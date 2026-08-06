@@ -147,7 +147,7 @@
 | SUB-008 Map Management |
 | SUB-009 Task Interface |
 | SUB-010 Route Graph Management |
-| SUB-011 Station Navigation |
+| SUB-011 Navigation |
 
 ---
 
@@ -220,7 +220,7 @@
 | SUB-006 Robot Localization EKF |
 | SUB-008 Map Management |
 | SUB-009 Task Interface |
-| SUB-011 Station Navigation |
+| SUB-011 Navigation |
 
 ---
 
