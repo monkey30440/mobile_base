@@ -590,3 +590,72 @@ RF2O 以連續二維雷射掃描估測相對運動，初版作為獨立里程資
           │
           ▼
      /rf2o_odom
+```
+
+## SUB-006 Robot Localization EKF
+
+### 目的
+
+Robot Localization EKF 子系統負責融合 Wheel Odometry、RF2O Odometry 與 IMU 資料，建立 AMR 連續且一致的平面里程資訊，並提供建圖與導航使用。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-003 |
+| SYS-004 |
+| SYS-005 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| 套件 | `robot_localization` |
+| 濾波器 | Extended Kalman Filter |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+| 運動模型 | 平面運動 |
+| 輸出型別 | `nav_msgs/msg/Odometry` |
+
+---
+
+### 系統職責
+
+- 接收 Wheel Odometry。
+- 接收 RF2O Odometry。
+- 接收 IMU 原始量測資料。
+- 融合平面位置、速度與角速度資訊。
+- 發布系統里程資訊。
+- 發布系統里程 TF。
+- 提供連續運動估測供 SLAM Toolbox 與 Navigation 使用。
+
+---
+
+### 邏輯架構
+
+```text
+/wheel_odom
+      │
+/rf2o_odom
+      │
+/imu/data_raw
+      │
+      ▼
+Robot Localization EKF
+      │
+      ├── Position
+      ├── Orientation
+      ├── Linear Velocity
+      └── Angular Velocity
+      │
+      ▼
+    /odom
+      │
+      ▼
+odom → base_footprint
+```
+
