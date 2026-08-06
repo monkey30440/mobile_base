@@ -1715,7 +1715,7 @@ SUB-010 依下列順序完成設計確認：
 | SYS-013 | SUB-010 |
 | SYS-014 | SUB-010 |
 
-## SUB-011 Station Navigation
+## SUB-011 Navigation
 
 ### 目的
 

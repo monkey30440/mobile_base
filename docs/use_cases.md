@@ -1,183 +1,233 @@
-# UC-001 建圖任務（Mapping）
+# Use Cases
 
-## 1. 目的
-
-建立可供定位與導航使用之二維地圖。
-
-對應 Capability：**CAP-001 建立可重複使用之地圖**
+本文件定義 `mobile_base` 系統之使用情境（Use Case），作為系統能力、需求與設計之起點。
 
 ---
 
-## 2. 使用者
+# UC-001 建立可重複使用之地圖
 
-- 開發人員
-- 測試人員
+## 目的
 
----
-
-## 3. 說明
-
-使用者透過終端啟動建圖模式，並以鍵盤控制 AMR 移動。
-
-系統於移動過程中執行 SLAM，完成環境地圖建立並儲存地圖檔。
+使使用者能建立二維環境地圖，並儲存為可供後續定位與導航使用之地圖。
 
 ---
 
-## 4. 前置條件
+## 參與者
 
-- AMR 已完成開機。
-- ROS 2 系統已啟動。
-- LiDAR、IMU、底盤驅動正常運作。
-- 建圖相關節點已啟動。
+- 使用者
 
 ---
 
-## 5. 操作流程
+## 前置條件
 
-| 步驟 | 操作 |
-|------|------|
-| 1 | 啟動建圖模式。 |
-| 2 | 啟動鍵盤遙控。 |
-| 3 | 控制 AMR 完成環境巡航。 |
-| 4 | 儲存地圖。 |
-| 5 | 完成建圖任務。 |
+- 系統已完成啟動。
+- LiDAR、IMU、Wheel Odometry 運作正常。
+- AMR 位於欲建圖環境。
 
 ---
 
-## 6. 輸入
+## 觸發條件
 
-| 項目 | 說明 |
-|------|------|
-| Keyboard Command | 鍵盤控制指令 |
+使用者開始建圖。
 
 ---
 
-## 7. 輸出
+## 基本流程
 
-| 項目 | 說明 |
-|------|------|
-| Map | Occupancy Grid 地圖 |
-| map.yaml | 地圖設定檔 |
-| map.pgm | 地圖影像檔 |
-
----
-
-## 8. 完成條件
-
-- 完成環境地圖建立。
-- 成功產生 `map.yaml`。
-- 成功產生 `map.pgm`。
+1. 使用者啟動建圖功能。
+2. 系統開始接收感測器資料。
+3. 使用者操作 AMR 移動。
+4. 系統持續建立 Occupancy Grid 地圖。
+5. 使用者完成環境巡覽。
+6. 使用者儲存地圖。
+7. 系統完成地圖儲存。
 
 ---
 
-## 9. 驗證方式
+## 完成條件
 
-於實機完成建圖流程，確認地圖可供後續定位與導航使用。
-
----
-
-## 10. Traceability
-
-| Use Case | Capability |
-|----------|------------|
-| UC-001 | CAP-001 |
-
-## UC-002 路網站點移動任務
-
-### 目的
-
-使用者透過終端指定路網站點，AMR 由目前位置自主移動至指定站點。
-
-**對應 Capability**
-
-- CAP-002 導航至指定路網站點
+- 地圖成功建立。
+- 地圖成功儲存。
+- 地圖可供後續定位與導航使用。
 
 ---
 
-### 使用者
+## 使用系統能力
 
-- 開發人員
-- 測試人員
-
----
-
-### 情境
-
-使用者透過終端指定目標站點。
-
-系統取得 AMR 目前位姿，依既有地圖與路網產生移動路徑，控制 AMR 抵達指定站點。
+| Capability |
+|---|
+| CAP-001 |
 
 ---
 
-### 前置條件
+## 涉及子系統
 
-- AMR 完成開機。
-- ROS 2 系統完成啟動。
-- 地圖完成載入。
-- 路網資料完成載入。
-- AMR 完成定位。
-- 導航功能完成啟動。
-
----
-
-### 操作流程
-
-| 步驟 | 說明 |
-|---|---|
-| 1 | 使用者指定目標站點。 |
-| 2 | 系統取得 AMR 目前位姿。 |
-| 3 | 系統產生至目標站點之移動路徑。 |
-| 4 | AMR 執行移動。 |
-| 5 | AMR 抵達目標站點。 |
-| 6 | 系統完成移動任務。 |
+| Subsystem |
+|---|
+| SUB-001 Base Control |
+| SUB-002 LiDAR Perception |
+| SUB-003 IMU Perception |
+| SUB-004 Wheel Odometry |
+| SUB-005 RF2O Odometry |
+| SUB-006 Robot Localization EKF |
+| SUB-007 SLAM Toolbox |
+| SUB-008 Map Management |
 
 ---
 
-### 輸入
+# UC-002 導航至指定路網站點
 
-| 項目 | 說明 |
-|---|---|
-| Target Station | 使用者指定之路網站點。 |
-| Current Pose | AMR 目前定位結果。 |
-| Map | UC-001 建立之地圖。 |
-| Road Network | 路網站點與連線資料。 |
+## 目的
+
+使使用者能指定路網站點，AMR 自主沿 Route Graph 移動至目標站點。
 
 ---
 
-### 輸出
+## 參與者
 
-| 項目 | 說明 |
-|---|---|
-| Navigation Result | AMR 抵達目標站點。 |
-| Task Status | 移動任務執行狀態。 |
+- 使用者
 
 ---
 
-### 完成條件
+## 前置條件
 
-- 系統取得有效目標站點。
-- 系統產生移動路徑。
+- 系統已完成啟動。
+- 已載入指定 Map Package。
+- 已載入 Route Graph。
+- 已完成定位。
+- Navigation 系統已完成初始化。
+
+---
+
+## 觸發條件
+
+使用者提交目標站點。
+
+---
+
+## 基本流程
+
+1. 使用者指定目標站點。
+2. 系統驗證目標站點。
+3. 系統取得 AMR 目前位姿。
+4. 系統計算 Route。
+5. 系統完成目前位置與 Route Graph 的銜接。
+6. 系統沿 Route Graph 導航。
+7. 系統判定 AMR 抵達目標站點。
+8. 系統回報任務完成。
+
+---
+
+## 完成條件
+
 - AMR 抵達指定站點。
-- 系統回報任務完成。
+- AMR 達到站點指定朝向。
+- 系統回報導航完成。
 
 ---
 
-### 驗證
+## 使用系統能力
 
-於實機指定路網站點並執行移動任務。
-
-確認：
-
-- 系統可取得 AMR 目前位姿。
-- 系統可接受目標站點。
-- 系統可產生移動路徑。
-- AMR 可抵達指定站點。
-- 系統可回報任務完成。
+| Capability |
+|---|
+| CAP-002 |
 
 ---
 
-### Traceability
+## 涉及子系統
 
-| Use Case | Capability |
-|---|---|
-| UC-002 | CAP-002 |
+| Subsystem |
+|---|
+| SUB-001 Base Control |
+| SUB-002 LiDAR Perception |
+| SUB-003 IMU Perception |
+| SUB-004 Wheel Odometry |
+| SUB-005 RF2O Odometry |
+| SUB-006 Robot Localization EKF |
+| SUB-008 Map Management |
+| SUB-009 Task Interface |
+| SUB-010 Route Graph Management |
+| SUB-011 Station Navigation |
+
+---
+
+# UC-003 導航至任意指定 Pose
+
+## 目的
+
+使使用者能指定地圖中任意可通行之目標 Pose，AMR 自主規劃導航路徑並移動至指定位置與朝向。
+
+---
+
+## 參與者
+
+- 使用者
+
+---
+
+## 前置條件
+
+- 系統已完成啟動。
+- 已載入指定 Map Package。
+- AMR 已完成定位。
+- Navigation 系統已完成初始化。
+
+---
+
+## 觸發條件
+
+使用者提交目標 Pose。
+
+---
+
+## 基本流程
+
+1. 使用者指定目標 Pose。
+2. 系統驗證目標 Pose。
+3. 系統取得 AMR 目前位姿。
+4. 系統產生導航路徑。
+5. 系統控制 AMR 沿路徑移動。
+6. 系統判定 AMR 抵達目標 Pose。
+7. 系統回報任務完成。
+
+---
+
+## 完成條件
+
+- AMR 抵達指定位置。
+- AMR 達到指定朝向。
+- 系統回報導航完成。
+
+---
+
+## 使用系統能力
+
+| Capability |
+|---|
+| CAP-003 |
+
+---
+
+## 涉及子系統
+
+| Subsystem |
+|---|
+| SUB-001 Base Control |
+| SUB-002 LiDAR Perception |
+| SUB-003 IMU Perception |
+| SUB-004 Wheel Odometry |
+| SUB-005 RF2O Odometry |
+| SUB-006 Robot Localization EKF |
+| SUB-008 Map Management |
+| SUB-009 Task Interface |
+| SUB-011 Station Navigation |
+
+---
+
+## 備註
+
+UC-003 與 UC-002 共用相同導航架構。
+
+UC-002 使用 Route Graph 完成站點導航。
+
+UC-003 直接以 Goal Pose 作為導航目標，不使用 Route Graph 與 Station Mapping，由 Nav2 完成路徑規劃、導航與到站判定。
