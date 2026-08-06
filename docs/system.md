@@ -175,3 +175,57 @@ Package 結構於 Implementation 階段確認。
 |-------------|-----------|
 | SYS-002 | SUB-001 |
 | SYS-005 | SUB-001 |
+
+## SUB-002 LiDAR 感知
+
+### 目的
+
+LiDAR 感知子系統負責取得兩顆 SICK picoScan150 的環境掃描資料，並分別提供 ROS 2 Topic 供下游應用使用。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-003 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| LiDAR | SICK picoScan150 ×2 |
+| 通訊介面 | Ethernet |
+| 資料來源 | 前方 LiDAR、後方 LiDAR |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+| 座標模型 | 既有 URDF |
+
+---
+
+### 系統職責
+
+- 建立兩顆 LiDAR 的 Ethernet 通訊。
+- 取得兩顆 LiDAR 的掃描資料。
+- 為每顆 LiDAR 指定獨立 ROS Topic。
+- 為每顆 LiDAR 指定獨立 TF Frame。
+- 依 URDF 提供 LiDAR 至 `base_link` 的固定座標轉換。
+- 提供兩顆 LiDAR 的裝置狀態。
+
+---
+
+### 邏輯架構
+
+```text
+ Front picoScan150                 Rear picoScan150
+         │                                 │
+         ▼                                 ▼
+ Front LiDAR Interface             Rear LiDAR Interface
+         │                                 │
+         ▼                                 ▼
+    /scan/front                       /scan/rear
+         │                                 │
+         ▼                                 ▼
+ front_laser_frame                 rear_laser_frame
