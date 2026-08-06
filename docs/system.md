@@ -803,3 +803,147 @@ SUB-007 依下列順序完成設計確認：
 |---|---|
 | SYS-001 | SUB-007 |
 | SYS-006 | SUB-007 |
+
+## SUB-008 Map Management
+
+### 目的
+
+Map Management 子系統負責管理二維地圖之儲存與載入，提供建圖成果保存與後續導航使用。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-007 |
+| SYS-008 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| ROS 套件 | nav2_map_server |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+| 地圖格式 | Occupancy Grid |
+
+---
+
+### 系統職責
+
+- 接收目前地圖。
+- 儲存地圖。
+- 載入地圖。
+- 管理地圖檔案。
+- 提供地圖服務。
+
+---
+
+### 邏輯架構
+
+```text
+        /map
+          │
+          ▼
+  Map Management
+      │       │
+      ▼       ▼
+ Save Map  Load Map
+      │       │
+      └──┬────┘
+         ▼
+ map.yaml
+ map.pgm
+```
+
+---
+
+### ROS Interface
+
+#### Subscribe
+
+| Topic | Type | 說明 |
+|---|---|---|
+| `/map` | `nav_msgs/msg/OccupancyGrid` | 建圖結果 |
+
+#### Service
+
+| Service | 說明 |
+|---|---|
+| Save Map | 儲存目前地圖 |
+| Load Map | 載入指定地圖 |
+
+---
+
+### 地圖格式
+
+| 檔案 | 說明 |
+|---|---|
+| `map.yaml` | 地圖設定 |
+| `map.pgm` | Occupancy Grid |
+
+---
+
+### 儲存位置
+
+初版採固定目錄：
+
+```text
+maps/
+```
+
+每張地圖包含：
+
+```text
+maps/
+└── map_name/
+    ├── map.yaml
+    └── map.pgm
+```
+
+---
+
+### 系統參數
+
+| 參數 | 初版設定 |
+|---|---|
+| Map Format | Occupancy Grid |
+| Save Path | `maps/` |
+| File Name | 使用者指定 |
+| Overwrite | 允許覆寫同名地圖 |
+
+---
+
+### 設計依據
+
+SUB-008 依下列順序完成設計確認：
+
+1. nav2_map_server 文件。
+2. SUB-007 SLAM Toolbox。
+3. Hardware Bring-up。
+4. 地圖儲存驗證。
+5. 地圖載入驗證。
+
+---
+
+### 驗證項目
+
+| 驗證項目 | 完成條件 |
+|---|---|
+| 地圖接收 | 可接收 `/map` |
+| 地圖儲存 | 成功產生 `map.yaml` 與 `map.pgm` |
+| 地圖載入 | 成功載入指定地圖 |
+| 地圖一致性 | 載入後內容與儲存前一致 |
+| 多次操作 | 可重複執行儲存與載入 |
+
+---
+
+### Traceability
+
+| Requirement | Subsystem |
+|---|---|
+| SYS-007 | SUB-008 |
+| SYS-008 | SUB-008 |
