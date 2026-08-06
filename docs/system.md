@@ -947,3 +947,74 @@ SUB-008 依下列順序完成設計確認：
 |---|---|
 | SYS-007 | SUB-008 |
 | SYS-008 | SUB-008 |
+
+## SUB-009 Task Interface
+
+### 目的
+
+Task Interface 子系統負責接收使用者透過終端提交之路網站點移動任務，將任務交付導航系統執行，並提供任務狀態與完成結果。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-012 |
+| SYS-017 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| 操作者 | 開發人員、測試人員 |
+| 操作方式 | 終端命令 |
+| 任務類型 | 路網站點移動任務 |
+| 任務輸入 | Target Station |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+
+---
+
+### 系統職責
+
+- 接收使用者指定之目標站點。
+- 建立路網站點移動任務。
+- 將目標站點交付 Goal Management。
+- 啟動導航任務。
+- 接收導航任務狀態。
+- 顯示任務執行狀態。
+- 顯示任務完成結果。
+
+---
+
+### 邏輯架構
+
+```text
+使用者
+  │
+  ▼
+終端命令
+  │
+  ▼
+Task Interface
+  │
+  ├── Target Station
+  ├── Task Identifier
+  └── Task Status
+  │
+  ▼
+Goal Management
+  │
+  ▼
+Navigation System
+  │
+  ▼
+Task Result
+  │
+  ▼
+使用者
+```
+
