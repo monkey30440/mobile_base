@@ -1714,3 +1714,274 @@ SUB-010 依下列順序完成設計確認：
 | SYS-010 | SUB-010 |
 | SYS-013 | SUB-010 |
 | SYS-014 | SUB-010 |
+
+## SUB-011 Station Navigation
+
+### 目的
+
+Station Navigation 子系統負責接收目標 Route Node，整合 Nav2 Route Server 與 Nav2 Navigation Stack，由 AMR 目前位姿完成路網銜接、路網導航、運動控制及到站判定。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-011 |
+| SYS-014 |
+| SYS-015 |
+| SYS-016 |
+| SYS-017 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| 導航框架 | Nav2 |
+| 路網規劃 | `nav2_route` |
+| 任務編排 | BT Navigator |
+| 自由空間規劃 | Planner Server |
+| 運動控制 | Controller Server |
+| 定位 | AMCL |
+| 地圖來源 | SUB-008 Map Management |
+| 路網來源 | SUB-010 Route Graph Management |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+
+Nav2 Route Server 使用預先定義之導航圖計算 Route，並可搭配自由空間規劃器完成目前位姿至路網的銜接。Nav2 提供 Route Server、BT Navigator、Planner Server、Controller Server、Costmap 與 Lifecycle Manager 等成熟元件作為初版導航基礎。:contentReference[oaicite:0]{index=0}
+
+---
+
+### 系統職責
+
+- 接收目標 Route Node。
+- 取得 AMR 目前地圖位姿。
+- 計算目前位置至目標節點之 Route。
+- 完成目前位置與 Route Graph 的銜接。
+- 沿 Route Graph 執行導航。
+- 依地圖與即時感知資料產生速度命令。
+- 判定 AMR 抵達目標站點。
+- 提供導航進度與完成結果。
+
+Route Graph 搜尋、Route Tracking、節點與 Edge 處理由 Nav2 Route Server 提供；自由空間路徑、局部運動控制及導航流程由 Nav2 對應元件提供。:contentReference[oaicite:1]{index=1}
+
+---
+
+### 邏輯架構
+
+```text
+Target Station
+      │
+      ▼
+SUB-010 Route Graph Management
+      │
+      │ Goal Route Node
+      ▼
+SUB-011 Station Navigation
+      │
+      ├── Current Pose
+      ├── Compute Route
+      ├── First Mile
+      ├── On Route
+      ├── Path Execution
+      └── Goal Check
+      │
+      ▼
+Nav2 Controller Server
+      │
+      ▼
+   /cmd_vel
+      │
+      ▼
+SUB-001 底盤控制
+```
+
+---
+
+### 導航流程
+
+```text
+Current Pose
+      │
+      ▼
+Compute Route
+      │
+      ▼
+First Mile
+      │
+      ▼
+On Route
+      │
+      ▼
+Goal Station
+```
+
+初版導航流程：
+
+1. 接收目標站點對應之 Route Node。
+2. 取得 AMR 目前位姿。
+3. Route Server 搜尋目前位置之路網銜接節點。
+4. Route Server 計算至目標 Route Node 的 Route。
+5. BT Navigator 執行 Route Graph 導航流程。
+6. Planner Server建立目前位置至 Route 起始區段的可行路徑。
+7. Controller Server依 Path 與 Local Costmap 產生速度命令。
+8. AMR 沿 Route 移動至目標站點。
+9. Goal Checker 判定 AMR 符合站點位置與朝向允收範圍。
+10. 系統回傳導航完成結果。
+
+Nav2 的 Route Graph Behavior Tree 可在 AMR 與第一個 Route Node 距離較大時，先以自由空間規劃銜接路網，再沿 Route 執行導航。:contentReference[oaicite:2]{index=2}
+
+---
+
+### Nav2 組成
+
+| 元件 | 職責 |
+|---|---|
+| Map Server | 發布指定 Map Package 之 Occupancy Grid |
+| AMCL | 提供 AMR 於 `map` 座標系中的目前位姿 |
+| Route Server | 載入 Route Graph、計算 Route、追蹤 Route 進度 |
+| BT Navigator | 編排路網銜接、路徑計算、路徑執行與導航恢復流程 |
+| Planner Server | 產生自由空間銜接路徑 |
+| Controller Server | 依 Path 產生底盤速度命令 |
+| Global Costmap | 提供全域地圖與障礙物資訊 |
+| Local Costmap | 提供車體周圍即時障礙物資訊 |
+| Goal Checker | 判定站點位置與朝向抵達條件 |
+| Progress Checker | 評估導航移動進度 |
+| Lifecycle Manager | 管理 Nav2 元件生命週期 |
+
+Controller Server 負責執行 Controller、Progress Checker 與 Goal Checker Plugin，並管理 Local Costmap。:contentReference[oaicite:3]{index=3}
+
+---
+
+### ROS Interface
+
+#### 輸入
+
+| 介面 | Type | 說明 |
+|---|---|---|
+| Goal Route Node | Route Action Goal | 目標站點對應之 Route Node |
+| `/map` | `nav_msgs/msg/OccupancyGrid` | 導航地圖 |
+| `/odom` | `nav_msgs/msg/Odometry` | 系統里程資訊 |
+| `/scan_front` | `sensor_msgs/msg/LaserScan` | 前方障礙物感知 |
+| `/scan_rear` | `sensor_msgs/msg/LaserScan` | 後方障礙物感知 |
+| TF | TF2 | `map`、`odom`、`base_footprint` 與感測器座標 |
+
+#### 輸出
+
+| 介面 | Type | 說明 |
+|---|---|---|
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | 底盤速度命令 |
+| Navigation Feedback | Action Feedback | Route 與導航執行進度 |
+| Navigation Result | Action Result | 到站結果 |
+
+---
+
+### TF Interface
+
+```text
+map
+ │
+ └── odom
+      │
+      └── base_footprint
+            │
+            └── base_link
+                  ├── front_laser_frame
+                  ├── rear_laser_frame
+                  └── imu_link
+```
+
+| Transform | 發布來源 |
+|---|---|
+| `map → odom` | AMCL |
+| `odom → base_footprint` | Robot Localization EKF |
+| `base_footprint → base_link` | URDF |
+| `base_link → sensor frames` | URDF |
+
+---
+
+### 導航策略
+
+| 區段 | 初版實作 |
+|---|---|
+| First Mile | Nav2 自由空間規劃銜接 Route Graph |
+| On Route | Nav2 Route Server 計算與追蹤 Route |
+| Last Mile | 目標 Route Node 與 Station Goal Checker |
+| 運動控制 | Nav2 Controller Server |
+| 障礙物處理 | Global Costmap、Local Costmap 與 Behavior Tree |
+
+CAP-002 的目標位於 Route Graph 站點，因此初版以 First Mile 與 On Route 為主要導航區段。
+
+---
+
+### 系統參數
+
+| 參數 | 初版設定 |
+|---|---|
+| Map Frame | `map` |
+| Odom Frame | `odom` |
+| Base Frame | `base_footprint` |
+| Odom Topic | `/odom` |
+| Velocity Topic | `/cmd_vel` |
+| Route Graph | `maps/<map_name>/route_graph.geojson` |
+| Station Mapping | `maps/<map_name>/stations.yaml` |
+| Route Server | 啟用 |
+| AMCL | 啟用 |
+| Global Costmap | 啟用 |
+| Local Costmap | 啟用 |
+| Goal Position Tolerance | 採 Nav2 Baseline，實機驗證後定版 |
+| Goal Yaw Tolerance | 採 Nav2 Baseline，實機驗證後定版 |
+| Planner Plugin | 採 Nav2 成熟 Plugin |
+| Controller Plugin | 採 Nav2 成熟 Plugin |
+| Behavior Tree | 採 Nav2 Route Graph Baseline |
+
+Planner、Controller、Goal Checker 與 Behavior Tree 初版優先採用 Nav2 既有 Plugin 與範例設定，實機導航完成後再調整。Nav2 提供多種成熟 Planner 與 Controller Plugin，可依差速底盤實機結果選定。:contentReference[oaicite:4]{index=4}
+
+---
+
+### 設計依據
+
+SUB-011 依下列順序完成設計確認：
+
+1. UC-002 路網站點移動任務。
+2. SUB-008 Map Management。
+3. SUB-010 Route Graph Management。
+4. Nav2 Route Server。
+5. Nav2 Route Graph Behavior Tree。
+6. Nav2 Navigation Stack。
+7. 實機站點導航驗證。
+
+初版採用 Nav2 現有 Route Server、Behavior Tree、Planner、Controller、Costmap 與定位元件，專案自訂內容限於 Station ID 與 Route Node ID 的薄層整合。
+
+---
+
+### 驗證項目
+
+| 驗證項目 | 完成條件 |
+|---|---|
+| 地圖載入 | Map Server 成功發布指定地圖 |
+| 定位 | AMCL 持續提供 AMR 地圖位姿 |
+| Route Goal | 系統可接收目標 Route Node |
+| Route 計算 | Route Server 可產生至目標節點之 Route |
+| First Mile | AMR 可由目前位置銜接 Route Graph |
+| On Route | AMR 可沿 Route Graph 移動 |
+| 障礙物感知 | Costmap 可反映 LiDAR 感知結果 |
+| 速度命令 | `/cmd_vel` 持續提供有效控制命令 |
+| 到站判定 | AMR 位姿符合站點位置與朝向允收範圍 |
+| 任務回報 | SUB-009 可取得導航進度與完成結果 |
+| 重複導航 | AMR 可依序完成多個站點導航任務 |
+| 持續運轉 | 導航期間各 Nav2 元件穩定運作 |
+
+---
+
+### Traceability
+
+| Requirement | Subsystem |
+|---|---|
+| SYS-011 | SUB-011 |
+| SYS-014 | SUB-011 |
+| SYS-015 | SUB-011 |
+| SYS-016 | SUB-011 |
+| SYS-017 | SUB-011 |
