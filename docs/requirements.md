@@ -1,176 +1,177 @@
-# System Requirements
+# Requirements
 
-## CAP-001 建立可重複使用之地圖
-
-### SYS-001 建圖模式
-
-系統提供建圖模式，供使用者執行環境建圖。
-
-**Traceability**
-
-- CAP-001
+本文件定義 `mobile_base` 系統需求（System Requirements），作為系統設計、實作與驗證依據。
 
 ---
 
-### SYS-002 手動控制
+# UC-001 建立可重複使用之地圖
 
-系統提供鍵盤控制介面，供使用者控制 AMR 移動。
+## SYS-001 建圖
 
-**Traceability**
-
-- CAP-001
+系統應建立二維 Occupancy Grid 地圖。
 
 ---
 
-### SYS-003 雷射資料
+## SYS-002 底盤控制
 
-系統接收 LiDAR 掃描資料，作為建圖輸入。
-
-**Traceability**
-
-- CAP-001
+系統應控制差速底盤完成移動。
 
 ---
 
-### SYS-004 IMU 資料
+## SYS-003 LiDAR 感知
 
-系統接收 IMU 資料，作為建圖輸入。
-
-**Traceability**
-
-- CAP-001
+系統應取得 LiDAR 掃描資料。
 
 ---
 
-### SYS-005 底盤里程資訊
+## SYS-004 IMU 感知
 
-系統提供 AMR 運動資訊，作為建圖輸入。
-
-**Traceability**
-
-- CAP-001
+系統應取得 IMU 量測資料。
 
 ---
 
-### SYS-006 地圖建立
+## SYS-005 里程估測
 
-系統建立 Occupancy Grid 地圖。
-
-**Traceability**
-
-- CAP-001
+系統應提供 AMR 平面里程資訊。
 
 ---
 
-### SYS-007 地圖儲存
+## SYS-006 地圖發布
 
-系統提供地圖儲存功能，產生：
-
-- `map.yaml`
-- `map.pgm`
-
-**Traceability**
-
-- CAP-001
+系統應發布建立完成之 Occupancy Grid 地圖。
 
 ---
 
-### SYS-008 地圖重用
+## SYS-007 地圖儲存
 
-系統提供已建立地圖，供定位與導航使用。
-
-**Traceability**
-
-- CAP-001
-
-## CAP-002 導航至指定路網站點
-
-### SYS-009 地圖載入
-
-系統載入 UC-001 建立之二維地圖，作為定位與導航基準。
-
-**Traceability**
-
-- CAP-002
+系統應儲存 Occupancy Grid 地圖。
 
 ---
 
-### SYS-010 路網載入
+## SYS-008 地圖載入
 
-系統載入路網站點與連線資料，供站點查詢與路徑規劃使用。
-
-**Traceability**
-
-- CAP-002
+系統應載入指定 Occupancy Grid 地圖。
 
 ---
 
-### SYS-011 AMR 定位
+## SYS-009 地圖管理
 
-系統提供 AMR 於地圖座標系中的目前位姿。
-
-**Traceability**
-
-- CAP-002
+系統應管理 Map Package。
 
 ---
 
-### SYS-012 目標站點輸入
+# UC-002 導航至指定路網站點
 
-系統提供終端介面，供使用者指定目標站點。
+## SYS-010 Route Graph
 
-**Traceability**
-
-- CAP-002
+系統應載入指定 Map Package 之 Route Graph。
 
 ---
 
-### SYS-013 站點解析
+## SYS-011 Navigation
 
-系統將目標站點轉換為對應之地圖位姿與路網節點。
-
-**Traceability**
-
-- CAP-002
+系統應提供自主導航能力。
 
 ---
 
-### SYS-014 導航路徑產生
+## SYS-012 Navigation Task
 
-系統依 AMR 目前位姿、目標站點、地圖與路網資料產生可執行之移動路徑。
-
-路徑可由 First Mile、On Route 與 Last Mile 導航區段組成。
-
-**Traceability**
-
-- CAP-002
+系統應接收路網站點導航任務。
 
 ---
 
-### SYS-015 自主移動
+## SYS-013 Station Mapping
 
-系統依移動路徑控制 AMR 完成平面移動與轉向。
-
-**Traceability**
-
-- CAP-002
+系統應提供 Station ID 與 Route Node ID 對應。
 
 ---
 
-### SYS-016 目標站點抵達
+## SYS-014 Route Navigation
 
-系統判定 AMR 位姿符合目標站點之位置與朝向允收範圍。
-
-**Traceability**
-
-- CAP-002
+系統應沿 Route Graph 導航至指定站點。
 
 ---
 
-### SYS-017 任務狀態
+## SYS-015 Path Execution
 
-系統提供路網站點移動任務之執行狀態與完成結果。
+系統應控制 AMR 沿導航路徑移動。
 
-**Traceability**
+---
 
-- CAP-002
+## SYS-016 Goal Checking
+
+系統應判定 AMR 已抵達目標站點。
+
+---
+
+## SYS-017 Navigation Result
+
+系統應回報導航任務完成或失敗結果。
+
+---
+
+# UC-003 導航至任意指定 Pose
+
+## SYS-018 Goal Pose
+
+系統應接收使用者指定之 Goal Pose。
+
+---
+
+## SYS-019 Goal Validation
+
+系統應驗證 Goal Pose 是否可導航。
+
+---
+
+## SYS-020 Pose Planning
+
+系統應規劃至 Goal Pose 的導航路徑。
+
+---
+
+## SYS-021 Pose Navigation
+
+系統應自主導航至 Goal Pose。
+
+---
+
+## SYS-022 Goal Pose Checking
+
+系統應判定 AMR 已抵達 Goal Pose。
+
+---
+
+## SYS-023 Goal Pose Result
+
+系統應回報 Goal Pose 導航任務完成或失敗結果。
+
+---
+
+# Requirement Traceability
+
+| Requirement | Use Case | Capability |
+|---|---|---|
+| SYS-001 | UC-001 | CAP-001 |
+| SYS-002 | UC-001 | CAP-001 |
+| SYS-003 | UC-001 | CAP-001 |
+| SYS-004 | UC-001 | CAP-001 |
+| SYS-005 | UC-001 | CAP-001 |
+| SYS-006 | UC-001 | CAP-001 |
+| SYS-007 | UC-001 | CAP-001 |
+| SYS-008 | UC-001 | CAP-001 |
+| SYS-009 | UC-001 | CAP-001 |
+| SYS-010 | UC-002 | CAP-002 |
+| SYS-011 | UC-002 | CAP-002 |
+| SYS-012 | UC-002 | CAP-002 |
+| SYS-013 | UC-002 | CAP-002 |
+| SYS-014 | UC-002 | CAP-002 |
+| SYS-015 | UC-002 | CAP-002 |
+| SYS-016 | UC-002 | CAP-002 |
+| SYS-017 | UC-002 | CAP-002 |
+| SYS-018 | UC-003 | CAP-003 |
+| SYS-019 | UC-003 | CAP-003 |
+| SYS-020 | UC-003 | CAP-003 |
+| SYS-021 | UC-003 | CAP-003 |
+| SYS-022 | UC-003 | CAP-003 |
+| SYS-023 | UC-003 | CAP-003 |
