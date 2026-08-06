@@ -659,3 +659,147 @@ Robot Localization EKF
 odom → base_footprint
 ```
 
+## SUB-007 SLAM Toolbox
+
+### 目的
+
+SLAM Toolbox 子系統負責根據 LiDAR 掃描資料與系統里程資訊建立二維 Occupancy Grid 地圖，並提供地圖資料與座標轉換。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-001 |
+| SYS-006 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| 套件 | slam_toolbox |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+| 地圖型式 | Occupancy Grid |
+| 建圖模式 | Online Mapping |
+
+---
+
+### 系統職責
+
+- 接收 LiDAR 掃描資料。
+- 接收系統里程資訊。
+- 執行二維同步定位與建圖。
+- 建立 Occupancy Grid。
+- 發布地圖 Topic。
+- 發布 Map TF。
+- 提供地圖儲存服務。
+
+---
+
+### 邏輯架構
+
+```text
+/scan_front 或 /scan_rear
+            │
+            │
+          /odom
+            │
+            ▼
+      SLAM Toolbox
+            │
+      ┌─────┴─────┐
+      ▼           ▼
+    /map     map → odom
+```
+
+---
+
+### ROS Interface
+
+#### Subscribe
+
+| Topic | Type | 說明 |
+|---|---|---|
+| Scan Topic | `sensor_msgs/msg/LaserScan` | LiDAR 掃描資料 |
+| `/odom` | `nav_msgs/msg/Odometry` | 系統里程資訊 |
+
+#### Publish
+
+| Topic | Type | 說明 |
+|---|---|---|
+| `/map` | `nav_msgs/msg/OccupancyGrid` | 二維地圖 |
+
+---
+
+### TF Interface
+
+| Parent | Child |
+|---|---|
+| `map` | `odom` |
+
+`map → odom` TF 由 SLAM Toolbox 單一發布。
+
+---
+
+### 輸入資料
+
+| 項目 | 初版來源 |
+|---|---|
+| Scan Topic | Hardware Bring-up 選定之 LiDAR Topic |
+| Odometry | `/odom` |
+
+LiDAR Scan Topic 依 SUB-005 完成之實機測試結果決定。
+
+---
+
+### 系統參數
+
+| 參數 | 初版設定 |
+|---|---|
+| Mapping Mode | Online |
+| Scan Topic | Hardware Bring-up 決定 |
+| Odom Topic | `/odom` |
+| Map Frame | `map` |
+| Odom Frame | `odom` |
+| Base Frame | `base_footprint` |
+
+其餘 SLAM 參數採用 slam_toolbox Baseline，並於實機建圖完成後調整。
+
+---
+
+### 設計依據
+
+SUB-007 依下列順序完成設計確認：
+
+1. slam_toolbox 文件。
+2. SUB-002 LiDAR。
+3. SUB-006 Robot Localization。
+4. Hardware Bring-up。
+5. 建圖結果驗證。
+
+---
+
+### 驗證項目
+
+| 驗證項目 | 完成條件 |
+|---|---|
+| Scan 接收 | 持續接收 LiDAR Topic |
+| Odometry 接收 | 持續接收 `/odom` |
+| 地圖建立 | `/map` 持續更新 |
+| Topic 格式 | `nav_msgs/msg/OccupancyGrid` |
+| TF 發布 | `map → odom` 持續發布 |
+| 建圖品質 | 地圖與實際環境一致 |
+| 長時間建圖 | 建圖期間持續穩定運作 |
+
+---
+
+### Traceability
+
+| Requirement | Subsystem |
+|---|---|
+| SYS-001 | SUB-007 |
+| SYS-006 | SUB-007 |
