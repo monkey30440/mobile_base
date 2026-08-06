@@ -147,3 +147,170 @@ Navigation 子系統依目前位姿與目標 Pose 的相對位置，自動組合
 | Capability | Use Case |
 |---|---|
 | CAP-003 | UC-003 |
+
+# CAP-003 Navigate to Arbitrary Pose
+
+## 目的
+
+使 AMR 能夠導航至地圖中任意指定之 Goal Pose，並於可通行區域內自主規劃路徑、避開障礙物，最後抵達指定位置與朝向。
+
+---
+
+## 對應 Use Case
+
+| Use Case |
+|---|
+| UC-003 |
+
+---
+
+## 功能描述
+
+系統接收使用者指定之 Goal Pose，利用目前定位結果與地圖資訊，自主規劃導航路徑，控制 AMR 移動至目標位置。
+
+Goal Pose 可位於地圖中任意可通行位置，不需事先建立 Route Graph 或 Station Mapping。
+
+---
+
+## 前置條件
+
+- 已完成系統啟動。
+- 已載入 Map Package。
+- AMCL 已完成定位。
+- Nav2 已完成初始化。
+- Goal Pose 位於可導航區域。
+
+---
+
+## 輸入
+
+| 項目 | 說明 |
+|---|---|
+| Goal Pose | 使用者指定之目標位置與朝向 |
+
+---
+
+## 輸出
+
+| 項目 | 說明 |
+|---|---|
+| Navigation Status | 導航執行狀態 |
+| Navigation Result | 任務完成結果 |
+
+---
+
+## 系統能力
+
+系統應具備下列能力：
+
+1. 接收 Goal Pose。
+2. 驗證 Goal Pose。
+3. 取得 AMR 目前位姿。
+4. 規劃至 Goal Pose 的導航路徑。
+5. 即時避開環境障礙物。
+6. 控制 AMR 沿規劃路徑移動。
+7. 判定 AMR 抵達 Goal Pose。
+8. 回報導航結果。
+
+---
+
+## 系統流程
+
+```text
+Goal Pose
+     │
+     ▼
+Validate Goal
+     │
+     ▼
+Get Current Pose
+     │
+     ▼
+Global Path Planning
+     │
+     ▼
+Path Following
+     │
+     ▼
+Obstacle Avoidance
+     │
+     ▼
+Goal Checking
+     │
+     ▼
+Navigation Result
+```
+
+---
+
+## 採用成熟方案
+
+初版優先採用 Nav2 Navigation Stack：
+
+- AMCL
+- Planner Server
+- Controller Server
+- BT Navigator
+- Global Costmap
+- Local Costmap
+- Goal Checker
+- Progress Checker
+- Lifecycle Manager
+
+不使用：
+
+- Route Graph
+- Route Server
+- Station Mapping
+
+---
+
+## 與 UC-002 差異
+
+| 項目 | UC-002 | UC-003 |
+|---|---|---|
+| Navigation Target | Station ID | Goal Pose |
+| Route Graph | 使用 | 不使用 |
+| Station Mapping | 使用 | 不使用 |
+| Route Server | 使用 | 不使用 |
+| Global Planner | Route Graph | Nav2 Planner |
+| Navigation | Nav2 | Nav2 |
+
+---
+
+## 對應子系統
+
+| Subsystem |
+|---|
+| SUB-001 Base Control |
+| SUB-002 LiDAR Perception |
+| SUB-003 IMU Perception |
+| SUB-004 Wheel Odometry |
+| SUB-005 RF2O Odometry |
+| SUB-006 Robot Localization EKF |
+| SUB-008 Map Management |
+| SUB-009 Task Interface |
+| SUB-011 Navigation |
+
+---
+
+## 驗證項目
+
+| 驗證項目 | 完成條件 |
+|---|---|
+| Goal Pose | 可接收任意 Goal Pose |
+| Goal Validation | 可驗證 Goal Pose 合法性 |
+| Path Planning | 可產生導航路徑 |
+| Path Following | AMR 可沿路徑移動 |
+| Obstacle Avoidance | 可避開靜態與動態障礙物 |
+| Goal Arrival | 可抵達指定位置與朝向 |
+| Navigation Result | 可回報導航完成結果 |
+| Repeated Navigation | 可重複執行多次 Goal Pose 導航 |
+
+---
+
+## Traceability
+
+| Use Case | Capability |
+|---|---|
+| UC-003 | CAP-003 |
