@@ -229,3 +229,70 @@ LiDAR 感知子系統負責取得兩顆 SICK picoScan150 的環境掃描資料�
          │                                 │
          ▼                                 ▼
  front_laser_frame                 rear_laser_frame
+```
+
+## SUB-003 IMU 感知
+
+### 目的
+
+IMU 感知子系統負責取得 TDK IIM-42652 的角速度與線性加速度資料，轉換為標準 ROS 2 IMU 訊息，並提供下游運動估測使用。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-004 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| IMU | TDK IIM-42652 |
+| 感測能力 | 3 軸陀螺儀、3 軸加速度計 |
+| 連接介面 | USB Serial |
+| 裝置 | `/dev/ttyACM0` |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+| 座標模型 | 既有 URDF |
+
+IIM-42652 為六軸慣性感測器，提供三軸角速度與三軸線性加速度量測。:contentReference[oaicite:0]{index=0}
+
+---
+
+### 系統職責
+
+- 建立 `/dev/ttyACM0` 通訊。
+- 接收 IMU 資料封包。
+- 驗證封包完整性。
+- 解析三軸角速度資料。
+- 解析三軸線性加速度資料。
+- 將量測資料轉換為 SI 單位。
+- 發布標準 ROS 2 IMU Topic。
+- 為 IMU 訊息提供時間戳記與 Frame ID。
+
+---
+
+### 邏輯架構
+
+```text
+TDK IIM-42652
+      │
+      ▼
+ /dev/ttyACM0
+      │
+      ▼
+ IMU Driver
+      │
+      ├── Packet Validation
+      ├── Angular Velocity
+      ├── Linear Acceleration
+      ├── Unit Conversion
+      ├── Timestamp
+      └── Frame ID
+      │
+      ▼
+ /imu/data_raw
