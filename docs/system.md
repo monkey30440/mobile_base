@@ -532,3 +532,61 @@ SUB-004 依下列順序完成設計確認：
 | Requirement | Subsystem |
 |---|---|
 | SYS-005 | SUB-004 |
+
+## SUB-005 RF2O Odometry
+
+### 目的
+
+RF2O Odometry 子系統負責根據單一 LiDAR Scan Topic 估測 AMR 平面運動，發布標準 ROS 2 Odometry 訊息，並提供 Robot Localization EKF 使用。
+
+---
+
+### 對應需求
+
+| Requirement |
+|---|
+| SYS-003 |
+
+---
+
+### 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| 演算法 | RF2O Laser Odometry |
+| 資料來源 | SUB-002 LiDAR 感知 |
+| 運算平台 | Jetson AGX Orin Developer Kit |
+| ROS | ROS 2 Jazzy |
+| 運動模型 | 平面運動 |
+| 輸入型別 | `sensor_msgs/msg/LaserScan` |
+| 輸出型別 | `nav_msgs/msg/Odometry` |
+
+RF2O 以連續二維雷射掃描估測相對運動，初版作為獨立里程資訊來源。:contentReference[oaicite:0]{index=0}
+
+---
+
+### 系統職責
+
+- 接收指定 LiDAR Scan Topic。
+- 依連續掃描資料估測平面位姿變化。
+- 計算 AMR 線速度與角速度。
+- 發布標準 ROS 2 Odometry 訊息。
+- 為輸出訊息提供時間戳記與 Frame ID。
+
+---
+
+### 邏輯架構
+
+```text
+/scan_front 或 /scan_rear
+          │
+          ▼
+ RF2O Laser Odometry
+          │
+          ├── Position
+          ├── Orientation
+          ├── Linear Velocity
+          └── Angular Velocity
+          │
+          ▼
+     /rf2o_odom
