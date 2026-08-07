@@ -82,7 +82,7 @@ _DECLARATIONS = (
     ('vehicle.left_motor_sign', 1),
     ('vehicle.right_feedback_sign', -1),
     ('vehicle.left_feedback_sign', 1),
-    ('vehicle.max_motor_rpm', 4400),
+    ('vehicle.max_motor_rpm', 4000),
     ('vehicle.min_effective_motor_rpm', 60),
 
     ('control.loop_period_s', 0.02),

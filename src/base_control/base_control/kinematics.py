@@ -48,7 +48,7 @@ class VehicleGeometry:
     left_motor_sign: int = 1
     right_feedback_sign: int = -1
     left_feedback_sign: int = 1
-    max_motor_rpm: int = 4400
+    max_motor_rpm: int = 4000
     min_effective_motor_rpm: int = 60
 
     def __post_init__(self) -> None:

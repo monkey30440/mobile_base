@@ -170,13 +170,19 @@ Vehicle Geometry 由下列參數決定：
 
 ### Vehicle Parameters
 
-| 參數 | 初版來源 |
-|---|---|
-| Wheel Radius | 既有 Baseline |
-| Wheel Separation | 既有 Baseline |
-| Gear Ratio | 既有 Baseline |
+| 參數 | 採用值 | 來源 |
+|---|---|---|
+| Wheel Radius | 0.08 m | 既有 Baseline |
+| Wheel Separation | 0.555 m | 既有 Baseline |
+| Gear Ratio | 20.0 | 既有 Baseline |
 
-上述參數於 Hardware Bring-up 完成後，以實機量測確認。
+上述為目前採用值，**沿用既有 Baseline，尚未經實機量測驗證**。
+
+三者僅影響 `/cmd_vel` 命令換算，不影響 `/wheel_states` 回授
+（回授為輪端 rad，僅依賴 Gear Ratio 與編碼器解析度）。
+
+實機量測方法待 Vehicle Parameter 校正時定義；
+Wheel Radius 應量測有載滾動半徑，非幾何半徑。
 
 ---
 
@@ -217,6 +223,28 @@ position = turns × (Encoder Resolution × 4) + pulse
 - 每轉步數由 `01-06` 推導，不寫死常數。
 - 啟動時讀取並驗證 `02-14` 與 `01-06`；`02-14` 非 0 時視為組態錯誤並回報，
   避免驅動器更換或重置後產生無聲之里程誤差。
+
+#### Turns 溢位處理
+
+turns 欄位為 signed 16-bit（−32768 ~ +32767）。驅動器 `05-03` = 2
+（關閉 Overflow 保護，實機確認）時不觸發警報，計數器靜默繞回。
+
+以本車參數計算，繞回發生於約 823 m 行駛距離（0.5 m/s 約 27 分鐘），
+落在單次建圖任務時間內，故必須處理。
+
+SUB-001 以軟體偵測繞回並累加，對外提供單調連續之輪端位置，
+下游子系統無須自行處理繞回或加裝位移跳變濾除。
+
+---
+
+### 關閉行為
+
+節點關閉時應停止運動並解除激磁，使驅動器回到未激磁狀態。
+
+- SIGTERM 與 SIGINT 皆須走相同關閉路徑；
+  容器與服務管理器送出 SIGTERM，若未處理將留下激磁殘留。
+- 解除激磁為安全關鍵動作，左右輪獨立嘗試並重試，
+  單顆失敗不得中斷另一顆之解除。
 
 ---
 

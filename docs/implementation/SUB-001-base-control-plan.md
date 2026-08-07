@@ -102,10 +102,39 @@ Vehicle Parameters（Wheel Radius、Wheel Separation、Gear Ratio）仍為既有
 - 原地旋轉 0.2 rad/s：左 −0.691、右 +0.681~0.691 rad/s（理論 ±0.694）。
 - `/cmd_vel` 逾時自動停止；節點關閉時停止並解除激磁，驅動器回到 `WAIT/INHIBIT`。
 
-### Stage 3 — 實機驗證與參數確認
+### Stage 3 — 實機驗證與參數確認（進行中）
 
-- 完成下方驗證計畫全部項目。
-- 以實機量測確認 Vehicle Parameters，取代 Baseline 推定值。
+已完成（2026-08-07）：
+
+- **Encoder turns 溢位處理**：turns 為 signed 16-bit，驅動器 `05-03`=2
+  關閉 Overflow 保護故靜默繞回（約 823 m / 27 分鐘 @ 0.5 m/s 觸發）。
+  改以軟體偵測繞回並累加，採「原始值 + 補償量」而非逐次累加差值，
+  使偶發異常讀值僅造成單次尖峰而不永久污染位置。
+  以單元測試驗證正反向繞回與連續 3 次繞回皆單調連續。
+- **Encoder 反向驗證**：正向 0.05 m/s 位置遞增、反向 −0.05 m/s 位置遞減，
+  左右輪對稱。
+- **關閉路徑健壯化**：SIGTERM 原不執行 `finally`（Python 預設立即終止），
+  導致激磁殘留；已加裝 SIGTERM handler。另發現中斷於交易途中會使
+  半雙工匯流排失去同步（FC06 讀到殘留之 FC17h 回應），
+  已加入關閉前排空緩衝、解除激磁逐顆重試且互不中斷。
+  連續 3 次 SIGTERM 測試皆完整解除激磁。
+- **Vehicle Parameters**：採用 Baseline 值（見下），未進行實機量測。
+
+未完成：
+
+- 落地實際行駛驗證（目前僅架高驗證輪端行為）。
+- Vehicle Parameters 實機量測。
+- 長時間運轉驗證。
+
+Vehicle Parameters 採用值：
+
+| 參數 | 值 | 狀態 |
+|---|---|---|
+| Wheel Radius | 0.08 m | 沿用 Baseline，未量測 |
+| Wheel Separation | 0.555 m | 沿用 Baseline，未量測 |
+| Gear Ratio | 20.0 | 沿用 Baseline，未量測 |
+
+三者僅影響 `/cmd_vel` 命令換算，不影響 `/wheel_states` 回授。
 
 ---
 
@@ -121,7 +150,7 @@ Vehicle Parameters（Wheel Radius、Wheel Separation、Gear Ratio）仍為既有
    若後續需高於 50 Hz，再評估調整
    `/sys/bus/usb-serial/devices/ttyUSB0/latency_timer`。
 
-未驗證項目（Stage 2/3 處理）：encoder 反向轉動、turns 於 ±32768 之溢位行為、警報處理路徑。
+未驗證項目：警報處理路徑（實際觸發驅動器警報後之回復流程）。
 
 ---
 
@@ -144,7 +173,7 @@ Vehicle Parameters（Wheel Radius、Wheel Separation、Gear Ratio）仍為既有
 - [x] Design Baseline reviewed（`05_subsystem.md` SUB-001、SYS-022）
 - [x] Stage 1 通訊驗證（2026-08-07）
 - [x] Stage 2 `base_control` package（2026-08-07，架高驗證）
-- [ ] Stage 3 落地實機驗證與 Vehicle Parameters 量測
+- [ ] Stage 3 落地實機驗證與 Vehicle Parameters 量測（部分完成）
 - [ ] Feature Freeze
 
 ---

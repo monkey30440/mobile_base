@@ -48,6 +48,12 @@ POSITION_FORMAT_TURNS_PULSE = 0
 # 增量式編碼器為四倍頻
 QUADRATURE_FACTOR = 4
 
+# turns 欄位為 signed 16-bit，超出範圍時繞回。
+# 驅動器 05-03 = 2（關閉 Overflow 保護）時不觸發警報，僅靜默繞回，
+# 故須由軟體偵測並累加，否則每 65536 馬達轉會產生一次巨大假位移。
+_TURNS_RANGE = 0x10000
+_TURNS_HALF_RANGE = _TURNS_RANGE // 2
+
 MOTOR_STATUS_MAP = {
     0: 'STOP',
     2: 'RUN',
@@ -127,6 +133,9 @@ class DriverInterface:
         self._right_id = right_id
         self._left_id = left_id
         self._counts_per_motor_rev: int | None = None
+        # 每側之 turns 繞回追蹤：最近一次原始值與累計補償量
+        self._last_raw_turns: dict[str, int] = {}
+        self._turns_offset: dict[str, int] = {'right': 0, 'left': 0}
 
     @property
     def driver_ids(self) -> tuple[int, int]:
@@ -192,9 +201,15 @@ class DriverInterface:
         """SERVO-EN ON、FREE OFF。"""
         self._write_net_in_both(net_in_word(servo_en=True))
 
-    def disable(self) -> None:
-        """SERVO-EN OFF。"""
-        self._write_net_in_both(net_in_word(servo_en=False))
+    def disable(self, retries: int = 2) -> None:
+        """SERVO-EN OFF。
+
+        安全關鍵路徑：逐顆獨立嘗試並重試，任一顆失敗不影響另一顆，
+        全部嘗試完畢後才回報錯誤。
+        """
+        self._write_net_in_both(
+            net_in_word(servo_en=False), best_effort=True, retries=retries
+        )
 
     def free(self) -> None:
         """FREE ON：不激磁，馬達可被外力轉動（推車模式）。"""
@@ -222,13 +237,53 @@ class DriverInterface:
         ):
             self._write_register_both(address, value)
 
-    def _write_net_in_both(self, word: int) -> None:
-        self._write_register_both(ADDR_NET_IN, word)
+    def _write_net_in_both(
+        self, word: int, *, best_effort: bool = False, retries: int = 0
+    ) -> None:
+        self._write_register_both(
+            ADDR_NET_IN, word, best_effort=best_effort, retries=retries
+        )
 
-    def _write_register_both(self, address: int, value: int) -> None:
+    def _write_register_both(
+        self,
+        address: int,
+        value: int,
+        *,
+        best_effort: bool = False,
+        retries: int = 0,
+    ) -> None:
+        """對兩顆驅動器寫入同一暫存器。
+
+        best_effort 為真時，單顆失敗不中斷另一顆，
+        待兩顆皆嘗試完畢後才彙整錯誤拋出。
+        """
+        failures: list[str] = []
         for driver_id in (self._right_id, self._left_id):
-            self._transport.write_register(driver_id, address, value)
-            time.sleep(_FC06_GAP_S)
+            error = self._write_with_retry(address, value, driver_id, retries)
+            if error is None:
+                continue
+            if not best_effort:
+                raise error
+            failures.append(f'ID {driver_id}: {error}')
+        if failures:
+            raise Md2Error('; '.join(failures))
+
+    def _write_with_retry(
+        self, address: int, value: int, driver_id: int, retries: int
+    ) -> Md2Error | None:
+        last_error: Md2Error | None = None
+        for attempt in range(retries + 1):
+            try:
+                self._transport.write_register(driver_id, address, value)
+                time.sleep(_FC06_GAP_S)
+                return None
+            except Md2Error as exc:
+                last_error = exc
+                # 失敗多因匯流排殘留資料造成不同步，重試前先排空
+                if attempt < retries:
+                    self._transport.drain()
+        time.sleep(_FC06_GAP_S)
+        return last_error
 
     # ── 運動命令 ─────────────────────────────────────────────────────────────
 
@@ -248,25 +303,45 @@ class DriverInterface:
             left_rpm=left_rpm,
         )
         return DualFeedback(
-            right=self._decode(raw.right),
-            left=self._decode(raw.left),
+            right=self._decode('right', raw.right),
+            left=self._decode('left', raw.left),
             comm_s=raw.comm_s,
         )
 
-    def _decode(self, raw) -> MotorFeedback:
+    def reset_position_tracking(self) -> None:
+        """清除 turns 繞回追蹤狀態；重新連線後應呼叫。"""
+        self._last_raw_turns.clear()
+        self._turns_offset = {'right': 0, 'left': 0}
+
+    def _decode(self, side: str, raw) -> MotorFeedback:
         """解碼馬達端位置。
 
         02-14 = 0 時位置以 (turns, pulse) 兩個 word 表示，
-        累積 counts = turns × counts_per_motor_rev + pulse。
+        累積 counts = 累計 turns × counts_per_motor_rev + pulse。
         """
+        turns = self._accumulate_turns(side, raw.pos_turns)
         return MotorFeedback(
             status=raw.status,
             alarm=raw.alarm,
             rpm=raw.rpm,
-            position_counts=(
-                raw.pos_turns * self.counts_per_motor_rev + raw.pos_pulse
-            ),
+            position_counts=turns * self.counts_per_motor_rev + raw.pos_pulse,
         )
+
+    def _accumulate_turns(self, side: str, raw_turns: int) -> int:
+        """將 signed 16-bit turns 還原為連續累計圈數。
+
+        以「原始值 + 累計補償量」而非逐次累加差值計算，
+        使偶發異常讀值僅造成單次尖峰，不會永久污染位置。
+        """
+        previous = self._last_raw_turns.get(side)
+        if previous is not None:
+            delta = raw_turns - previous
+            if delta < -_TURNS_HALF_RANGE:
+                self._turns_offset[side] += _TURNS_RANGE      # 正向繞回
+            elif delta > _TURNS_HALF_RANGE:
+                self._turns_offset[side] -= _TURNS_RANGE      # 反向繞回
+        self._last_raw_turns[side] = raw_turns
+        return raw_turns + self._turns_offset[side]
 
 
 __all__ = [

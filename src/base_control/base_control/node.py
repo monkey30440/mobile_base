@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import signal
 import sys
 
 import rclpy
@@ -228,16 +229,41 @@ class BaseControlNode(Node):
     # ── 關閉 ─────────────────────────────────────────────────────────────────
 
     def shutdown(self) -> None:
-        """停止運動、解除激磁並關閉序列埠。"""
+        """停止運動、解除激磁並關閉序列埠。
+
+        關閉路徑不得因單一步驟失敗而中斷，否則可能留下激磁狀態，
+        故 stop 與 disable 分別容錯。
+        """
+        # 中斷可能發生於交易途中，殘留回應會使後續請求失去同步
+        if self._transport is not None:
+            self._transport.drain()
         if self._driver is not None:
             try:
                 self._driver.stop()
+            except Md2Error as exc:
+                self.get_logger().error(f'關閉期間停止命令失敗：{exc}')
+                self._transport.drain()
+            try:
                 self._driver.disable()
                 self.get_logger().info('驅動器已停止並解除激磁')
             except Md2Error as exc:
-                self.get_logger().error(f'關閉期間通訊失敗：{exc}')
+                self.get_logger().error(f'關閉期間解除激磁失敗：{exc}')
         if self._transport is not None:
             self._transport.close()
+
+
+def _install_sigterm_handler() -> None:
+    """令 SIGTERM 走與 SIGINT 相同之關閉路徑。
+
+    Python 對 SIGTERM 之預設行為為立即終止程序，`finally` 不會執行，
+    將導致驅動器維持激磁。`docker stop`、systemd 與 supervisor 皆送 SIGTERM，
+    故須明確轉換為例外以確保 shutdown() 被呼叫。
+    """
+
+    def handler(*_):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, handler)
 
 
 def main(args=None) -> int:
@@ -245,6 +271,7 @@ def main(args=None) -> int:
     node = None
     try:
         node = BaseControlNode()
+        _install_sigterm_handler()
         rclpy.spin(node)
     except (DriverConfigError, Md2Error) as exc:
         print(f'base_control 啟動失敗：{exc}', file=sys.stderr)

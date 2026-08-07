@@ -15,7 +15,8 @@ base_control_node:
     driver.s_curve_acc_ms: 1
     driver.s_curve_dec_ms: 1
 
-    # 沿用既有 Baseline 推定值，Stage 3 以實機量測取代
+    # 採用值：沿用既有 Baseline，尚未經實機量測驗證
+    # 僅影響 /cmd_vel 命令換算，不影響 /wheel_states 回授
     vehicle.wheel_radius_m: 0.08
     vehicle.wheel_separation_m: 0.555
     vehicle.gear_ratio: 20.0
@@ -23,7 +24,8 @@ base_control_node:
     vehicle.left_motor_sign: 1
     vehicle.right_feedback_sign: -1
     vehicle.left_feedback_sign: 1
-    vehicle.max_motor_rpm: 4400
+    # 4000 = 01-04 無載全轉速 4188 × 95%，並低於 05-04 過速報警門檻 4300
+    vehicle.max_motor_rpm: 4000
     vehicle.min_effective_motor_rpm: 60
 
     # counts_per_motor_rev 不在此設定，一律由驅動器 01-06 推導

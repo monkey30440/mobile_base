@@ -118,6 +118,16 @@ class Md2Transport:
         if self._serial.is_open:
             self._serial.close()
 
+    def drain(self, settle_s: float = 0.05) -> None:
+        """清空收發緩衝並等待匯流排靜默。
+
+        交易途中被中斷時，未讀完之回應會殘留於緩衝區，
+        使後續請求讀到前一筆回應而 CRC 失敗。關閉流程前須先排空。
+        """
+        time.sleep(settle_s)
+        self._serial.reset_input_buffer()
+        self._serial.reset_output_buffer()
+
     def __enter__(self) -> 'Md2Transport':
         return self
 
