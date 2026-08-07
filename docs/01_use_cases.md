@@ -72,6 +72,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 | SUB-006 Robot Localization EKF |
 | SUB-007 SLAM Toolbox |
 | SUB-008 Map Management |
+| SUB-012 Robot Description |
 
 ---
 
@@ -210,3 +211,4 @@ Navigation Strategy 為 Navigation 內部行為，不受 Navigation Target 類�
 | SUB-009 Task Interface |
 | SUB-010 Target Resolution |
 | SUB-011 Navigation |
+| SUB-012 Robot Description |

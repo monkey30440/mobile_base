@@ -77,6 +77,7 @@ maps/
 | SUB-006 Robot Localization EKF |
 | SUB-007 SLAM Toolbox |
 | SUB-008 Map Management |
+| SUB-012 Robot Description |
 
 ---
 
@@ -187,3 +188,4 @@ Navigation Result：
 | SUB-009 Task Interface |
 | SUB-010 Target Resolution |
 | SUB-011 Navigation |
+| SUB-012 Robot Description |

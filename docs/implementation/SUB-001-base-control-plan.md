@@ -79,38 +79,60 @@ LiDAR / IMU 感知（SUB-002 / SUB-003）。
 效益：消除參數重複、移除自訂運動學與里程程式碼、取得速度限制與
 odometry covariance 等既有能力。
 
-代價：hardware interface 須以 C++ 實作（ros2_control 無穩定 Python 支援），
-序列埠改用 POSIX termios 或等效函式庫。
+代價：hardware interface 須以 C++ 實作（ros2_control 無穩定 Python 支援）。
 
 ---
 
 ## 實作策略
 
-### Stage A — 前置驗證（gating，尚未執行）
+### Stage A — 前置驗證（已完成 2026-08-07）
 
-**ros2_control 可用性目前為未驗證假設**，base image 內未預裝
-（僅 `pluginlib` 存在），須先確認方可繼續：
+base image 未預裝 ros2_control（僅 `pluginlib`），已確認可經 apt 取得：
 
-- [ ] `ros-jazzy-ros2-control`、`ros-jazzy-ros2-controllers` 可經 apt 取得並安裝。
-- [ ] 安裝後 `controller_manager`、`diff_drive_controller`、
-      `joint_state_broadcaster` 可正常載入。
-- [ ] 更新 `Dockerfile` 並確認 `docker compose build` 通過。
+- [x] `ros-jazzy-ros2-control` 4.45.2、`ros-jazzy-ros2-controllers` 4.40.1 安裝成功。
+- [x] `controller_manager`、`hardware_interface`、`controller_interface`、
+      `diff_drive_controller`、`joint_state_broadcaster` 皆可見。
+- [x] C++ 開發標頭與 CMake config 齊備
+      （`system_interface.hpp`、`hardware_info.hpp`、`hardware_interfaceConfig.cmake`）。
+- [x] `Dockerfile` 更新後 `docker compose build` 通過，全新容器驗證元件可用。
 
-若無法取得，須回頭重新評估架構決策。
+**架構決策成立，可繼續 Stage B。**
 
-### Stage B — URDF 與 `<ros2_control>` 描述
 
-ros2_control 需要 URDF 提供 joint 定義與硬體介面描述，目前專案尚無 URDF。
+### Stage B — SUB-012 Robot Description
 
-- [ ] 建立最小 URDF：`base_footprint`、`base_link`、左右輪 joint。
-- [ ] 加入 `<ros2_control>` 區段，宣告本插件與輪端介面。
-- [ ] `robot_state_publisher` 可發布 `base_footprint → base_link`。
+ros2_control 需要 URDF 提供 joint 定義與硬體介面描述。
+本階段實作 **SUB-012 Robot Description**（規格見 `05_subsystem.md`）。
+
+來源：`ref/FIH_AMR_ROBOT_V2.0_0731`（完整人形 AMR，84 links）。
+meshes 可直接沿用，URDF 須裁剪並調整。
+
+- [ ] 建立 `mobile_base_description` 套件，複製所需 meshes。
+- [ ] 裁剪 URDF：保留車體、驅動輪 ×2、caster ×4、感測器 frame；
+      移除軀幹、雙臂、雙手、頭部（約 60 links）。
+- [ ] 補上 `base_footprint`（來源 URDF 無此連桿）。
+- [ ] Frame 命名對齊規格：`imu_link`、
+      `front_left_laser_frame`、`back_right_laser_frame`。
+- [ ] 加入 `<ros2_control>` 區段，宣告 SUB-001 插件與輪端介面。
+- [ ] `robot_state_publisher` 可發布完整 TF tree。
+
+#### 來源 URDF 與規格之差異
+
+| 項目 | 來源 URDF | 規格 |
+|---|---|---|
+| 車體基準 | 無 `base_footprint` | `odom → base_footprint → base_link` |
+| LiDAR frame | `base_lidar_link_FL` / `_BR` | `front_left_laser_frame` / `back_right_laser_frame` |
+| IMU frame | `base_imu_link` | `imu_link` |
+| 輪關節 | `driving_wheel_joint_R` / `_L` | `left_wheel_joint` / `right_wheel_joint` |
+
+LiDAR 為對角安裝（前左、後右），已於 2026-08-07 確認並回寫規格；
+原規格之 front/rear 命名與 `/scan_front`、`/scan_rear` 已全面更新。
 
 ### Stage C — Hardware Interface 插件
 
 依已驗證之協議以 C++ 實作：
 
-1. Modbus Transport：RS-485 封包、CRC、收發。
+1. Modbus Transport：以 **libmodbus** 實作 RS-485 通訊。
 2. Driver Interface：寄存器語意、組態驗證、激磁、警報。
 3. Encoder Decoder：turns 繞回累加、輪端單位換算。
 4. `SystemInterface` 實作：`on_init` / `on_configure` / `on_activate` /
@@ -141,6 +163,13 @@ ros2_control 需要 URDF 提供 joint 定義與硬體介面描述，目前專案
 
 ## 已決事項
 
+0. **Modbus 實作採 libmodbus**（`libmodbus-dev` 3.1.10，apt 可取得）。
+   已驗證涵蓋所需 API：`modbus_new_rtu`、`modbus_set_slave`、
+   `modbus_write_and_read_registers`（FC17h，`write_addr` 與 `read_addr` 可分開指定）、
+   `modbus_read_registers`、`modbus_write_register`、`modbus_set_response_timeout`。
+   理由：CRC、RTU 框間延遲與 partial read 為易錯處，
+   Python 版已於此踩過一次（中斷造成半雙工失去同步），改用成熟實作。
+
 1. **Encoder 解碼**：維持驅動器出廠預設 `02-14 = 0`，軟體解碼為
    `turns × (01-06 × 4) + pulse`。驅動器端不做持久化設定。
    啟動時驗證 `02-14` 與 `01-06`，不符即回報組態錯誤。
@@ -167,8 +196,8 @@ ros2_control 需要 URDF 提供 joint 定義與硬體介面描述，目前專案
 ## 狀態
 
 - [x] Design Baseline reviewed（ros2_control 架構已回寫規格）
-- [ ] Stage A 前置驗證
-- [ ] Stage B URDF
+- [x] Stage A 前置驗證（2026-08-07）
+- [ ] Stage B SUB-012 Robot Description
 - [ ] Stage C Hardware Interface
 - [ ] Stage D 控制器組態
 - [ ] Stage E 實機驗證

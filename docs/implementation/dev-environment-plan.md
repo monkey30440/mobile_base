@@ -12,7 +12,7 @@
 
 | 檔案 | 用途 |
 |---|---|
-| `Dockerfile` | 以 Isaac ROS base image 建立 ROS 2 Jazzy 建置／執行環境 |
+| `Dockerfile` | 以 Isaac ROS base image 建立 ROS 2 Jazzy 建置／執行環境，並安裝 ros2_control |
 | `compose.yaml` | 平台中立之容器設定，不綁定實機裝置節點 |
 | `compose.hardware.yaml` | 疊加實機裝置節點（device passthrough） |
 
@@ -65,6 +65,8 @@ docker compose -f compose.yaml -f compose.hardware.yaml up -d --build
 
 - **ROS 2 Jazzy 基準於目標平台成立**，`04_architecture.md` 與 `05_subsystem.md` 之 ROS 版本基準無需修正。
 - Base image 未預裝 `pip3`，已於 Dockerfile 補上 `apt-get install python3-pip`。
+- Base image 未預裝 ros2_control，已於 Dockerfile 安裝
+  `ros-jazzy-ros2-control` 4.45.2 與 `ros-jazzy-ros2-controllers` 4.40.1。
 - 容器內存取 `/dev/ttyUSB0` 僅需 device passthrough，無需額外權限設定。
 
 ---

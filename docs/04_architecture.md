@@ -378,8 +378,8 @@ map → odom
 # Perception Architecture
 
 ```text
-Front LiDAR
-Rear LiDAR
+Front-Left LiDAR
+Back-Right LiDAR
         │
         ▼
 Original LaserScan
@@ -467,6 +467,8 @@ SUB-009 Task Interface
 SUB-010 Target Resolution
 
 SUB-011 Navigation
+
+SUB-012 Robot Description
 ```
 
 各 Subsystem 維持單一職責。

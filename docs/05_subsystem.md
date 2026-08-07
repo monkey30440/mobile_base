@@ -17,6 +17,7 @@
 | SUB-009 | Task Interface |
 | SUB-010 | Target Resolution |
 | SUB-011 | Navigation |
+| SUB-012 | Robot Description |
 
 ---
 
@@ -315,15 +316,16 @@ LiDAR Perception 子系統負責取得前後兩顆 LiDAR 的原始掃描資料�
 | 運算平台 | Jetson AGX Orin Developer Kit |
 | ROS | ROS 2 Jazzy |
 | LiDAR | SICK picoScan150 ×2 |
+| 安裝方式 | 對角配置（前左、後右） |
 | 通訊介面 | Ethernet |
-| Coordinate Frame | URDF 定義 |
+| Coordinate Frame | SUB-012 Robot Description |
 
 ---
 
 ## 系統職責
 
-- 建立前方 LiDAR 通訊。
-- 建立後方 LiDAR 通訊。
+- 建立前左 LiDAR 通訊。
+- 建立後右 LiDAR 通訊。
 - 接收兩顆 LiDAR 掃描資料。
 - 分別發布標準 ROS 2 `LaserScan` Topic。
 - 提供各 LiDAR 裝置狀態。
@@ -338,28 +340,36 @@ LiDAR Perception 僅負責提供原始 LiDAR 資料。
 ## 邏輯架構
 
 ```text
-Front picoScan150                    Rear picoScan150
+Front-Left picoScan150                    Back-Right picoScan150
         │                                    │
         ▼                                    ▼
-Front LiDAR Driver                   Rear LiDAR Driver
+Front-Left LiDAR Driver                   Back-Right LiDAR Driver
         │                                    │
         ▼                                    ▼
-  /scan_front                          /scan_rear
+  /scan_front_left                          /scan_back_right
         │                                    │
         └──────────────┬─────────────────────┘
                        ▼
               Downstream Consumers
 ```
 
-兩顆 LiDAR 分別發布 `/scan_front` 與 `/scan_rear`。
+兩顆 LiDAR 分別發布 `/scan_front_left` 與 `/scan_back_right`。
 
 初版維持兩個獨立原始 Topic。
+
+### 對角安裝
+
+兩顆 LiDAR 採對角配置：一顆位於車體前左，一顆位於車體後右。
+/home/zzz/mobile_base/ref/FIH_AMR_ROBOT_V2.0_0731
+此配置使兩顆 LiDAR 之視野互補，涵蓋車體四周並消除單側盲區；
+各顆本身不足以單獨涵蓋全周，故下游若僅取用單一來源，
+須確認該來源之視野足以滿足其功能需求。
 
 ---
 
 ## LiDAR 資料使用原則
 
-- SUB-002 持續發布原始 `/scan_front` 與 `/scan_rear`。
+- SUB-002 持續發布原始 `/scan_front_left` 與 `/scan_back_right`。
 - 下游可直接接收多個原始 LiDAR Topic 時，直接使用原始資料。
 - 下游僅需單一來源且單一原始 Topic 可滿足需求時，使用選定之原始 Topic。
 - 僅於下游介面無法直接接收所需原始資料，且單一來源無法滿足功能需求時，才評估 LaserScan Fusion。
@@ -373,8 +383,8 @@ Front LiDAR Driver                   Rear LiDAR Driver
 
 | Topic | Type | 說明 |
 |---|---|---|
-| `/scan_front` | `sensor_msgs/msg/LaserScan` | 前方 LiDAR 原始掃描資料 |
-| `/scan_rear` | `sensor_msgs/msg/LaserScan` | 後方 LiDAR 原始掃描資料 |
+| `/scan_front_left` | `sensor_msgs/msg/LaserScan` | 前左 LiDAR 原始掃描資料 |
+| `/scan_back_right` | `sensor_msgs/msg/LaserScan` | 後右 LiDAR 原始掃描資料 |
 
 SUB-002 不發布預設融合後 Scan Topic。
 
@@ -384,10 +394,10 @@ SUB-002 不發布預設融合後 Scan Topic。
 
 | Parent Frame | Child Frame |
 |---|---|
-| `base_link` | `front_laser_frame` |
-| `base_link` | `rear_laser_frame` |
+| `base_link` | `front_left_laser_frame` |
+| `base_link` | `back_right_laser_frame` |
 
-LiDAR 安裝位置與姿態由 URDF 管理。
+LiDAR 安裝位置與姿態由 **SUB-012 Robot Description** 管理。
 
 初版沿用既有 URDF Baseline，Hardware Bring-up 完成後以實機掃描確認。
 
@@ -423,10 +433,10 @@ SUB-002 不額外修改量測內容。
 |---|---|
 | Device IP | 現有 Baseline |
 | Host IP | 網路設定 |
-| Front Frame ID | `front_laser_frame` |
-| Rear Frame ID | `rear_laser_frame` |
-| Front Topic | `/scan_front` |
-| Rear Topic | `/scan_rear` |
+| Front-Left Frame ID | `front_left_laser_frame` |
+| Back-Right Frame ID | `back_right_laser_frame` |
+| Front-Left Topic | `/scan_front_left` |
+| Back-Right Topic | `/scan_back_right` |
 
 ### Scan Parameters
 
@@ -448,8 +458,8 @@ SUB-002 不額外修改量測內容。
 
 ```text
 lidar_perception
-├── Front LiDAR Driver
-├── Rear LiDAR Driver
+├── Front-Left LiDAR Driver
+├── Back-Right LiDAR Driver
 ├── Ethernet Transport
 ├── Parameter Manager
 └── Diagnostics
@@ -479,12 +489,12 @@ SUB-002 依下列順序完成設計確認：
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| Front Driver | 可持續接收前方 LiDAR |
-| Rear Driver | 可持續接收後方 LiDAR |
-| Front Topic | `/scan_front` 持續發布 |
-| Rear Topic | `/scan_rear` 持續發布 |
+| Front-Left Driver | 可持續接收前左 LiDAR |
+| Back-Right Driver | 可持續接收後右 LiDAR |
+| Front-Left Topic | `/scan_front_left` 持續發布 |
+| Back-Right Topic | `/scan_back_right` 持續發布 |
 | Message Type | 兩個 Topic 均為 `sensor_msgs/msg/LaserScan` |
-| Frame ID | 與 URDF 定義一致 |
+| Frame ID | 與 SUB-012 定義一致 |
 | Scan Direction | 與實際安裝方向一致 |
 | Raw Data | 下游可直接取得兩個原始 Topic |
 | Downstream Input | 完成各下游應用之輸入能力確認 |
@@ -526,7 +536,7 @@ IMU Perception 子系統負責取得 TDK IIM-42652 的角速度與線性加速�
 | 感測能力 | 3 軸角速度、3 軸線性加速度 |
 | 通訊介面 | USB Serial |
 | Device | `/dev/ttyACM0` |
-| Coordinate Frame | URDF 定義 |
+| Coordinate Frame | SUB-012 Robot Description |
 
 ---
 
@@ -588,7 +598,7 @@ TDK IIM-42652
 |---|---|
 | `base_link` | `imu_link` |
 
-IMU 安裝位置與座標方向由 URDF 管理。
+IMU 安裝位置與座標方向由 **SUB-012 Robot Description** 管理。
 
 初版沿用既有 URDF Baseline，並透過實機靜止與旋轉測試確認。
 
@@ -702,7 +712,7 @@ SUB-003 依下列順序完成設計確認：
 | Angular Velocity | 旋轉方向與實際運動一致 |
 | Linear Acceleration | 靜止時重力方向一致 |
 | Unit | 使用 ROS 2 標準 SI 單位 |
-| Axis Mapping | 與 URDF 定義一致 |
+| Axis Mapping | 與 SUB-012 定義一致 |
 | Long Duration | 建圖與導航期間持續正常運作 |
 
 ---
@@ -744,7 +754,7 @@ Differential Drive Controller 子系統負責差速運動學與輪式里程：
 | 控制框架 | ros2_control |
 | 元件 | `diff_drive_controller` |
 | 硬體介面 | SUB-001 Base Control |
-| Coordinate Frame | URDF 定義 |
+| Coordinate Frame | SUB-012 Robot Description |
 
 ---
 
@@ -963,7 +973,7 @@ RF2O Odometry 子系統負責使用 LiDAR 原始掃描資料估測 AMR 平面里
 | ROS | ROS 2 Jazzy |
 | 演算法 | RF2O Laser Odometry |
 | 資料來源 | SUB-002 LiDAR Perception |
-| Coordinate Frame | URDF 定義 |
+| Coordinate Frame | SUB-012 Robot Description |
 
 ---
 
@@ -986,7 +996,7 @@ RF2O Odometry 僅負責雷射里程估測。
 ## 邏輯架構
 
 ```text
-/scan_front 或 /scan_rear
+/scan_front_left 或 /scan_back_right
           │
           ▼
  RF2O Laser Odometry
@@ -1010,7 +1020,7 @@ RF2O 優先直接使用 SUB-002 提供之原始 LiDAR Topic。
 
 1. 確認 RF2O 套件支援的輸入形式。
 2. 若套件可直接接收所需之多個原始來源，直接使用原始 Topic。
-3. 若套件僅接受單一 `LaserScan`，分別驗證 `/scan_front` 與 `/scan_rear`。
+3. 若套件僅接受單一 `LaserScan`，分別驗證 `/scan_front_left` 與 `/scan_back_right`。
 4. 選用可穩定提供 RF2O 里程估測的單一原始來源。
 5. 單一原始來源可滿足需求時維持不融合。
 6. 僅於介面限制且單一來源無法滿足功能需求時，才評估 LaserScan Fusion。
@@ -1025,7 +1035,7 @@ RF2O 優先直接使用 SUB-002 提供之原始 LiDAR Topic。
 
 | Topic | Type | 說明 |
 |---|---|---|
-| `/scan_front` 或 `/scan_rear` | `sensor_msgs/msg/LaserScan` | RF2O 原始 Scan 輸入 |
+| `/scan_front_left` 或 `/scan_back_right` | `sensor_msgs/msg/LaserScan` | RF2O 原始 Scan 輸入 |
 
 正式輸入 Topic 依套件介面、Hardware Bring-up 與實機測試結果決定。
 
@@ -1073,8 +1083,8 @@ RF2O 提供相對運動估測，不提供長時間絕對定位。
 
 候選原始來源：
 
-- `/scan_front`
-- `/scan_rear`
+- `/scan_front_left`
+- `/scan_back_right`
 
 實機評估項目：
 
@@ -1139,7 +1149,7 @@ SUB-005 依下列順序完成設計確認：
 3. SUB-002 LiDAR Perception。
 4. RF2O 輸入介面確認。
 5. Hardware Bring-up。
-6. `/scan_front` 與 `/scan_rear` 實機比較。
+6. `/scan_front_left` 與 `/scan_back_right` 實機比較。
 7. LaserScan Fusion 必要性評估。
 8. Robot Localization 輸入需求。
 
@@ -1150,8 +1160,8 @@ SUB-005 依下列順序完成設計確認：
 | 驗證項目 | 完成條件 |
 |---|---|
 | Input Capability | 完成 RF2O 原始 Scan 輸入能力確認 |
-| Front Scan Test | 完成 `/scan_front` RF2O 測試 |
-| Rear Scan Test | 完成 `/scan_rear` RF2O 測試 |
+| Front-Left Scan Test | 完成 `/scan_front_left` RF2O 測試 |
+| Back-Right Scan Test | 完成 `/scan_back_right` RF2O 測試 |
 | Scan Source | 選定可滿足需求之原始 LiDAR 來源 |
 | Topic Publish | `/rf2o_odom` 持續發布 |
 | Message Type | `nav_msgs/msg/Odometry` |
@@ -1299,11 +1309,11 @@ Robot Localization 使用：
 ```text
 base_link
 ├── imu_link
-├── front_laser_frame
-└── rear_laser_frame
+├── front_left_laser_frame
+└── back_right_laser_frame
 ```
 
-由 URDF 提供。
+由 **SUB-012 Robot Description** 提供。
 
 ---
 
@@ -1546,7 +1556,7 @@ SLAM Toolbox 優先直接使用 SUB-002 提供之原始 LiDAR Topic。
 
 1. 確認 SLAM Toolbox 可接受之 LiDAR 輸入形式。
 2. 若可直接接收所需之多個原始來源，直接使用原始 Topic。
-3. 若僅接受單一 `LaserScan`，分別驗證 `/scan_front` 與 `/scan_rear`。
+3. 若僅接受單一 `LaserScan`，分別驗證 `/scan_front_left` 與 `/scan_back_right`。
 4. 選用可穩定完成建圖的單一原始來源。
 5. 單一原始來源可滿足建圖需求時維持不融合。
 6. 僅於介面限制且單一來源無法滿足建圖需求時，才評估 LaserScan Fusion。
@@ -1604,8 +1614,8 @@ base_link
 |---|---|
 | `map → odom` | SLAM Toolbox |
 | `odom → base_footprint` | SUB-006 Robot Localization EKF |
-| `base_footprint → base_link` | URDF |
-| `base_link → sensor frames` | URDF |
+| `base_footprint → base_link` | SUB-012 Robot Description |
+| `base_link → sensor frames` | SUB-012 Robot Description |
 
 Mapping 模式中，`map → odom` 僅由 SLAM Toolbox 發布。
 
@@ -1710,7 +1720,7 @@ SUB-007 依下列順序完成設計確認：
 4. 既有 URDF 與 TF Tree。
 5. SLAM Toolbox LiDAR 輸入能力確認。
 6. Hardware Bring-up。
-7. `/scan_front` 與 `/scan_rear` 實機建圖比較。
+7. `/scan_front_left` 與 `/scan_back_right` 實機建圖比較。
 8. LaserScan Fusion 必要性評估。
 9. Occupancy Grid 實機驗證。
 
@@ -1723,8 +1733,8 @@ SUB-007 依下列順序完成設計確認：
 | 驗證項目 | 完成條件 |
 |---|---|
 | Input Capability | 完成 SLAM Toolbox 原始 Scan 輸入能力確認 |
-| Front Scan Test | 完成 `/scan_front` 建圖測試 |
-| Rear Scan Test | 完成 `/scan_rear` 建圖測試 |
+| Front-Left Scan Test | 完成 `/scan_front_left` 建圖測試 |
+| Back-Right Scan Test | 完成 `/scan_back_right` 建圖測試 |
 | Scan Source | 選定可滿足需求之原始 LiDAR 輸入 |
 | Odom Input | 可持續取得 `/odom` 與 TF |
 | Topic Publish | `/map` 持續發布並更新 |
@@ -3319,8 +3329,8 @@ map
 Navigation 優先直接使用 SUB-002 提供之原始 LiDAR Topic：
 
 ```text
-/scan_front
-/scan_rear
+/scan_front_left
+/scan_back_right
 ```
 
 使用原則：
@@ -3342,9 +3352,9 @@ Navigation 使用：
 概念資料流：
 
 ```text
-/scan_front ─────┐
+/scan_front_left ─────┐
                  ├──► Costmap Observation Sources
-/scan_rear ──────┘
+/scan_back_right ──────┘
 ```
 
 若 Nav2 Costmap 可直接設定兩個 Observation Source，直接使用兩個原始 LiDAR Topic。
@@ -3436,8 +3446,8 @@ Station 最終已解析為 Goal Pose。
 | Canonical Goal Pose | `geometry_msgs/msg/PoseStamped` | Navigation Goal |
 | `/map` | `nav_msgs/msg/OccupancyGrid` | Navigation Map |
 | `/odom` | `nav_msgs/msg/Odometry` | 系統里程 |
-| `/scan_front` | `sensor_msgs/msg/LaserScan` | Front LiDAR |
-| `/scan_rear` | `sensor_msgs/msg/LaserScan` | Rear LiDAR |
+| `/scan_front_left` | `sensor_msgs/msg/LaserScan` | Front-Left LiDAR |
+| `/scan_back_right` | `sensor_msgs/msg/LaserScan` | Back-Right LiDAR |
 | `/tf` | TF2 | Dynamic TF |
 | `/tf_static` | TF2 | Static TF |
 
@@ -3478,16 +3488,16 @@ map
             │
             └── base_link
                   ├── imu_link
-                  ├── front_laser_frame
-                  └── rear_laser_frame
+                  ├── front_left_laser_frame
+                  └── back_right_laser_frame
 ```
 
 | Transform | Publisher |
 |---|---|
 | `map → odom` | AMCL |
 | `odom → base_footprint` | SUB-006 Robot Localization EKF |
-| `base_footprint → base_link` | URDF |
-| `base_link → sensor frames` | URDF |
+| `base_footprint → base_link` | SUB-012 Robot Description |
+| `base_link → sensor frames` | SUB-012 Robot Description |
 
 Navigation 模式中 `map → odom` 僅由 AMCL 發布。
 
@@ -3558,8 +3568,8 @@ Behavior Server
 | Odom Frame | `odom` |
 | Base Frame | `base_footprint` |
 | Odom Topic | `/odom` |
-| Front Scan | `/scan_front` |
-| Rear Scan | `/scan_rear` |
+| Front-Left Scan | `/scan_front_left` |
+| Back-Right Scan | `/scan_back_right` |
 | Velocity Topic | `/cmd_vel` |
 
 ---
@@ -3708,3 +3718,169 @@ SUB-011 依下列順序完成設計確認：
 | SYS-019 | SUB-011 |
 | SYS-020 | SUB-011 |
 | SYS-021 | SUB-011 |
+
+# SUB-012 Robot Description
+
+## 目的
+
+Robot Description 子系統負責定義 AMR 之機器人幾何、座標系與關節，
+提供 TF、感測器安裝位姿、ros2_control 硬體介面宣告與導航所需之車體輪廓。
+
+本子系統為靜態描述資源，不含執行期邏輯。
+
+---
+
+## 對應需求
+
+| Requirement |
+|---|
+| SYS-023 |
+
+---
+
+## 系統邊界
+
+| 項目 | 規格 |
+|---|---|
+| ROS | ROS 2 Jazzy |
+| 描述格式 | URDF（xacro） |
+| 幾何資產 | STL meshes |
+| 發布元件 | `robot_state_publisher` |
+| 來源 | 既有專案 `FIH_AMR_ROBOT_V2.0` |
+
+---
+
+## 系統職責
+
+- 定義車體與輪組之連桿與關節。
+- 定義感測器安裝位姿（LiDAR ×2、IMU）。
+- 定義 `base_footprint` 與 `base_link` 之關係。
+- 提供 ros2_control `<ros2_control>` 硬體介面宣告。
+- 提供導航所需之車體輪廓（footprint）。
+- 經 `robot_state_publisher` 發布靜態與關節 TF。
+
+不負責：
+
+- TF 之 `map → odom`（SUB-007 / SUB-011）與 `odom → base_footprint`（SUB-006）。
+- 感測器驅動與資料處理。
+- 運動控制與里程。
+
+---
+
+## 範圍
+
+既有專案 URDF 為完整人形 AMR（含軀幹、雙臂、雙手、頭部）。
+本子系統僅涵蓋 `mobile_base` v0.1 所需部分：
+
+| 項目 | 納入 |
+|---|---|
+| `base_footprint`、`base_link` | ✅ |
+| 驅動輪 ×2 與懸吊 | ✅ |
+| Caster ×4 | ✅ |
+| LiDAR ×2、IMU 安裝 frame | ✅ |
+| 軀幹、手臂、手部、頭部 | ❌ 不納入 |
+
+上半身於後續版本需要時再行加入，不預先建立未使用之描述。
+
+---
+
+## TF Interface
+
+本子系統提供之座標關係：
+
+```text
+base_footprint
+      │
+      ▼
+  base_link
+      ├── driving_wheel_link_L / _R
+      ├── caster_* （×4 組）
+      ├── imu_link
+      ├── front_left_laser_frame
+      └── back_right_laser_frame
+```
+
+`base_footprint → base_link` 為固定轉換，由 `robot_state_publisher` 發布。
+
+輪關節之轉動由 `joint_state_broadcaster` 提供 `/joint_states`，
+經 `robot_state_publisher` 轉為 TF。
+
+---
+
+## Frame 命名
+
+| Frame | 說明 |
+|---|---|
+| `base_footprint` | 車體於地面之投影，導航與定位基準 |
+| `base_link` | 車體本體座標系 |
+| `left_wheel_joint` / `right_wheel_joint` | 驅動輪關節，ros2_control 控制對象 |
+| `imu_link` | IMU 安裝座標系（SUB-003） |
+| `front_left_laser_frame` | 前左 LiDAR（SUB-002） |
+| `back_right_laser_frame` | 後右 LiDAR（SUB-002） |
+
+Frame 命名為跨子系統契約，變更須同步更新所有引用之子系統。
+
+---
+
+## ros2_control 宣告
+
+URDF 須包含 `<ros2_control>` 區段，宣告：
+
+- SUB-001 Base Control 之 hardware interface 插件。
+- 左右驅動輪之 `position` / `velocity` state interface
+  與 `velocity` command interface。
+- 插件所需之硬體參數（序列埠、Driver ID 等）。
+
+---
+
+## 軟體組成
+
+```text
+mobile_base_description
+├── urdf/          機器人描述（xacro）
+├── meshes/        STL 幾何資產
+├── config/        （視需要）
+└── launch/        robot_state_publisher
+```
+
+---
+
+## 設計依據
+
+SUB-012 依下列順序完成設計確認：
+
+1. 既有專案 `FIH_AMR_ROBOT_V2.0` URDF 與 meshes。
+2. 實車安裝配置確認（LiDAR 對角、IMU 位置）。
+3. ros2_control URDF 規範。
+4. SUB-002 / SUB-003 感測器 frame 需求。
+5. SUB-006 TF tree 需求。
+6. 實機 TF 與掃描方向驗證。
+
+設計原則：
+
+- 沿用既有 URDF 之幾何數值，不重新建模。
+- 僅納入目前版本所需之連桿與關節。
+- Frame 命名與各子系統規格一致。
+
+---
+
+## 驗證項目
+
+| 驗證項目 | 完成條件 |
+|---|---|
+| URDF 解析 | `robot_state_publisher` 可載入且無錯誤 |
+| TF Tree | `base_footprint → base_link → 各 frame` 完整且無斷點 |
+| Mesh 載入 | RViz 可正確顯示車體幾何 |
+| Frame 命名 | 與 SUB-002／SUB-003／SUB-006 規格一致 |
+| 感測器位姿 | LiDAR 與 IMU 之安裝位姿與實車一致 |
+| 尺寸 | 車體輪廓與實車量測一致 |
+| ros2_control | `controller_manager` 可依 `<ros2_control>` 載入硬體介面 |
+| 輪關節 | `/joint_states` 可驅動輪關節 TF 轉動 |
+
+---
+
+## Traceability
+
+| Requirement | Subsystem |
+|---|---|
+| SYS-023 | SUB-012 |
