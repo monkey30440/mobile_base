@@ -98,6 +98,26 @@ base image 未預裝 ros2_control（僅 `pluginlib`），已確認可經 apt 取
 
 **架構決策成立，可繼續 Stage B。**
 
+#### Stage A 之驗證缺口（2026-08-07 於 Stage C 發現）
+
+上述驗證僅確認套件「可安裝、可見、可編譯」，**未確認 `ros2_control_node` 可實際執行**。
+
+Stage C 實機測試時 `ros2_control_node` 於載入插件前即以 exit 127 死亡：
+
+```text
+symbol lookup error: libpal_statistics_msgs__rosidl_typesupport_fastrtps_cpp.so:
+undefined symbol: _ZN8eprosima7fastcdr3Cdr9serializeEj
+```
+
+根因為 base image 之 ROS 快照（2026-01）與 packages.ros.org（2026-06）
+相差約 5 個月，共 197 個 ros-jazzy 套件版本落後，
+其中 Fast-CDR、Fast-DDS、rmw、rosidl 等通訊層不一致。
+
+處置見「Stage C 之環境對齊」。
+
+**教訓**：外部相依之驗證須包含「實際執行」，
+僅確認安裝與編譯不足以證明可用。
+
 
 ### Stage B — SUB-012 Robot Description
 

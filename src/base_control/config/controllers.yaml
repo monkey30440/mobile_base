@@ -1,0 +1,57 @@
+# SUB-004 Differential Drive Controller 組態
+#
+# Vehicle Geometry 由本檔單一持有；SUB-001 不重複宣告，
+# 避免命令路徑與里程路徑採用不同數值而產生無聲不一致。
+# 見 docs/05_subsystem.md § SUB-004。
+
+controller_manager:
+  ros__parameters:
+    update_rate: 50  # Hz；單次 FC17h 交易約 10~15 ms
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+diff_drive_controller:
+  ros__parameters:
+    left_wheel_names: ["driving_wheel_joint_L"]
+    right_wheel_names: ["driving_wheel_joint_R"]
+
+    # 沿用既有 Baseline，尚未經實機量測驗證。
+    # URDF 幾何推算輪距 0.5545 m，與此值相符。
+    wheel_separation: 0.555
+    wheel_radius: 0.08
+
+    # 使用輪端回授而非開迴路推算
+    open_loop: false
+    position_feedback: true
+
+    # TF 發布權責集中於 SUB-006 Robot Localization EKF
+    enable_odom_tf: false
+
+    odom_frame_id: odom
+    base_frame_id: base_footprint
+
+    publish_rate: 50.0
+    cmd_vel_timeout: 0.5
+
+    pose_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+
+    # 最高車速受馬達物理極限限制：
+    # 01-04 無載全轉速 4188 RPM，採用上限 4000 RPM
+    #   → 4000 / 20 × 2π × 0.08 / 60 ≈ 1.68 m/s
+    linear:
+      x:
+        max_velocity: 1.0
+        min_velocity: -1.0
+        max_acceleration: 1.0
+        max_deceleration: -1.0
+    angular:
+      z:
+        max_velocity: 2.0
+        min_velocity: -2.0
+        max_acceleration: 2.0
+        max_deceleration: -2.0
