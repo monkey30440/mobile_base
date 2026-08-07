@@ -8,15 +8,14 @@
 
 ### Architecture Refactoring
 
-完成 UC-001、UC-002、UC-003 後，評估調整文件結構。
+完成 UC-001、UC-002 後，評估調整文件結構。
 
 ```text
 architecture.md
 ├── Overall System Architecture
 ├── Common Architecture
 ├── UC-001 Runtime Flow
-├── UC-002 Runtime Flow
-└── UC-003 Runtime Flow
+└── UC-002 Runtime Flow
 ```
 
 Status

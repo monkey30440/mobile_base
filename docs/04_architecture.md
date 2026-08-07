@@ -71,7 +71,7 @@ Architecture 描述系統元件、資料流與子系統責任，不描述各子�
                                Navigation
                                     │
                                     ▼
-                            Robot Controller
+                            Base Control
 ```
 
 ---

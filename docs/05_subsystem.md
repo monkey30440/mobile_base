@@ -30,9 +30,7 @@ Base Control 子系統負責接收 AMR 運動命令，控制差速底盤完成�
 
 ## 對應需求
 
-| Requirement |
-|---|
-| SYS-002 |
+目前 `03_requirements.md` 未定義涵蓋底盤運動控制（接收 `/cmd_vel` 並驅動差速輪）之獨立 SYS 需求，待後續版本補齊。
 
 ---
 
@@ -227,9 +225,7 @@ SUB-001 依下列順序完成設計確認：
 
 ## Traceability
 
-| Requirement | Subsystem |
-|---|---|
-| SYS-002 | SUB-001 |
+無（見「對應需求」說明）。
 
 # SUB-002 LiDAR Perception
 
@@ -1690,6 +1686,7 @@ Map Management 子系統負責管理二維地圖與其關聯導航資源，提�
 
 | Requirement |
 |---|
+| SYS-002 |
 | SYS-007 |
 | SYS-008 |
 | SYS-009 |
@@ -1948,10 +1945,10 @@ map_management
 SUB-008 依下列順序完成設計確認：
 
 1. UC-001 地圖儲存需求。
-2. UC-002 與 UC-003 地圖載入需求。
+2. UC-002 地圖載入需求。
 3. `nav2_map_server`。
 4. SUB-007 SLAM Toolbox 輸出。
-5. SUB-010 Navigation Resource Management 資源需求。
+5. SUB-010 Target Resolution 資源需求。
 6. Map Package 目錄結構。
 7. 實機地圖儲存與載入驗證。
 
@@ -1981,6 +1978,7 @@ SUB-008 依下列順序完成設計確認：
 
 | Requirement | Subsystem |
 |---|---|
+| SYS-002 | SUB-008 |
 | SYS-007 | SUB-008 |
 | SYS-008 | SUB-008 |
 | SYS-009 | SUB-008 |
@@ -2018,7 +2016,7 @@ Task Interface 子系統負責接收使用者提交之 Navigation Target，完�
 | 任務類型 | Navigation |
 | Navigation Target | Station ID、Goal Pose |
 | Canonical Navigation Goal | Goal Pose |
-| Station Resolution | SUB-010 Navigation Resource Management |
+| Station Resolution | SUB-010 Target Resolution |
 | Navigation Execution | SUB-011 Navigation |
 
 ---
