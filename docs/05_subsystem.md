@@ -107,12 +107,24 @@ Base Control 子系統負責接收 AMR 運動命令，控制差速底盤完成�
 
 | Topic | Type | 說明 |
 |---|---|---|
-| `/wheel_states` | 自定義訊息 | 左右輪回授資訊 |
-| `/driver/status` | 自定義訊息 | Driver 狀態 |
+| `/wheel_states` | `sensor_msgs/msg/JointState` | 左右輪回授資訊 |
+| `/driver/status` | `diagnostic_msgs/msg/DiagnosticArray` | Driver 狀態 |
+
+依 Mature Solution First 與 Keep Custom Code Minimal，本子系統不建立自定義訊息型別。
+
+`/wheel_states` 欄位定義：
+
+| 欄位 | 內容 |
+|---|---|
+| `name` | `["left_wheel", "right_wheel"]` |
+| `position` | 輪端累積角位置（rad） |
+| `velocity` | 輪端角速度（rad/s） |
+
+位置與速度皆為輪端（減速機輸出端）物理量，已套用方向修正，符合車體座標系。
 
 Base Control 不負責 Wheel Odometry 計算。
 
-Wheel Odometry 由 **SUB-004 Wheel Odometry** 負責。
+Wheel Odometry 由 **SUB-004 Wheel Odometry** 負責，訂閱 `/wheel_states`。
 
 ---
 
@@ -750,7 +762,7 @@ Wheel Odometry 僅負責輪式里程估測。
 
 | Topic | Type | 說明 |
 |---|---|---|
-| `/wheel_states` | 自定義訊息 | 左右輪運動回授 |
+| `/wheel_states` | `sensor_msgs/msg/JointState` | 左右輪運動回授（輪端 rad、rad/s） |
 
 ### Publish
 
