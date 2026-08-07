@@ -68,6 +68,8 @@ docker compose -f compose.yaml -f compose.hardware.yaml up -d --build
 - Base image 未預裝 ros2_control，已於 Dockerfile 安裝
   `ros-jazzy-ros2-control` 4.45.2 與 `ros-jazzy-ros2-controllers` 4.40.1。
 - 容器內存取 `/dev/ttyUSB0` 僅需 device passthrough，無需額外權限設定。
+- colcon 之 `build/`、`install/`、`log/` 產生於 `/workspace`，未掛載至主機，
+  容器重建後需重新 `colcon build`。
 
 ---
 

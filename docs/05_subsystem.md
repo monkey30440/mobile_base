@@ -117,10 +117,10 @@ Base Control 不負責：
 
 | Joint | Interface | 單位 | 說明 |
 |---|---|---|---|
-| `left_wheel_joint` | `position` | rad | 輪端累積角位置 |
-| `left_wheel_joint` | `velocity` | rad/s | 輪端角速度 |
-| `right_wheel_joint` | `position` | rad | 輪端累積角位置 |
-| `right_wheel_joint` | `velocity` | rad/s | 輪端角速度 |
+| `driving_wheel_joint_L` | `position` | rad | 輪端累積角位置 |
+| `driving_wheel_joint_L` | `velocity` | rad/s | 輪端角速度 |
+| `driving_wheel_joint_R` | `position` | rad | 輪端累積角位置 |
+| `driving_wheel_joint_R` | `velocity` | rad/s | 輪端角速度 |
 
 位置為單調連續值，已完成 turns 繞回處理；
 位置與速度皆為輪端（減速機輸出端）物理量，並已套用方向修正。
@@ -129,8 +129,8 @@ Base Control 不負責：
 
 | Joint | Interface | 單位 |
 |---|---|---|
-| `left_wheel_joint` | `velocity` | rad/s |
-| `right_wheel_joint` | `velocity` | rad/s |
+| `driving_wheel_joint_L` | `velocity` | rad/s |
+| `driving_wheel_joint_R` | `velocity` | rad/s |
 
 ### 生命週期
 
@@ -394,8 +394,8 @@ SUB-002 不發布預設融合後 Scan Topic。
 
 | Parent Frame | Child Frame |
 |---|---|
-| `base_link` | `front_left_laser_frame` |
-| `base_link` | `back_right_laser_frame` |
+| `base_link` | `base_lidar_link_FL` |
+| `base_link` | `base_lidar_link_BR` |
 
 LiDAR 安裝位置與姿態由 **SUB-012 Robot Description** 管理。
 
@@ -433,8 +433,8 @@ SUB-002 不額外修改量測內容。
 |---|---|
 | Device IP | 現有 Baseline |
 | Host IP | 網路設定 |
-| Front-Left Frame ID | `front_left_laser_frame` |
-| Back-Right Frame ID | `back_right_laser_frame` |
+| Front-Left Frame ID | `base_lidar_link_FL` |
+| Back-Right Frame ID | `base_lidar_link_BR` |
 | Front-Left Topic | `/scan_front_left` |
 | Back-Right Topic | `/scan_back_right` |
 
@@ -596,7 +596,7 @@ TDK IIM-42652
 
 | Parent Frame | Child Frame |
 |---|---|
-| `base_link` | `imu_link` |
+| `base_link` | `base_imu_link` |
 
 IMU 安裝位置與座標方向由 **SUB-012 Robot Description** 管理。
 
@@ -611,7 +611,7 @@ IMU 安裝位置與座標方向由 **SUB-012 Robot Description** 管理。
 | 欄位 | 初版處理 |
 |---|---|
 | `header.stamp` | 使用 Driver 產生之訊息時間 |
-| `header.frame_id` | `imu_link` |
+| `header.frame_id` | `base_imu_link` |
 | `angular_velocity` | 轉換為 rad/s |
 | `linear_acceleration` | 轉換為 m/s² |
 | `orientation` | 維持未提供狀態 |
@@ -629,7 +629,7 @@ IMU 安裝位置與座標方向由 **SUB-012 Robot Description** 管理。
 |---|---|
 | Device | `/dev/ttyACM0` |
 | Baud Rate | 既有 Driver Baseline |
-| Frame ID | `imu_link` |
+| Frame ID | `base_imu_link` |
 | Topic | `/imu/data_raw` |
 
 ---
@@ -664,7 +664,7 @@ Axis Mapping 依 URDF 與實機測試確認。
 
 - 靜止時重力方向。
 - 正向旋轉時角速度方向。
-- X、Y、Z 軸與 `imu_link` 定義一致。
+- X、Y、Z 軸與 `base_imu_link` 定義一致。
 
 ---
 
@@ -708,7 +708,7 @@ SUB-003 依下列順序完成設計確認：
 | Topic Publish | `/imu/data_raw` 持續發布 |
 | Message Type | `sensor_msgs/msg/Imu` |
 | Timestamp | `header.stamp` 持續遞增 |
-| Frame ID | `header.frame_id` 為 `imu_link` |
+| Frame ID | `header.frame_id` 為 `base_imu_link` |
 | Angular Velocity | 旋轉方向與實際運動一致 |
 | Linear Acceleration | 靜止時重力方向一致 |
 | Unit | 使用 ROS 2 標準 SI 單位 |
@@ -1308,9 +1308,9 @@ Robot Localization 使用：
 
 ```text
 base_link
-├── imu_link
-├── front_left_laser_frame
-└── back_right_laser_frame
+├── base_imu_link
+├── base_lidar_link_FL
+└── base_lidar_link_BR
 ```
 
 由 **SUB-012 Robot Description** 提供。
@@ -3487,9 +3487,9 @@ map
       └── base_footprint
             │
             └── base_link
-                  ├── imu_link
-                  ├── front_left_laser_frame
-                  └── back_right_laser_frame
+                  ├── base_imu_link
+                  ├── base_lidar_link_FL
+                  └── base_lidar_link_BR
 ```
 
 | Transform | Publisher |
@@ -3793,11 +3793,11 @@ base_footprint
       │
       ▼
   base_link
-      ├── driving_wheel_link_L / _R
+      ├── driving_wheel_link_L / driving_wheel_link_R
       ├── caster_* （×4 組）
-      ├── imu_link
-      ├── front_left_laser_frame
-      └── back_right_laser_frame
+      ├── base_imu_link
+      ├── base_lidar_link_FL
+      └── base_lidar_link_BR
 ```
 
 `base_footprint → base_link` 為固定轉換，由 `robot_state_publisher` 發布。
@@ -3809,16 +3809,25 @@ base_footprint
 
 ## Frame 命名
 
-| Frame | 說明 |
+| Frame / Joint | 說明 |
 |---|---|
 | `base_footprint` | 車體於地面之投影，導航與定位基準 |
 | `base_link` | 車體本體座標系 |
-| `left_wheel_joint` / `right_wheel_joint` | 驅動輪關節，ros2_control 控制對象 |
-| `imu_link` | IMU 安裝座標系（SUB-003） |
-| `front_left_laser_frame` | 前左 LiDAR（SUB-002） |
-| `back_right_laser_frame` | 後右 LiDAR（SUB-002） |
+| `driving_wheel_joint_L` / `driving_wheel_joint_R` | 驅動輪關節，ros2_control 控制對象 |
+| `base_imu_link` | IMU 安裝座標系（SUB-003） |
+| `base_lidar_link_FL` | 前左 LiDAR（SUB-002） |
+| `base_lidar_link_BR` | 後右 LiDAR（SUB-002） |
 
-Frame 命名為跨子系統契約，變更須同步更新所有引用之子系統。
+**既有 URDF 之名稱不予改動**，各子系統規格一律配合 URDF。
+`base_footprint` 為新增連桿（來源 URDF 未定義），不影響既有名稱。
+
+Topic 名稱不受此限制，與 frame 之對應如下：
+
+| Topic | Frame |
+|---|---|
+| `/scan_front_left` | `base_lidar_link_FL` |
+| `/scan_back_right` | `base_lidar_link_BR` |
+| `/imu/data_raw` | `base_imu_link` |
 
 ---
 
@@ -3845,6 +3854,37 @@ mobile_base_description
 
 ---
 
+## 被動關節處理
+
+來源 URDF 之 caster（swivel／suspension／wheel 共 16 個）與驅動輪懸吊
+（prismatic ×2）皆為被動關節，無編碼器亦無任何 joint state 來源。
+
+保留為可動將使 TF tree 殘缺並持續產生 tf2 警告，故一律宣告為 `fixed`。
+僅 `driving_wheel_joint_L` / `driving_wheel_joint_R` 維持 `continuous`，
+由 `joint_state_broadcaster` 提供狀態。
+
+此為型別調整，未更動任何名稱。v0.1 不需建模懸吊行程與 caster 轉向；
+日後若需精確視覺化，可還原型別並另行提供 joint state 來源。
+
+---
+
+## 幾何參數
+
+由來源 URDF 取得，供交叉驗證：
+
+| 項目 | 值 |
+|---|---|
+| 左輪中心 y | +0.2775 m |
+| 右輪中心 y | −0.2770 m |
+| 輪距（推算） | 0.5545 m |
+| LiDAR FL | (+0.28771, +0.26721, −0.06011) |
+| LiDAR BR | (−0.24671, −0.26721, −0.06011) |
+| IMU | (+0.04375, −0.00800, −0.01459) |
+
+輪距推算值 0.5545 m 與 SUB-004 採用之 Baseline 值 0.555 m 相符（差 0.5 mm）。
+
+---
+
 ## 設計依據
 
 SUB-012 依下列順序完成設計確認：
@@ -3868,14 +3908,15 @@ SUB-012 依下列順序完成設計確認：
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| URDF 解析 | `robot_state_publisher` 可載入且無錯誤 |
-| TF Tree | `base_footprint → base_link → 各 frame` 完整且無斷點 |
+| URDF 解析 | `robot_state_publisher` 可載入且無錯誤（2026-08-07 已確認） |
+| TF Tree | 單一樹、root 為 `base_footprint`、25 links 無斷點（2026-08-07 已確認） |
+| 靜態 TF | `/tf_static` 發布 22 筆固定轉換（2026-08-07 已確認） |
+| 輪關節 | `/joint_states` 可驅動輪關節 TF 轉動（2026-08-07 已確認） |
+| Frame 命名 | 與 SUB-002／SUB-003／SUB-006 規格一致（2026-08-07 已確認） |
 | Mesh 載入 | RViz 可正確顯示車體幾何 |
-| Frame 命名 | 與 SUB-002／SUB-003／SUB-006 規格一致 |
 | 感測器位姿 | LiDAR 與 IMU 之安裝位姿與實車一致 |
 | 尺寸 | 車體輪廓與實車量測一致 |
 | ros2_control | `controller_manager` 可依 `<ros2_control>` 載入硬體介面 |
-| 輪關節 | `/joint_states` 可驅動輪關節 TF 轉動 |
 
 ---
 

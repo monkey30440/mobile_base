@@ -107,26 +107,35 @@ ros2_control 需要 URDF 提供 joint 定義與硬體介面描述。
 來源：`ref/FIH_AMR_ROBOT_V2.0_0731`（完整人形 AMR，84 links）。
 meshes 可直接沿用，URDF 須裁剪並調整。
 
-- [ ] 建立 `mobile_base_description` 套件，複製所需 meshes。
-- [ ] 裁剪 URDF：保留車體、驅動輪 ×2、caster ×4、感測器 frame；
-      移除軀幹、雙臂、雙手、頭部（約 60 links）。
-- [ ] 補上 `base_footprint`（來源 URDF 無此連桿）。
-- [ ] Frame 命名對齊規格：`imu_link`、
-      `front_left_laser_frame`、`back_right_laser_frame`。
-- [ ] 加入 `<ros2_control>` 區段，宣告 SUB-001 插件與輪端介面。
-- [ ] `robot_state_publisher` 可發布完整 TF tree。
+- [x] 建立 `mobile_base_description` 套件，複製所需 meshes（84 → 24 個）。
+- [x] 裁剪 URDF：84 → 25 links（移除軀幹、雙臂、雙手、頭部共 60 links）。
+- [x] 補上 `base_footprint`（z = 0.256 m，由輪心 0.176 + 輪半徑 0.08 推得）。
+- [x] 被動關節（caster ×16、懸吊 ×2）改為 `fixed`，僅驅動輪維持 `continuous`。
+- [x] 加入 `<ros2_control>` 區段，宣告 `base_control/BaseControlHardware`。
+- [x] `robot_state_publisher` 發布完整 TF tree，零錯誤零警告。
 
-#### 來源 URDF 與規格之差異
+驗證結果（2026-08-07）：
 
-| 項目 | 來源 URDF | 規格 |
+- `check_urdf`：單一樹，root `base_footprint`，25 links 無斷點。
+- `/tf_static` 22 筆；送入 `/joint_states` 後 `/tf` 出現兩個驅動輪轉換。
+- xacro 於 `use_ros2_control` true／false 皆可解析。
+
+#### 命名處置
+
+URDF 既有名稱不予改動，改由規格配合 URDF：
+
+| 項目 | 採用（來源 URDF） | 原規格 |
 |---|---|---|
-| 車體基準 | 無 `base_footprint` | `odom → base_footprint → base_link` |
-| LiDAR frame | `base_lidar_link_FL` / `_BR` | `front_left_laser_frame` / `back_right_laser_frame` |
-| IMU frame | `base_imu_link` | `imu_link` |
-| 輪關節 | `driving_wheel_joint_R` / `_L` | `left_wheel_joint` / `right_wheel_joint` |
+| LiDAR frame | `base_lidar_link_FL` / `_BR` | ~~front/rear_laser_frame~~ |
+| IMU frame | `base_imu_link` | ~~imu_link~~ |
+| 輪關節 | `driving_wheel_joint_L` / `_R` | ~~left/right_wheel_joint~~ |
 
-LiDAR 為對角安裝（前左、後右），已於 2026-08-07 確認並回寫規格；
-原規格之 front/rear 命名與 `/scan_front`、`/scan_rear` 已全面更新。
+Topic 名稱不在此限，採 `/scan_front_left`、`/scan_back_right`。
+
+`base_footprint` 為新增連桿（來源 URDF 未定義），不涉及更名。
+
+LiDAR 對角安裝（前左、後右）已確認並全面回寫規格。
+URDF 幾何推算輪距 0.5545 m，與 Baseline 0.555 m 相符。
 
 ### Stage C — Hardware Interface 插件
 
@@ -197,7 +206,7 @@ LiDAR 為對角安裝（前左、後右），已於 2026-08-07 確認並回寫�
 
 - [x] Design Baseline reviewed（ros2_control 架構已回寫規格）
 - [x] Stage A 前置驗證（2026-08-07）
-- [ ] Stage B SUB-012 Robot Description
+- [x] Stage B SUB-012 Robot Description（2026-08-07）
 - [ ] Stage C Hardware Interface
 - [ ] Stage D 控制器組態
 - [ ] Stage E 實機驗證
