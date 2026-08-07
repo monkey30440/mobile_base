@@ -57,15 +57,13 @@
 
 - Base Image 內建 ROS 2 Jazzy 之確切套件集（是否已含 Nav2、SLAM Toolbox、robot_localization，或需另行安裝）：建置時確認，非現在假設。
   - 2026-08-07 實機建置確認：base image 未預裝 `pip3`，已於 Dockerfile 補上 `apt-get install python3-pip`。
-  - 2026-08-07 實機建置確認：base image 內建之 NVIDIA L4T apt 來源（`repo.download.nvidia.com/jetson/common`）於一般 build context 下因無裝置端認證會回 401。由於 Docker BuildKit 預設忽略宿主機的 default-runtime 設定，本專案最終決議採用「在 Dockerfile 中使用 Dir::Etc::SourceParts=/dev/null 暫時忽略 sources.list.d」之正規做法解決。
 - Jetson 裝置節點權限（`/dev/ttyUSB0` 等）於容器內之存取方式，待實機測試確認。
 
 ---
 
 ## 驗證計畫 (Verification Plan)
 
-- [x] `docker compose config` 語法驗證通過。
-- [ ] `docker compose build` 成功（需 NGC 登入拉取 base image，於實機／有 NGC 認證環境執行）。
+- [x] `docker compose build` 成功（2026-08-07 於實機確認）。
 - [ ] 容器內 `ROS_DISTRO` 為 `jazzy`。
 - [ ] 容器內可執行 `colcon build`（空 workspace 或最小測試 package）。
 - [ ] 容器可存取 `/dev/ttyUSB0`（供 SUB-001 後續開發使用）。
@@ -76,8 +74,8 @@
 ## 狀態 (Status)
 
 - [x] Design Baseline reviewed（ROS 2 Jazzy 假設已與 base image 交叉驗證，無矛盾）
-- [x] Implementation（`Dockerfile`、`compose.yaml` 已建立，`src/` 建立為 mount target）
-- [ ] Verification（語法檢查已通過，實機建置與硬體存取待使用者於有 NGC 認證之環境執行）
+- [x] Implementation（`Dockerfile`、`compose.yaml` 初版完成）
+- [ ] Verification（`docker compose build` 已通過，容器內項目待驗證）
 - [ ] Feature Freeze
 
 ---
