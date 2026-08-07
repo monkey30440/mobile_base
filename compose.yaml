@@ -1,0 +1,21 @@
+services:
+  mobile_base:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mobile_base:latest
+    container_name: mobile_base
+    runtime: nvidia
+    network_mode: host
+    ipc: host
+    devices:
+      # SUB-001 Base Control: RS-485 (DEXMART M1C-N016RE ×2 / Modbus Multi-drive 2.0)
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    volumes:
+      - ./src:/workspace/src
+      - ./maps:/workspace/maps
+    environment:
+      - ROS_DOMAIN_ID=77
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
