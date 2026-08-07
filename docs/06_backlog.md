@@ -24,26 +24,6 @@ Status
 
 ---
 
-## Navigation
-
-### Navigation Strategy
-
-將 Navigation Strategy 獨立成專章。
-
-內容包含：
-
-- First Mile
-- On Route
-- Last Mile
-- Goal Selection
-- Navigation
-
-Status
-
-- Backlog
-
----
-
 ## Simulation
 
 ### Isaac Sim

@@ -6,7 +6,7 @@
 
 本專案採用 V-Model 作為開發流程，以需求驅動設計，以實機驗證作為主要驗證方式，逐步建立一套可追溯、可驗證且可維護的系統。
 
-本文件為專案目前唯一正式文件，後續文件將依需求逐步拆分，避免過度設計與重複維護。
+本文件為專案入口文件，提供專案目標與文件索引。各層級之正式規格已依職責拆分為獨立文件，見「9. 文件索引」。
 
 ---
 
@@ -67,14 +67,21 @@ Requirement
     ↓
 Architecture
     ↓
+Design Baseline
+    ↓
 Implementation
     ↓
 Hardware Verification
     ↓
-Freeze
+Feature Freeze
 ```
 
-完成 Freeze 後，方可開始下一項功能。
+- **Design Baseline**：Use Case、Capability、Requirement、Architecture 與 Subsystem 設計已完成確認，作為目前應實作之基準，但尚未實作或驗證。
+- **Feature Freeze**：對應功能已完成實作並通過 Hardware Verification，穩定至可視為目前版本基準。
+
+僅完成文件層級設計時，應標示為 Design Baseline；唯有完成實作與實機驗證後，才可標示為 Feature Freeze。
+
+完成 Feature Freeze 後，方可開始下一項功能。
 
 ---
 
@@ -85,11 +92,24 @@ mobile_base/
 ├── Dockerfile
 ├── compose.yaml
 ├── docs/
-│   └── README.md
-└── src/
+│   ├── README.md
+│   ├── 01_use_cases.md
+│   ├── 02_capabilities.md
+│   ├── 03_requirements.md
+│   ├── 04_architecture.md
+│   ├── 05_subsystem.md
+│   └── 06_backlog.md
+└── maps/
+    └── template/
+        ├── map.pgm
+        ├── map.yaml
+        ├── route_graph.geojson
+        └── stations.yaml
 ```
 
 Repository 結構依需求自然成長，不預先建立未使用之目錄或檔案。
+
+`maps/template/` 為 Map Package 目錄結構範本，供建立新場域地圖時參考，非實際場域資料。
 
 ---
 
@@ -113,3 +133,18 @@ Repository 結構依需求自然成長，不預先建立未使用之目錄或檔
 正式文件僅保留目前有效且已確認之內容，不保留討論過程或已淘汰方案。
 
 所有需求、設計、實作與驗證皆應具有完整追溯關係。
+
+---
+
+## 9. 文件索引
+
+| 文件 | 內容 |
+|---|---|
+| [`01_use_cases.md`](./01_use_cases.md) | Use Case 定義（使用者可操作之系統功能） |
+| [`02_capabilities.md`](./02_capabilities.md) | Capability 定義（系統對外提供之能力） |
+| [`03_requirements.md`](./03_requirements.md) | System Requirement 定義與 UC/CAP 追溯表 |
+| [`04_architecture.md`](./04_architecture.md) | 軟體架構、資料流與子系統責任劃分 |
+| [`05_subsystem.md`](./05_subsystem.md) | 各子系統之目的、邊界、介面、參數與驗證項目 |
+| [`06_backlog.md`](./06_backlog.md) | 未納入目前版本之功能與研究議題 |
+
+本文件（`README.md`）僅作為專案入口，不重複上述文件之內容；各文件為其對應主題之 Single Source of Truth。
