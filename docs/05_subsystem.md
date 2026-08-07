@@ -30,7 +30,9 @@ Base Control 子系統負責接收 AMR 運動命令，控制差速底盤完成�
 
 ## 對應需求
 
-目前 `03_requirements.md` 未定義涵蓋底盤運動控制（接收 `/cmd_vel` 並驅動差速輪）之獨立 SYS 需求，待後續版本補齊。
+| Requirement |
+|---|
+| SYS-022 |
 
 ---
 
@@ -225,7 +227,9 @@ SUB-001 依下列順序完成設計確認：
 
 ## Traceability
 
-無（見「對應需求」說明）。
+| Requirement | Subsystem |
+|---|---|
+| SYS-022 | SUB-001 |
 
 # SUB-002 LiDAR Perception
 

@@ -118,7 +118,7 @@ Repository 結構依需求自然成長，不預先建立未使用之目錄或檔
 | Milestone | 狀態 |
 |-----------|------|
 | Repository 建立 | ✅ |
-| 文件建立 | 進行中 |
+| 文件建立（Design Baseline） | ✅ |
 | CAP-001 | 未開始 |
 | CAP-002 | 未開始 |
 
