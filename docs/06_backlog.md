@@ -37,8 +37,7 @@ Status
 - On Route
 - Last Mile
 - Goal Selection
-- Station Navigation
-- Pose Navigation
+- Navigation
 
 Status
 

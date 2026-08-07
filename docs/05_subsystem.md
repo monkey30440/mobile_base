@@ -15,7 +15,7 @@
 | SUB-007 | SLAM Toolbox |
 | SUB-008 | Map Management |
 | SUB-009 | Task Interface |
-| SUB-010 | Route Graph Management |
+| SUB-010 | Target Resolution |
 | SUB-011 | Navigation |
 
 ---
@@ -1716,7 +1716,7 @@ Map Management 子系統負責管理二維地圖與其關聯導航資源，提�
 - 載入指定 Map Package 之 Occupancy Grid。
 - 管理地圖與導航資源之固定目錄結構。
 - 提供 Map Server 所需之地圖檔案路徑。
-- 提供 Route Graph Management 所需之 Route Graph 與 Station Mapping 路徑。
+- 提供 Target Resolution 所需之 Route Graph 與 Station Mapping 路徑。
 - 提供 Map Package 載入狀態。
 
 Map Management 不負責：
@@ -1951,7 +1951,7 @@ SUB-008 依下列順序完成設計確認：
 2. UC-002 與 UC-003 地圖載入需求。
 3. `nav2_map_server`。
 4. SUB-007 SLAM Toolbox 輸出。
-5. SUB-010 Route Graph Management 資源需求。
+5. SUB-010 Navigation Resource Management 資源需求。
 6. Map Package 目錄結構。
 7. 實機地圖儲存與載入驗證。
 
@@ -1989,14 +1989,14 @@ SUB-008 依下列順序完成設計確認：
 
 ## 目的
 
-Task Interface 子系統負責接收使用者提交之導航任務，驗證任務內容、轉換為系統內部導航請求，並管理導航任務生命週期，提供一致的任務介面供上層系統使用。
+Task Interface 子系統負責接收使用者提交之 Navigation Target，完成基本輸入驗證，並將目標交由 Target Resolution 流程產生 Canonical Goal Pose。
+
+本子系統定位為薄層 Adapter，不負責導航策略、路徑規劃、導航控制或任務排程。
 
 初版支援：
 
-- Station Navigation（UC-002）
-- Pose Navigation（UC-003）
-
-Task Interface 不負責導航規劃與控制，而是負責任務管理與派送。
+- Station ID
+- Goal Pose
 
 ---
 
@@ -2004,9 +2004,9 @@ Task Interface 不負責導航規劃與控制，而是負責任務管理與派�
 
 | Requirement |
 |---|
-| SYS-010 |
-| SYS-011 |
-| SYS-012 |
+| SYS-008 |
+| SYS-009 |
+| SYS-017 |
 
 ---
 
@@ -2015,228 +2015,307 @@ Task Interface 不負責導航規劃與控制，而是負責任務管理與派�
 | 項目 | 規格 |
 |---|---|
 | ROS | ROS 2 Jazzy |
-| 任務型態 | Navigation Task |
-| 支援導航模式 | Station Navigation、Pose Navigation |
-| 任務執行者 | SUB-011 Navigation |
+| 任務類型 | Navigation |
+| Navigation Target | Station ID、Goal Pose |
+| Canonical Navigation Goal | Goal Pose |
+| Station Resolution | SUB-010 Navigation Resource Management |
+| Navigation Execution | SUB-011 Navigation |
 
 ---
 
 ## 系統職責
 
-- 接收 Navigation Task。
-- 驗證任務內容。
-- 識別導航任務類型。
-- 建立 Navigation Goal。
-- 派送導航任務。
-- 接收導航執行結果。
-- 回報任務狀態。
-- 管理任務生命週期。
+- 接收 Navigation Target。
+- 識別 Navigation Target 類型。
+- 驗證輸入資料格式。
+- Station ID 交由 SUB-010 解析。
+- Goal Pose 直接作為 Canonical Goal Pose。
+- 將 Canonical Goal Pose 交由 SUB-011 Navigation。
+- 接收 Navigation Feedback。
+- 接收 Navigation Result。
+- 將 Navigation Result 回報給使用者。
 
 Task Interface 不負責：
 
-- Route Planning
-- Route Graph
-- Localization
-- Navigation Control
-- Motion Control
+- Station 資料管理。
+- Route Graph 管理。
+- Route Planning。
+- Navigation Strategy Selection。
+- Path Planning。
+- Path Following。
+- Localization。
+- Task Queue。
+- Task Priority。
+- Fleet Scheduling。
 
 ---
 
 ## 邏輯架構
 
 ```text
-                 User
-                  │
-                  ▼
-          Navigation Task
-                  │
-          Task Validation
-                  │
-          Task Classification
-                  │
-        ┌─────────┴─────────┐
-        ▼                   ▼
-Station Navigation     Pose Navigation
-        │                   │
-        └─────────┬─────────┘
-                  ▼
-        SUB-011 Navigation
-                  │
-                  ▼
-          Navigation Result
-                  │
-                  ▼
-             Task Status
+                     User
+                      │
+             Navigation Target
+                      │
+                      ▼
+             SUB-009 Task Interface
+                      │
+               Target Type
+             ┌────────┴────────┐
+             ▼                 ▼
+        Station ID         Goal Pose
+             │                 │
+             ▼                 │
+        SUB-010               │
+     Target Resolution         │
+             │                 │
+             ▼                 │
+          Goal Pose            │
+             │                 │
+             └────────┬────────┘
+                      ▼
+             Canonical Goal Pose
+                      │
+                      ▼
+             SUB-011 Navigation
+                      │
+              ┌───────┴───────┐
+              ▼               ▼
+           Feedback          Result
+              │               │
+              └───────┬───────┘
+                      ▼
+             SUB-009 Task Interface
+                      │
+                      ▼
+                     User
 ```
 
 ---
 
-## Navigation Task
+## Navigation Target
 
-Task Interface 統一管理所有導航任務。
+系統支援兩種 Navigation Target。
 
-初版支援：
+| Target Type | Input | 處理 |
+|---|---|---|
+| Station | Station ID | 交由 SUB-010 解析成 Goal Pose |
+| Pose | `geometry_msgs/msg/PoseStamped` | 直接作為 Goal Pose |
 
-| Task Type | 說明 |
-|---|---|
-| Station Navigation | 導航至指定 Station |
-| Pose Navigation | 導航至指定 Goal Pose |
+Navigation Target 僅描述「使用者要去哪裡」。
 
-未來可擴充：
+Navigation Target 不決定：
 
-- Dock Navigation
-- Patrol
-- Multi-goal Navigation
-- Fleet Dispatch
+- 是否使用 Route Graph。
+- 是否使用 First Mile。
+- 是否使用 Last Mile。
+- 採用何種 Planner。
+- 採用何種 Controller。
 
-無須修改 Navigation 子系統介面。
-
----
-
-## 任務生命週期
-
-所有 Navigation Task 使用一致生命週期。
-
-```text
-Created
-    │
-    ▼
-Validated
-    │
-    ▼
-Dispatched
-    │
-    ▼
-Executing
-    │
- ┌──┴─────┐
- ▼        ▼
-Succeeded Failed
-```
-
-Task Interface 管理狀態，不管理導航細節。
+上述行為屬於 SUB-011 Navigation。
 
 ---
 
-## ROS Interface
+## Canonical Goal
 
-### Subscribe
-
-Task Interface 初版不直接訂閱感測器 Topic。
-
-導航結果由 Navigation Action 回傳。
-
----
-
-### Action Server
-
-初版提供一個 Navigation Action。
-
-| Action | 說明 |
-|---|---|
-| Navigation Task | 接收導航任務 |
-
-Action Goal：
-
-| 欄位 | 說明 |
-|---|---|
-| `task_type` | `station_navigation` 或 `pose_navigation` |
-| `target_station` | Station Navigation 使用 |
-| `goal_pose` | Pose Navigation 使用 |
-
-Action Feedback：
-
-| 欄位 | 說明 |
-|---|---|
-| Current State | 任務狀態 |
-| Navigation Status | Navigation 執行狀態 |
-
-Action Result：
-
-| 欄位 | 說明 |
-|---|---|
-| Result | Success / Failure |
-| Error Code | 失敗原因 |
-| Message | 補充資訊 |
-
-Action 型別於 Interface Design 階段定義。
-
----
-
-## 與 SUB-011 關係
-
-Task Interface 不參與導航規劃。
-
-```text
-Navigation Task
-        │
-        ▼
-Task Interface
-        │
-        ▼
-Navigation Goal
-        │
-        ▼
-SUB-011 Navigation
-        │
-        ▼
-Navigation Result
-        │
-        ▼
-Task Status
-```
-
-Task Interface 僅負責：
-
-- 任務建立
-- 任務派送
-- 任務狀態管理
-
-Navigation 負責：
-
-- 規劃
-- 控制
-- 定位
-- 避障
-- 到站判定
-
----
-
-## Navigation Mode
-
-### Station Navigation
-
-輸入：
-
-```text
-Station ID
-```
-
-Task Interface 建立：
-
-```text
-Station Navigation Task
-```
-
-交由 SUB-011 Navigation 執行。
-
----
-
-### Pose Navigation
-
-輸入：
+所有 Navigation Target 在進入 Navigation 前統一轉換為：
 
 ```text
 geometry_msgs/msg/PoseStamped
 ```
 
-Task Interface 建立：
+因此：
 
 ```text
-Pose Navigation Task
+Station ID
+    │
+    ▼
+Goal Pose
 ```
 
-交由 SUB-011 Navigation 執行。
+以及：
+
+```text
+Goal Pose
+    │
+    ▼
+Goal Pose
+```
+
+最終皆形成：
+
+```text
+Canonical Goal Pose
+```
+
+SUB-011 Navigation 不需要知道 Goal Pose 原本來自 Station 或直接 Pose 輸入。
+
+---
+
+## Station Target Flow
+
+```text
+Station ID
+    │
+    ▼
+SUB-009
+    │
+    ▼
+SUB-010
+    │
+stations.yaml
+    │
+    ▼
+Goal Pose
+    │
+    ▼
+SUB-011
+```
+
+Station 是否位於 Route Graph Node 上，不屬於 Target Resolution 必要條件。
+
+Station 定義的是：
+
+> AMR 最終應抵達的位置與朝向。
+
+Route Graph 定義的是：
+
+> AMR 導航過程可利用的路網。
+
+兩者彼此解耦。
+
+---
+
+## Pose Target Flow
+
+```text
+Goal Pose
+    │
+    ▼
+SUB-009
+    │
+    ▼
+Canonical Goal Pose
+    │
+    ▼
+SUB-011
+```
+
+Pose Target 不需要經過 SUB-010。
+
+---
+
+## ROS Interface
+
+初版優先使用既有 ROS 2 與 Nav2 Interface，避免建立不必要的自定義 Navigation Action。
+
+### Navigation Target Input
+
+Station Target：
+
+```text
+Station ID
+```
+
+實際 CLI、Service 或其他輸入形式於 Implementation 階段依最小需求確認。
+
+Pose Target：
+
+```text
+geometry_msgs/msg/PoseStamped
+```
+
+---
+
+## Navigation Interface
+
+SUB-009 將解析完成之 Canonical Goal Pose 交給 SUB-011。
+
+SUB-011 初版優先整合 Nav2：
+
+```text
+NavigateToPose
+```
+
+Action。
+
+```text
+Canonical Goal Pose
+        │
+        ▼
+Nav2 NavigateToPose
+```
+
+不另外實作與 Nav2 重複的 Navigation Action Server。
+
+---
+
+## Feedback
+
+Navigation Feedback 優先直接沿用 Nav2 Action Feedback。
+
+SUB-009 不建立另一套 Navigation Progress 定義，除非後續上層系統具有明確需求。
+
+初版僅需向使用者提供足以確認導航正在執行之狀態。
+
+---
+
+## Result
+
+Navigation Result 優先沿用 Nav2 Action Result。
+
+Task Interface 對外至少應能表示：
+
+```text
+Succeeded
+Failed
+Canceled
+```
+
+實際 Error Code 優先沿用 Nav2 現有結果資訊，不重複建立自定義錯誤碼系統。
+
+---
+
+## 任務生命週期
+
+SUB-009 不建立獨立完整 Task State Machine。
+
+初版生命週期直接映射 Navigation Action 狀態：
+
+```text
+Received
+    │
+    ▼
+Resolving Target
+    │
+    ▼
+Navigation Executing
+    │
+ ┌──┼─────────┐
+ ▼  ▼         ▼
+Success     Failure
+            Cancel
+```
+
+若未來 Fleet Management 需要：
+
+- Queue
+- Priority
+- Retry
+- Scheduling
+- Multi-task
+
+由上層 Fleet / Task Management 系統負責。
+
+---
+
+## Cancel
+
+若底層 Nav2 Action 支援 Cancel，SUB-009 應直接使用既有 Cancel 機制。
+
+初版不建立額外 Preemption Policy。
+
+多任務搶占、Priority 與 Retry Policy 留待 Fleet Management 階段處理。
 
 ---
 
@@ -2244,13 +2323,12 @@ Pose Navigation Task
 
 | 參數 | 初版設定 |
 |---|---|
-| Supported Task | Station Navigation、Pose Navigation |
-| Station Target | Station ID |
-| Pose Target | `geometry_msgs/msg/PoseStamped` |
-| Result Timeout | Navigation Parameter |
-| Retry Policy | 不自動 Retry |
-
-Retry Policy 後續版本再評估。
+| Supported Target | Station ID、Goal Pose |
+| Canonical Goal | `geometry_msgs/msg/PoseStamped` |
+| Navigation Action | Nav2 `NavigateToPose` |
+| Automatic Retry | 不啟用 |
+| Task Queue | 不提供 |
+| Priority | 不提供 |
 
 ---
 
@@ -2258,22 +2336,24 @@ Retry Policy 後續版本再評估。
 
 ```text
 task_interface
-├── Task Validator
-├── Task Dispatcher
-├── Navigation Action Server
-├── Task State Manager
-├── Parameter Manager
+├── Target Input Adapter
+├── Target Type Validation
+├── Station Resolver Client
+├── Navigation Client
 └── Diagnostics
 ```
 
-初版自訂程式僅負責：
+不建立：
 
-- Navigation Task 定義
-- Task 驗證
-- Task 派送
-- Task 狀態管理
+```text
+Custom Navigation Action Server
+Task Scheduler
+Task Queue
+Route Planner
+Navigation State Machine
+```
 
-導航能力完全重用 SUB-011。
+除非後續需求明確要求。
 
 ---
 
@@ -2281,14 +2361,22 @@ task_interface
 
 SUB-009 依下列順序完成設計確認：
 
-1. UC-002 Navigation Task。
-2. UC-003 Navigation Task。
-3. ROS 2 Action。
-4. SUB-011 Navigation 介面。
-5. 未來 Fleet / Scheduler 擴充需求。
-6. 實機導航驗證。
+1. UC-002 導航至指定目標。
+2. CAP-002 自主導航至指定目標。
+3. SYS-008 Navigation Target。
+4. SYS-009 Target Resolution。
+5. SYS-017 Navigation Result。
+6. ROS 2 Action。
+7. Nav2 `NavigateToPose`。
+8. SUB-010 Target Resolution。
+9. SUB-011 Navigation。
 
-初版優先建立統一 Navigation Task 介面，避免 Station Navigation 與 Pose Navigation 使用不同 API。
+設計原則為：
+
+- 優先沿用 Nav2 原生介面。
+- Task Interface 維持薄層 Adapter。
+- Target Resolution 與 Navigation Execution 分離。
+- 不提前建立 Fleet / Scheduler 功能。
 
 ---
 
@@ -2296,16 +2384,17 @@ SUB-009 依下列順序完成設計確認：
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| Station Task | 可建立 Station Navigation 任務 |
-| Pose Task | 可建立 Pose Navigation 任務 |
-| Task Validation | 可拒絕非法任務 |
-| Task Dispatch | 可派送至 SUB-011 |
-| Action Feedback | 可持續收到執行狀態 |
-| Action Result | 成功回傳導航結果 |
-| State Machine | 任務生命週期正確 |
-| Failure Handling | 導航失敗可正確回報 |
-| Repeatability | 可重複提交導航任務 |
-| Long Duration | 長時間持續正常運作 |
+| Station Input | 可接收有效 Station ID |
+| Pose Input | 可接收有效 Goal Pose |
+| Invalid Target | 非法 Target 可被拒絕 |
+| Station Resolution | Station ID 可經 SUB-010 取得 Goal Pose |
+| Pose Pass-through | Goal Pose 可直接形成 Canonical Goal Pose |
+| Navigation Dispatch | Canonical Goal Pose 可交由 SUB-011 |
+| Feedback | 可取得 Nav2 Navigation Feedback |
+| Success Result | 成功導航可正確回報 |
+| Failure Result | 導航失敗可正確回報 |
+| Cancel | 可沿用 Nav2 Cancel 機制 |
+| Repeatability | 可重複提交 Navigation Target |
 
 ---
 
@@ -2313,18 +2402,17 @@ SUB-009 依下列順序完成設計確認：
 
 | Requirement | Subsystem |
 |---|---|
-| SYS-012 | SUB-009 |
+| SYS-008 | SUB-009 |
+| SYS-009 | SUB-009 |
 | SYS-017 | SUB-009 |
-| SYS-018 | SUB-009 |
-| SYS-023 | SUB-009 |
 
-# SUB-010 Route Graph Management
+# SUB-010 Target Resolution
 
 ## 目的
 
-Route Graph Management 子系統負責管理路網拓樸與站點對應資訊，提供 Navigation 子系統路網站點導航所需之 Route Graph 與 Station Mapping。
+Target Resolution 子系統負責解析 Navigation Target，產生 Canonical Goal Pose，並管理 Navigation 所需之 Route Graph 資源。
 
-本子系統專注於資料管理與查詢，不負責路徑規劃與導航控制。
+本子系統專注於導航目標解析，不負責導航規劃、導航控制或 Route Search。
 
 ---
 
@@ -2332,9 +2420,12 @@ Route Graph Management 子系統負責管理路網拓樸與站點對應資訊，
 
 | Requirement |
 |---|
-| SYS-013 |
-| SYS-014 |
-| SYS-015 |
+| SYS-009 |
+| SYS-012 |
+| SYS-018 |
+| SYS-019 |
+| SYS-020 |
+| SYS-021 |
 
 ---
 
@@ -2343,192 +2434,153 @@ Route Graph Management 子系統負責管理路網拓樸與站點對應資訊，
 | 項目 | 規格 |
 |---|---|
 | ROS | ROS 2 Jazzy |
-| Route Graph | Nav2 Route (`route_graph.geojson`) |
-| Station Mapping | `stations.yaml` |
-| Map Package | SUB-008 Map Management |
+| Navigation Target | Station、Goal Pose |
+| Canonical Goal | `geometry_msgs/msg/PoseStamped` |
+| Route Graph | `route_graph.geojson` |
+| Station Database | `stations.yaml` |
 | Navigation | SUB-011 Navigation |
 
 ---
 
 ## 系統職責
 
+- 解析 Navigation Target。
+- Station ID 轉換為 Goal Pose。
+- 驗證 Station 是否存在。
+- 載入 Station Database。
 - 載入 Route Graph。
-- 載入 Station Mapping。
-- 驗證 Route Graph 完整性。
-- 驗證 Station Mapping 完整性。
-- 提供 Station ID 查詢。
-- 提供 Route Node ID 查詢。
-- 提供 Navigation 所需 Route Graph 資源。
-- 提供 Route Graph 載入狀態。
+- 提供 Route Graph 給 Navigation。
+- 提供 Canonical Goal Pose。
 
-Route Graph Management 不負責：
+Target Resolution 不負責：
 
-- Route Search
-- Route Planning
-- Path Planning
-- Navigation
-- Route Graph 編輯
-
-上述功能由 Nav2 Route Server 或 Navigation 子系統負責。
+- Route Planning。
+- Route Search。
+- Path Planning。
+- Controller。
+- Navigation Strategy。
+- Localization。
+- Navigation Execution。
 
 ---
 
 ## 邏輯架構
 
 ```text
-               Map Package
-                    │
-        ┌───────────┴───────────┐
-        ▼                       ▼
-route_graph.geojson       stations.yaml
-        │                       │
-        ▼                       ▼
- Route Graph Loader     Station Loader
-        │                       │
-        └───────────┬───────────┘
-                    ▼
-       Route Graph Management
-                    │
-        ┌───────────┴───────────┐
-        ▼                       ▼
-  Route Graph Query      Station Query
-                    │
-                    ▼
-            SUB-011 Navigation
+Navigation Target
+        │
+        ▼
+ Target Resolution
+        │
+ ┌──────┴──────┐
+ ▼             ▼
+Station      Goal Pose
+ ▼             │
+stations.yaml  │
+ ▼             │
+Goal Pose      │
+ └──────┬──────┘
+        ▼
+Canonical Goal Pose
+        │
+        ▼
+SUB-011 Navigation
+        │
+        ▼
+Route Graph
 ```
 
 ---
 
-## Route Graph
+# Navigation Target
 
-Route Graph 採用 Nav2 Route 標準 GeoJSON 格式。
+系統支援：
+
+| Target | 說明 |
+|---|---|
+| Station | 預先定義導航站點 |
+| Goal Pose | 任意導航目標 |
+
+所有 Target 最終皆轉換為：
 
 ```text
-route_graph.geojson
+geometry_msgs/msg/PoseStamped
 ```
-
-內容包含：
-
-- Route Node
-- Route Edge
-- Edge Cost
-- Graph Metadata
-
-Route Graph Management 不解析導航策略。
-
-Route Search 與 Route Tracking 完全交由 Nav2 Route Server。
 
 ---
 
-## Station Mapping
+# Station Database
 
-Station Mapping 使用：
+Station Database：
 
 ```text
 stations.yaml
 ```
 
-建立：
-
-```text
-Station ID
-        │
-        ▼
-Route Node ID
-```
-
-例如：
+定義：
 
 ```yaml
 stations:
-  station_a: node_001
-  station_b: node_018
-  station_c: node_052
+  station_a:
+    x: 1.0
+    y: 2.0
+    yaw: 0.0
+
+  station_b:
+    x: 5.5
+    y: 3.2
+    yaw: 1.57
 ```
 
-Navigation 僅使用 Station ID。
+Station 定義：
 
-Route Node ID 對使用者透明。
+- Position
+- Orientation
+
+Station 不綁定：
+
+- Route Node
+- Graph Node ID
+
+Station 表示：
+
+> AMR 最終應抵達的位置。
 
 ---
 
-## Navigation 流程
+# Route Graph
 
-Station Navigation：
+Target Resolution 管理：
 
 ```text
-Station ID
-      │
-      ▼
-Station Mapping
-      │
-      ▼
-Route Node ID
-      │
-      ▼
+route_graph.geojson
+```
+
+用途：
+
+提供 Navigation 可利用之 Route Graph。
+
+Route Graph：
+
+不表示 Navigation Target。
+
+不表示 Station。
+
+僅表示：
+
+> 可利用之導航路網。
+
+Route Search 完全交由：
+
+```text
 Nav2 Route Server
-      │
-      ▼
-SUB-011 Navigation
 ```
 
-Route Graph Management 不參與：
-
-- Route Planning
-- Controller
-- BT
-- Costmap
+完成。
 
 ---
 
-## ROS Interface
-
-Route Graph Management 初版不發布新的 ROS Topic。
-
-Navigation 啟動流程：
-
-```text
-Map Package
-      │
-      ▼
-Route Graph Management
-      │
-      ├── Route Graph
-      └── Station Mapping
-              │
-              ▼
-      SUB-011 Navigation
-```
-
-是否透過 ROS Parameter、Service 或 Library API 整合，由 Implementation 階段決定。
-
----
-
-## Resource Interface
-
-### Input
-
-| Resource | 說明 |
-|---|---|
-| `route_graph.geojson` | Nav2 Route Graph |
-| `stations.yaml` | Station Mapping |
-
-由 SUB-008 Map Management 提供路徑。
-
----
-
-### Output
-
-| Resource | 說明 |
-|---|---|
-| Route Graph | Navigation 使用 |
-| Route Node ID | Station Navigation 使用 |
-
----
-
-## Map Package
-
-Route Graph Management 使用：
+# Map Package
 
 ```text
 maps/
@@ -2539,126 +2591,247 @@ maps/
     └── stations.yaml
 ```
 
-各資源用途：
+Target Resolution 使用：
 
-| Resource | Purpose |
-|---|---|
-| `map.yaml` | Navigation Map |
-| `route_graph.geojson` | Route Graph |
-| `stations.yaml` | Station Mapping |
+- stations.yaml
+- route_graph.geojson
 
-Map Package 切換時，同步切換 Route Graph 與 Station Mapping。
+Map Package 切換時同步更新。
 
 ---
 
-## 資料驗證
+# Target Resolution Flow
 
-Route Graph Management 啟動時應完成：
+## Station
 
-### Route Graph
+```text
+Station ID
+     │
+stations.yaml
+     │
+     ▼
+Goal Pose
+```
 
-- 檔案存在。
-- 格式合法。
-- Node 唯一。
-- Edge 合法。
-- Graph 可載入。
+若 Station 不存在：
 
-### Station Mapping
-
-- 檔案存在。
-- YAML 格式合法。
-- Station ID 唯一。
-- Route Node ID 存在於 Route Graph。
-- 不存在無效 Mapping。
-
-若驗證失敗，Navigation 不應啟動。
+回傳 Invalid Target。
 
 ---
 
-## 系統參數
+## Goal Pose
+
+```text
+Goal Pose
+      │
+      ▼
+Goal Pose
+```
+
+直接 Pass Through。
+
+---
+
+# Canonical Goal Pose
+
+所有 Navigation Target 最終形成：
+
+```text
+geometry_msgs/msg/PoseStamped
+```
+
+Navigation 不需知道：
+
+- Goal 來自 Station。
+- Goal 來自 Goal Pose。
+
+Navigation 永遠使用：
+
+```text
+Canonical Goal Pose
+```
+
+---
+
+# Navigation Integration
+
+Target Resolution：
+
+```text
+Goal Pose
+```
+
+Navigation：
+
+```text
+Current Pose
+
+Goal Pose
+
+Route Graph
+```
+
+Navigation Strategy：
+
+由 Navigation 決定。
+
+不是 Target Resolution。
+
+---
+
+# Route Graph Integration
+
+Route Graph：
+
+```text
+route_graph.geojson
+```
+
+由：
+
+```text
+Nav2 Route Server
+```
+
+載入。
+
+Target Resolution：
+
+不實作：
+
+- Graph Loader。
+- Route Planner。
+- Route Search。
+- Nearest Node Search。
+
+上述能力全部沿用：
+
+Nav2 Route。
+
+---
+
+# ROS Interface
+
+Target Resolution 初版不發布 Topic。
+
+輸入：
+
+```text
+Station ID
+```
+
+或：
+
+```text
+Goal Pose
+```
+
+輸出：
+
+```text
+geometry_msgs/msg/PoseStamped
+```
+
+Route Graph 由 Navigation 啟動流程載入。
+
+---
+
+# 系統參數
 
 | 參數 | 初版設定 |
 |---|---|
-| Map Root | `maps/` |
-| Map Name | Launch 指定 |
+| Station Database | `stations.yaml` |
 | Route Graph | `route_graph.geojson` |
-| Station Mapping | `stations.yaml` |
-
-Route Graph 與 Station Mapping 固定使用 Map Package 標準名稱。
+| Canonical Goal | `geometry_msgs/msg/PoseStamped` |
 
 ---
 
-## 軟體組成
+# 軟體組成
 
 ```text
-route_graph_management
-├── Map Package Resolver
-├── Route Graph Loader
-├── Station Loader
-├── Graph Validator
-├── Station Validator
-├── Query Interface
+target_resolution
+├── Station Database Loader
+├── Station Resolver
+├── Route Graph Resource Manager
+├── Validation
 └── Diagnostics
 ```
 
-專案自訂程式僅負責：
+不建立：
 
-- Map Package 整合。
-- Route Graph 載入。
-- Station Mapping 載入。
-- Station ID 查詢。
-- Graph 驗證。
+```text
+Graph Loader
 
-Route Search、Shortest Path、Graph Traversal 完全採用 `nav2_route`。
+Route Planner
+
+Nearest Node Search
+
+Graph Traversal
+```
+
+全部交由：
+
+```text
+Nav2 Route
+```
 
 ---
 
-## 設計依據
+# 設計依據
 
 SUB-010 依下列順序完成設計確認：
 
-1. Nav2 Route 官方文件。
-2. GeoJSON Route Graph 格式。
-3. UC-002 Station Navigation。
-4. SUB-008 Map Management。
-5. SUB-011 Navigation。
-6. Map Package 結構。
-7. Route Graph 實機導航驗證。
+1. UC-002 導航至指定目標。
+2. CAP-002 自主導航至指定目標。
+3. SYS-009 Navigation Target Processing。
+4. Nav2 Route。
+5. SUB-009 Task Interface。
+6. SUB-011 Navigation。
 
-初版優先採用 Nav2 Route 提供之 Route Graph 能力，不自行實作 Graph 演算法或 Route Planner。
+設計原則：
+
+- Navigation 永遠使用 Goal Pose。
+- Station 僅為 Goal Pose 的來源之一。
+- Route Graph 為 Navigation 可利用之導航資源。
+- 優先使用 Nav2 Route 現有能力。
 
 ---
 
-## 驗證項目
+# 驗證項目
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| Route Graph Load | 可成功載入 `route_graph.geojson` |
-| Station Mapping Load | 可成功載入 `stations.yaml` |
-| Graph Validation | Route Graph 格式合法 |
-| Station Validation | 所有 Station ID 對應有效 Route Node |
-| Station Query | 可依 Station ID 查得 Route Node |
-| Package Switch | 切換 `map_name` 時同步切換所有資源 |
-| Navigation Integration | SUB-011 可成功使用 Route Graph |
-| Error Handling | 無效 Graph 或 Mapping 可正確回報 |
-| Repeatability | 重複載入結果一致 |
-| Long Duration | 長時間導航期間持續正常運作 |
+| Station Load | 可成功載入 `stations.yaml` |
+| Route Graph Load | Nav2 可成功載入 `route_graph.geojson` |
+| Station Resolution | Station ID 可解析為 Goal Pose |
+| Invalid Station | 不存在 Station 可正確回報 |
+| Goal Pose Pass-through | Goal Pose 可直接輸出 |
+| Canonical Goal | 所有 Target 可形成 Canonical Goal Pose |
+| Map Switch | Map Package 切換後同步更新 |
+| Repeatability | 重複解析結果一致 |
 
 ---
 
-## Traceability
+# Traceability
 
 | Requirement | Subsystem |
 |---|---|
-| SYS-010 | SUB-010 |
-| SYS-013 | SUB-010 |
-| SYS-014 | SUB-010 |
+| SYS-009 | SUB-010 |
+| SYS-012 | SUB-010 |
+| SYS-018 | SUB-010 |
+| SYS-019 | SUB-010 |
+| SYS-020 | SUB-010 |
+| SYS-021 | SUB-010 |
 
 # SUB-011 Navigation
 
 ## 目的
 
-Navigation 子系統負責執行 Station Navigation 與 Pose Navigation，整合 Nav2 Navigation Stack、定位、路徑規劃、路徑追蹤、障礙物處理與到站判定，控制 AMR 由目前位姿移動至指定導航目標。
+Navigation 子系統負責接收 Canonical Goal Pose，取得 AMR 目前位姿，並整合 Nav2 完成定位、導航策略執行、路徑規劃、路徑追蹤、障礙物處理、到達判定與導航結果回報。
+
+Navigation 不關心 Goal Pose 原本來自 Station ID 或使用者直接指定之 Pose。
+
+初版優先使用 Nav2 既有 Server、Plugin、Behavior Tree 與 Action，不自行實作 Navigation Planner、Controller 或 Route Planner。
 
 ---
 
@@ -2666,7 +2839,10 @@ Navigation 子系統負責執行 Station Navigation 與 Pose Navigation，整合
 
 | Requirement |
 |---|
+| SYS-010 |
 | SYS-011 |
+| SYS-012 |
+| SYS-013 |
 | SYS-014 |
 | SYS-015 |
 | SYS-016 |
@@ -2675,8 +2851,6 @@ Navigation 子系統負責執行 Station Navigation 與 Pose Navigation，整合
 | SYS-019 |
 | SYS-020 |
 | SYS-021 |
-| SYS-022 |
-| SYS-023 |
 
 ---
 
@@ -2684,246 +2858,545 @@ Navigation 子系統負責執行 Station Navigation 與 Pose Navigation，整合
 
 | 項目 | 規格 |
 |---|---|
-| 運算平台 | Jetson AGX Orin Developer Kit |
 | ROS | ROS 2 Jazzy |
-| 導航框架 | Nav2 |
-| 定位 | `nav2_amcl` |
-| 任務編排 | `nav2_bt_navigator` |
-| 路徑規劃 | `nav2_planner` |
-| 路徑追蹤 | `nav2_controller` |
-| 障礙物表示 | `nav2_costmap_2d` |
-| 路網導航 | `nav2_route` |
-| 地圖來源 | SUB-008 Map Management |
-| Route Graph 來源 | SUB-010 Route Graph Management |
-| 任務來源 | SUB-009 Task Interface |
+| Navigation Framework | Nav2 |
+| Canonical Goal | `geometry_msgs/msg/PoseStamped` |
+| Localization | `nav2_amcl` |
+| Navigation Orchestration | `nav2_bt_navigator` |
+| Free-space Planning | `nav2_planner` |
+| Path Following | `nav2_controller` |
+| Obstacle Representation | `nav2_costmap_2d` |
+| Route Navigation | `nav2_route` |
+| Map | SUB-008 Map Management |
+| Navigation Resources | SUB-010 Target Resolution |
+| Task Interface | SUB-009 Task Interface |
+| Base Control | SUB-001 Base Control |
 
 ---
 
 ## 系統職責
 
-- 接收 Station Navigation 或 Pose Navigation 目標。
-- 取得 AMR 目前地圖位姿。
-- 依任務類型選擇導航流程。
-- 執行靜態地圖定位。
-- 規劃導航路徑。
-- 追蹤導航路徑。
-- 使用原始 LiDAR 資料建立 Costmap。
-- 產生底盤速度命令。
+- 接收 Canonical Goal Pose。
+- 取得 AMR Current Pose。
+- 提供靜態地圖定位。
+- 執行 Navigation Behavior Tree。
+- 優先利用適用之 Route Graph。
+- 支援 First Mile。
+- 支援 On Route Navigation。
+- 支援 Last Mile。
+- Route Graph 不適用時執行 Free-space Navigation。
+- 使用 Global / Local Costmap 表示環境障礙物。
+- 規劃可執行 Navigation Path。
+- 控制 AMR 沿 Path 移動。
+- 發布底盤速度命令。
 - 判定導航進度。
-- 判定 AMR 抵達導航目標。
-- 回傳導航 Feedback 與 Result。
-- 管理 Nav2 元件生命週期。
+- 判定 Goal Pose 是否抵達。
+- 提供 Navigation Feedback。
+- 提供 Navigation Result。
+- 管理 Nav2 Lifecycle。
 
 Navigation 不負責：
 
+- Navigation Target 輸入介面。
+- Station ID 解析。
+- Station Database 管理。
 - Map Package 檔案管理。
-- Route Graph 與 Station Mapping 內容管理。
+- Route Graph 編輯。
+- Route Graph 自訂搜尋演算法。
 - 感測器 Driver。
-- Wheel Odometry 與 Sensor Fusion。
-- 上層任務排程。
+- Wheel Odometry。
+- Sensor Fusion。
+- Task Queue。
+- Fleet Scheduling。
 
 ---
 
-## 邏輯架構
+## 核心架構
 
 ```text
-                    SUB-009 Task Interface
-                              │
-            ┌─────────────────┴─────────────────┐
-            ▼                                   ▼
-      Station Navigation                  Pose Navigation
-            │                                   │
-            ▼                                   │
-SUB-010 Route Graph Management                   │
-            │                                   │
-            ▼                                   ▼
-      Goal Route Node                       Goal Pose
-            │                                   │
-            └─────────────────┬─────────────────┘
-                              ▼
-                     SUB-011 Navigation
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-            AMCL       Planner Server   Controller Server
-                              │
-                              ▼
-                          /cmd_vel
-                              │
-                              ▼
-                     SUB-001 Base Control
+                 Canonical Goal Pose
+                         │
+                         ▼
+                  SUB-011 Navigation
+                         │
+                         ▼
+                   BT Navigator
+                         │
+                         ▼
+               Navigation Behavior Tree
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+       Route-assisted          Free-space
+        Navigation              Navigation
+              │                     │
+              └──────────┬──────────┘
+                         ▼
+                  Planner Server
+                         │
+                         ▼
+                Controller Server
+                         │
+                         ▼
+                     /cmd_vel
+                         │
+                         ▼
+                SUB-001 Base Control
 ```
 
 ---
 
-## 導航模式
+## Canonical Goal
 
-| 模式 | 目標輸入 | Route Graph | Route Server |
-|---|---|---|---|
-| Station Navigation | Station ID 對應之 Route Node | 使用 | 使用 |
-| Pose Navigation | `geometry_msgs/msg/PoseStamped` | 不使用 | 不使用 |
+SUB-011 僅接受：
 
-兩種模式共用：
+```text
+geometry_msgs/msg/PoseStamped
+```
 
-- AMCL
-- BT Navigator
-- Planner Server
-- Controller Server
-- Global Costmap
-- Local Costmap
-- Goal Checker
-- Progress Checker
-- Lifecycle Manager
+作為 Navigation Goal。
 
----
-
-## Station Navigation
-
-Station Navigation 使用 Route Graph 完成指定站點導航。
+上游流程：
 
 ```text
 Station ID
     │
     ▼
-SUB-010 Route Graph Management
+SUB-010
     │
     ▼
-Route Node ID
-    │
-    ▼
-Nav2 Route Server
-    │
-    ├── Route Search
-    ├── Route Tracking
-    └── Route Operations
-    │
-    ▼
-BT Navigator
-    │
-    ├── First Mile
-    ├── On Route
-    └── Goal Arrival
-    │
-    ▼
-Controller Server
+Goal Pose
 ```
 
-執行流程：
-
-1. 接收目標 Route Node。
-2. 取得 AMR 目前位姿。
-3. Route Server 計算至目標節點之 Route。
-4. Navigation 完成目前位置與 Route Graph 的銜接。
-5. AMR 沿 Route Graph 移動。
-6. Goal Checker 判定 AMR 抵達站點。
-7. Navigation 回傳結果。
-
----
-
-## Pose Navigation
-
-Pose Navigation 直接使用 Goal Pose。
+或：
 
 ```text
 Goal Pose
     │
     ▼
-BT Navigator
+SUB-009
     │
     ▼
-Planner Server
-    │
-    ▼
-Controller Server
-    │
-    ▼
-Goal Checker
+Goal Pose
 ```
 
-執行流程：
-
-1. 接收 `Goal Pose`。
-2. 驗證目標位姿位於可導航區域。
-3. 取得 AMR 目前位姿。
-4. Planner Server 產生全域路徑。
-5. Controller Server 追蹤路徑。
-6. Goal Checker 判定 AMR 抵達指定位置與朝向。
-7. Navigation 回傳結果。
-
-Pose Navigation 不使用：
-
-- Route Graph
-- Route Server
-- Station Mapping
-
----
-
-## Nav2 組成
-
-| 元件 | 職責 |
-|---|---|
-| Map Server | 發布指定 Occupancy Grid |
-| AMCL | 發布 `map → odom` 並提供地圖定位 |
-| Route Server | 計算與追蹤 Route Graph 路線 |
-| BT Navigator | 編排導航流程 |
-| Planner Server | 產生全域路徑 |
-| Controller Server | 追蹤路徑並產生速度命令 |
-| Global Costmap | 提供全域可通行與障礙物資訊 |
-| Local Costmap | 提供 AMR 周圍即時障礙物資訊 |
-| Goal Checker | 判定位置與朝向抵達條件 |
-| Progress Checker | 判定 AMR 是否持續推進 |
-| Lifecycle Manager | 管理 Nav2 元件狀態 |
-
-初版優先採用 Nav2 既有 Server、Plugin、Behavior Tree 與 Lifecycle 機制。
-
----
-
-## LiDAR 與障礙物來源
-
-Navigation 優先直接使用 SUB-002 發布之原始 LiDAR Topic。
+最後均形成：
 
 ```text
-/scan_front ─────┐
-                 ├──► Global Costmap
-/scan_rear ──────┤
-                 └──► Local Costmap
+Canonical Goal Pose
+        │
+        ▼
+SUB-011 Navigation
+```
+
+因此 Navigation 不需要知道：
+
+- Goal 是否來自 Station。
+- Station ID 為何。
+- Goal 是否位於 Route Graph Node。
+- Target Resolution 如何完成。
+
+---
+
+# Navigation Strategy
+
+Navigation Strategy 由 Nav2 Behavior Tree 編排。
+
+初版不建立額外的：
+
+```text
+Custom Strategy Selector Node
+```
+
+而是優先透過 Nav2 Behavior Tree 組合：
+
+- Route Server
+- Planner Server
+- Controller Server
+- Recovery / Behavior
+
+完成導航策略。
+
+系統策略原則：
+
+1. 可合理利用 Route Graph 時，優先執行 Route-assisted Navigation。
+2. Current Pose 不在 Route Graph 上時，使用 First Mile 銜接路網。
+3. Goal Pose 不在 Route Graph 上時，使用 Last Mile 銜接目標。
+4. Route Graph 不適用或 Route-assisted Navigation 無法使用時，允許使用 Free-space Navigation。
+5. 實際策略條件與 fallback 行為於 Behavior Tree 實機驗證後定版。
+
+---
+
+# Route-assisted Navigation
+
+Route-assisted Navigation 利用既有 Route Graph 約束或引導 AMR 的主要移動路線。
+
+```text
+Current Pose
+      │
+      ▼
+ First Mile
+      │
+      ▼
+ Route Graph
+      │
+      ▼
+   On Route
+      │
+      ▼
+ Last Mile
+      │
+      ▼
+  Goal Pose
+```
+
+Route Graph：
+
+```text
+maps/<map_name>/route_graph.geojson
+```
+
+由 Nav2 Route Server 使用。
+
+SUB-011 不自行實作：
+
+- Graph Search。
+- Graph Traversal。
+- Nearest Node Search。
+- Route Cost Algorithm。
+- Route Tracking Algorithm。
+
+上述能力優先沿用 `nav2_route`。
+
+---
+
+## First Mile
+
+First Mile 負責由 AMR Current Pose 銜接 Route Graph。
+
+```text
+Current Pose
+      │
+      ▼
+Planner Server
+      │
+      ▼
+Route Entry
+```
+
+First Mile 使用 Nav2 既有 Free-space Planner 完成。
+
+SUB-011 不自行實作 First Mile Planner。
+
+---
+
+## On Route
+
+On Route 階段由 Nav2 Route Server 提供 Route Graph 導航能力。
+
+```text
+Route Entry
+     │
+     ▼
+Nav2 Route Server
+     │
+     ▼
+Route
+     │
+     ▼
+Route Exit
+```
+
+Route Server 負責 Route 計算與 Route Tracking。
+
+---
+
+## Last Mile
+
+Last Mile 負責由 Route Graph 離開點銜接 Canonical Goal Pose。
+
+```text
+Route Exit
+     │
+     ▼
+Planner Server
+     │
+     ▼
+Goal Pose
+```
+
+Goal Pose 不需要位於 Route Graph Node。
+
+因此 Station 與 Route Graph 維持解耦。
+
+---
+
+# Free-space Navigation
+
+若 Route Graph 不適用，Navigation 可直接執行 Free-space Navigation。
+
+```text
+Current Pose
+      │
+      ▼
+Planner Server
+      │
+      ▼
+Global Path
+      │
+      ▼
+Controller Server
+      │
+      ▼
+Goal Pose
+```
+
+Free-space Navigation 使用 Nav2 既有：
+
+- Planner Server
+- Controller Server
+- Costmaps
+- Goal Checker
+- Progress Checker
+- Behavior Tree
+
+不自行實作 Global Planner 或 Local Planner。
+
+---
+
+# Navigation Behavior Tree
+
+Behavior Tree 負責 Navigation 流程編排。
+
+概念流程：
+
+```text
+Canonical Goal Pose
+        │
+        ▼
+ Navigation Behavior Tree
+        │
+        ├── Route-assisted Navigation
+        │       ├── Compute Route
+        │       ├── First Mile
+        │       ├── On Route
+        │       └── Last Mile
+        │
+        ├── Free-space Navigation
+        │       ├── Compute Path
+        │       └── Follow Path
+        │
+        └── Recovery / Failure Handling
+```
+
+初版優先沿用 Nav2 官方 Behavior Tree 與既有 BT Node。
+
+僅在現有 Behavior Tree 無法滿足 v0.1 Navigation Strategy 時，才新增最小必要的 BT 組合或 Plugin。
+
+---
+
+# Localization
+
+Navigation 使用靜態 Map Localization。
+
+```text
+Map Package
+    │
+    ▼
+Map Server
+    │
+    ▼
+  /map
+    │
+    ▼
+  AMCL
+    │
+    ▼
+map → odom
+```
+
+系統里程：
+
+```text
+/wheel_odom
+/rf2o_odom
+/imu/data_raw
+      │
+      ▼
+SUB-006 Robot Localization EKF
+      │
+      ├── /odom
+      └── odom → base_footprint
+```
+
+最終 TF：
+
+```text
+map
+ │
+ └── odom
+      │
+      └── base_footprint
+            │
+            └── base_link
+```
+
+---
+
+# LiDAR 使用原則
+
+Navigation 優先直接使用 SUB-002 提供之原始 LiDAR Topic：
+
+```text
+/scan_front
+/scan_rear
 ```
 
 使用原則：
 
-1. Costmap 支援多個 Observation Source 時，直接使用 `/scan_front` 與 `/scan_rear`。
-2. 下游僅需單一來源且單一原始 Topic 可滿足需求時，使用選定之原始 Topic。
-3. 僅於介面無法直接使用所需原始來源，且單一來源無法滿足障礙物覆蓋需求時，才評估 LaserScan Fusion。
+1. 下游元件可直接接收多個原始來源時，直接使用原始 Topic。
+2. 單一原始來源已足夠時，直接使用單一原始 Topic。
+3. 僅於下游介面限制且原始資料無法滿足功能需求時，才評估 LaserScan Fusion。
 4. 初版不預設導入 LaserScan Fusion。
 
 ---
 
-## ROS Interface
+# Costmap
 
-### 輸入
+Navigation 使用：
 
-| 介面 | Type | 說明 |
-|---|---|---|
-| Goal Route Node | Nav2 Route Action Goal | Station Navigation 目標節點 |
-| Goal Pose | `geometry_msgs/msg/PoseStamped` | Pose Navigation 目標 |
-| `/map` | `nav_msgs/msg/OccupancyGrid` | 導航地圖 |
-| `/odom` | `nav_msgs/msg/Odometry` | 系統里程資訊 |
-| `/scan_front` | `sensor_msgs/msg/LaserScan` | 前方原始 LiDAR |
-| `/scan_rear` | `sensor_msgs/msg/LaserScan` | 後方原始 LiDAR |
-| `/tf` | TF2 | 動態座標轉換 |
-| `/tf_static` | TF2 | 固定座標轉換 |
+- Global Costmap
+- Local Costmap
 
-### 輸出
+概念資料流：
 
-| 介面 | Type | 說明 |
-|---|---|---|
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | 底盤速度命令 |
-| Navigation Feedback | Action Feedback | 導航執行狀態 |
-| Navigation Result | Action Result | 導航完成結果 |
+```text
+/scan_front ─────┐
+                 ├──► Costmap Observation Sources
+/scan_rear ──────┘
+```
+
+若 Nav2 Costmap 可直接設定兩個 Observation Source，直接使用兩個原始 LiDAR Topic。
+
+Costmap 提供：
+
+- Static Map。
+- Robot Footprint。
+- Obstacle Layer。
+- Inflation Layer。
+- Local Obstacle Representation。
+
+實際 Layer 與 Plugin 以 Nav2 Baseline 起始，實機導航後調整。
 
 ---
 
-## TF Interface
+# Planner Server
+
+Planner Server 負責產生 Free-space Path。
+
+使用場景包含：
+
+- 完整 Free-space Navigation。
+- First Mile。
+- Last Mile。
+- Route-assisted Navigation 中需要之局部自由空間規劃。
+
+初版 Planner Plugin 優先採用 Nav2 成熟 Plugin。
+
+正式 Plugin 依差速底盤與實機場域測試決定。
+
+---
+
+# Controller Server
+
+Controller Server 負責：
+
+- Path Following。
+- Local Motion Control。
+- Goal Checking。
+- Progress Checking。
+- 產生 Velocity Command。
+
+輸出：
+
+```text
+/cmd_vel
+```
+
+初版 Controller Plugin 優先採用 Nav2 成熟 Plugin。
+
+正式 Plugin 依實機追蹤品質與底盤特性決定。
+
+---
+
+# Goal Checking
+
+所有導航目標最終皆為 Canonical Goal Pose。
+
+因此 Goal Checking 使用一致條件：
+
+- Goal Position。
+- Goal Orientation。
+- Position Tolerance。
+- Yaw Tolerance。
+
+```text
+Current Pose
+      │
+      ▼
+ Goal Checker
+      │
+      ▼
+ Goal Pose
+```
+
+Station Goal 不需要特殊 Goal Checker。
+
+Station 最終已解析為 Goal Pose。
+
+---
+
+# ROS Interface
+
+## Input
+
+| Interface | Type | 說明 |
+|---|---|---|
+| Canonical Goal Pose | `geometry_msgs/msg/PoseStamped` | Navigation Goal |
+| `/map` | `nav_msgs/msg/OccupancyGrid` | Navigation Map |
+| `/odom` | `nav_msgs/msg/Odometry` | 系統里程 |
+| `/scan_front` | `sensor_msgs/msg/LaserScan` | Front LiDAR |
+| `/scan_rear` | `sensor_msgs/msg/LaserScan` | Rear LiDAR |
+| `/tf` | TF2 | Dynamic TF |
+| `/tf_static` | TF2 | Static TF |
+
+---
+
+## Navigation Action
+
+初版優先整合 Nav2 既有：
+
+```text
+NavigateToPose
+```
+
+Navigation Target 在進入 SUB-011 前已解析為 Canonical Goal Pose。
+
+不另外建立與 Nav2 重複的 Navigation Action Server。
+
+---
+
+## Output
+
+| Interface | Type | 說明 |
+|---|---|---|
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | 底盤速度命令 |
+| Navigation Feedback | Nav2 Action Feedback | 導航進度 |
+| Navigation Result | Nav2 Action Result | 導航結果 |
+
+---
+
+# TF Interface
 
 ```text
 map
@@ -2938,91 +3411,75 @@ map
                   └── rear_laser_frame
 ```
 
-| Transform | 發布來源 |
+| Transform | Publisher |
 |---|---|
 | `map → odom` | AMCL |
 | `odom → base_footprint` | SUB-006 Robot Localization EKF |
 | `base_footprint → base_link` | URDF |
 | `base_link → sensor frames` | URDF |
 
-Navigation 模式中，`map → odom` 僅由 AMCL 發布。
+Navigation 模式中 `map → odom` 僅由 AMCL 發布。
 
 ---
 
-## 定位
+# Navigation Result
 
-Navigation 使用靜態地圖與 AMCL。
+Navigation Result 優先沿用 Nav2 既有 Action Result。
+
+SUB-011 不另外建立自定義 Result Protocol。
+
+至少需支援：
+
+```text
+Succeeded
+Failed
+Canceled
+```
+
+Navigation Feedback 與 Result 交由 SUB-009 回報使用者。
+
+---
+
+# Recovery
+
+Navigation Recovery 優先使用 Nav2 Behavior Tree 與既有 Behavior Server 能力。
+
+初版不自行建立 Recovery Framework。
+
+可使用之行為依 Nav2 Baseline 與實機需求確認，例如：
+
+- Clear Costmap。
+- Wait。
+- Spin。
+- Back Up。
+
+僅保留實機有必要之 Recovery Behavior。
+
+---
+
+# Lifecycle
+
+Nav2 元件使用 Lifecycle Management。
+
+主要元件包含：
 
 ```text
 Map Server
-    │
-    ▼
-  /map
-    │
-原始 LiDAR Topic
-    │
-    ▼
-   AMCL
-    │
-    ▼
-map → odom
+AMCL
+Route Server
+Planner Server
+Controller Server
+BT Navigator
+Behavior Server
 ```
 
-AMCL 的正式 LiDAR 輸入依套件介面與實機定位結果決定，並遵循原始資料優先原則。
+初版使用 `nav2_lifecycle_manager` 管理 Nav2 元件啟停與狀態。
 
 ---
 
-## 路徑規劃與控制
+# 系統參數
 
-### Planner
-
-Planner Server 負責：
-
-- Pose Navigation 全域路徑規劃。
-- Station Navigation 的自由空間銜接路徑。
-- 依 Global Costmap 產生可執行路徑。
-
-### Controller
-
-Controller Server 負責：
-
-- 路徑追蹤。
-- 局部障礙物處理。
-- 產生 `/cmd_vel`。
-- 執行 Goal Checker。
-- 執行 Progress Checker。
-
-Planner 與 Controller Plugin 初版採用 Nav2 成熟 Plugin，依差速底盤實機表現選定。
-
----
-
-## 到站判定
-
-### Station Navigation
-
-到站條件依站點定義與 Goal Checker 設定確認：
-
-- Route Node 位置。
-- Station Mapping 定義之朝向。
-- Position Tolerance。
-- Yaw Tolerance。
-
-### Pose Navigation
-
-到站條件依 Goal Pose 與 Goal Checker 設定確認：
-
-- 目標位置。
-- 目標朝向。
-- Position Tolerance。
-- Yaw Tolerance。
-
-初版採 Nav2 Baseline，實機驗證後定版。
-
----
-
-## 系統參數
-
-### Frame and Topic Parameters
+## Frames and Topics
 
 | 參數 | 初版設定 |
 |---|---|
@@ -3030,113 +3487,148 @@ Planner 與 Controller Plugin 初版採用 Nav2 成熟 Plugin，依差速底盤�
 | Odom Frame | `odom` |
 | Base Frame | `base_footprint` |
 | Odom Topic | `/odom` |
-| Velocity Topic | `/cmd_vel` |
 | Front Scan | `/scan_front` |
 | Rear Scan | `/scan_rear` |
-
-### Navigation Parameters
-
-| 參數 | 初版設定 |
-|---|---|
-| Navigation Mode | Station 或 Pose |
-| AMCL | 啟用 |
-| Route Server | Station 模式啟用 |
-| Global Costmap | 啟用 |
-| Local Costmap | 啟用 |
-| Goal Position Tolerance | Nav2 Baseline，實機調整 |
-| Goal Yaw Tolerance | Nav2 Baseline，實機調整 |
-| Planner Plugin | Nav2 成熟 Plugin |
-| Controller Plugin | Nav2 成熟 Plugin |
-| Behavior Tree | Nav2 Baseline |
-| Progress Checker | Nav2 Baseline |
-| Goal Checker | Nav2 Baseline |
-
-### Station Parameters
-
-| 參數 | 初版設定 |
-|---|---|
-| Route Graph | `maps/<map_name>/route_graph.geojson` |
-| Station Mapping | `maps/<map_name>/stations.yaml` |
-
-上述參數僅適用於 Station Navigation。
+| Velocity Topic | `/cmd_vel` |
 
 ---
 
-## 軟體組成
+## Navigation Resources
+
+| Resource | Path |
+|---|---|
+| Map | `maps/<map_name>/map.yaml` |
+| Route Graph | `maps/<map_name>/route_graph.geojson` |
+
+`stations.yaml` 不由 SUB-011 直接使用。
+
+Station 已在 SUB-010 解析為 Canonical Goal Pose。
+
+---
+
+## Navigation Parameters
+
+下列參數初版採 Nav2 Baseline：
+
+- Planner Plugin
+- Controller Plugin
+- Goal Checker
+- Progress Checker
+- Costmap Parameters
+- Robot Footprint
+- Inflation Radius
+- Navigation Behavior Tree
+- Recovery Behavior
+- Position Tolerance
+- Yaw Tolerance
+
+正式設定以實機導航結果確認。
+
+---
+
+# 軟體組成
 
 ```text
 navigation
-├── Nav2 Bringup Integration
-├── AMCL Configuration
-├── Route Server Configuration
-├── Planner Configuration
-├── Controller Configuration
-├── Costmap Configuration
-├── Behavior Trees
-├── Lifecycle Configuration
-├── Action Adapter
+├── Nav2 Bringup
+├── BT Navigator
+├── AMCL
+├── Route Server
+├── Planner Server
+├── Controller Server
+├── Global Costmap
+├── Local Costmap
+├── Behavior Server
+├── Lifecycle Manager
+├── Parameters
 └── Diagnostics
 ```
 
-初版專案自訂內容限於：
+初版不建立：
 
-- Station 與 Pose 任務介面整合。
-- Map Package 路徑參數。
-- Nav2 Launch 與 Parameters。
-- Behavior Tree 選擇與設定。
-- Diagnostics。
+```text
+Custom Route Planner
+Custom Global Planner
+Custom Local Planner
+Custom Strategy Selector
+Custom Navigation Action Server
+Custom Recovery Framework
+```
 
-Navigation 演算法、Planner、Controller、Costmap 與 Route Search 優先採用 Nav2 成熟實作。
+除非實機驗證證明 Nav2 既有能力無法滿足需求。
 
 ---
 
-## 設計依據
+# 設計依據
 
 SUB-011 依下列順序完成設計確認：
 
-1. UC-002 Station Navigation。
-2. UC-003 Pose Navigation。
-3. Nav2 Jazzy 套件。
-4. `nav2_route`。
-5. SUB-006 Robot Localization EKF。
-6. SUB-008 Map Management。
-7. SUB-009 Task Interface。
-8. SUB-010 Route Graph Management。
-9. 原始 LiDAR 輸入能力確認。
-10. 實機導航驗證。
+1. UC-002 導航至指定目標。
+2. CAP-002 自主導航至指定目標。
+3. SYS-010～SYS-021。
+4. ROS 2 Jazzy Navigation2。
+5. Nav2 `NavigateToPose`。
+6. Nav2 Route Server。
+7. Nav2 Behavior Tree。
+8. Nav2 Planner Server。
+9. Nav2 Controller Server。
+10. Nav2 Costmap。
+11. Nav2 AMCL。
+12. SUB-006 Robot Localization EKF。
+13. SUB-008 Map Management。
+14. SUB-009 Task Interface。
+15. SUB-010 Target Resolution。
+16. 實機導航驗證。
+
+設計原則：
+
+- Navigation 永遠處理 Canonical Goal Pose。
+- Target Source 與 Navigation Execution 解耦。
+- Route Graph 為 Navigation Strategy 資源。
+- Route-assisted Navigation 優先使用 Nav2 Route。
+- Free-space Navigation 優先使用 Nav2 Planner。
+- Navigation Strategy 優先使用 Behavior Tree 編排。
+- 不重複實作 Nav2 已提供能力。
 
 ---
 
-## 驗證項目
+# 驗證項目
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| Map Load | Map Server 成功發布指定地圖 |
-| Localization | AMCL 持續提供有效地圖定位 |
-| TF | TF Tree 持續完整且無重複發布 |
-| Station Goal | 可接收目標 Route Node |
-| Route Planning | Route Server 可產生至目標節點之 Route |
-| First Mile | AMR 可由目前位置銜接 Route Graph |
-| On Route | AMR 可沿 Route Graph 移動 |
-| Station Arrival | AMR 可抵達指定站點與朝向 |
-| Pose Goal | 可接收有效 Goal Pose |
-| Pose Planning | Planner Server 可產生至 Goal Pose 的路徑 |
-| Pose Navigation | AMR 可抵達指定位置與朝向 |
-| Costmap Input | Costmap 可直接使用原始 LiDAR Topic |
-| Obstacle Representation | Costmap 可反映前後 LiDAR 障礙物 |
-| Velocity Command | `/cmd_vel` 持續提供有效命令 |
-| Feedback | SUB-009 可持續取得導航狀態 |
-| Result | SUB-009 可取得導航完成結果 |
-| Repeatability | 可重複執行 Station 與 Pose 任務 |
-| Long Duration | 導航期間各 Nav2 元件持續正常運作 |
+| Canonical Goal | 可接收有效 Goal Pose |
+| Map Load | 可載入指定 Map Package |
+| Localization | AMCL 可持續提供有效定位 |
+| TF | TF Tree 完整且無重複發布 |
+| Route Graph Load | Nav2 Route Server 可載入 Route Graph |
+| Route Planning | 可計算適用 Route |
+| First Mile | Current Pose 不在 Route 上時可銜接路網 |
+| On Route | AMR 可沿 Route Graph 導航 |
+| Last Mile | Route Graph 未到達 Goal 時可銜接 Goal Pose |
+| Free-space Navigation | 不使用 Route Graph 時可直接導航至 Goal Pose |
+| Route-assisted Strategy | 適用 Route Graph 時可優先利用路網 |
+| Route Fallback | Route-assisted 無法使用時可依 BT Policy 處理 |
+| Planner | 可產生可執行 Path |
+| Controller | AMR 可穩定追蹤 Path |
+| Costmap | 可使用原始 LiDAR 建立障礙物資訊 |
+| Obstacle Avoidance | 導航時可處理環境障礙物 |
+| Goal Checking | 可正確判定 Goal Pose 抵達 |
+| Velocity Command | `/cmd_vel` 持續提供有效速度命令 |
+| Feedback | 可提供 Navigation Feedback |
+| Result | 可正確回報成功、失敗或取消 |
+| Repeatability | 可重複執行不同 Navigation Target |
+| Long Duration | 長時間導航期間 Nav2 元件持續穩定運作 |
 
 ---
 
-## Traceability
+# Traceability
 
 | Requirement | Subsystem |
 |---|---|
+| SYS-010 | SUB-011 |
 | SYS-011 | SUB-011 |
+| SYS-012 | SUB-011 |
+| SYS-013 | SUB-011 |
 | SYS-014 | SUB-011 |
 | SYS-015 | SUB-011 |
 | SYS-016 | SUB-011 |
@@ -3145,5 +3637,3 @@ SUB-011 依下列順序完成設計確認：
 | SYS-019 | SUB-011 |
 | SYS-020 | SUB-011 |
 | SYS-021 | SUB-011 |
-| SYS-022 | SUB-011 |
-| SYS-023 | SUB-011 |
