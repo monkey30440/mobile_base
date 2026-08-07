@@ -9,7 +9,7 @@
 | SUB-001 | Base Control |
 | SUB-002 | LiDAR Perception |
 | SUB-003 | IMU Perception |
-| SUB-004 | Wheel Odometry |
+| SUB-004 | Differential Drive Controller |
 | SUB-005 | RF2O Odometry |
 | SUB-006 | Robot Localization EKF |
 | SUB-007 | SLAM Toolbox |
@@ -24,7 +24,11 @@
 
 ## 目的
 
-Base Control 子系統負責接收 AMR 運動命令，控制差速底盤完成運動，並提供底盤運動回授，作為里程估測與定位之基礎。
+Base Control 子系統負責 DEXMART M1 驅動器之通訊與生命週期管理，
+向 ros2_control 框架提供左右輪之輪端狀態與速度命令介面。
+
+本子系統為 ros2_control 之硬體層，不含差速運動學與里程計算；
+該部分由 **SUB-004 Differential Drive Controller** 以 `diff_drive_controller` 完成。
 
 ---
 
@@ -47,35 +51,50 @@ Base Control 子系統負責接收 AMR 運動命令，控制差速底盤完成�
 | 通訊介面 | RS-485 |
 | 通訊協議 | Modbus Multi-drive 2.0 |
 | Device | `/dev/ttyUSB0` |
+| 控制框架 | ros2_control |
+| 元件型式 | `hardware_interface::SystemInterface` 插件 |
 
 ---
 
 ## 系統職責
 
-- 接收底盤速度命令。
-- 執行差速輪運動學計算。
-- 控制左右輪驅動器。
-- 讀取左右輪運動回授。
-- 發布底盤運動資訊。
-- 提供驅動器狀態。
+- 建立並維持 RS-485 Multi-drive 2.0 通訊。
+- 管理驅動器生命週期（組態驗證、激磁、解除激磁）。
+- 讀取左右輪運動回授並解碼為輪端物理量。
+- 處理編碼器 turns 繞回，提供單調連續之輪端位置。
+- 接收輪端速度命令並轉為馬達端命令下達驅動器。
+- 提供驅動器狀態與警報。
+
+Base Control 不負責：
+
+- 差速運動學（`cmd_vel` ↔ 輪速換算）。
+- 里程計算與 `/odom` 發布。
+- TF 發布。
+
+上述由 **SUB-004 Differential Drive Controller** 負責。
 
 ---
 
 ## 邏輯架構
 
 ```text
-            /cmd_vel
+        controller_manager
                 │
-                ▼
-         Base Controller
+   read()  ┌────┴────┐  write()
+           ▼         ▼
+     State If.   Command If.
+   (輪端 rad,    (輪端 rad/s)
+    rad/s)           │
+           ▲         ▼
+           └────┬────┘
                 │
- Differential Drive Kinematics
-                │
-      ┌─────────┴─────────┐
-      ▼                   ▼
- Left Wheel Cmd      Right Wheel Cmd
-      │                   │
-      └─────────┬─────────┘
+       SUB-001 Base Control
+       ┌────────┴────────┐
+       │  Encoder 解碼   │
+       │  turns 繞回累加 │
+       │  單位換算       │
+       │  驅動器生命週期 │
+       └────────┬────────┘
                 ▼
      Modbus Multi-drive 2.0
                 │
@@ -84,47 +103,49 @@ Base Control 子系統負責接收 AMR 運動命令，控制差速底盤完成�
       ┌─────────┴─────────┐
       ▼                   ▼
  Left Driver         Right Driver
-      │                   │
-      └─────────┬─────────┘
-                ▼
-         Wheel Feedback
-                │
-                ▼
-          ROS 2 Interface
 ```
 
 ---
 
-## ROS Interface
+## ros2_control Interface
 
-### Subscribe
+本子系統不直接發布或訂閱 Topic，而是向 `controller_manager`
+匯出下列介面；Topic 層由上層 controller 與 broadcaster 提供。
 
-| Topic | Type | 說明 |
+### State Interfaces
+
+| Joint | Interface | 單位 | 說明 |
+|---|---|---|---|
+| `left_wheel_joint` | `position` | rad | 輪端累積角位置 |
+| `left_wheel_joint` | `velocity` | rad/s | 輪端角速度 |
+| `right_wheel_joint` | `position` | rad | 輪端累積角位置 |
+| `right_wheel_joint` | `velocity` | rad/s | 輪端角速度 |
+
+位置為單調連續值，已完成 turns 繞回處理；
+位置與速度皆為輪端（減速機輸出端）物理量，並已套用方向修正。
+
+### Command Interfaces
+
+| Joint | Interface | 單位 |
 |---|---|---|
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | 底盤速度命令 |
+| `left_wheel_joint` | `velocity` | rad/s |
+| `right_wheel_joint` | `velocity` | rad/s |
 
-### Publish
+### 生命週期
 
-| Topic | Type | 說明 |
-|---|---|---|
-| `/wheel_states` | `sensor_msgs/msg/JointState` | 左右輪回授資訊 |
-| `/driver/status` | `diagnostic_msgs/msg/DiagnosticArray` | Driver 狀態 |
-
-依 Mature Solution First 與 Keep Custom Code Minimal，本子系統不建立自定義訊息型別。
-
-`/wheel_states` 欄位定義：
-
-| 欄位 | 內容 |
+| ros2_control 狀態轉換 | 動作 |
 |---|---|
-| `name` | `["left_wheel", "right_wheel"]` |
-| `position` | 輪端累積角位置（rad） |
-| `velocity` | 輪端角速度（rad/s） |
+| `on_init` / `on_configure` | 開啟序列埠、驗證驅動器組態（`02-14`、`01-06`） |
+| `on_activate` | 解除 FREE、SERVO-EN ON |
+| `on_deactivate` | 停止運動、SERVO-EN OFF |
+| `on_cleanup` / `on_shutdown` | 關閉序列埠 |
 
-位置與速度皆為輪端（減速機輸出端）物理量，已套用方向修正，符合車體座標系。
+解除激磁為安全關鍵動作，左右輪獨立嘗試並重試，單顆失敗不得中斷另一顆。
 
-Base Control 不負責 Wheel Odometry 計算。
+### 驅動器狀態
 
-Wheel Odometry 由 **SUB-004 Wheel Odometry** 負責，訂閱 `/wheel_states`。
+驅動器警報與通訊狀態以 `diagnostic_msgs/msg/DiagnosticArray`
+發布於 `/driver/status`，供操作人員與診斷工具使用。
 
 ---
 
@@ -142,47 +163,19 @@ Driver Register、Control Word 與 Status Word 已於 2026-08-07 實機確認。
 
 ---
 
-## 差速運動學
-
-Base Control 採用 Differential Drive 模型。
-
-輸入：
-
-- 車體線速度
-- 車體角速度
-
-輸出：
-
-- 左輪目標速度
-- 右輪目標速度
-
-Vehicle Geometry 由下列參數決定：
-
-- Wheel Radius
-- Wheel Separation
-- Gear Ratio
-
-初版沿用既有 Baseline，後續以實機量測結果更新。
-
----
-
 ## 系統參數
 
-### Vehicle Parameters
+### 傳動參數
 
 | 參數 | 採用值 | 來源 |
 |---|---|---|
-| Wheel Radius | 0.08 m | 既有 Baseline |
-| Wheel Separation | 0.555 m | 既有 Baseline |
-| Gear Ratio | 20.0 | 既有 Baseline |
+| Gear Ratio | 20.0 | 既有 Baseline，尚未經實機量測驗證 |
 
-上述為目前採用值，**沿用既有 Baseline，尚未經實機量測驗證**。
+Gear Ratio 用於馬達端與輪端之換算，為 SUB-001 之唯一車體相關參數。
 
-三者僅影響 `/cmd_vel` 命令換算，不影響 `/wheel_states` 回授
-（回授為輪端 rad，僅依賴 Gear Ratio 與編碼器解析度）。
-
-實機量測方法待 Vehicle Parameter 校正時定義；
-Wheel Radius 應量測有載滾動半徑，非幾何半徑。
+Wheel Radius 與 Wheel Separation **不屬於本子系統**，
+由 **SUB-004 Differential Drive Controller** 單一持有，
+使兩者不致於兩處各自設定而產生無聲不一致。
 
 ---
 
@@ -237,29 +230,19 @@ SUB-001 以軟體偵測繞回並累加，對外提供單調連續之輪端位置
 
 ---
 
-### 關閉行為
-
-節點關閉時應停止運動並解除激磁，使驅動器回到未激磁狀態。
-
-- SIGTERM 與 SIGINT 皆須走相同關閉路徑；
-  容器與服務管理器送出 SIGTERM，若未處理將留下激磁殘留。
-- 解除激磁為安全關鍵動作，左右輪獨立嘗試並重試，
-  單顆失敗不得中斷另一顆之解除。
-
----
-
 ## 軟體組成
 
 ```text
 base_control
-├── Driver Interface
-├── Modbus Transport
-├── Differential Kinematics
-├── Parameter Manager
-└── Diagnostics
+├── Modbus Transport      RS-485 封包、CRC、收發
+├── Driver Interface      寄存器語意、生命週期、警報
+├── Encoder Decoder       turns 繞回累加、單位換算
+├── Hardware Interface    ros2_control SystemInterface 插件
+└── Diagnostics           /driver/status
 ```
 
-實作為 `src/base_control`（ament_python），各模組對應上述職責劃分。
+實作為 `hardware_interface::SystemInterface` 插件（C++，pluginlib 匯出），
+由 `controller_manager` 載入，不獨立成為 ROS 節點。
 
 ---
 
@@ -270,11 +253,16 @@ SUB-001 依下列順序完成設計確認：
 1. DEXMART Driver 官方文件。
 2. Modbus Multi-drive 2.0 通訊協議。
 3. 現有專案 Baseline。
-4. Hardware Bring-up。
-5. Vehicle Parameter 實機量測。
+4. Hardware Bring-up 與協議實機驗證。
+5. ros2_control `hardware_interface` 介面規範。
 6. Driver Configuration 確認。
 
-初版優先沿用既有成熟 Driver 設定，不重新設計 Driver Protocol。
+設計原則：
+
+- 不重新設計 Driver Protocol，沿用既有成熟 Driver 設定。
+- 不自行實作差速運動學、里程積分與控制迴圈排程，
+  改由 ros2_control 與 `diff_drive_controller` 提供。
+- 自訂程式碼僅限於 ros2_control 未涵蓋之 M1 專屬協議部分。
 
 ---
 
@@ -282,12 +270,19 @@ SUB-001 依下列順序完成設計確認：
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| Driver 通訊 | 可建立 RS-485 通訊（2026-08-07 已確認） |
-| Driver 控制 | 左右輪可獨立控制（2026-08-07 已確認） |
-| 差速控制 | AMR 可完成直行與原地旋轉（輪端已驗證，落地行駛待確認） |
-| Wheel Feedback | 可持續取得左右輪回授（2026-08-07 已確認，50 Hz） |
-| `/cmd_vel` | 底盤可正確執行速度命令（2026-08-07 已確認） |
+| Driver 通訊 | 可建立 RS-485 通訊 |
+| Driver 控制 | 左右輪可獨立控制 |
+| Hardware Interface 載入 | `controller_manager` 可載入並啟用本插件 |
+| State Interface | 輪端 position／velocity 持續更新且數值正確 |
+| Position 連續性 | 跨 turns 繞回邊界後位置仍單調連續 |
+| Command Interface | 輪端速度命令可正確驅動左右輪 |
+| 生命週期 | activate 激磁、deactivate 解除激磁，皆可重複執行 |
+| 異常關閉 | SIGTERM 下仍完成解除激磁 |
+| 警報處理 | 驅動器警報可被偵測、回報並回復 |
 | 長時間運轉 | 建圖與導航期間持續穩定運作 |
+
+Stage 1／Stage 2 已於手搓實作上驗證通訊協議、編碼器解碼、繞回處理與
+關閉行為（2026-08-07）；上述項目須於 ros2_control 實作完成後重新驗證。
 
 ---
 
@@ -718,11 +713,15 @@ SUB-003 依下列順序完成設計確認：
 |---|---|
 | SYS-004 | SUB-003 |
 
-# SUB-004 Wheel Odometry
+# SUB-004 Differential Drive Controller
 
 ## 目的
 
-Wheel Odometry 子系統負責根據左右輪運動回授計算 AMR 平面里程資訊，發布標準 ROS 2 `Odometry` 訊息，提供 Robot Localization EKF 作為感測器融合輸入。
+Differential Drive Controller 子系統負責差速運動學與輪式里程：
+接收車體速度命令並換算為左右輪速度命令，同時由輪端回授推算 AMR 平面里程，
+發布標準 ROS 2 `Odometry` 訊息，提供 Robot Localization EKF 作為感測器融合輸入。
+
+本子系統以 ros2_control 之 `diff_drive_controller` 實現，不含自訂程式碼。
 
 ---
 
@@ -731,6 +730,7 @@ Wheel Odometry 子系統負責根據左右輪運動回授計算 AMR 平面里程
 | Requirement |
 |---|
 | SYS-005 |
+| SYS-022 |
 
 ---
 
@@ -741,45 +741,45 @@ Wheel Odometry 子系統負責根據左右輪運動回授計算 AMR 平面里程
 | 運算平台 | Jetson AGX Orin Developer Kit |
 | ROS | ROS 2 Jazzy |
 | 運動模型 | Differential Drive |
-| 資料來源 | SUB-001 Base Control |
+| 控制框架 | ros2_control |
+| 元件 | `diff_drive_controller` |
+| 硬體介面 | SUB-001 Base Control |
 | Coordinate Frame | URDF 定義 |
 
 ---
 
 ## 系統職責
 
-- 接收左右輪運動回授。
-- 執行 Differential Drive 運動學計算。
-- 推算 AMR 平面位姿。
-- 推算 AMR 線速度。
-- 推算 AMR 角速度。
-- 發布標準 ROS 2 `Odometry` Topic。
-- 提供 Wheel Odometry 狀態。
+- 接收車體速度命令 `/cmd_vel`。
+- 執行差速運動學，輸出左右輪速度命令至 SUB-001。
+- 由輪端回授推算 AMR 平面位姿、線速度與角速度。
+- 發布 Wheel Odometry。
+- 執行速度與加速度限制。
+- 執行命令逾時保護。
 
-Wheel Odometry 僅負責輪式里程估測。
+不負責：
 
-感測器融合、系統里程與 TF 發布由 **SUB-006 Robot Localization EKF** 負責。
+- 驅動器通訊與生命週期（SUB-001）。
+- 感測器融合與 `odom → base_footprint` TF（SUB-006）。
 
 ---
 
 ## 邏輯架構
 
 ```text
-      /wheel_states
-             │
-             ▼
-     Wheel Odometry
-             │
- Differential Drive
-    Kinematics
-             │
-             ├── Position
-             ├── Orientation
-             ├── Linear Velocity
-             └── Angular Velocity
-             │
-             ▼
-       /wheel_odom
+            /cmd_vel
+                │
+                ▼
+     diff_drive_controller
+       ┌────────┴────────┐
+       ▼                 ▼
+  Inverse Kinematics  Odometry
+       │                 │
+       ▼                 ▼
+ 輪端速度命令        /wheel_odom
+       │                 ▲
+       ▼                 │
+ SUB-001 Command If.  SUB-001 State If.
 ```
 
 ---
@@ -790,7 +790,7 @@ Wheel Odometry 僅負責輪式里程估測。
 
 | Topic | Type | 說明 |
 |---|---|---|
-| `/wheel_states` | `sensor_msgs/msg/JointState` | 左右輪運動回授（輪端 rad、rad/s） |
+| `/cmd_vel` | `geometry_msgs/msg/TwistStamped` | 底盤速度命令 |
 
 ### Publish
 
@@ -798,11 +798,29 @@ Wheel Odometry 僅負責輪式里程估測。
 |---|---|---|
 | `/wheel_odom` | `nav_msgs/msg/Odometry` | Wheel Odometry |
 
+`diff_drive_controller` 預設之 odometry topic 經 remap 為 `/wheel_odom`，
+以維持 SUB-006 既有輸入介面不變。
+
+`/cmd_vel` 之訊息型別依 `diff_drive_controller` 版本設定；
+若採 `TwistStamped`，上游 Navigation 須對應設定。
+
+---
+
+## Joint State
+
+`joint_state_broadcaster` 由 SUB-001 之 State Interface 發布 `/joint_states`
+（`sensor_msgs/msg/JointState`，輪端 rad、rad/s），供 `robot_state_publisher`
+與診斷工具使用。
+
+本專案不另建自訂輪端狀態 Topic。
+
 ---
 
 ## TF Interface
 
-Wheel Odometry 不發布 TF。
+Differential Drive Controller **不發布 TF**。
+
+`diff_drive_controller` 之 `enable_odom_tf` 須設為 `false`。
 
 系統唯一的：
 
@@ -810,7 +828,7 @@ Wheel Odometry 不發布 TF。
 odom → base_footprint
 ```
 
-由 **SUB-006 Robot Localization EKF** 發布。
+由 **SUB-006 Robot Localization EKF** 發布，避免兩處同時發布造成 TF 衝突。
 
 ---
 
@@ -822,40 +840,13 @@ odom → base_footprint
 |---|---|
 | `header.frame_id` | `odom` |
 | `child_frame_id` | `base_footprint` |
-| Position | Differential Drive 推算 |
-| Orientation | Differential Drive 推算 |
-| Linear Velocity | 左右輪速度推算 |
-| Angular Velocity | 左右輪速度推算 |
+| Position | `diff_drive_controller` 積分 |
+| Orientation | `diff_drive_controller` 積分 |
+| Linear Velocity | 輪端回授推算 |
+| Angular Velocity | 輪端回授推算 |
 | Covariance | 初版採 Baseline，實機調整 |
 
 Wheel Odometry 提供相對運動估測，不保證長時間絕對定位精度。
-
----
-
-## Differential Drive
-
-Wheel Odometry 使用標準 Differential Drive 運動模型。
-
-輸入：
-
-- 左輪速度
-- 右輪速度
-
-輸出：
-
-- X Position
-- Y Position
-- Heading
-- Linear Velocity
-- Angular Velocity
-
-Vehicle Geometry 使用：
-
-- Wheel Radius
-- Wheel Separation
-- Gear Ratio
-
-初版沿用既有 Baseline，Hardware Bring-up 後以實機量測確認。
 
 ---
 
@@ -863,38 +854,43 @@ Vehicle Geometry 使用：
 
 ### Vehicle Parameters
 
-| 參數 | 初版來源 |
-|---|---|
-| Wheel Radius | 既有 Baseline |
-| Wheel Separation | 既有 Baseline |
-| Gear Ratio | 既有 Baseline |
+| 參數 | 採用值 | 來源 |
+|---|---|---|
+| Wheel Radius | 0.08 m | 既有 Baseline，尚未經實機量測驗證 |
+| Wheel Separation | 0.555 m | 既有 Baseline，尚未經實機量測驗證 |
+
+本子系統為此二參數之**唯一持有者**。SUB-001 不重複宣告，
+避免命令路徑與里程路徑採用不同數值而產生無聲不一致。
+
+Wheel Radius 應量測有載滾動半徑，非幾何半徑。
+
+Gear Ratio 與編碼器解析度不屬於本子系統；
+SUB-001 已將回授換算至輪端物理量。
 
 ---
 
-### Odometry Parameters
+### Controller Parameters
 
-下列參數依實機調整：
+下列參數依 `diff_drive_controller` Baseline 設定，實機調整：
 
-- Encoder Resolution
 - Update Rate
-- Covariance
-- Initial Pose
-
-初版沿用既有 Baseline，Hardware Bring-up 完成後確認。
+- Publish Rate
+- Velocity / Acceleration Limits
+- `cmd_vel_timeout`
+- Odometry Covariance
+- `open_loop`（本專案採 `false`，使用輪端回授）
+- `enable_odom_tf`（固定 `false`）
 
 ---
 
 ## 軟體組成
 
 ```text
-wheel_odometry
-├── Differential Kinematics
-├── Odometry Integration
-├── Parameter Manager
-└── Diagnostics
+diff_drive_controller   （ros2_control 既有元件）
+└── controller 參數檔
 ```
 
-Package 結構於 Implementation 階段確認。
+本子系統不建立自訂程式碼，僅提供組態與 launch 設定。
 
 ---
 
@@ -903,13 +899,17 @@ Package 結構於 Implementation 階段確認。
 SUB-004 依下列順序完成設計確認：
 
 1. Differential Drive 運動模型。
-2. 現有專案 Baseline。
-3. SUB-001 Base Control。
-4. Hardware Bring-up。
-5. Vehicle Geometry 實機量測。
-6. Robot Localization 輸入需求。
+2. ros2_control 與 `diff_drive_controller` 官方文件。
+3. SUB-001 Base Control 匯出之介面。
+4. Robot Localization 輸入需求。
+5. Hardware Bring-up。
+6. Vehicle Geometry 實機量測。
 
-初版優先採用成熟 Differential Drive 運動模型，不自行設計 Wheel Odometry 演算法。
+設計原則：
+
+- 優先使用 `diff_drive_controller`，不自行實作差速運動學與里程積分。
+- Wheel Radius 與 Wheel Separation 集中於本子系統，維持單一來源。
+- TF 發布權責集中於 SUB-006，本子系統不發布 TF。
 
 ---
 
@@ -917,14 +917,16 @@ SUB-004 依下列順序完成設計確認：
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| Wheel Feedback | 可持續接收左右輪回授 |
+| Controller 載入 | `controller_manager` 可載入並啟用 `diff_drive_controller` |
+| Command Path | `/cmd_vel` 可驅動底盤直行與原地旋轉 |
 | Topic Publish | `/wheel_odom` 持續發布 |
 | Message Type | `nav_msgs/msg/Odometry` |
-| Straight Motion | 直線位移方向正確 |
-| Rotation | 原地旋轉方向正確 |
+| Straight Motion | 直線位移方向與量值正確 |
+| Rotation | 原地旋轉方向與角度正確 |
 | Velocity | 線速度與角速度合理 |
 | Covariance | Covariance 正常設定 |
 | TF | 不發布 `odom → base_footprint` |
+| Timeout | `/cmd_vel` 逾時後底盤停止 |
 | Long Duration | 建圖與導航期間持續正常運作 |
 
 ---
@@ -934,6 +936,7 @@ SUB-004 依下列順序完成設計確認：
 | Requirement | Subsystem |
 |---|---|
 | SYS-005 | SUB-004 |
+| SYS-022 | SUB-004 |
 
 # SUB-005 RF2O Odometry
 
@@ -1197,7 +1200,7 @@ Robot Localization EKF 子系統負責融合 Wheel Odometry、RF2O Odometry 與 
 
 ## 系統職責
 
-- 接收 Wheel Odometry。
+- 接收 Wheel Odometry（SUB-004）。
 - 接收 RF2O Odometry。
 - 接收 IMU 原始量測。
 - 執行 Extended Kalman Filter。
@@ -1432,7 +1435,7 @@ SUB-006 依下列順序完成設計確認：
 1. robot_localization 官方文件。
 2. ROS 2 Jazzy Baseline。
 3. SUB-003 IMU Perception。
-4. SUB-004 Wheel Odometry。
+4. SUB-004 Differential Drive Controller。
 5. SUB-005 RF2O Odometry。
 6. Hardware Bring-up。
 7. EKF Covariance 調整。

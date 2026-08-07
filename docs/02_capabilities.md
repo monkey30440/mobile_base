@@ -72,7 +72,7 @@ maps/
 | SUB-001 Base Control |
 | SUB-002 LiDAR Perception |
 | SUB-003 IMU Perception |
-| SUB-004 Wheel Odometry |
+| SUB-004 Differential Drive Controller |
 | SUB-005 RF2O Odometry |
 | SUB-006 Robot Localization EKF |
 | SUB-007 SLAM Toolbox |
@@ -180,7 +180,7 @@ Navigation Result：
 | SUB-001 Base Control |
 | SUB-002 LiDAR Perception |
 | SUB-003 IMU Perception |
-| SUB-004 Wheel Odometry |
+| SUB-004 Differential Drive Controller |
 | SUB-005 RF2O Odometry |
 | SUB-006 Robot Localization EKF |
 | SUB-008 Map Management |

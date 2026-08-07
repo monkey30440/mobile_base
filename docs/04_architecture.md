@@ -47,6 +47,9 @@ Architecture 描述系統元件、資料流與子系統責任，不描述各子�
               Velocity Command
                      │
                      ▼
+   SUB-004 Differential Drive Controller
+                     │
+                     ▼
           SUB-001 Base Control
 ```
 
@@ -69,6 +72,9 @@ Architecture 描述系統元件、資料流與子系統責任，不描述各子�
                                     │
                                     ▼
                                Navigation
+                                    │
+                                    ▼
+                    Differential Drive Controller
                                     │
                                     ▼
                             Base Control
@@ -97,10 +103,14 @@ Robot Localization EKF
 SLAM Toolbox
 AMCL
 
+Control Layer （ros2_control）
+─────────────────────────────────────
+Differential Drive Controller
+Joint State Broadcaster
+
 Hardware Layer
 ─────────────────────────────────────
-Base Control
-Wheel Odometry
+Base Control （hardware_interface）
 LiDAR
 IMU
 ```
@@ -114,7 +124,7 @@ LiDAR
    │
 IMU
    │
-Wheel Odometry
+Differential Drive Controller
    │
 RF2O
    │
@@ -335,6 +345,7 @@ Goal Pose
 
 ```text
 Wheel Odometry
+（Differential Drive Controller）
         │
 RF2O Odometry
         │
@@ -387,6 +398,51 @@ Localization
 
 ---
 
+# ros2_control Architecture
+
+底盤控制採 ros2_control 框架，硬體層與控制層分離。
+
+```text
+                /cmd_vel
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │  controller_manager   │
+        │  ┌─────────────────┐  │
+        │  │ diff_drive_     │  │ ── /wheel_odom
+        │  │ controller      │  │
+        │  ├─────────────────┤  │
+        │  │ joint_state_    │  │ ── /joint_states
+        │  │ broadcaster     │  │
+        │  └────────┬────────┘  │
+        │  read()   │  write()  │
+        │           ▼           │
+        │  SUB-001 Base Control │
+        │  (hardware_interface) │
+        └───────────┬───────────┘
+                    ▼
+              RS-485 / M1 Drivers
+```
+
+責任劃分：
+
+| 層 | 元件 | 職責 |
+|---|---|---|
+| Controller | `diff_drive_controller` | 差速運動學、里程積分、速度限制 |
+| Broadcaster | `joint_state_broadcaster` | 發布 `/joint_states` |
+| Hardware | SUB-001 Base Control | M1 協議、驅動器生命週期、編碼器解碼 |
+
+設計原則：
+
+- 自訂程式碼僅限硬體層之 M1 專屬協議，控制層全數採用既有元件。
+- Vehicle Geometry 集中於 `diff_drive_controller`，不於多處重複宣告。
+- `diff_drive_controller` 不發布 TF；`odom → base_footprint` 由
+  SUB-006 Robot Localization EKF 單一發布。
+- ros2_control 需要 URDF 之 `<ros2_control>` 描述，
+  URDF 為硬體介面與 joint 定義之來源。
+
+---
+
 # Software Components
 
 ```text
@@ -396,7 +452,7 @@ SUB-002 LiDAR Perception
 
 SUB-003 IMU Perception
 
-SUB-004 Wheel Odometry
+SUB-004 Differential Drive Controller
 
 SUB-005 RF2O Odometry
 
@@ -422,6 +478,7 @@ SUB-011 Navigation
 Architecture 遵循：
 
 - ROS 2 Jazzy
+- ros2_control
 - Nav2
 - SLAM Toolbox
 - Robot Localization
@@ -461,6 +518,9 @@ Route-assisted  Free-space
         │
         ▼
     cmd_vel
+        │
+        ▼
+   ros2_control
 ```
 
 其中：

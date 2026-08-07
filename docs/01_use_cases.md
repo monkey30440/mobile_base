@@ -67,7 +67,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 | SUB-001 Base Control |
 | SUB-002 LiDAR Perception |
 | SUB-003 IMU Perception |
-| SUB-004 Wheel Odometry |
+| SUB-004 Differential Drive Controller |
 | SUB-005 RF2O Odometry |
 | SUB-006 Robot Localization EKF |
 | SUB-007 SLAM Toolbox |
@@ -203,7 +203,7 @@ Navigation Strategy 為 Navigation 內部行為，不受 Navigation Target 類�
 | SUB-001 Base Control |
 | SUB-002 LiDAR Perception |
 | SUB-003 IMU Perception |
-| SUB-004 Wheel Odometry |
+| SUB-004 Differential Drive Controller |
 | SUB-005 RF2O Odometry |
 | SUB-006 Robot Localization EKF |
 | SUB-008 Map Management |
