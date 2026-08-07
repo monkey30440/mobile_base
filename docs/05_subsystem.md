@@ -123,7 +123,10 @@ Wheel Odometry 由 **SUB-004 Wheel Odometry** 負責。
 | Left Driver | RS-485 |
 | Right Driver | RS-485 |
 
-Driver Register、Control Word 與 Status Word 初版依 DEXMART 官方文件設定，實機 Bring-up 完成後確認。
+Driver Register、Control Word 與 Status Word 已於 2026-08-07 實機確認。
+
+左右輪以 Multi-drive 2.0 FC17h 群組讀寫，單一封包同時下達雙輪速度命令並讀回回授；
+個別驅動器參數以 FC03／FC06 存取。
 
 ---
 
@@ -167,18 +170,41 @@ Vehicle Geometry 由下列參數決定：
 
 ### Driver Parameters
 
-下列參數依驅動器設定決定：
+下列參數已於 2026-08-07 實機確認：
 
-- Driver ID
-- Baud Rate
+| 參數 | 值 |
+|---|---|
+| Driver ID | 右輪 1、左輪 2 |
+| Baud Rate | 230400（8N1） |
+| Encoder Resolution（`01-06`） | 2500 pulse/rev（單相） |
+| 位置命令格式（`02-14`） | 0：Index(turns) + pulse |
+| PDO Mapping（`09-26`） | 0 |
+
+下列參數依實機調校決定，Stage 3 確認：
+
 - Control Mode
-- Encoder Resolution
 - Maximum Motor RPM
-- Acceleration
-- Deceleration
+- Acceleration / Deceleration
 - Torque Limit
 
-初版依官方文件建立設定，Bring-up 後確認。
+---
+
+### Encoder 位置解碼
+
+驅動器維持出廠預設 `02-14 = 0`，位置以 Index(turns) 與 pulse 兩個 word 表示。
+
+輪端位置計算方式：
+
+```text
+position = turns × (Encoder Resolution × 4) + pulse
+```
+
+設計原則：
+
+- 驅動器端不做持久化設定，行為完全由本專案決定，更換驅動器可直接使用。
+- 每轉步數由 `01-06` 推導，不寫死常數。
+- 啟動時讀取並驗證 `02-14` 與 `01-06`；`02-14` 非 0 時視為組態錯誤並回報，
+  避免驅動器更換或重置後產生無聲之里程誤差。
 
 ---
 
@@ -216,8 +242,8 @@ SUB-001 依下列順序完成設計確認：
 
 | 驗證項目 | 完成條件 |
 |---|---|
-| Driver 通訊 | 可建立 RS-485 通訊 |
-| Driver 控制 | 左右輪可獨立控制 |
+| Driver 通訊 | 可建立 RS-485 通訊（2026-08-07 已確認） |
+| Driver 控制 | 左右輪可獨立控制（2026-08-07 已確認） |
 | 差速控制 | AMR 可完成直行與原地旋轉 |
 | Wheel Feedback | 可持續取得左右輪回授 |
 | `/cmd_vel` | 底盤可正確執行速度命令 |
