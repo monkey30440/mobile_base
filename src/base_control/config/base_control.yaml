@@ -1,0 +1,35 @@
+base_control_node:
+  ros__parameters:
+    serial.port: "/dev/ttyUSB0"
+    serial.baud: 230400
+    serial.timeout_s: 0.1
+    serial.bytesize: 8
+    serial.parity: "N"
+    serial.stopbits: 1
+
+    # 2026-08-07 實機確認
+    driver.right_id: 1
+    driver.left_id: 2
+    driver.linear_acc_ms: 100
+    driver.linear_dec_ms: 100
+    driver.s_curve_acc_ms: 1
+    driver.s_curve_dec_ms: 1
+
+    # 沿用既有 Baseline 推定值，Stage 3 以實機量測取代
+    vehicle.wheel_radius_m: 0.08
+    vehicle.wheel_separation_m: 0.555
+    vehicle.gear_ratio: 20.0
+    vehicle.right_motor_sign: -1
+    vehicle.left_motor_sign: 1
+    vehicle.right_feedback_sign: -1
+    vehicle.left_feedback_sign: 1
+    vehicle.max_motor_rpm: 4400
+    vehicle.min_effective_motor_rpm: 60
+
+    # counts_per_motor_rev 不在此設定，一律由驅動器 01-06 推導
+
+    control.loop_period_s: 0.02
+    control.cmd_vel_timeout_s: 0.5
+    control.frame_id: "base_link"
+    control.left_joint_name: "left_wheel_joint"
+    control.right_joint_name: "right_wheel_joint"
