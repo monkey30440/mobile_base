@@ -91,6 +91,7 @@ Feature Freeze
 mobile_base/
 ├── Dockerfile
 ├── compose.yaml
+├── compose.hardware.yaml
 ├── docs/
 │   ├── README.md
 │   ├── 01_use_cases.md
@@ -98,18 +99,28 @@ mobile_base/
 │   ├── 03_requirements.md
 │   ├── 04_architecture.md
 │   ├── 05_subsystem.md
-│   └── 06_backlog.md
-└── maps/
-    └── template/
-        ├── map.pgm
-        ├── map.yaml
-        ├── route_graph.geojson
-        └── stations.yaml
+│   ├── 06_backlog.md
+│   └── implementation/
+├── maps/
+│   └── template/
+│       ├── map.pgm
+│       ├── map.yaml
+│       ├── route_graph.geojson
+│       └── stations.yaml
+└── src/
 ```
 
 Repository 結構依需求自然成長，不預先建立未使用之目錄或檔案。
 
 `maps/template/` 為 Map Package 目錄結構範本，供建立新場域地圖時參考，非實際場域資料。
+
+`compose.yaml` 為平台中立之開發環境設定；`compose.hardware.yaml` 為實機裝置節點之疊加設定，僅於實際連接硬體之運算平台使用：
+
+```bash
+docker compose -f compose.yaml -f compose.hardware.yaml up
+```
+
+`docs/implementation/` 存放各項實作計畫，屬過程性文件，非正式規格；正式規格見「9. 文件索引」。
 
 ---
 
