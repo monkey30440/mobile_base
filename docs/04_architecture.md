@@ -50,7 +50,7 @@ Architecture 描述系統元件、資料流與子系統責任，不描述各子�
    SUB-004 Differential Drive Controller
                      │
                      ▼
-          SUB-001 Base Control
+          SUB-001 Drive Hardware Interface
 ```
 
 ---
@@ -417,8 +417,9 @@ Localization
         │  └────────┬────────┘  │
         │  read()   │  write()  │
         │           ▼           │
-        │  SUB-001 Base Control │
-        │  (hardware_interface) │
+        │      SUB-001 Drive    |
+        |        Hardware       │
+        │        Interface      │
         └───────────┬───────────┘
                     ▼
               RS-485 / M1 Drivers
@@ -430,7 +431,7 @@ Localization
 |---|---|---|
 | Controller | `diff_drive_controller` | 差速運動學、里程積分、速度限制 |
 | Broadcaster | `joint_state_broadcaster` | 發布 `/joint_states` |
-| Hardware | SUB-001 Base Control | M1 協議、驅動器生命週期、編碼器解碼 |
+| Hardware | SUB-001 Drive Hardware Interface | M1 協議、驅動器生命週期、編碼器解碼 |
 
 設計原則：
 
@@ -446,7 +447,7 @@ Localization
 # Software Components
 
 ```text
-SUB-001 Base Control
+SUB-001 Drive Hardware Interface
 
 SUB-002 LiDAR Perception
 

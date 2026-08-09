@@ -6,7 +6,7 @@
 
 | ID | Subsystem |
 |---|---|
-| SUB-001 | Base Control |
+| SUB-001 | Drive Hardware Interface |
 | SUB-002 | LiDAR Perception |
 | SUB-003 | IMU Perception |
 | SUB-004 | Differential Drive Controller |
@@ -21,11 +21,11 @@
 
 ---
 
-# SUB-001 Base Control
+# SUB-001 Drive Hardware Interface
 
 ## 目的
 
-Base Control 子系統負責 DEXMART M1 驅動器之通訊與生命週期管理，
+Drive Hardware Interface 子系統負責 DEXMART M1 驅動器之通訊與生命週期管理，
 向 ros2_control 框架提供左右輪之輪端狀態與速度命令介面。
 
 本子系統為 ros2_control 之硬體層，不含差速運動學與里程計算；
@@ -89,7 +89,7 @@ Base Control 不負責：
            ▲         ▼
            └────┬────┘
                 │
-       SUB-001 Base Control
+       SUB-001 Drive Hardware Interface
        ┌────────┴────────┐
        │  Encoder 解碼   │
        │  turns 繞回累加 │
@@ -753,7 +753,7 @@ Differential Drive Controller 子系統負責差速運動學與輪式里程：
 | 運動模型 | Differential Drive |
 | 控制框架 | ros2_control |
 | 元件 | `diff_drive_controller` |
-| 硬體介面 | SUB-001 Base Control |
+| 硬體介面 | SUB-001 Drive Hardware Interface |
 | Coordinate Frame | SUB-012 Robot Description |
 
 ---
@@ -910,7 +910,7 @@ SUB-004 依下列順序完成設計確認：
 
 1. Differential Drive 運動模型。
 2. ros2_control 與 `diff_drive_controller` 官方文件。
-3. SUB-001 Base Control 匯出之介面。
+3. SUB-001 Drive Hardware Interface 匯出之介面。
 4. Robot Localization 輸入需求。
 5. Hardware Bring-up。
 6. Vehicle Geometry 實機量測。
@@ -2951,7 +2951,7 @@ Navigation 不關心 Goal Pose 原本來自 Station ID 或使用者直接指定�
 | Map | SUB-008 Map Management |
 | Navigation Resources | SUB-010 Target Resolution |
 | Task Interface | SUB-009 Task Interface |
-| Base Control | SUB-001 Base Control |
+| Base Control | SUB-001 Drive Hardware Interface |
 
 ---
 
@@ -3022,7 +3022,7 @@ Navigation 不負責：
                      /cmd_vel
                          │
                          ▼
-                SUB-001 Base Control
+                SUB-001 Drive Hardware Interface
 ```
 
 ---
@@ -3835,7 +3835,7 @@ Topic 名稱不受此限制，與 frame 之對應如下：
 
 URDF 須包含 `<ros2_control>` 區段，宣告：
 
-- SUB-001 Base Control 之 hardware interface 插件。
+- SUB-001 Drive Hardware Interface 之 hardware interface 插件。
 - 左右驅動輪之 `position` / `velocity` state interface
   與 `velocity` command interface。
 - 插件所需之硬體參數（序列埠、Driver ID 等）。
