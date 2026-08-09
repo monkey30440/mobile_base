@@ -3,7 +3,10 @@
 <package format="3">
   <name>base_control</name>
   <version>0.1.0</version>
-  <description>SUB-001 Base Control: ros2_control hardware interface for DEXMART M1 drivers over RS-485 Multi-drive 2.0.</description>
+  <description>
+    SUB-001 Drive Hardware Interface: ros2_control hardware interface
+    for DEXMART M1 drivers over RS-485 Multi-drive 2.0.
+  </description>
   <maintainer email="SteveTsai@fih-foxconn.com">Jim Chen</maintainer>
   <license>Proprietary</license>
 
