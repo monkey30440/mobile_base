@@ -1,0 +1,52 @@
+=== ARMED SAFE MOTOR TEST ===
+port=/dev/ttyUSB0 baud=230400
+RIGHT ID1: +0 RPM
+LEFT  ID2: +80 RPM
+duration=1.000s rate=10.0Hz
+Ctrl-C / exception will still attempt STOP and NET-IN restore.
+
+[1] Preflight
+BEFORE ID1: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+BEFORE ID2: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+
+[2] SERVO-EN ON
+ENABLED ID1: status=0 alarm=0 rpm=+0 NET-IN=0x0080
+ENABLED ID2: status=0 alarm=0 rpm=+0 NET-IN=0x0080
+
+[3] FC17 zero-RPM sanity check
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=4 errchk=0x9BCB
+LEFT ID2: status=0 alarm=0 rpm=+0 pos_hi=0 pos_lo=0 bus_raw=5103 current_raw=6 errchk=0xD7BB
+
+[4] Motion
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=2 errchk=0x9B43
+LEFT ID2: status=0 alarm=0 rpm=+0 pos_hi=0 pos_lo=0 bus_raw=5103 current_raw=5 errchk=0xD711
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=3 errchk=0x5B7E
+LEFT ID2: status=2 alarm=0 rpm=+75 pos_hi=0 pos_lo=718 bus_raw=5103 current_raw=40 errchk=0x04C5
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=3 errchk=0x5B7E
+LEFT ID2: status=2 alarm=0 rpm=+81 pos_hi=0 pos_lo=2047 bus_raw=5103 current_raw=29 errchk=0xE438
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=5 errchk=0x5BF6
+LEFT ID2: status=2 alarm=0 rpm=+78 pos_hi=0 pos_lo=3370 bus_raw=5103 current_raw=43 errchk=0xEF55
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=3 errchk=0x5B7E
+LEFT ID2: status=2 alarm=0 rpm=+80 pos_hi=0 pos_lo=4703 bus_raw=5100 current_raw=47 errchk=0x5831
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=3 errchk=0x5B7E
+LEFT ID2: status=2 alarm=0 rpm=+80 pos_hi=0 pos_lo=6051 bus_raw=5105 current_raw=25 errchk=0x4C37
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=2 errchk=0x9B43
+LEFT ID2: status=2 alarm=0 rpm=+79 pos_hi=0 pos_lo=7379 bus_raw=5103 current_raw=29 errchk=0xF90F
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=5 errchk=0x5BF6
+LEFT ID2: status=2 alarm=0 rpm=+82 pos_hi=0 pos_lo=8711 bus_raw=5103 current_raw=18 errchk=0x078D
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=1 errchk=0x9B07
+LEFT ID2: status=2 alarm=0 rpm=+79 pos_hi=1 pos_lo=49 bus_raw=5103 current_raw=27 errchk=0xB029
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=6 errchk=0x5BB2
+LEFT ID2: status=2 alarm=0 rpm=+77 pos_hi=1 pos_lo=1378 bus_raw=5103 current_raw=41 errchk=0xE919
+
+[5] STOP: command both motors to 0 RPM
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=4 errchk=0x9BCB
+LEFT ID2: status=2 alarm=0 rpm=+82 pos_hi=1 pos_lo=2711 bus_raw=5103 current_raw=17 errchk=0x3B3B
+RIGHT ID1: status=0 alarm=0 rpm=+0 pos_hi=2 pos_lo=6415 bus_raw=5108 current_raw=7 errchk=0x9B8F
+LEFT ID2: status=0 alarm=0 rpm=+0 pos_hi=1 pos_lo=3207 bus_raw=5103 current_raw=10 errchk=0x74C8
+
+[6] Restore original NET-IN / SERVO-EN state
+RESTORED ID1: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+RESTORED ID2: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+
+=== TEST COMPLETE ===

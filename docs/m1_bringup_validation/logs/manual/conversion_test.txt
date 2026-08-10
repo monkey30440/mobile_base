@@ -1,0 +1,78 @@
+=== VERIFIED-CONVERSION MODEL ===
+gear_ratio             = 20.0
+encoder_ppr            = 2500
+quadrature_factor      = 4
+counts_per_motor_rev   = 10000
+counts_per_wheel_rev   = 200000.0
+left_sign              = +1
+right_sign             = -1
+
+[1] ROS wheel velocity -> M1 motor RPM
+left : wheel=+0.000000 rad/s -> motor=+0.000000 RPM -> wheel=+0.000000 rad/s
+PASS left velocity round-trip +0.000: +0.000000000 rad/s
+left : wheel=+1.000000 rad/s -> motor=+190.985932 RPM -> wheel=+1.000000 rad/s
+PASS left velocity round-trip +1.000: +1.000000000 rad/s
+left : wheel=-1.000000 rad/s -> motor=-190.985932 RPM -> wheel=-1.000000 rad/s
+PASS left velocity round-trip -1.000: -1.000000000 rad/s
+left : wheel=+2.500000 rad/s -> motor=+477.464829 RPM -> wheel=+2.500000 rad/s
+PASS left velocity round-trip +2.500: +2.500000000 rad/s
+right: wheel=+0.000000 rad/s -> motor=-0.000000 RPM -> wheel=+0.000000 rad/s
+PASS right velocity round-trip +0.000: +0.000000000 rad/s
+right: wheel=+1.000000 rad/s -> motor=-190.985932 RPM -> wheel=+1.000000 rad/s
+PASS right velocity round-trip +1.000: +1.000000000 rad/s
+right: wheel=-1.000000 rad/s -> motor=+190.985932 RPM -> wheel=-1.000000 rad/s
+PASS right velocity round-trip -1.000: -1.000000000 rad/s
+right: wheel=+2.500000 rad/s -> motor=-477.464829 RPM -> wheel=+2.500000 rad/s
+PASS right velocity round-trip +2.500: +2.500000000 rad/s
+
+[2] Known 1 rad/s expected command
+|motor RPM| for 1 rad/s = 190.985931710
+LEFT  ROS +1 rad/s -> +190.985931710 RPM
+RIGHT ROS +1 rad/s -> -190.985931710 RPM
+PASS left +1 rad/s sign: +190.985932 RPM
+PASS right +1 rad/s sign: -190.985932 RPM
+
+[3] M1 Index+pulse -> motor counts
+PASS position 0:0: 0 counts
+PASS position 0:9999: 9999 counts
+PASS position 1:0: 10000 counts
+PASS position 1:3207: 13207 counts
+PASS position -1:9999: -1 counts
+PASS position -2:5000: -15000 counts
+
+[4] Motor counts -> ROS wheel position
+200000 motor counts = nominal 1 wheel revolution
+LEFT  feedback -> +6.283185307 rad
+RIGHT feedback -> -6.283185307 rad
+PASS left one-wheel-rev: +6.283185307 rad
+PASS right one-wheel-rev sign: -6.283185307 rad
+
+[5] Position round-trip
+left : wheel=+0.000000000 rad -> counts=+0.000000 -> wheel=+0.000000000 rad
+PASS left position round-trip: +0.000000000 rad
+left : wheel=+0.500000000 rad -> counts=+15915.494309 -> wheel=+0.500000000 rad
+PASS left position round-trip: +0.500000000 rad
+left : wheel=+6.283185307 rad -> counts=+200000.000000 -> wheel=+6.283185307 rad
+PASS left position round-trip: +6.283185307 rad
+left : wheel=-6.283185307 rad -> counts=-200000.000000 -> wheel=-6.283185307 rad
+PASS left position round-trip: -6.283185307 rad
+left : wheel=+12.345000000 rad -> counts=+392953.554494 -> wheel=+12.345000000 rad
+PASS left position round-trip: +12.345000000 rad
+right: wheel=+0.000000000 rad -> counts=-0.000000 -> wheel=+0.000000000 rad
+PASS right position round-trip: +0.000000000 rad
+right: wheel=+0.500000000 rad -> counts=-15915.494309 -> wheel=+0.500000000 rad
+PASS right position round-trip: +0.500000000 rad
+right: wheel=+6.283185307 rad -> counts=-200000.000000 -> wheel=+6.283185307 rad
+PASS right position round-trip: +6.283185307 rad
+right: wheel=-6.283185307 rad -> counts=+200000.000000 -> wheel=-6.283185307 rad
+PASS right position round-trip: -6.283185307 rad
+right: wheel=+12.345000000 rad -> counts=-392953.554494 -> wheel=+12.345000000 rad
+PASS right position round-trip: +12.345000000 rad
+
+[6] ros2_control-facing constants
+motor_rpm_per_wheel_rad_s = 190.985931710274
+wheel_rad_s_per_motor_rpm = 0.005235987756
+wheel_rad_per_motor_count = 0.000031415927
+
+=== RESULT ===
+PASS: all conversion checks passed

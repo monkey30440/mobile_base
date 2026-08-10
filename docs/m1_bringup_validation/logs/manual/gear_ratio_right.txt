@@ -1,0 +1,351 @@
+=== ARMED GEAR-RATIO TEST ===
+port=/dev/ttyUSB0 baud=230400
+RIGHT ID1, LEFT ID2; selected RIGHT = ID1
+command RPM: +80
+target motor revolutions: 20.0000
+nominal gear ratio: 20.0000:1
+VISUAL EXPECTATION: wheel should rotate about 1.0000 revolution(s)
+Make a visible wheel reference mark before continuing. Ctrl-C/exception will attempt STOP and NET-IN restore.
+
+[1] Read selected-driver encoder configuration
+ID1 01-06 encoder resolution = 2500 pulse/rev
+ID1 02-14 position format = 0
+counts_per_motor_rev = 10000
+target encoder delta = 200000 counts
+
+[2] Preflight
+ID1: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+ID2: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+
+[3] SERVO-EN ON
+ID1: status=0 alarm=0 rpm=+0 NET-IN=0x0080
+ID2: status=0 alarm=0 rpm=+0 NET-IN=0x0080
+
+[4] FC17 zero-RPM sanity
+ ID1: status=0 alarm=0 rpm=+0 pos=2:6415 current_raw=5
+ ID2: status=0 alarm=0 rpm=+0 pos=1:3207 current_raw=12
+start continuous motor counts = 26415
+
+[5] Motion until encoder target
+ID1: rpm=+0 pos=2:6415 delta=+0 counts motor_revs=+0.0000
+ID1: rpm=+33 pos=2:6578 delta=+163 counts motor_revs=+0.0163
+ID1: rpm=+72 pos=2:7135 delta=+720 counts motor_revs=+0.0720
+ID1: rpm=+79 pos=2:7783 delta=+1368 counts motor_revs=+0.1368
+ID1: rpm=+79 pos=2:8444 delta=+2029 counts motor_revs=+0.2029
+ID1: rpm=+79 pos=2:9113 delta=+2698 counts motor_revs=+0.2698
+ID1: rpm=+80 pos=2:9785 delta=+3370 counts motor_revs=+0.3370
+ID1: rpm=+81 pos=3:475 delta=+4060 counts motor_revs=+0.4060
+ID1: rpm=+80 pos=3:1116 delta=+4701 counts motor_revs=+0.4701
+ID1: rpm=+80 pos=3:1814 delta=+5399 counts motor_revs=+0.5399
+ID1: rpm=+81 pos=3:2478 delta=+6063 counts motor_revs=+0.6063
+ID1: rpm=+78 pos=3:3145 delta=+6730 counts motor_revs=+0.6730
+ID1: rpm=+79 pos=3:3813 delta=+7398 counts motor_revs=+0.7398
+ID1: rpm=+80 pos=3:4476 delta=+8061 counts motor_revs=+0.8061
+ID1: rpm=+79 pos=3:5143 delta=+8728 counts motor_revs=+0.8728
+ID1: rpm=+80 pos=3:5811 delta=+9396 counts motor_revs=+0.9396
+ID1: rpm=+81 pos=3:6473 delta=+10058 counts motor_revs=+1.0058
+ID1: rpm=+78 pos=3:7139 delta=+10724 counts motor_revs=+1.0724
+ID1: rpm=+79 pos=3:7808 delta=+11393 counts motor_revs=+1.1393
+ID1: rpm=+80 pos=3:8471 delta=+12056 counts motor_revs=+1.2056
+ID1: rpm=+79 pos=3:9138 delta=+12723 counts motor_revs=+1.2723
+ID1: rpm=+80 pos=3:9810 delta=+13395 counts motor_revs=+1.3395
+ID1: rpm=+81 pos=4:478 delta=+14063 counts motor_revs=+1.4063
+ID1: rpm=+79 pos=4:1145 delta=+14730 counts motor_revs=+1.4730
+ID1: rpm=+80 pos=4:1815 delta=+15400 counts motor_revs=+1.5400
+ID1: rpm=+80 pos=4:2480 delta=+16065 counts motor_revs=+1.6065
+ID1: rpm=+78 pos=4:3143 delta=+16728 counts motor_revs=+1.6728
+ID1: rpm=+79 pos=4:3812 delta=+17397 counts motor_revs=+1.7397
+ID1: rpm=+81 pos=4:4476 delta=+18061 counts motor_revs=+1.8061
+ID1: rpm=+78 pos=4:5141 delta=+18726 counts motor_revs=+1.8726
+ID1: rpm=+80 pos=4:5807 delta=+19392 counts motor_revs=+1.9392
+ID1: rpm=+81 pos=4:6472 delta=+20057 counts motor_revs=+2.0057
+ID1: rpm=+79 pos=4:7135 delta=+20720 counts motor_revs=+2.0720
+ID1: rpm=+79 pos=4:7805 delta=+21390 counts motor_revs=+2.1390
+ID1: rpm=+80 pos=4:8471 delta=+22056 counts motor_revs=+2.2056
+ID1: rpm=+79 pos=4:9140 delta=+22725 counts motor_revs=+2.2725
+ID1: rpm=+80 pos=4:9811 delta=+23396 counts motor_revs=+2.3396
+ID1: rpm=+81 pos=5:503 delta=+24088 counts motor_revs=+2.4088
+ID1: rpm=+79 pos=5:1143 delta=+24728 counts motor_revs=+2.4728
+ID1: rpm=+79 pos=5:1842 delta=+25427 counts motor_revs=+2.5427
+ID1: rpm=+81 pos=5:2506 delta=+26091 counts motor_revs=+2.6091
+ID1: rpm=+79 pos=5:3171 delta=+26756 counts motor_revs=+2.6756
+ID1: rpm=+80 pos=5:3839 delta=+27424 counts motor_revs=+2.7424
+ID1: rpm=+81 pos=5:4502 delta=+28087 counts motor_revs=+2.8087
+ID1: rpm=+78 pos=5:5169 delta=+28754 counts motor_revs=+2.8754
+ID1: rpm=+80 pos=5:5838 delta=+29423 counts motor_revs=+2.9423
+ID1: rpm=+80 pos=5:6499 delta=+30084 counts motor_revs=+3.0084
+ID1: rpm=+78 pos=5:7165 delta=+30750 counts motor_revs=+3.0750
+ID1: rpm=+79 pos=5:7835 delta=+31420 counts motor_revs=+3.1420
+ID1: rpm=+81 pos=5:8501 delta=+32086 counts motor_revs=+3.2086
+ID1: rpm=+79 pos=5:9168 delta=+32753 counts motor_revs=+3.2753
+ID1: rpm=+80 pos=5:9841 delta=+33426 counts motor_revs=+3.3426
+ID1: rpm=+81 pos=6:505 delta=+34090 counts motor_revs=+3.4090
+ID1: rpm=+79 pos=6:1170 delta=+34755 counts motor_revs=+3.4755
+ID1: rpm=+80 pos=6:1839 delta=+35424 counts motor_revs=+3.5424
+ID1: rpm=+80 pos=6:2507 delta=+36092 counts motor_revs=+3.6092
+ID1: rpm=+78 pos=6:3168 delta=+36753 counts motor_revs=+3.6753
+ID1: rpm=+79 pos=6:3835 delta=+37420 counts motor_revs=+3.7420
+ID1: rpm=+81 pos=6:4502 delta=+38087 counts motor_revs=+3.8087
+ID1: rpm=+78 pos=6:5165 delta=+38750 counts motor_revs=+3.8750
+ID1: rpm=+81 pos=6:5840 delta=+39425 counts motor_revs=+3.9425
+ID1: rpm=+80 pos=6:6500 delta=+40085 counts motor_revs=+4.0085
+ID1: rpm=+78 pos=6:7162 delta=+40747 counts motor_revs=+4.0747
+ID1: rpm=+79 pos=6:7836 delta=+41421 counts motor_revs=+4.1421
+ID1: rpm=+80 pos=6:8500 delta=+42085 counts motor_revs=+4.2085
+ID1: rpm=+79 pos=6:9164 delta=+42749 counts motor_revs=+4.2749
+ID1: rpm=+80 pos=6:9842 delta=+43427 counts motor_revs=+4.3427
+ID1: rpm=+81 pos=7:505 delta=+44090 counts motor_revs=+4.4090
+ID1: rpm=+78 pos=7:1168 delta=+44753 counts motor_revs=+4.4753
+ID1: rpm=+81 pos=7:1870 delta=+45455 counts motor_revs=+4.5455
+ID1: rpm=+79 pos=7:2507 delta=+46092 counts motor_revs=+4.6092
+ID1: rpm=+78 pos=7:3194 delta=+46779 counts motor_revs=+4.6779
+ID1: rpm=+80 pos=7:3868 delta=+47453 counts motor_revs=+4.7453
+ID1: rpm=+79 pos=7:4532 delta=+48117 counts motor_revs=+4.8117
+ID1: rpm=+78 pos=7:5191 delta=+48776 counts motor_revs=+4.8776
+ID1: rpm=+81 pos=7:5866 delta=+49451 counts motor_revs=+4.9451
+ID1: rpm=+79 pos=7:6529 delta=+50114 counts motor_revs=+5.0114
+ID1: rpm=+78 pos=7:7188 delta=+50773 counts motor_revs=+5.0773
+ID1: rpm=+80 pos=7:7863 delta=+51448 counts motor_revs=+5.1448
+ID1: rpm=+79 pos=7:8527 delta=+52112 counts motor_revs=+5.2112
+ID1: rpm=+78 pos=7:9190 delta=+52775 counts motor_revs=+5.2775
+ID1: rpm=+81 pos=7:9868 delta=+53453 counts motor_revs=+5.3453
+ID1: rpm=+81 pos=8:531 delta=+54116 counts motor_revs=+5.4116
+ID1: rpm=+79 pos=8:1195 delta=+54780 counts motor_revs=+5.4780
+ID1: rpm=+80 pos=8:1871 delta=+55456 counts motor_revs=+5.5456
+ID1: rpm=+80 pos=8:2534 delta=+56119 counts motor_revs=+5.6119
+ID1: rpm=+78 pos=8:3193 delta=+56778 counts motor_revs=+5.6778
+ID1: rpm=+80 pos=8:3867 delta=+57452 counts motor_revs=+5.7452
+ID1: rpm=+80 pos=8:4527 delta=+58112 counts motor_revs=+5.8112
+ID1: rpm=+78 pos=8:5192 delta=+58777 counts motor_revs=+5.8777
+ID1: rpm=+81 pos=8:5866 delta=+59451 counts motor_revs=+5.9451
+ID1: rpm=+79 pos=8:6531 delta=+60116 counts motor_revs=+6.0116
+ID1: rpm=+78 pos=8:7189 delta=+60774 counts motor_revs=+6.0774
+ID1: rpm=+80 pos=8:7865 delta=+61450 counts motor_revs=+6.1450
+ID1: rpm=+79 pos=8:8529 delta=+62114 counts motor_revs=+6.2114
+ID1: rpm=+79 pos=8:9191 delta=+62776 counts motor_revs=+6.2776
+ID1: rpm=+81 pos=8:9869 delta=+63454 counts motor_revs=+6.3454
+ID1: rpm=+80 pos=9:533 delta=+64118 counts motor_revs=+6.4118
+ID1: rpm=+79 pos=9:1194 delta=+64779 counts motor_revs=+6.4779
+ID1: rpm=+81 pos=9:1899 delta=+65484 counts motor_revs=+6.5484
+ID1: rpm=+80 pos=9:2561 delta=+66146 counts motor_revs=+6.6146
+ID1: rpm=+79 pos=9:3220 delta=+66805 counts motor_revs=+6.6805
+ID1: rpm=+80 pos=9:3894 delta=+67479 counts motor_revs=+6.7479
+ID1: rpm=+80 pos=9:4557 delta=+68142 counts motor_revs=+6.8142
+ID1: rpm=+79 pos=9:5219 delta=+68804 counts motor_revs=+6.8804
+ID1: rpm=+80 pos=9:5893 delta=+69478 counts motor_revs=+6.9478
+ID1: rpm=+80 pos=9:6557 delta=+70142 counts motor_revs=+7.0142
+ID1: rpm=+79 pos=9:7215 delta=+70800 counts motor_revs=+7.0800
+ID1: rpm=+81 pos=9:7891 delta=+71476 counts motor_revs=+7.1476
+ID1: rpm=+79 pos=9:8555 delta=+72140 counts motor_revs=+7.2140
+ID1: rpm=+78 pos=9:9218 delta=+72803 counts motor_revs=+7.2803
+ID1: rpm=+80 pos=9:9897 delta=+73482 counts motor_revs=+7.3482
+ID1: rpm=+80 pos=10:560 delta=+74145 counts motor_revs=+7.4145
+ID1: rpm=+78 pos=10:1221 delta=+74806 counts motor_revs=+7.4806
+ID1: rpm=+81 pos=10:1900 delta=+75485 counts motor_revs=+7.5485
+ID1: rpm=+80 pos=10:2562 delta=+76147 counts motor_revs=+7.6147
+ID1: rpm=+78 pos=10:3222 delta=+76807 counts motor_revs=+7.6807
+ID1: rpm=+81 pos=10:3897 delta=+77482 counts motor_revs=+7.7482
+ID1: rpm=+79 pos=10:4558 delta=+78143 counts motor_revs=+7.8143
+ID1: rpm=+78 pos=10:5221 delta=+78806 counts motor_revs=+7.8806
+ID1: rpm=+80 pos=10:5895 delta=+79480 counts motor_revs=+7.9480
+ID1: rpm=+80 pos=10:6555 delta=+80140 counts motor_revs=+8.0140
+ID1: rpm=+78 pos=10:7215 delta=+80800 counts motor_revs=+8.0800
+ID1: rpm=+80 pos=10:7894 delta=+81479 counts motor_revs=+8.1479
+ID1: rpm=+79 pos=10:8558 delta=+82143 counts motor_revs=+8.2143
+ID1: rpm=+78 pos=10:9244 delta=+82829 counts motor_revs=+8.2829
+ID1: rpm=+81 pos=10:9923 delta=+83508 counts motor_revs=+8.3508
+ID1: rpm=+80 pos=11:587 delta=+84172 counts motor_revs=+8.4172
+ID1: rpm=+79 pos=11:1247 delta=+84832 counts motor_revs=+8.4832
+ID1: rpm=+80 pos=11:1925 delta=+85510 counts motor_revs=+8.5510
+ID1: rpm=+80 pos=11:2588 delta=+86173 counts motor_revs=+8.6173
+ID1: rpm=+78 pos=11:3249 delta=+86834 counts motor_revs=+8.6834
+ID1: rpm=+80 pos=11:3923 delta=+87508 counts motor_revs=+8.7508
+ID1: rpm=+80 pos=11:4584 delta=+88169 counts motor_revs=+8.8169
+ID1: rpm=+78 pos=11:5246 delta=+88831 counts motor_revs=+8.8831
+ID1: rpm=+81 pos=11:5920 delta=+89505 counts motor_revs=+8.9505
+ID1: rpm=+80 pos=11:6579 delta=+90164 counts motor_revs=+9.0164
+ID1: rpm=+78 pos=11:7240 delta=+90825 counts motor_revs=+9.0825
+ID1: rpm=+80 pos=11:7918 delta=+91503 counts motor_revs=+9.1503
+ID1: rpm=+80 pos=11:8583 delta=+92168 counts motor_revs=+9.2168
+ID1: rpm=+79 pos=11:9246 delta=+92831 counts motor_revs=+9.2831
+ID1: rpm=+81 pos=11:9922 delta=+93507 counts motor_revs=+9.3507
+ID1: rpm=+81 pos=12:588 delta=+94173 counts motor_revs=+9.4173
+ID1: rpm=+79 pos=12:1248 delta=+94833 counts motor_revs=+9.4833
+ID1: rpm=+80 pos=12:1927 delta=+95512 counts motor_revs=+9.5512
+ID1: rpm=+80 pos=12:2589 delta=+96174 counts motor_revs=+9.6174
+ID1: rpm=+79 pos=12:3247 delta=+96832 counts motor_revs=+9.6832
+ID1: rpm=+80 pos=12:3924 delta=+97509 counts motor_revs=+9.7509
+ID1: rpm=+80 pos=12:4585 delta=+98170 counts motor_revs=+9.8170
+ID1: rpm=+78 pos=12:5245 delta=+98830 counts motor_revs=+9.8830
+ID1: rpm=+81 pos=12:5922 delta=+99507 counts motor_revs=+9.9507
+ID1: rpm=+79 pos=12:6582 delta=+100167 counts motor_revs=+10.0167
+ID1: rpm=+79 pos=12:7241 delta=+100826 counts motor_revs=+10.0826
+ID1: rpm=+80 pos=12:7917 delta=+101502 counts motor_revs=+10.1502
+ID1: rpm=+80 pos=12:8581 delta=+102166 counts motor_revs=+10.2166
+ID1: rpm=+79 pos=12:9271 delta=+102856 counts motor_revs=+10.2856
+ID1: rpm=+81 pos=12:9948 delta=+103533 counts motor_revs=+10.3533
+ID1: rpm=+81 pos=13:588 delta=+104173 counts motor_revs=+10.4173
+ID1: rpm=+79 pos=13:1276 delta=+104861 counts motor_revs=+10.4861
+ID1: rpm=+80 pos=13:1950 delta=+105535 counts motor_revs=+10.5535
+ID1: rpm=+81 pos=13:2615 delta=+106200 counts motor_revs=+10.6200
+ID1: rpm=+79 pos=13:3273 delta=+106858 counts motor_revs=+10.6858
+ID1: rpm=+80 pos=13:3951 delta=+107536 counts motor_revs=+10.7536
+ID1: rpm=+80 pos=13:4611 delta=+108196 counts motor_revs=+10.8196
+ID1: rpm=+79 pos=13:5271 delta=+108856 counts motor_revs=+10.8856
+ID1: rpm=+79 pos=13:5949 delta=+109534 counts motor_revs=+10.9534
+ID1: rpm=+80 pos=13:6609 delta=+110194 counts motor_revs=+11.0194
+ID1: rpm=+79 pos=13:7267 delta=+110852 counts motor_revs=+11.0852
+ID1: rpm=+81 pos=13:7944 delta=+111529 counts motor_revs=+11.1529
+ID1: rpm=+81 pos=13:8608 delta=+112193 counts motor_revs=+11.2193
+ID1: rpm=+79 pos=13:9270 delta=+112855 counts motor_revs=+11.2855
+ID1: rpm=+81 pos=13:9949 delta=+113534 counts motor_revs=+11.3534
+ID1: rpm=+81 pos=14:612 delta=+114197 counts motor_revs=+11.4197
+ID1: rpm=+78 pos=14:1275 delta=+114860 counts motor_revs=+11.4860
+ID1: rpm=+80 pos=14:1950 delta=+115535 counts motor_revs=+11.5535
+ID1: rpm=+80 pos=14:2616 delta=+116201 counts motor_revs=+11.6201
+ID1: rpm=+79 pos=14:3274 delta=+116859 counts motor_revs=+11.6859
+ID1: rpm=+80 pos=14:3948 delta=+117533 counts motor_revs=+11.7533
+ID1: rpm=+80 pos=14:4613 delta=+118198 counts motor_revs=+11.8198
+ID1: rpm=+79 pos=14:5270 delta=+118855 counts motor_revs=+11.8855
+ID1: rpm=+81 pos=14:5946 delta=+119531 counts motor_revs=+11.9531
+ID1: rpm=+80 pos=14:6609 delta=+120194 counts motor_revs=+12.0194
+ID1: rpm=+79 pos=14:7268 delta=+120853 counts motor_revs=+12.0853
+ID1: rpm=+80 pos=14:7946 delta=+121531 counts motor_revs=+12.1531
+ID1: rpm=+81 pos=14:8609 delta=+122194 counts motor_revs=+12.2194
+ID1: rpm=+79 pos=14:9271 delta=+122856 counts motor_revs=+12.2856
+ID1: rpm=+81 pos=14:9950 delta=+123535 counts motor_revs=+12.3535
+ID1: rpm=+80 pos=15:612 delta=+124197 counts motor_revs=+12.4197
+ID1: rpm=+79 pos=15:1278 delta=+124863 counts motor_revs=+12.4863
+ID1: rpm=+80 pos=15:1978 delta=+125563 counts motor_revs=+12.5563
+ID1: rpm=+80 pos=15:2614 delta=+126199 counts motor_revs=+12.6199
+ID1: rpm=+79 pos=15:3302 delta=+126887 counts motor_revs=+12.6887
+ID1: rpm=+79 pos=15:3975 delta=+127560 counts motor_revs=+12.7560
+ID1: rpm=+80 pos=15:4639 delta=+128224 counts motor_revs=+12.8224
+ID1: rpm=+79 pos=15:5297 delta=+128882 counts motor_revs=+12.8882
+ID1: rpm=+80 pos=15:5975 delta=+129560 counts motor_revs=+12.9560
+ID1: rpm=+80 pos=15:6635 delta=+130220 counts motor_revs=+13.0220
+ID1: rpm=+78 pos=15:7294 delta=+130879 counts motor_revs=+13.0879
+ID1: rpm=+80 pos=15:7971 delta=+131556 counts motor_revs=+13.1556
+ID1: rpm=+80 pos=15:8636 delta=+132221 counts motor_revs=+13.2221
+ID1: rpm=+79 pos=15:9298 delta=+132883 counts motor_revs=+13.2883
+ID1: rpm=+81 pos=15:9976 delta=+133561 counts motor_revs=+13.3561
+ID1: rpm=+81 pos=16:638 delta=+134223 counts motor_revs=+13.4223
+ID1: rpm=+79 pos=16:1302 delta=+134887 counts motor_revs=+13.4887
+ID1: rpm=+81 pos=16:1978 delta=+135563 counts motor_revs=+13.5563
+ID1: rpm=+80 pos=16:2640 delta=+136225 counts motor_revs=+13.6225
+ID1: rpm=+79 pos=16:3302 delta=+136887 counts motor_revs=+13.6887
+ID1: rpm=+80 pos=16:3976 delta=+137561 counts motor_revs=+13.7561
+ID1: rpm=+80 pos=16:4640 delta=+138225 counts motor_revs=+13.8225
+ID1: rpm=+79 pos=16:5300 delta=+138885 counts motor_revs=+13.8885
+ID1: rpm=+80 pos=16:5973 delta=+139558 counts motor_revs=+13.9558
+ID1: rpm=+80 pos=16:6637 delta=+140222 counts motor_revs=+14.0222
+ID1: rpm=+79 pos=16:7296 delta=+140881 counts motor_revs=+14.0881
+ID1: rpm=+81 pos=16:7971 delta=+141556 counts motor_revs=+14.1556
+ID1: rpm=+80 pos=16:8635 delta=+142220 counts motor_revs=+14.2220
+ID1: rpm=+79 pos=16:9298 delta=+142883 counts motor_revs=+14.2883
+ID1: rpm=+80 pos=16:9977 delta=+143562 counts motor_revs=+14.3562
+ID1: rpm=+80 pos=17:640 delta=+144225 counts motor_revs=+14.4225
+ID1: rpm=+79 pos=17:1303 delta=+144888 counts motor_revs=+14.4888
+ID1: rpm=+80 pos=17:1978 delta=+145563 counts motor_revs=+14.5563
+ID1: rpm=+80 pos=17:2641 delta=+146226 counts motor_revs=+14.6226
+ID1: rpm=+79 pos=17:3302 delta=+146887 counts motor_revs=+14.6887
+ID1: rpm=+79 pos=17:3974 delta=+147559 counts motor_revs=+14.7559
+ID1: rpm=+80 pos=17:4636 delta=+148221 counts motor_revs=+14.8221
+ID1: rpm=+79 pos=17:5325 delta=+148910 counts motor_revs=+14.8910
+ID1: rpm=+80 pos=17:5998 delta=+149583 counts motor_revs=+14.9583
+ID1: rpm=+80 pos=17:6663 delta=+150248 counts motor_revs=+15.0248
+ID1: rpm=+79 pos=17:7322 delta=+150907 counts motor_revs=+15.0907
+ID1: rpm=+81 pos=17:7999 delta=+151584 counts motor_revs=+15.1584
+ID1: rpm=+81 pos=17:8664 delta=+152249 counts motor_revs=+15.2249
+ID1: rpm=+79 pos=17:9326 delta=+152911 counts motor_revs=+15.2911
+ID1: rpm=+81 pos=18:3 delta=+153588 counts motor_revs=+15.3588
+ID1: rpm=+81 pos=18:666 delta=+154251 counts motor_revs=+15.4251
+ID1: rpm=+79 pos=18:1327 delta=+154912 counts motor_revs=+15.4912
+ID1: rpm=+80 pos=18:2006 delta=+155591 counts motor_revs=+15.5591
+ID1: rpm=+80 pos=18:2668 delta=+156253 counts motor_revs=+15.6253
+ID1: rpm=+79 pos=18:3327 delta=+156912 counts motor_revs=+15.6912
+ID1: rpm=+80 pos=18:4003 delta=+157588 counts motor_revs=+15.7588
+ID1: rpm=+80 pos=18:4664 delta=+158249 counts motor_revs=+15.8249
+ID1: rpm=+79 pos=18:5327 delta=+158912 counts motor_revs=+15.8912
+ID1: rpm=+80 pos=18:5999 delta=+159584 counts motor_revs=+15.9584
+ID1: rpm=+80 pos=18:6659 delta=+160244 counts motor_revs=+16.0244
+ID1: rpm=+82 pos=18:7323 delta=+160908 counts motor_revs=+16.0908
+ID1: rpm=+81 pos=18:7996 delta=+161581 counts motor_revs=+16.1581
+ID1: rpm=+81 pos=18:8660 delta=+162245 counts motor_revs=+16.2245
+ID1: rpm=+79 pos=18:9323 delta=+162908 counts motor_revs=+16.2908
+ID1: rpm=+81 pos=19:1 delta=+163586 counts motor_revs=+16.3586
+ID1: rpm=+80 pos=19:668 delta=+164253 counts motor_revs=+16.4253
+ID1: rpm=+79 pos=19:1329 delta=+164914 counts motor_revs=+16.4914
+ID1: rpm=+80 pos=19:2004 delta=+165589 counts motor_revs=+16.5589
+ID1: rpm=+80 pos=19:2669 delta=+166254 counts motor_revs=+16.6254
+ID1: rpm=+79 pos=19:3328 delta=+166913 counts motor_revs=+16.6913
+ID1: rpm=+79 pos=19:4000 delta=+167585 counts motor_revs=+16.7585
+ID1: rpm=+80 pos=19:4666 delta=+168251 counts motor_revs=+16.8251
+ID1: rpm=+78 pos=19:5352 delta=+168937 counts motor_revs=+16.8937
+ID1: rpm=+80 pos=19:6003 delta=+169588 counts motor_revs=+16.9588
+ID1: rpm=+80 pos=19:6689 delta=+170274 counts motor_revs=+17.0274
+ID1: rpm=+76 pos=19:7348 delta=+170933 counts motor_revs=+17.0933
+ID1: rpm=+80 pos=19:8024 delta=+171609 counts motor_revs=+17.1609
+ID1: rpm=+81 pos=19:8688 delta=+172273 counts motor_revs=+17.2273
+ID1: rpm=+79 pos=19:9351 delta=+172936 counts motor_revs=+17.2936
+ID1: rpm=+81 pos=20:30 delta=+173615 counts motor_revs=+17.3615
+ID1: rpm=+80 pos=20:695 delta=+174280 counts motor_revs=+17.4280
+ID1: rpm=+79 pos=20:1357 delta=+174942 counts motor_revs=+17.4942
+ID1: rpm=+80 pos=20:2031 delta=+175616 counts motor_revs=+17.5616
+ID1: rpm=+80 pos=20:2694 delta=+176279 counts motor_revs=+17.6279
+ID1: rpm=+79 pos=20:3355 delta=+176940 counts motor_revs=+17.6940
+ID1: rpm=+79 pos=20:4026 delta=+177611 counts motor_revs=+17.7611
+ID1: rpm=+80 pos=20:4691 delta=+178276 counts motor_revs=+17.8276
+ID1: rpm=+79 pos=20:5353 delta=+178938 counts motor_revs=+17.8938
+ID1: rpm=+80 pos=20:6024 delta=+179609 counts motor_revs=+17.9609
+ID1: rpm=+80 pos=20:6690 delta=+180275 counts motor_revs=+18.0275
+ID1: rpm=+79 pos=20:7350 delta=+180935 counts motor_revs=+18.0935
+ID1: rpm=+80 pos=20:8024 delta=+181609 counts motor_revs=+18.1609
+ID1: rpm=+81 pos=20:8690 delta=+182275 counts motor_revs=+18.2275
+ID1: rpm=+79 pos=20:9354 delta=+182939 counts motor_revs=+18.2939
+ID1: rpm=+81 pos=21:30 delta=+183615 counts motor_revs=+18.3615
+ID1: rpm=+81 pos=21:694 delta=+184279 counts motor_revs=+18.4279
+ID1: rpm=+79 pos=21:1357 delta=+184942 counts motor_revs=+18.4942
+ID1: rpm=+80 pos=21:2031 delta=+185616 counts motor_revs=+18.5616
+ID1: rpm=+80 pos=21:2694 delta=+186279 counts motor_revs=+18.6279
+ID1: rpm=+79 pos=21:3357 delta=+186942 counts motor_revs=+18.6942
+ID1: rpm=+79 pos=21:4028 delta=+187613 counts motor_revs=+18.7613
+ID1: rpm=+79 pos=21:4690 delta=+188275 counts motor_revs=+18.8275
+ID1: rpm=+78 pos=21:5354 delta=+188939 counts motor_revs=+18.8939
+ID1: rpm=+80 pos=21:6025 delta=+189610 counts motor_revs=+18.9610
+ID1: rpm=+81 pos=21:6687 delta=+190272 counts motor_revs=+19.0272
+ID1: rpm=+79 pos=21:7351 delta=+190936 counts motor_revs=+19.0936
+ID1: rpm=+81 pos=21:8052 delta=+191637 counts motor_revs=+19.1637
+ID1: rpm=+80 pos=21:8717 delta=+192302 counts motor_revs=+19.2302
+ID1: rpm=+79 pos=21:9380 delta=+192965 counts motor_revs=+19.2965
+ID1: rpm=+81 pos=22:57 delta=+193642 counts motor_revs=+19.3642
+ID1: rpm=+80 pos=22:719 delta=+194304 counts motor_revs=+19.4304
+ID1: rpm=+79 pos=22:1387 delta=+194972 counts motor_revs=+19.4972
+ID1: rpm=+79 pos=22:2058 delta=+195643 counts motor_revs=+19.5643
+ID1: rpm=+81 pos=22:2719 delta=+196304 counts motor_revs=+19.6304
+ID1: rpm=+79 pos=22:3383 delta=+196968 counts motor_revs=+19.6968
+ID1: rpm=+80 pos=22:4056 delta=+197641 counts motor_revs=+19.7641
+ID1: rpm=+81 pos=22:4717 delta=+198302 counts motor_revs=+19.8302
+ID1: rpm=+79 pos=22:5381 delta=+198966 counts motor_revs=+19.8966
+ID1: rpm=+80 pos=22:6054 delta=+199639 counts motor_revs=+19.9639
+ID1: rpm=+79 pos=22:6716 delta=+200301 counts motor_revs=+20.0301
+
+[6] STOP both motors
+ ID1: status=2 alarm=0 rpm=+78 pos=22:6925 current_raw=39
+ ID2: status=0 alarm=0 rpm=+0 pos=1:3207 current_raw=16
+ ID1: status=0 alarm=0 rpm=+0 pos=22:7406 current_raw=4
+ ID2: status=0 alarm=0 rpm=+0 pos=1:3207 current_raw=18
+
+[7] Restore original NET-IN
+ID1: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+ID2: status=6 alarm=0 rpm=+0 NET-IN=0x0000
+
+=== RESULT ===
+encoder delta      = +200301 counts
+measured motor rev = +20.030100
+nominal wheel rev  = 1.001505 (if ratio really is 20.0:1)
+
+VISUAL CHECK REQUIRED:
+Did the right wheel rotate approximately 1.0000 revolution(s)?
+Record the observed wheel revolutions, then calculate:
+  measured_gear_ratio = abs(measured_motor_revs) / observed_wheel_revolutions
