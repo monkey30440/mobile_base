@@ -1,0 +1,18 @@
+=== PRECHECK ===
+ID1: status=9 alarm=0 rpm=+0 NET-IN=0x0000 02-14=0
+ID2: status=9 alarm=0 rpm=+0 NET-IN=0x0000 02-14=0
+Original formats: {1: 0, 2: 0}
+
+=== WRITE 02-14 = 1 ===
+ID1: EEP 02-14 <- 1
+ID2: EEP 02-14 <- 1
+
+=== CONFIGURATION ===
+ID1: Configuration complete
+ID2: Configuration complete
+
+=== VERIFY ===
+ID1: 02-14=1 alarm=0
+ID2: 02-14=1 alarm=0
+
+PASS: all requested drivers report 02-14=1

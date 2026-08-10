@@ -1,0 +1,81 @@
+Position formats: ID1=1, ID2=1
+
+[1/20] 2026-08-10 11:46:34
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC91F
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.05A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA07
+
+[2/20] 2026-08-10 11:46:34
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.08V current=0.07A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0977
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.03A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x2A58
+
+[3/20] 2026-08-10 11:46:34
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.08V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC94A
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.04A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x7A50
+
+[4/20] 2026-08-10 11:46:34
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC91F
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.05A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA07
+
+[5/20] 2026-08-10 11:46:34
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.05A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC95B
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.06A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA34
+
+[6/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC91F
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.03A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA8F
+
+[7/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.07A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0922
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.04A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xBA87
+
+[8/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.08V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC94A
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.05A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xBA6D
+
+[9/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.04A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0966
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.03A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x7A45
+
+[10/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.04A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0966
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.03A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x7A45
+
+[11/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC91F
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.05A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA07
+
+[12/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.04A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0966
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.04A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xBAF0
+
+[13/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC91F
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.06A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA43
+
+[14/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.08V current=0.04A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0933
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.05A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x2AA7
+
+[15/20] 2026-08-10 11:46:35
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC91F
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.04A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x2A3A
+
+[16/20] 2026-08-10 11:46:36
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.04A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0966
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.04A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xBAF0
+
+[17/20] 2026-08-10 11:46:36
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.04A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0966
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.03A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x7A45
+
+[18/20] 2026-08-10 11:46:36
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.05V current=0.05A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC95B
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.05A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA70
+
+[19/20] 2026-08-10 11:46:36
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.08V current=0.06A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0xC94A
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.04A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0x7A50
+
+[20/20] 2026-08-10 11:46:36
+ID1: status=9(STO) alarm=0 rpm=+0 bus=51.08V current=0.04A pos_steps=+0 hi=0x0000 lo=0x0000 errchk=0x0933
+ID2: status=9(STO) alarm=0 rpm=+0 bus=51.03V current=0.04A pos_steps=-1 hi=0xFFFF lo=0xFFFF errchk=0xEA9A

@@ -1,0 +1,30 @@
+=== PRECHECK ===
+ID1: 02-14=1 alarm=0 rpm=+0 NET-IN=0x0000
+ID2: 02-14=1 alarm=0 rpm=+0 NET-IN=0x0000
+
+=== +RPM PHASE ===
+ID1: status=0 alarm=0 rpm=+0 hi=0xFFFF lo=0xFFB6 pos=-74
+ID1: status=2 alarm=0 rpm=+76 hi=0x0000 lo=0x0358 pos=+856
+ID1: status=2 alarm=0 rpm=+79 hi=0x0000 lo=0x0920 pos=+2336
+ID1: status=2 alarm=0 rpm=+81 hi=0x0000 lo=0x0EF9 pos=+3833
+ID1: status=2 alarm=0 rpm=+79 hi=0x0000 lo=0x14CA pos=+5322
+ID1: status=2 alarm=0 rpm=+80 hi=0x0000 lo=0x1AA0 pos=+6816
+ID1: status=2 alarm=0 rpm=+79 hi=0x0000 lo=0x2070 pos=+8304
+ID1: status=2 alarm=0 rpm=+81 hi=0x0000 lo=0x2649 pos=+9801
+phase +80 RPM delta = +11853 steps
+
+=== -RPM PHASE ===
+ID1: status=0 alarm=0 rpm=+0 hi=0x0000 lo=0x2E03 pos=+11779
+ID1: status=2 alarm=0 rpm=-75 hi=0x0000 lo=0x2A64 pos=+10852
+ID1: status=2 alarm=0 rpm=-81 hi=0x0000 lo=0x249C pos=+9372
+ID1: status=2 alarm=0 rpm=-79 hi=0x0000 lo=0x1EC5 pos=+7877
+ID1: status=2 alarm=0 rpm=-80 hi=0x0000 lo=0x18D4 pos=+6356
+ID1: status=2 alarm=0 rpm=-79 hi=0x0000 lo=0x1318 pos=+4888
+ID1: status=2 alarm=0 rpm=-81 hi=0x0000 lo=0x0D46 pos=+3398
+ID1: status=2 alarm=0 rpm=-78 hi=0x0000 lo=0x0772 pos=+1906
+phase -80 RPM delta = -11851 steps
+
+positive delta=+11853; negative delta=-11851
+
+PASS: 02-14=1 FC17 signed position delta verified in both directions
+NOTE: production code must still unwrap int32 rollover if lifetime travel can reach it.
