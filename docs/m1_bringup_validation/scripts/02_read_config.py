@@ -4,12 +4,17 @@ from m1_modbus import serial, fc03_one
 
 REGS = [
  ('01-01 motor/sensor type',0x0100),
+ ('01-03 motor poles',0x0102),
  ('01-04 no-load full RPM',0x0103),
  ('01-06 encoder resolution pulse/rev',0x0105),
  ('01-10 drive enable',0x0109),
  ('01-11 control mode',0x010A),
+ ('01-12 speed control method',0x010B),
+ ('01-16 encoder/hall offset',0x010F),
  ('02-14 position format',0x020D),
  ('02-15 speed display update rate',0x020E),
+ ('02-18 rated output permille',0x0211),
+ ('02-22 low speed RPM',0x0215),
  ('05-03 feedback protection',0x0502),
  ('05-04 overspeed alarm RPM',0x0503),
  ('05-17 RS485/CAN timeout ms',0x0510),

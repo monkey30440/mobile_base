@@ -1,59 +1,65 @@
-# M1 Bring-up Validation（從零驗證）
+# M1 Bring-up Validation v2
 
-這個資料夾的目的不是驗證既有實作，而是**從硬體與官方通訊文件開始重新驗證**：
+目的：從硬體與 M1 官方通訊定義開始建立可重現證據，不把「目前實機設定」自動當成正確設計。
 
-1. 找到 RS-485 裝置與正確 baud / driver ID。
-2. 用標準 Modbus RTU FC03 讀取 M1 組態，確認兩顆驅動器的基本條件。
-3. 用 Multi-drive 2.0 FC03 只讀方式驗證群組定址與回授格式。
-4. 最後才使用 Multi-drive 2.0 FC17，以低速短時間方式測試左右馬達。
-5. 每一步都產生 log，方便之後寫 ros2_control Hardware Interface 時保留證據。
-
-> **安全**：第一次執行馬達測試時，請把驅動輪架空、確保 E-stop/STO 可立即動作，旁邊不要有人或物。`04_motor_test.py` 必須明確輸入 `--arm I_UNDERSTAND` 才會送出運轉命令，而且預設只跑 80 RPM / 1 秒。
-
-## 已知車體資料
-
-- wheel separation: `0.5545 m`
-- wheel radius: `0.08 m`
-- gear ratio: `20.0`
-
-這三個值**不代表已驗證**；本 checklist 會另外驗證方向與實際里程。
-
-## 依賴
-
-Ubuntu / ROS 2 主機上執行：
-
-```bash
-sudo apt update
-sudo apt install -y python3-serial
-```
-
-確認：
-
-```bash
-python3 -c "import serial; print(serial.__version__)"
-```
-
-## 建議執行順序
+## 目前建議驗證順序
 
 ```bash
 cd docs/m1_bringup_validation
 
+# read-only
 bash scripts/00_preflight.sh
 python3 scripts/01_scan_bus.py --port /dev/ttyUSB0
-python3 scripts/02_read_config.py --port /dev/ttyUSB0 --baud <掃描到的baud> --ids <ID1,ID2>
-python3 scripts/03_md2_read.py --port /dev/ttyUSB0 --baud <baud> --ids <ID1,ID2>
+python3 scripts/02_read_config.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
+python3 scripts/02b_read_control_mapping.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
+python3 scripts/03_md2_read.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --samples 20 --hz 10
 
-# 到這裡全部 PASS，再進行馬達測試
-python3 scripts/04_motor_test.py --port /dev/ttyUSB0 --baud <baud> --ids <右ID,左ID> --right-rpm 80 --left-rpm 0 --seconds 1 --arm I_UNDERSTAND
-python3 scripts/04_motor_test.py --port /dev/ttyUSB0 --baud <baud> --ids <右ID,左ID> --right-rpm 0 --left-rpm 80 --seconds 1 --arm I_UNDERSTAND
+# lifecycle only
+python3 scripts/03b_servo_enable_test.py --port /dev/ttyUSB0 --baud 230400 --id 1 --arm I_UNDERSTAND
+python3 scripts/03b_servo_enable_test.py --port /dev/ttyUSB0 --baud 230400 --id 2 --arm I_UNDERSTAND
+
+# low-speed motion
+python3 scripts/04_motor_test_safe.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --right-rpm 80 --left-rpm 0 --seconds 1 --arm I_UNDERSTAND
+python3 scripts/04_motor_test_safe.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --right-rpm 0 --left-rpm 80 --seconds 1 --arm I_UNDERSTAND
+
+# mechanical ratio
+python3 scripts/05_gear_ratio_test.py ...
+
+# target position representation
+python3 scripts/07_set_position_format1.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --arm I_UNDERSTAND
+python3 scripts/08_verify_position_format1.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --wheel right --rpm 80 --arm I_UNDERSTAND
+python3 scripts/08_verify_position_format1.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --wheel left --rpm 80 --arm I_UNDERSTAND
+python3 scripts/06_conversion_test.py
+
+# architecture config audit
+python3 scripts/09_audit_recommended_config.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
+
+# timing evidence needed before choosing communication watchdog
+python3 scripts/10_fc17_timing.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --samples 300 --hz 50 --arm I_UNDERSTAND
+
+# read-only error-history snapshot
+python3 scripts/11_read_comm_error_history.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
 ```
 
-每次完整測試可用：
+## Target architecture-level M1 configuration
 
-```bash
-bash scripts/record_session.sh
-```
+These are design choices, not values to accept merely because the hardware currently has them:
 
-它會建立 `logs/YYYYMMDD_HHMMSS/`，把環境、USB/serial、ROS 狀態等資訊存起來。
+- `01-10 = 1`: lifecycle-controlled SERVO-ON.
+- `01-11 = 0`: Speed closed-loop.
+- `01-12 = 4`: Multi-drive Lite JG speed source.
+- `02-14 = 1`: signed 32-bit Step position representation.
+- `02-15 = 3`: 100 Hz RPM/monitor refresh.
+- `09-18 = 0`: Modbus RTU.
+- unique driver IDs matching deployment mapping.
+- `09-20`: baud matching host configuration.
+- `09-21 = 0`: standard RTU timing baseline.
+- `09-26 = 0`: fixed Multi-drive 2.0 mapping expected by these scripts.
+- `05-17 > 0`: communication watchdog enabled; exact value comes after timing measurement.
+- `05-18`: intentionally selected error-count policy, not left at zero by accident.
+- `05-21 = 2` is the current safety recommendation: alarm stop + clear remote virtual I/O.
 
-詳細完成條件請看 [CHECKLIST.md](CHECKLIST.md)。
+Motor/sensor, motor poles, encoder resolution, encoder/Hall offset, rated power and protection/PID parameters
+must be selected from the actual motor/electrical system, not from this software architecture.
+
+See `RESULTS_REVIEW.md` and `CHECKLIST.md`.
