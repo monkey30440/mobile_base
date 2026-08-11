@@ -80,9 +80,9 @@ Route Graph、Route-assisted Navigation、First Mile、On Route、Last Mile 與�
 
 # 3. System Context
 
-`mobile_base` 的 system boundary 包含完成 Mapping、Localization / Odometry、Navigation 與 Motion Control 所需的軟體責任，以及系統所管理的 Map Package 與 Robot Description。
+`mobile_base` 的 system boundary 包含完成 Mapping、Localization / Odometry、Navigation 與 Motion Control 所需的軟體責任，以及系統所管理的 Navigation Resource Set、Navigation Configuration 與 Robot Description。
 
-Operator、Navigation Client / Upper Layer、teleoperation tool、實體感測器、Drive Hardware 與 Physical Environment 均位於此 system boundary 之外。
+Operator、Navigation Client / Upper Layer、teleoperation tool、commissioning operator / tool、實體感測器、Drive Hardware 與 Physical Environment 均位於此 system boundary 之外。
 
 ```text
  Operator                         Navigation Client / Upper Layer
@@ -92,6 +92,8 @@ Operator、Navigation Client / Upper Layer、teleoperation tool、實體感測�
  External Teleoperation Tool ────────► ┌─────────────────────────┐
         manual velocity command       │                         │
                                       │       mobile_base       │
+ Commissioning Operator / Tool ──────►│                         │
+        route and station resources   │                         │
  LiDAR Devices ── measurements ──────►│                         │
  IMU Device ───── measurements ──────►│                         │
                                       └────────────┬────────────┘
@@ -111,6 +113,7 @@ Operator、Navigation Client / Upper Layer、teleoperation tool、實體感測�
 | Operator | 操作 external teleoperation tool，並發起或監督 Mapping 工作。 |
 | External Teleoperation Tool | 將 Operator 輸入轉換為 Manual Velocity Command；不得直接控制 Drive Hardware。v0.1 的操作工具為 `teleop_twist_keyboard`。 |
 | Navigation Client / Upper Layer | 提交 Navigation Target、要求取消導航，並接收 navigation feedback 與 result。 |
+| Commissioning Operator / Tool | 依 Mapping 所建立的地圖建立或維護 Route Graph 與 Station Catalog，並將場域 navigation resources 提供給 `mobile_base`。此 entity 不參與 runtime route selection 或 navigation execution。 |
 | LiDAR Devices | 提供環境量測；不負責地圖建立、定位或避障決策。 |
 | IMU Device | 提供慣性量測；不負責 system pose 或 odometry 的最終估測。 |
 | Drive Hardware | 接收受控的底盤命令，並回報 wheel measurement、device state 與 fault。 |
@@ -120,6 +123,10 @@ Operator、Navigation Client / Upper Layer、teleoperation tool、實體感測�
 
 - External Teleoperation Tool 只提供 Manual Velocity Command；`mobile_base` 負責 command acceptance、operational-limit enforcement、timeout handling、motion execution 與 safe stopping。
 - Navigation Client / Upper Layer 提供 Station ID 或 Goal Pose；`mobile_base` 負責驗證、解析並正規化 Navigation Target。
+- `mobile_base` 將同一場域的 Map Package、Route Graph 與 Station Catalog 管理為單一 Navigation Resource Set。Map Package 與 Route Graph 必須共同選取、載入並通過相容性驗證；Station Catalog 必須屬於同一 resource set，並在處理 Station Target 前通過驗證。
+- Map Package 由 Mapping flow 產生；Route Graph 與 Station Catalog 由 external commissioning process 建立或維護。其來源不同不得破壞 Navigation Resource Set 的一致性。
+- Navigation Configuration 是獨立於場域 Navigation Resource Set 的 software deployment configuration；兩者均有效時，Navigation 才可進入 operational state。
+- Route Graph 描述 route-preferred movement resource；Station Catalog 將 Station ID 定義為 `map` frame 中的 Canonical Goal Pose。Station 不得因部署格式而被強制等同於 Route Graph node。
 - `mobile_base` 是 Drive Hardware 的唯一軟體控制邊界。外部 client 與 operator tool 不得繞過此邊界直接下達 drive command。
 - `mobile_base` 管理 Mapping 所產出的 Map Package，並回報 Mapping 與 Navigation 的成功、失敗或取消結果。
 - `mobile_base` 必須將 sensor validity、localization validity、drive state 與 fault 納入跨 subsystem 的 operational decision。
@@ -449,7 +456,7 @@ IMU Perception 不負責：
 
 ## 4.6 Mapping
 
-Mapping 擁有二維 Occupancy Grid 的建立與持續更新，以及 Mapping mode 中的 `map → odom`。Map Package 的儲存、驗證與載入由獨立的 Map Management 負責。
+Mapping 擁有二維 Occupancy Grid 的建立與持續更新，以及 Mapping mode 中的 `map → odom`。Map Package 的儲存、驗證與載入由獨立的 Navigation Resource Management 負責。
 
 ### Responsibilities
 
@@ -458,7 +465,7 @@ Mapping 擁有二維 Occupancy Grid 的建立與持續更新，以及 Mapping mo
 - Mapping 進行期間持續更新 active Occupancy Grid。
 - 提供 Mapping state 與其 input validity dependency。
 - 在 Mapping mode 中獨占 `map → odom`。
-- 使用者完成環境巡覽後，將 candidate Occupancy Grid 提交給 Map Management。
+- 使用者完成環境巡覽後，將 candidate Occupancy Grid 提交給 Navigation Resource Management。
 - 無法初始化、必要輸入失效或無法繼續建圖時，終止 Mapping 並回報原因。
 - 在 Map Package 尚未成功儲存並驗證可重新載入前，不得宣告整體建圖成功。
 
@@ -471,9 +478,9 @@ Mapping 擁有二維 Occupancy Grid 的建立與持續更新，以及 Mapping mo
 | SYS-005 | Consumer：使用 State Estimation 提供的有效 system planar odometry。 |
 | SYS-006 | Primary owner：取得新的有效 perception 與 odometry 後持續更新地圖。 |
 | SYS-023 | Consumer：使用 Robot Description 提供的 frame relationships。 |
-| SYS-024 | Shared：回報 Mapping 是否成功開始、持續及產生 candidate map；Map Management 負責 package 儲存與 reload validation。 |
+| SYS-024 | Shared：回報 Mapping 是否成功開始、持續及產生 candidate map；Navigation Resource Management 負責 package 儲存與 reload validation。 |
 
-SYS-002 與 SYS-007 由 Map Management 擁有，不配置給 Mapping。
+SYS-002 與 SYS-007 由 Navigation Resource Management 擁有，不配置給 Mapping。
 
 ### Cross-subsystem Relationships
 
@@ -488,7 +495,7 @@ Robot Description ── frame relationships ───────┘       ├�
                                                         └── candidate map
                                                                   │
                                                                   ▼
-                                                           Map Management
+                                                   Navigation Resource Management
 ```
 
 ### Coordinate-frame Contract
@@ -516,13 +523,13 @@ Mapping 的 architectural input 是「有效且足夠的 LiDAR perception」，�
 
 Mapping 不接收或轉送 `teleop_twist_keyboard` 的 vehicle velocity command。Mapping active 時，external teleoperation source 才可被 operational flow 授權；Mapping 終止或失敗後，該 command authority 必須撤銷。所有停止行為仍經 Motion Control 與 Drive Hardware Interface 執行。
 
-Mapping 只產生 candidate Occupancy Grid。Map Management 必須將其儲存為 Map Package 並驗證可重新載入；只有兩個階段皆成功，系統才能依 SYS-024 回報 Mapping Success。
+Mapping 只產生 candidate Occupancy Grid。Navigation Resource Management 必須將其儲存為 Map Package 並驗證可重新載入；只有兩個階段皆成功，系統才能依 SYS-024 回報 Mapping Success。
 
 ```text
 Mapping: candidate Occupancy Grid ready
                     │
                     ▼
-Map Management: package stored and reloadable
+Navigation Resource Management: package stored and reloadable
                     │
                     ▼
 System: Mapping Success
@@ -542,3 +549,243 @@ Mapping 不負責：
 - `odom → base_footprint` ownership；
 - SLAM algorithm、plugin、topic、parameter 或 map file format 的 detailed design；
 - LaserScan merge algorithm。
+
+## 4.7 Navigation Resource Management
+
+Navigation Resource Management 是場域 Navigation Resource Set 的 selection、loading、validation、readiness 與 activation owner。v0.1 以人工管理的單一場域資料集合為部署單位；此 logical subsystem 不代表必須建立自訂 resource-management framework 或獨立 software package。
+
+### Responsibilities
+
+- 接收唯一的場域 resource-set selection，並由該 selection 取得同一集合中的 Map Package、Route Graph 與 Station Catalog。
+- 禁止以彼此獨立的 resource selection 組合不同場域的 Map Package、Route Graph 或 Station Catalog。
+- 接收 Mapping 產生的 candidate Occupancy Grid，儲存為 Map Package，並驗證可重新載入。
+- 在 navigation startup 前檢查必要 resource 是否存在、可解析且可由其 consuming subsystem 載入。
+- 彙整 Map Package、Route Graph、Station Catalog 與 Navigation Configuration 的 readiness。
+- 只有 Map Package 與 Route Graph 通過驗證，且 Navigation Configuration 有效時，才可將 resource set 宣告為 navigation-ready。
+- 處理 Station Target 前，額外要求同一 resource set 的 Station Catalog 通過驗證。
+- Resource 缺失、無效或不相容時回報 configuration failure，不得將其轉換為 free-space fallback。
+- 提供唯一的 active resource-set identity，供 Map Localization、Navigation Target Resolution 與 Navigation 使用。
+
+### Requirement Allocation
+
+| Requirement | Allocation |
+|---|---|
+| SYS-002 | Primary owner：將 candidate Occupancy Grid 儲存為可重新載入的 Map Package。 |
+| SYS-007 | Primary owner：載入已儲存的 Map Package，並提供有效的 Occupancy Grid。 |
+| SYS-009 | Provider：向 Navigation Target Resolution 提供同一 resource set 的 valid Station Catalog。 |
+| SYS-010 | Provider：向 Map Localization 提供 active Occupancy Grid 與 map readiness。 |
+| SYS-012 | Primary owner：彙整 Navigation Resource Set 與 Navigation Configuration validation，並提供 navigation readiness。 |
+| SYS-013、SYS-018～SYS-021 | Provider：向 Navigation 提供同一 resource set 的 valid Route Graph；不擁有 strategy 或 execution。 |
+| SYS-024 | Shared：提供 Map Package storage 與 reload-validation result。 |
+
+### Cross-subsystem Relationships
+
+```text
+Mapping ── candidate Occupancy Grid ────────────┐
+                                                │
+Commissioning Operator / Tool ── Route Graph ───┼──► Navigation Resource Management
+                                 Station Catalog│             │
+                                                │             ├── active map ──► Map Localization
+Navigation Configuration ── config readiness ───┘             ├── Station Catalog ──► Navigation Target Resolution
+                                                              ├── Route Graph ──► Navigation
+                                                              └── resource-set identity / readiness
+```
+
+Navigation Resource Management 擁有 resource lifecycle，不擁有各 resource 的 domain semantics：Map Localization 解讀 active map；Navigation Target Resolution 解讀 Station Catalog；Navigation 解讀 Route Graph 並執行 route-preferred movement。
+
+### Validation Contract
+
+Compatibility validation 分成兩個證據邊界：
+
+- Runtime validation：所有 runtime resource 由同一 resource-set selection 取得，且必要 resource 存在、可解析、可載入並使用一致的 coordinate-frame contract。
+- Commissioning validation：Route Graph 與 Station Pose 在 active map 中的幾何位置合理、route 可執行、Station 可由核准策略抵達，並具有對應的整合或實機 evidence。
+
+Runtime validation 不得宣稱能取代尚未實作的 geometric compatibility proof；人工管理亦不得取代 runtime 的 existence、parsing 與 loading checks。
+
+### Lifecycle Contract
+
+Mapping Success 與 Navigation Ready 是不同狀態：
+
+```text
+candidate Occupancy Grid
+        │ store and reload-validate
+        ▼
+Map Package Ready ───────────────► Mapping Success may be reported
+        │ commissioning adds Route Graph and Station Catalog
+        ▼
+Navigation Resource Set Complete
+        │ resource and configuration validation
+        ▼
+Navigation Ready
+```
+
+Navigation Resource Set 尚未完成，不影響已成功儲存且可重新載入之 Map Package 回報 Mapping Success；但不得開始 Navigation。
+
+### Excluded Responsibilities
+
+Navigation Resource Management 不負責：
+
+- 建立 Occupancy Grid；
+- 自動建立或編輯 Route Graph、Station Catalog；
+- Station ID resolution；
+- route search、strategy selection 或 navigation execution；
+- Map Localization；
+- dynamic resource switching、version management、checksum、rollback、remote deployment 或 resource database；
+- resource directory、file name、schema、server、service 或 ROS interface 的 detailed design。
+
+## 4.8 Navigation Target Resolution
+
+Navigation Target Resolution 是外部 Navigation Target 到 Canonical Goal Pose 的唯一 validation and normalization boundary。v0.1 的 Navigation Target 由 terminal client 提交，支援 Station ID 與 Absolute Goal Pose；Navigation execution 不得依 target source 建立不同核心流程。
+
+### Responsibilities
+
+- 接收 Station ID 或 Absolute Goal Pose，並識別其 target type。
+- 驗證輸入資料完整、數值有效且 coordinate-frame semantics 可用。
+- 使用 Navigation Resource Management 提供的 active、valid Station Catalog 解析 Station ID。
+- 將 Station target 解析為 position 與 orientation 完整的 goal pose。
+- 將有效 Absolute Goal Pose 正規化為 active map frame 的 goal pose。
+- 產生與 active resource-set identity 關聯的 Canonical Goal Pose。
+- 對 unknown Station、invalid pose、unavailable frame 或 normalization failure 回報 target-resolution failure。
+- 將有效 Canonical Goal Pose 交給 Navigation，並保持 Station 與 Goal Pose 共用同一 execution boundary。
+
+### Requirement Allocation
+
+| Requirement | Allocation |
+|---|---|
+| SYS-008 | Primary owner：接受並區分 Station ID 與 Goal Pose。 |
+| SYS-009 | Primary owner：驗證 Navigation Target，並解析為 Canonical Goal Pose。 |
+| SYS-012 | Consumer：只使用 active、valid、compatible resource set 中的 Station Catalog。 |
+| SYS-017 | Contributor：提供 invalid target、unknown Station 與 target-resolution failure reason。 |
+
+### Cross-subsystem Relationships
+
+```text
+Terminal Navigation Client
+        │
+        ├── Station ID ──────────────────────────┐
+        └── Absolute Goal Pose ──────────────────┤
+                                                 ▼
+Navigation Resource Management ─────────► Navigation Target Resolution
+        └── active Station Catalog                    │
+                                                     │ Canonical Goal Pose
+                                                     ▼
+                                                 Navigation
+```
+
+Navigation Resource Management 擁有 Station Catalog 的 selection、loading、readiness 與 active resource-set identity；Navigation Target Resolution 擁有 Station ID lookup 與 target semantics。Navigation Target Resolution 不管理 resource directory 或 activation。
+
+### Canonical Goal Contract
+
+Canonical Goal Pose 至少具有下列 architectural semantics：
+
+```text
+Canonical Goal Pose
+├── position
+├── orientation
+├── active map frame
+└── associated active resource-set identity
+```
+
+Station 定義最終應抵達的位置與朝向，不得被強制等同於 Route Graph node。Route entry、route exit、First Mile、On Route、Last Mile 與 fallback selection 均由 Navigation 決定，不屬於 target resolution。
+
+Target validity 與 reachability 必須分離：Navigation Target Resolution 判斷 target 是否能形成有效 Canonical Goal Pose；Navigation 判斷該 pose 是否可透過核准策略安全抵達。無法到達不得被重新分類為 invalid target。
+
+### Failure Boundaries
+
+- Resource failure：Station Catalog 缺失、無法載入或 resource-set mismatch，由 Navigation Resource Management 依 SYS-012 回報；不得視為 fallback。
+- Target failure：Station ID 不存在、Goal Pose 無效、frame 不可用或無法正規化，由 Navigation Target Resolution 依 SYS-009 回報；不得視為 fallback。
+- Navigation failure：route selection、First Mile、On Route、Last Mile 或允許的 fallback 無法完成，由 Navigation 回報。
+
+### v0.1 Input Constraint
+
+Relative Pose 不屬於 v0.1 Navigation Target。若未來納入，必須先建立上游 requirement，並在 input boundary 將其一次性解析為 active map frame 的 Absolute Canonical Goal Pose，不得使 Navigation core 增加相對座標執行分支。
+
+`DriveOnHeading` 或其他指定距離 movement primitive 不構成 Navigation Target，也不經此 subsystem 執行。
+
+### Excluded Responsibilities
+
+Navigation Target Resolution 不負責：
+
+- Station Catalog file lifecycle、resource-set selection 或 activation；
+- Route Graph loading、route search、route entry / exit selection；
+- First Mile、On Route、Last Mile 或 Free-space Fallback；
+- path planning、obstacle avoidance、motion control、arrival determination 或 navigation result aggregation；
+- task queue、priority、scheduling、automatic retry 或 fleet management；
+- terminal CLI syntax、ROS message、topic、service 或 action 的 detailed design。
+
+## 4.9 Map Localization
+
+Map Localization 是 Navigation Mode 下，AMR 在 active Map Package 中之 global pose、localization validity 與 `map → odom` 的唯一 owner。它使用既有地圖與感測、里程估測資料修正全域位置，不負責建立地圖、規劃路徑或控制車體。
+
+### Responsibilities
+
+- 只在 Navigation Resource Management 已提供 active、valid、compatible Map Package 後建立 localization context。
+- 接收 LiDAR Perception 提供的有效 scan measurement。
+- 接收 State Estimation 提供的 system planar odometry 與 odometry validity。
+- 使用 Robot Description 擁有的 frame relationships 解讀 sensor 與 base frames。
+- 估測並提供 AMR 在 active map frame 中的 current pose。
+- 判斷並提供 localization validity / state，不得將 stale、未收斂或與 active resource set 不一致的 pose 宣告為有效。
+- 在 Navigation Mode 下獨占 `map → odom` 的發布權。
+- localization 失效時明確回報狀態與 failure reason，使 Navigation 終止或拒絕依賴有效定位的 execution。
+
+### Requirement Allocation
+
+| Requirement | Allocation |
+|---|---|
+| SYS-010 | Primary owner：在已載入地圖中提供 current pose 與 localization validity。 |
+| SYS-012 | Consumer：只使用 active、valid、compatible resource set 中的 Map Package。 |
+| SYS-017 | Contributor：提供 localization state 與 localization failure reason。 |
+
+### Cross-subsystem Relationships
+
+```text
+Navigation Resource Management ── active Map Package / readiness ──┐
+LiDAR Perception ──────────────── valid scan measurement ──────────┤
+State Estimation ──────────────── planar odometry / validity ──────┼──► Map Localization
+Robot Description ─────────────── frame relationships ─────────────┘          │
+                                                                              ├── current map pose
+                                                                              ├── localization validity
+                                                                              └── map → odom
+```
+
+Navigation Resource Management 擁有 Map Package 的 selection、loading、readiness 與 active resource-set identity；Map Localization 擁有該地圖中的 pose estimation 與 validity。載入成功不等於 localization 已有效。
+
+### Coordinate-frame Ownership Contract
+
+`map → odom` 必須由目前 operating mode 的單一 subsystem 擁有：
+
+```text
+Mapping Mode       Mapping owns map → odom
+Navigation Mode    Map Localization owns map → odom
+```
+
+Mapping 與 Map Localization 不得同時發布 `map → odom`。State Estimation 在兩種 mode 下均維持 `odom → base_footprint` 的唯一 ownership；Robot Description 維持 `base_footprint → base_link` 與 sensor static transforms 的 ownership。
+
+### Localization-loss Contract
+
+Navigation execution 期間發生 localization invalid 時，責任鏈必須維持：
+
+```text
+Map Localization ── invalid state / reason ──► Navigation
+                                                    │
+                                                    └── terminate or reject execution
+                                                               │
+                                                               ▼
+                                                        Motion Control
+                                                        revokes autonomous command
+                                                        and reaches safe stop
+```
+
+Map Localization 只負責偵測並回報定位狀態，不直接發布 motion command。Navigation 負責停止依賴有效定位的 execution；Motion Control 負責撤銷 autonomous command 並使車體進入 safe stop。
+
+### Excluded Responsibilities
+
+Map Localization 不負責：
+
+- Occupancy Grid 建立、Map Package 儲存或 resource-set activation；
+- Route Graph、Station Catalog 或 Navigation Target resolution；
+- route search、First Mile、On Route、Last Mile 或 Free-space Fallback；
+- path planning、obstacle avoidance、arrival determination 或 navigation result aggregation；
+- `odom → base_footprint` 或 static transform ownership；
+- 直接發布 wheel command、velocity command 或控制 Drive Hardware；
+- localization algorithm、filter、recovery policy、parameter 或 ROS interface 的 detailed design。
