@@ -23,6 +23,7 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 - 儲存地圖。
 - 重新載入已建立之地圖。
 - 管理 Map Package。
+- 回報建圖與 Map Package 儲存結果。
 
 ---
 
@@ -34,16 +35,10 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 ## 輸出
 
-- Map Package
-
-```text
-maps/
-└── <map_name>/
-    ├── map.pgm
-    ├── map.yaml
-    ├── route_graph.geojson
-    └── stations.yaml
-```
+- Map Package（成功時）
+- Map Creation Result
+  - Success
+  - Failure
 
 ---
 
@@ -62,22 +57,6 @@ maps/
 | Use Case |
 |---|
 | UC-001 |
-
----
-
-## 對應 Subsystem
-
-| Subsystem |
-|---|
-| SUB-001 Base Control |
-| SUB-002 LiDAR Perception |
-| SUB-003 IMU Perception |
-| SUB-004 Differential Drive Controller |
-| SUB-005 RF2O Odometry |
-| SUB-006 Robot Localization EKF |
-| SUB-007 SLAM Toolbox |
-| SUB-008 Map Management |
-| SUB-012 Robot Description |
 
 ---
 
@@ -100,6 +79,7 @@ maps/
 - 自主避障。
 - 自主追蹤路徑。
 - 自主抵達導航目標。
+- 取消進行中的導航。
 - 回報導航結果。
 
 ---
@@ -112,24 +92,6 @@ maps/
 |---|---|
 | Station | 使用 Station ID 指定預先定義站點 |
 | Pose | 使用 Goal Pose 指定任意導航位置與朝向 |
-
----
-
-## Navigation
-
-Navigation 根據目前位姿、導航目標與環境資訊，自主決定導航策略。
-
-系統應：
-
-- 可利用 Route Graph 時優先使用 Route Graph。
-- 必要時使用自由空間導航。
-- 支援 First Mile。
-- 支援 On Route Navigation。
-- 支援 Last Mile。
-
-Navigation Strategy 為系統內部行為。
-
-Navigation Target 不限制 Navigation Strategy。
 
 ---
 
@@ -151,6 +113,7 @@ Navigation Result：
 
 - Success
 - Failure
+- Canceled
 
 ---
 
@@ -171,21 +134,3 @@ Navigation Result：
 | Use Case |
 |---|
 | UC-002 |
-
----
-
-## 對應 Subsystem
-
-| Subsystem |
-|---|
-| SUB-001 Base Control |
-| SUB-002 LiDAR Perception |
-| SUB-003 IMU Perception |
-| SUB-004 Differential Drive Controller |
-| SUB-005 RF2O Odometry |
-| SUB-006 Robot Localization EKF |
-| SUB-008 Map Management |
-| SUB-009 Task Interface |
-| SUB-010 Target Resolution |
-| SUB-011 Navigation |
-| SUB-012 Robot Description |
