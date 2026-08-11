@@ -100,6 +100,10 @@ mobile_base/
 │   ├── 04_architecture.md
 │   ├── 05_subsystem.md
 │   ├── 06_backlog.md
+│   ├── design_baseline/
+│   │   ├── m1_driver.md
+│   │   └── m1_hardware.md
+│   ├── m1_bringup_validation/
 │   └── implementation/
 ├── maps/
 │   └── template/
@@ -120,7 +124,9 @@ Repository 結構依需求自然成長，不預先建立未使用之目錄或檔
 docker compose -f compose.yaml -f compose.hardware.yaml up
 ```
 
-`docs/implementation/` 存放各項實作計畫，屬過程性文件，非正式規格；正式規格見「9. 文件索引」。
+`01_use_cases.md` 至 `05_subsystem.md` 為系統層級正式規格；`docs/design_baseline/` 存放經確認之詳細設計基準；`docs/m1_bringup_validation/` 保存 M1 實機驗證方法與證據。
+
+`docs/implementation/` 存放各項實作計畫，屬過程性文件，非正式規格。
 
 ---
 
@@ -157,5 +163,8 @@ docker compose -f compose.yaml -f compose.hardware.yaml up
 | [`04_architecture.md`](./04_architecture.md) | 軟體架構、資料流與子系統責任劃分 |
 | [`05_subsystem.md`](./05_subsystem.md) | 各子系統之目的、邊界、介面、參數與驗證項目 |
 | [`06_backlog.md`](./06_backlog.md) | 未納入目前版本之功能與研究議題 |
+| [`design_baseline/m1_driver.md`](./design_baseline/m1_driver.md) | 已核准之 M1 通訊協定與 runtime communication layer 詳細設計基準 |
+| [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md) | 已核准之 `ros2_control` SystemInterface 與 M1Driver 整合詳細設計基準 |
+| [`m1_bringup_validation/`](./m1_bringup_validation/) | M1 實機 bring-up 驗證方法、檢查表與結果證據 |
 
-本文件（`README.md`）僅作為專案入口，不重複上述文件之內容；各文件為其對應主題之 Single Source of Truth。
+本文件（`README.md`）僅作為專案入口，不重複上述文件之內容。系統規格、詳細設計基準與實機驗證證據各自依上述職責維護，不在其他文件重複定義。
