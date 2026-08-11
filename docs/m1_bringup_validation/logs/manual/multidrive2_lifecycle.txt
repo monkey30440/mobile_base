@@ -1,0 +1,50 @@
+=== ARMED M1 MULTI-DRIVE 2.0 LIFECYCLE TEST ===
+NO NON-ZERO RPM COMMAND WILL BE SENT
+port=/dev/ttyUSB0 baud=230400 ids=[1, 2]
+
+[1] Verify target mapping and save NET-IN fallback state
+ID1: 09-26=0 09-08(NET-X7)=14 NET-IN=0x0000
+ID2: 09-26=0 09-08(NET-X7)=14 NET-IN=0x0000
+
+[2] Preflight via Multi-drive 2.0 FC03
+BEFORE
+  ID1: status=6 alarm=0 rpm=+0 pos=+0 errchk=0xC6C7
+  ID2: status=6 alarm=0 rpm=+0 pos=+0 errchk=0x8064
+
+[3] FC17 SVON + simultaneous state read
+SVON immediate response
+  ID1: status=6 alarm=0 rpm=+0 pos=+0 errchk=0xC915
+  ID2: status=6 alarm=0 rpm=+0 pos=+0 errchk=0xD0A4
+  poll
+  ID1: status=0 alarm=0 rpm=+0 pos=+0 errchk=0x0046
+  ID2: status=0 alarm=0 rpm=+0 pos=+0 errchk=0xB619
+
+[4] FC17 JG 0 + simultaneous state read
+JG0 response
+  ID1: status=0 alarm=0 rpm=+0 pos=+0 errchk=0xCF21
+  ID2: status=0 alarm=0 rpm=+0 pos=+0 errchk=0xB6F3
+
+[5] FC17 SVOFF + simultaneous state read
+SVOFF immediate response
+  ID1: status=0 alarm=0 rpm=+0 pos=+0 errchk=0x0F94
+  ID2: status=0 alarm=0 rpm=+0 pos=+0 errchk=0x26A0
+  poll
+  ID1: status=6 alarm=0 rpm=+0 pos=+0 errchk=0xC65E
+  ID2: status=6 alarm=0 rpm=+0 pos=+0 errchk=0x10AA
+
+[6] SAFETY CLEANUP / FALLBACK
+JG0 cleanup 1/3
+  ID1: status=6 alarm=0 rpm=+0 pos=+0 errchk=0xC915
+  ID2: status=6 alarm=0 rpm=+0 pos=+0 errchk=0x10DD
+SVOFF cleanup
+  ID1: status=6 alarm=0 rpm=+0 pos=+0 errchk=0xC99D
+  ID2: status=6 alarm=0 rpm=+0 pos=+0 errchk=0x1033
+Standard Modbus NET-IN fallback restore
+  ID1: NET-IN -> 0x0000
+  ID2: NET-IN -> 0x0000
+FINAL
+  ID1: status=6 alarm=0 rpm=+0 pos=+0 errchk=0xC61A
+  ID2: status=6 alarm=0 rpm=+0 pos=+0 errchk=0x10DD
+
+=== RESULT ===
+PASS: FC17 SVON -> JG0 -> SVOFF controlled both drivers with zero RPM, and Multi-drive 2.0 state feedback confirmed the lifecycle
