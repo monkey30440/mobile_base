@@ -81,7 +81,7 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 - 執行 First Mile，將 AMR 由目前位姿銜接至適用的 route entry。
 - 執行 On Route movement，沿選定 Route Graph route 移動。
 - 執行 Last Mile，將 AMR 由 route exit 銜接至 Canonical Goal Pose。
-- 在 route-assisted movement 無法成立或無法安全繼續時，依核准條件執行 free-space fallback。
+- 在 route-assisted movement 無法成立或無法安全繼續時，辨識並回報保留的 Free-space Fallback eligibility；v0.1 不執行 fallback movement。
 - 監控 navigation stage、stage transition 與整體導航進度。
 - 自主避障。
 - 自主追蹤路徑。
@@ -147,7 +147,7 @@ Route Exit
 Canonical Goal Pose
 ```
 
-只有 Current Pose 無法連接可用 route entry、Route Graph 無法提供通往目標方向的可用 route、On Route movement 受阻且 route reselection 失敗，或 route exit 無法安全連接目標時，系統才可在仍能安全執行的前提下使用 free-space fallback。
+架構保留 Free-space Fallback eligibility：Current Pose 無法連接任何可用 route entry、有效 Route Graph 無法提供通往目標方向的可用 route、On Route movement 受阻且 route reselection 失敗，或所有可用 route-assisted candidates 均無法由 route exit 安全連接目標。v0.1 不執行 Free-space Fallback；符合 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止並回報 Free-space Fallback unavailable。
 
 ---
 

@@ -140,16 +140,16 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ---
 
-### Free-space Fallback
+### Reserved Free-space Fallback Boundary
 
-系統應優先使用可安全執行的 route-assisted movement。只有符合下列任一條件，且 free-space movement 仍可安全執行時，系統才可使用 free-space fallback：
+系統應優先使用可安全執行的 route-assisted movement。架構保留下列 Free-space Fallback eligibility，以供後續版本擴充：
 
 - Current Pose 無法連接任何可用 route entry。
-- Route Graph 無法提供通往 Canonical Goal Pose 方向的可用 route。
+- Active、valid Route Graph 無法提供通往 Canonical Goal Pose 方向的可用 route。
 - On Route movement 因目前環境阻塞而無法維持，且重新選擇 Route Graph route 仍失敗。
-- Route exit 無法透過 Last Mile 安全連接 Canonical Goal Pose。
+- 所有可用 route-assisted candidates 均無法由 route exit 透過 Last Mile 安全連接 Canonical Goal Pose。
 
-存在有效且可安全執行的 route-assisted solution 時，系統不得任意選擇完整 free-space movement。
+存在有效且可安全執行的 route-assisted solution 時，系統不得任意選擇完整 free-space movement。v0.1 不執行 Free-space Fallback；符合上述任一 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
 
 ---
 
@@ -159,8 +159,8 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 - Route Graph 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
 - Station Target 所需之 Station Catalog 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
 - Navigation configuration 無效時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
-- First Mile、On Route 或 Last Mile 無法安全執行時，系統僅可在符合 Free-space Fallback 條件時切換至 free-space movement。
-- Route-assisted movement 與允許的 free-space fallback 均無法安全執行時，系統終止導航、嘗試使底盤停止並回報失敗。
+- First Mile、On Route 或 Last Mile 無法安全執行時，系統應先用盡可用的 route-assisted alternatives。
+- 符合保留的 Free-space Fallback eligibility 但已無可用 route-assisted solution 時，v0.1 應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
 - 系統無法繼續導航時，系統終止導航任務並回報失敗。
 - 使用者取消導航時，系統終止導航任務並回報取消結果。
 

@@ -72,11 +72,11 @@ Subsystem detailed design baselines 必須符合本架構，但其 internal desi
 | AD-006 | Fault-safe Base Lifecycle | SYS-026、SYS-030、SYS-031 | 底盤啟用、運動、故障、停用與 shutdown 必須形成跨控制與硬體邊界的安全 contract。 |
 | AD-007 | Authoritative Robot Geometry and Frames | SYS-023 | Robot geometry、joint relationship、sensor mounting 與 static frame relationship 必須具有單一 architectural owner。 |
 | AD-008 | Evidence-bound Operational Parameters | SYS-015、SYS-016、SYS-026、SYS-027、SYS-028、SYS-030 | 路徑偏差、到站、停止、timeout 與 operational limit 不得由架構文件虛構；其值必須由下游 configuration、整合與實機驗證確立。 |
-| AD-009 | Route-preferred Navigation | SYS-012、SYS-013、SYS-018、SYS-019、SYS-020、SYS-021 | 系統必須分離 Navigation Target、Navigation Resources、strategy selection 與 movement execution；有效且可安全執行的 Route Graph 應優先使用，並以 First Mile、On Route、Last Mile 組成 route-assisted movement。Free-space movement 只可在核准的 fallback eligibility 下使用。 |
+| AD-009 | Route-preferred Navigation | SYS-012、SYS-013、SYS-018、SYS-019、SYS-020、SYS-021 | 系統必須分離 Navigation Target、Navigation Resources、strategy selection 與 movement execution；有效且可安全執行的 Route Graph 應優先使用，並以 First Mile、On Route、Last Mile 組成 route-assisted movement。架構保留受限的 Free-space Fallback boundary，但 v0.1 不執行 fallback movement。 |
 
 本章只整理需求對架構造成的影響，不新增需求內容。
 
-Route Graph、Route-assisted Navigation、First Mile、On Route、Last Mile 與受限的 Free-space Fallback 為 requirement-derived baseline。特定 planner、controller、Behavior Tree、route-search algorithm 或 recovery implementation 仍不是 Architecture Driver，應由下游 detailed design 與驗證決定。
+Route Graph、Route-assisted Navigation、First Mile、On Route、Last Mile 與保留但未實作的 Free-space Fallback boundary 為 requirement-derived baseline。特定 planner、controller、Behavior Tree、route-search algorithm 或 recovery implementation 仍不是 Architecture Driver，應由下游 detailed design 與驗證決定。
 
 # 3. System Context
 
@@ -686,7 +686,7 @@ Canonical Goal Pose
 └── associated active resource-set identity
 ```
 
-Station 定義最終應抵達的位置與朝向，不得被強制等同於 Route Graph node。Route entry、route exit、First Mile、On Route、Last Mile 與 fallback selection 均由 Navigation 決定，不屬於 target resolution。
+Station 定義最終應抵達的位置與朝向，不得被強制等同於 Route Graph node。Route entry、route exit、First Mile、On Route、Last Mile 與 fallback eligibility classification 均由 Navigation 決定，不屬於 target resolution。
 
 Target validity 與 reachability 必須分離：Navigation Target Resolution 判斷 target 是否能形成有效 Canonical Goal Pose；Navigation 判斷該 pose 是否可透過核准策略安全抵達。無法到達不得被重新分類為 invalid target。
 
@@ -694,7 +694,7 @@ Target validity 與 reachability 必須分離：Navigation Target Resolution 判
 
 - Resource failure：Station Catalog 缺失、無法載入或 resource-set mismatch，由 Navigation Resource Management 依 SYS-012 回報；不得視為 fallback。
 - Target failure：Station ID 不存在、Goal Pose 無效、frame 不可用或無法正規化，由 Navigation Target Resolution 依 SYS-009 回報；不得視為 fallback。
-- Navigation failure：route selection、First Mile、On Route、Last Mile 或允許的 fallback 無法完成，由 Navigation 回報。
+- Navigation failure：route selection、First Mile、On Route、Last Mile 無法完成，或符合保留 eligibility 但 Free-space Fallback unavailable，由 Navigation 回報。
 
 ### v0.1 Input Constraint
 
@@ -789,3 +789,277 @@ Map Localization 不負責：
 - `odom → base_footprint` 或 static transform ownership；
 - 直接發布 wheel command、velocity command 或控制 Drive Hardware；
 - localization algorithm、filter、recovery policy、parameter 或 ROS interface 的 detailed design。
+
+## 4.10 Navigation
+
+Navigation 是一次 autonomous navigation execution 的唯一 owner。它接收已正規化的 Canonical Goal Pose，在必要資源與定位均有效的前提下，以 route-preferred 原則協調完整 movement execution，並產生單一 navigation result。Navigation 不擁有 target resolution、resource lifecycle、localization estimation 或 Drive Hardware。
+
+### Responsibilities
+
+- 一次只管理一個 active navigation execution。
+- 開始 execution 前確認 Canonical Goal Pose、navigation resource readiness 與 localization validity 等 preconditions 已成立。
+- 根據 current pose、Canonical Goal Pose 與有效 Route Graph 建立完整 route-preferred movement strategy。
+- 協調 First Mile、On Route 與 Last Mile；辨識 SYS-021 eligibility，但 v0.1 不啟動 Free-space Fallback movement。
+- 為目前 active navigation stage 規劃並維持可安全執行的有效路徑。
+- 執行 path tracking、obstacle avoidance、stage progress monitoring 與 stage transition。
+- 接受使用者對 active execution 提出的 cancellation request。
+- 在完成、取消或失敗時撤銷 autonomous motion command。
+- 只有在 Canonical Goal Pose 的 position、orientation acceptance conditions 與 chassis stopped condition 均成立時判定成功。
+- 聚合並回報 Success、Failure 或 Canceled，以及可辨識的 execution stage / failure boundary。
+
+### Requirement Allocation
+
+| Requirement | Allocation |
+|---|---|
+| SYS-010 | Consumer：有效定位是開始及持續 navigation execution 的必要條件。 |
+| SYS-011 | Primary owner：為 active navigation stage 規劃並維持有效路徑。 |
+| SYS-012 | Consumer：只在必要 navigation resources 均 ready 時開始 execution。 |
+| SYS-013 | Primary owner：建立並維持 route-preferred movement strategy。 |
+| SYS-014 | Primary owner：使用有效環境資訊避免不安全的 navigation movement。 |
+| SYS-015 | Primary owner：追蹤 active stage path 並監控 stage transition。 |
+| SYS-016 | Primary owner：依 goal acceptance 與 chassis stopped conditions 判定成功。 |
+| SYS-017 | Primary owner：聚合並回報最終 navigation result 與 failure boundary。 |
+| SYS-018 | Primary owner：協調 First Mile execution。 |
+| SYS-019 | Primary owner：協調 On Route execution。 |
+| SYS-020 | Primary owner：協調 Last Mile execution。 |
+| SYS-021 | Primary owner：判斷保留的 eligibility；v0.1 終止 execution 並回報 Free-space Fallback unavailable。 |
+| SYS-025 | Primary owner：接受取消要求並終止 active navigation execution。 |
+
+### Cross-subsystem Relationships
+
+```text
+Navigation Target Resolution ── Canonical Goal Pose ─────────────┐
+Navigation Resource Management ─ resources / readiness ─────────┤
+Map Localization ─────────────── current pose / validity ────────┤
+LiDAR Perception ──────────────── environment measurement ───────┼──► Navigation
+State Estimation ──────────────── planar odometry / validity ────┤         │
+User ──────────────────────────── cancellation request ──────────┘         ├── autonomous motion command
+                                                                          ├── navigation stage / status
+                                                                          └── final navigation result
+```
+
+Navigation 將 autonomous motion command 提供給 Motion Control，但不擁有 command-source arbitration 或 Drive Hardware。Motion Control 決定可接受的 command authority，並將核准命令轉換為底盤運動。
+
+### Execution Ownership Contract
+
+Navigation execution 的 ownership 不因 target type、active stage 或 internal implementation component 改變：
+
+```text
+Station ID or Absolute Goal Pose
+              │
+              ▼
+Navigation Target Resolution
+              │ Canonical Goal Pose
+              ▼
+       one Navigation execution
+              │
+              ├── First Mile, when required
+              ├── On Route
+              ├── Last Mile, when required
+              └── reserved fallback eligibility
+                         └── v0.1: Failure / Fallback unavailable
+              │
+              ▼
+   Success, Failure, or Canceled
+```
+
+First Mile、On Route 與 Last Mile 是同一 execution 中的 movement stages。保留的 Free-space Fallback 是未啟用的 strategy extension boundary；它不建立另一個 execution owner，也不在 v0.1 產生 movement command。
+
+### First Mile Strategy Contract
+
+First Mile 是 route-assisted movement 的正常連接階段：當 Current Pose 尚未位於所選 route entry 時，Navigation 規劃並執行由 Current Pose 至該 entry 的安全連接。即使此連接使用 Route Graph 範圍外的 free-space path，它仍是為了接入 Route Graph 的 First Mile，不構成 Free-space Fallback。
+
+所選 route entry 不得只根據距離或孤立 graph node 決定；它必須屬於能朝 Canonical Goal Pose 前進的完整 route-assisted candidate：
+
+```text
+Current Pose
+    │
+    ├── First Mile
+    ▼
+selected route entry
+    │
+    ├── usable Route Graph route
+    ▼
+selected route exit
+    │
+    ├── Last Mile
+    ▼
+Canonical Goal Pose
+```
+
+First Mile 使用 current pose / localization validity、selected route entry、其所屬 route-assisted candidate、有效環境障礙物資訊，以及 system planar odometry / validity。其 architecture-level outcome 為：
+
+| Outcome | Semantics |
+|---|---|
+| Not Required | Current Pose 已符合 selected route entry 的 acceptance condition；Navigation 可直接進入 On Route，不得判定失敗。 |
+| Completed | AMR 已安全抵達 selected route entry，且可安全轉入 On Route。 |
+| Failed | 無法規劃、維持或安全完成至 selected route entry 的連接。 |
+
+單一 selected route entry 的 First Mile 失敗，不足以直接宣告 SYS-021 fallback eligibility。Navigation 必須先重新評估其他 usable route-assisted candidates；只有 Current Pose 無法連接任何可用 route entry 時，才符合對應的 Free-space Fallback eligibility：
+
+```text
+selected entry connection failed
+              │
+              ▼
+reevaluate other usable route-assisted candidates
+              │
+       ┌──────┴────────┐
+       │               │
+alternative found   no usable entry can be connected
+       │               │
+       ▼               ▼
+retry First Mile    SYS-021 fallback eligibility
+```
+
+First Mile 只提供 stage outcome 與 failure reason；route-assisted candidate reselection、fallback eligibility 與最終 navigation result 仍由 Navigation execution 統一決定。
+
+First Mile 的 planner、entry scoring、acceptance tolerance、replanning limit、timeout、Behavior Tree、plugin 與 stage transition 是否要求完全停止，均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。本文件只要求 stage transition 可安全執行。
+
+### On Route Strategy Contract
+
+On Route 是 route-assisted movement 的必要階段：Navigation 沿 selected Route Graph route，從 selected route entry 移動至 selected route exit。On Route 不建立獨立 navigation execution，也不自行接受 Navigation Target 或產生最終 navigation result。
+
+Selected route 必須：
+
+- 由 selected route entry 通往 selected route exit；
+- 由連續且相互連接的 Route Graph elements 組成；
+- 遵守 Route Graph 定義的 connectivity、direction 與 availability constraints；
+- 朝 Canonical Goal Pose 的方向形成完整 route-assisted candidate；
+- 能轉換為目前環境下可安全追蹤的 active stage path。
+
+On Route 使用 selected route entry、selected graph route、selected route exit、active Route Graph / resource-set identity、current pose / localization validity、有效環境障礙物資訊，以及 system planar odometry / validity。
+
+Route Graph 約束 topology、movement direction 與可用 route；即時環境資訊約束目前 movement 是否仍可安全執行。Navigation 可為 obstacle avoidance 或 path tracking 調整 selected route 內的 active stage path，但不得：
+
+- 靜默改變 selected graph route；
+- 違反 graph connectivity、direction 或 availability constraints；
+- 規劃或執行穿越已判定 occupied space 的 movement；
+- 將 route-assisted movement 靜默降級為完整 free-space movement。
+
+若局部調整已無法維持 selected route，On Route 必須回報 selected route blocked，不得繼續偏離路網。其 architecture-level outcome 為：
+
+| Outcome | Semantics |
+|---|---|
+| Completed | AMR 已抵達 selected route exit，且可安全轉入 Last Mile 或 goal completion。 |
+| Failed | Selected route 無法建立、維持或安全完成。 |
+
+SYS-018 與 SYS-020 明確允許 First Mile 或 Last Mile 在零長度連接時為 Not Required；SYS-019 未提供 On Route 的省略語意，因此 On Route 不定義 Not Required outcome。
+
+On Route 因目前環境阻塞而無法維持時，Navigation 必須先嘗試在不違反 selected route constraints 下維持安全 stage path；若仍失敗，必須重新選擇其他 usable Route Graph route。只有 route reselection 仍失敗時，才可能符合對應的 SYS-021 Free-space Fallback eligibility：
+
+```text
+selected route blocked
+          │
+          ▼
+safe local path adjustment within selected route
+          │ failed
+          ▼
+reselect another usable Route Graph route
+          │
+    ┌─────┴────────┐
+    │              │
+route found     reselection failed
+    │              │
+    ▼              ▼
+continue        SYS-021 fallback eligibility
+On Route
+```
+
+Route Graph 缺失、無效、與 active Map Package 不相容、resource-set identity mismatch，或 Navigation Configuration 無效，均屬 SYS-012 resource/configuration failure，不是 On Route blocked，也不得觸發 Free-space Fallback。Navigation 必須終止 execution、撤銷 autonomous motion command 並回報原因。
+
+On Route 的 graph-search algorithm、route scoring、cost function、node / edge metadata schema、path generation、replanning limit、timeout、acceptance tolerance、Behavior Tree、plugin，以及 stage transition 是否要求完全停止，均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。本文件只要求 stage transition 可安全執行。
+
+### Last Mile Strategy Contract
+
+Last Mile 是 route-assisted movement 的正常連接階段：當 selected route exit 尚未直接符合 Canonical Goal Pose 時，Navigation 規劃並執行由該 exit 至 Canonical Goal Pose 的安全連接。即使此連接使用 Route Graph 範圍外的 free-space path，它仍是 route-assisted movement 的 Last Mile，不構成 Free-space Fallback。
+
+Last Mile 使用 selected route exit、Canonical Goal Pose、current pose / localization validity、其所屬完整 route-assisted candidate、有效環境障礙物資訊，以及 system planar odometry / validity。其 architecture-level outcome 為：
+
+| Outcome | Semantics |
+|---|---|
+| Not Required | Selected route exit 已直接符合 Canonical Goal Pose 的 position 與 orientation acceptance conditions。 |
+| Completed | AMR 已由 selected route exit 安全抵達 Canonical Goal Pose 的 position 與 orientation acceptance conditions。 |
+| Failed | 無法規劃、維持或安全完成 selected route exit 至 Canonical Goal Pose 的連接。 |
+
+只有 selected route exit 已同時符合 Canonical Goal Pose 的 position 與 orientation acceptance conditions，Last Mile 才可判定 Not Required。只有位置相同但 orientation 尚未符合時，terminal alignment 所需的 movement 仍屬 Last Mile。
+
+Last Mile Completed 不直接產生 Navigation Success。Navigation 必須再依 SYS-016 確認完整 arrival conditions：
+
+```text
+position accepted
+        +
+orientation accepted
+        +
+chassis stopped
+        │
+        ▼
+Navigation Success
+```
+
+單一 selected route exit 無法安全連接 Canonical Goal Pose，不足以直接宣告 SYS-021 fallback eligibility。Navigation 必須先重新評估其他 usable route-assisted candidates；只要仍存在可透過其他 route exit 安全銜接目標的 route-assisted solution，就必須優先使用該 solution：
+
+```text
+selected exit cannot safely connect goal
+                    │
+                    ▼
+reevaluate other usable route-assisted candidates
+                    │
+          ┌─────────┴────────────┐
+          │                      │
+alternative exit / route     no usable route-assisted
+found                        candidate can connect goal
+          │                      │
+          ▼                      ▼
+resume route-assisted        SYS-021 fallback eligibility
+execution
+```
+
+Last Mile 只提供 stage outcome 與 failure reason；route-assisted candidate reselection、fallback eligibility、arrival determination 與最終 navigation result 仍由 Navigation execution 統一決定。
+
+Last Mile 不擁有 Route Graph selection / loading、Station ID resolution、command arbitration 或 Drive Hardware。其 planner、route-exit scoring、goal tolerance、terminal-alignment algorithm、replanning limit、timeout、Behavior Tree、plugin、parameter 與 approach velocity profile 均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。
+
+### Reserved Free-space Fallback Contract
+
+Free-space Fallback 是保留供後續版本擴充的 Navigation strategy boundary，不是 v0.1 的 active movement strategy。Navigation 仍須辨識下列 SYS-021 eligibility，以提供穩定的 failure semantics：
+
+- Current Pose 無法連接任何可用 route entry；
+- active、valid Route Graph 依 connectivity、direction 與 availability constraints 無法提供朝 Canonical Goal Pose 的 usable route；
+- On Route 因目前環境阻塞而無法維持，且 Route Graph route reselection 失敗；
+- 所有可用 route-assisted candidates 均無法由 route exit 透過 Last Mile 安全連接 Canonical Goal Pose。
+
+Eligibility 是 failure classification boundary，不授權 v0.1 執行 free-space movement。v0.1 的必要行為為：
+
+```text
+route-assisted alternatives exhausted
+                │
+                ▼
+SYS-021 eligibility identified
+                │
+                ▼
+terminate Navigation execution
+                │
+                ├── revoke autonomous motion command
+                ├── request safe stop through Motion Control
+                └── report Failure: Free-space Fallback unavailable
+```
+
+Route Graph、Station Catalog、Navigation Configuration、Canonical Goal Pose 或 localization 的缺失、無效、不相容或 identity mismatch，分別屬於 resource、target 或 localization failure，不構成 SYS-021 eligibility。特別是「active、valid Route Graph 無 usable route」與「Route Graph 無效或缺失」必須保持可辨識。
+
+任一時間不得存在未實作的 fallback movement command source。未來若要啟用 Free-space Fallback，必須先更新上游 capability / requirement baseline，定義其 execution、safety 與 verification obligations，並完成整合及實機驗證；不得僅透過 configuration 將此 reserved boundary 靜默啟用。
+
+### Failure and Command-revocation Boundary
+
+Navigation 不得在必要 resource、target 或 localization precondition 無效時開始 execution。進行中若 current stage 無法安全維持、localization 失效、使用者取消，或沒有可用的核准 strategy，Navigation 必須終止 execution、撤銷 autonomous motion command，並回報 Failure 或 Canceled。Motion Control 負責使撤銷後的底盤達到 safe stop；Navigation 不直接控制馬達。
+
+### Excluded Responsibilities
+
+Navigation 不負責：
+
+- Station ID resolution 或外部 Goal Pose validation / normalization；
+- Map Package、Route Graph、Station Catalog 或 Navigation Configuration 的 selection、loading、editing 或 validation ownership；
+- global pose estimation、localization validity 判定或 `map → odom` publication；
+- system planar odometry estimation 或 `odom → base_footprint` publication；
+- Drive Hardware lifecycle、wheel command generation 或 motor communication；
+- 多個 command source 的最終 arbitration；
+- task queue、mission scheduling、fleet management 或 automatic retry；
+- planner、controller、Behavior Tree、route algorithm、Nav2 plugin、parameter 或 ROS interface 的 detailed design。
