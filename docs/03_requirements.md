@@ -63,7 +63,19 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-011 路徑規劃
 
-系統應規劃由目前位姿至導航目標之有效路徑。無法產生有效路徑，或導航期間無法維持有效路徑時，系統不得開始或繼續導航，應嘗試使底盤停止並回報失敗。
+系統應為目前 active navigation stage 規劃可安全執行的有效路徑，並維持由目前位姿至 Canonical Goal Pose 的完整 movement continuity。無法產生或維持目前 stage 的有效路徑時，系統不得開始或繼續該 stage，並應依 SYS-021 判斷是否允許 fallback；無可用策略時應嘗試使底盤停止並回報失敗。
+
+---
+
+## SYS-012 Navigation Resource Validation
+
+系統開始導航前，應驗證目前 Map Package、Route Graph、Navigation configuration，以及 Station Target 所需的 Station Catalog 均存在、有效且彼此相容。任一必要資源缺失、無效或不相容時，系統不得開始導航，應回報原因，且不得將此情況視為 free-space fallback。
+
+---
+
+## SYS-013 Route-preferred Navigation Strategy
+
+系統應根據目前位姿、Canonical Goal Pose 與有效 Route Graph 建立可安全執行的 route-assisted movement，並優先使用適用的 Route Graph 範圍。存在有效且可安全執行的 route-assisted solution 時，系統不得選擇完整 free-space movement。
 
 ---
 
@@ -75,7 +87,7 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-015 路徑追蹤
 
-系統應控制 AMR 追蹤目前有效路徑並監控追蹤狀態；無法在設定之接受條件內繼續追蹤時，系統應嘗試使底盤停止並回報失敗。路徑偏差與失效判定條件應經整合及實機驗證。
+系統應控制 AMR 追蹤目前 active navigation stage 的有效路徑，並監控 path tracking 與 stage transition；無法在設定之接受條件內繼續追蹤或安全完成 stage transition 時，系統應依 SYS-021 判斷是否允許 fallback，無可用策略時應嘗試使底盤停止並回報失敗。路徑偏差、transition 與失效判定條件應經整合及實機驗證。
 
 ---
 
@@ -87,7 +99,38 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-017 導航結果
 
-系統應回報導航成功、失敗或取消；導航失敗時應回報原因。
+系統應回報導航成功、失敗或取消；導航失敗時應回報原因，並應能區分 Navigation Resource Validation、First Mile、On Route、Last Mile、Free-space Fallback，以及其他 navigation execution failure boundary。
+
+---
+
+## SYS-018 First Mile
+
+目前位姿不在選定 route entry 時，系統應規劃並執行由目前位姿至該 entry 的安全連接；目前位姿已位於適用的 route entry 時，First Mile 應視為不需要執行，不得因此判定導航失敗。
+
+---
+
+## SYS-019 On Route Navigation
+
+系統應沿選定 Route Graph route 由 route entry 移動至 route exit，並遵守 Route Graph 所定義的 connectivity、direction 與 availability constraints。
+
+---
+
+## SYS-020 Last Mile
+
+選定 route exit 未直接到達 Canonical Goal Pose 時，系統應規劃並執行由該 exit 至 Canonical Goal Pose 的安全連接；Canonical Goal Pose 已位於適用的 route exit 時，Last Mile 應視為不需要執行，不得因此判定導航失敗。
+
+---
+
+## SYS-021 Free-space Fallback
+
+系統只有在符合下列任一條件，且 free-space movement 仍可滿足定位、路徑規劃、障礙物避讓、路徑追蹤、運動控制與停止要求時，才可使用 free-space fallback：
+
+- Current Pose 無法連接任何可用 route entry。
+- Route Graph 無法提供通往 Canonical Goal Pose 方向的可用 route。
+- On Route movement 因目前環境阻塞而無法維持，且重新選擇 Route Graph route 仍失敗。
+- Route exit 無法透過 Last Mile 安全連接 Canonical Goal Pose。
+
+Route-assisted movement 與允許的 free-space fallback 均無法安全執行時，系統應終止導航、嘗試使底盤停止並回報失敗。
 
 ---
 
@@ -189,10 +232,16 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 | SYS-009 | UC-002 | CAP-002 |
 | SYS-010 | UC-002 | CAP-002 |
 | SYS-011 | UC-002 | CAP-002 |
+| SYS-012 | UC-002 | CAP-002 |
+| SYS-013 | UC-002 | CAP-002 |
 | SYS-014 | UC-002 | CAP-002 |
 | SYS-015 | UC-002 | CAP-002 |
 | SYS-016 | UC-002 | CAP-002 |
 | SYS-017 | UC-002 | CAP-002 |
+| SYS-018 | UC-002 | CAP-002 |
+| SYS-019 | UC-002 | CAP-002 |
+| SYS-020 | UC-002 | CAP-002 |
+| SYS-021 | UC-002 | CAP-002 |
 | SYS-025 | UC-002 | CAP-002 |
 | SYS-003 | UC-002 | CAP-002 |
 | SYS-004 | UC-002 | CAP-002 |

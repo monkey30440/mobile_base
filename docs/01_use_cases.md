@@ -95,6 +95,8 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 - AMR 已完成啟動。
 - 已載入可供導航使用之 Map Package。
+- 已載入與目前 Map Package 相容且有效之 Route Graph。
+- Station Target 所需之 Station Catalog 已載入、有效且與目前 Map Package 相容。
 - AMR 已在目前地圖中完成定位，且系統可接受導航任務。
 
 ---
@@ -108,10 +110,13 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ## 基本流程
 
 1. 使用者指定 Navigation Target。
-2. 系統驗證並解析 Navigation Target。
-3. 系統開始自主導航。
-4. 系統持續監控導航進度。
-5. 系統抵達 Navigation Target 並回報導航結果。
+2. 系統驗證 Navigation Target 與導航所需資源，並將 Navigation Target 解析為 Canonical Goal Pose。
+3. 系統根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
+4. 若目前位姿不在選定 route entry，系統執行 First Mile 銜接該 entry。
+5. 系統沿選定 Route Graph 執行 On Route movement。
+6. 若選定 route exit 未直接到達 Canonical Goal Pose，系統執行 Last Mile 銜接目標。
+7. 系統持續監控 navigation stage 與整體導航進度。
+8. 系統抵達 Navigation Target、停止並回報導航結果。
 
 ---
 
@@ -129,9 +134,33 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ---
 
+### Zero-length Connection Stage
+
+若目前位姿已位於適用的 route entry，First Mile 可省略。若 Canonical Goal Pose 已位於適用的 route exit，Last Mile 可省略。
+
+---
+
+### Free-space Fallback
+
+系統應優先使用可安全執行的 route-assisted movement。只有符合下列任一條件，且 free-space movement 仍可安全執行時，系統才可使用 free-space fallback：
+
+- Current Pose 無法連接任何可用 route entry。
+- Route Graph 無法提供通往 Canonical Goal Pose 方向的可用 route。
+- On Route movement 因目前環境阻塞而無法維持，且重新選擇 Route Graph route 仍失敗。
+- Route exit 無法透過 Last Mile 安全連接 Canonical Goal Pose。
+
+存在有效且可安全執行的 route-assisted solution 時，系統不得任意選擇完整 free-space movement。
+
+---
+
 ## Failure / Cancellation Flow
 
 - Station ID 不存在或 Goal Pose 無效時，系統拒絕導航任務並回報原因。
+- Route Graph 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
+- Station Target 所需之 Station Catalog 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
+- Navigation configuration 無效時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
+- First Mile、On Route 或 Last Mile 無法安全執行時，系統僅可在符合 Free-space Fallback 條件時切換至 free-space movement。
+- Route-assisted movement 與允許的 free-space fallback 均無法安全執行時，系統終止導航、嘗試使底盤停止並回報失敗。
 - 系統無法繼續導航時，系統終止導航任務並回報失敗。
 - 使用者取消導航時，系統終止導航任務並回報取消結果。
 

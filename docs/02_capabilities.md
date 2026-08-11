@@ -74,8 +74,15 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 - 接收 Navigation Target。
 - 驗證 Navigation Target。
-- 解析 Navigation Target。
-- 自主規劃導航。
+- 將 Navigation Target 解析為 Canonical Goal Pose。
+- 載入並驗證與目前 Map Package 相容的 Route Graph。
+- 載入並驗證 Station Target 所需的 Station Catalog。
+- 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
+- 執行 First Mile，將 AMR 由目前位姿銜接至適用的 route entry。
+- 執行 On Route movement，沿選定 Route Graph route 移動。
+- 執行 Last Mile，將 AMR 由 route exit 銜接至 Canonical Goal Pose。
+- 在 route-assisted movement 無法成立或無法安全繼續時，依核准條件執行 free-space fallback。
+- 監控 navigation stage、stage transition 與整體導航進度。
 - 自主避障。
 - 自主追蹤路徑。
 - 自主抵達導航目標。
@@ -104,6 +111,43 @@ Navigation Target
 ├── Station ID
 └── Goal Pose
 ```
+
+Navigation Resources：
+
+```text
+Navigation Resources
+├── Map Package
+├── Route Graph
+└── Station Catalog（Station Target 使用）
+```
+
+Route Graph 與 Station Catalog 必須與目前 Map Package 相容。缺失、無效或不相容的 Navigation Resource 屬於 configuration failure，不構成 free-space fallback 條件。
+
+---
+
+## Navigation Strategy
+
+系統的移動原則為 route-preferred：可安全使用 Route Graph 時，應優先沿 Route Graph 移動，不得任意選擇完整 free-space movement。
+
+Route-assisted movement 由以下階段組成：
+
+```text
+Current Pose
+    │
+    ├── First Mile（需要時）
+    ▼
+Route Entry
+    │
+    ├── On Route
+    ▼
+Route Exit
+    │
+    ├── Last Mile（需要時）
+    ▼
+Canonical Goal Pose
+```
+
+只有 Current Pose 無法連接可用 route entry、Route Graph 無法提供通往目標方向的可用 route、On Route movement 受阻且 route reselection 失敗，或 route exit 無法安全連接目標時，系統才可在仍能安全執行的前提下使用 free-space fallback。
 
 ---
 
