@@ -1,173 +1,145 @@
 # M1Driver Design Baseline
 
-> Status: **M1Driver stage design baseline**  
-> Date: 2026-08-11  
-> Scope: `SUB-001 Drive Hardware Interface` 之第二層 **M1Driver**  
-> Target: DEXMART M1 ×2, RS-485, Modbus Multi-drive 2.0, ROS 2 Jazzy / ros2_control
+**Project:** mobile_base  
+**Scope:** M1 protocol / runtime communication layer  
+**Status:** MVP design baseline  
+**Date:** 2026-08-11
 
 ---
 
-## 1. 目的
+## 1. Architecture
 
-本文件定案三層架構中的第二層 `M1Driver`：
+The MVP motor stack is now intentionally **two application layers**:
 
 ```text
-M1Hardware
-    ↓  MotorCommand / MotorState
-M1Driver                 ← 本文件
-    ↓  raw bytes
-SerialTransport
-    ↓
-RS-485
-    ↓
-M1 ID1 / ID2
+ros2_control / diff_drive_controller
+              |
+              v
+          M1Hardware
+              |
+              v
+           M1Driver
+              |
+              v
+           libmodbus
+              |
+              v
+        RS485 / M1 × 2
 ```
 
-`M1Driver` 的責任是：
+There is **no independent `SerialTransport` class in the MVP**.
 
-- 理解 DEXMART M1 與 Modbus / Multi-drive 2.0 協議。
-- 將馬達端命令轉為合法封包。
-- 驗證回應封包是否合法。
-- 將回應解析為 M1 原生馬達狀態。
-- 提供 Servo lifecycle 命令。
-- 提供少量 Standard Modbus register access 給 configuration / maintenance。
+`libmodbus` is a private implementation detail of `M1Driver`.
+No libmodbus type, function, or raw Modbus representation may leak into
+`M1Hardware`.
 
-`M1Driver` **不負責**：
-
-- ROS 2 / ros2_control lifecycle。
-- wheel rad/s ↔ motor RPM 的 gear ratio / sign 換算。
-- wheel position [rad] 換算。
-- int32 position rollover 後的長期連續位置累加。
-- 左輪 / 右輪語意。
-- 差速運動學、odometry、wheel radius、wheel separation。
-- Serial device 的實際 byte I/O 細節。
+If a second transport/backend is required in the future, a transport
+abstraction can be extracted later without changing the
+`M1Hardware <-> M1Driver` public contract.
 
 ---
 
-## 2. 架構原則
+## 2. M1Driver responsibilities
 
-### 2.1 Runtime control 優先使用 Multi-drive 2.0
+`M1Driver` owns:
 
-正常 ros2_control runtime 主線定案如下：
+```text
+M1 protocol semantics
+Multi-drive 2.0 addressing / driver bitmap
+Multi-drive 2.0 FC03 / FC17 request construction
+JG / SVON / SVOFF command encoding
+signed RPM encoding / decoding
+signed int32 position decoding
+response semantic validation
+M1 MotorState parsing
+runtime lifecycle protocol
+Standard Modbus register access for configuration / maintenance
+
+libmodbus RTU context ownership
+connect / disconnect
+response timeout configuration
+raw request send / response receive
+mapping libmodbus failures into ErrorCode
+request/response ordering for the selected driver IDs
+```
+
+`M1Driver` does **not** own:
+
+```text
+ROS 2 / ros2_control lifecycle
+left/right wheel semantics
+wheel rad/s <-> motor RPM conversion
+gear ratio
+wheel radius
+wheel separation
+robot kinematics
+continuous position rollover tracking
+wheel position [rad]
+device-health policy such as "alarm means ros2_control ERROR"
+```
+
+---
+
+## 3. Runtime protocol policy
+
+Normal ros2_control runtime should use Multi-drive 2.0 as much as practical.
+
+Frozen runtime path:
 
 ```text
 read_state()
-    → Multi-drive 2.0 FC03
+    -> Multi-drive 2.0 FC03
 
 enable()
-    → Multi-drive 2.0 FC17 + SVON + simultaneous state read
+    -> Multi-drive 2.0 FC17 + SVON + simultaneous state read
 
 exchange()
-    → Multi-drive 2.0 FC17 + JG/RPM + simultaneous state read
+    -> Multi-drive 2.0 FC17 + JG/RPM + simultaneous state read
 
 stop()
-    → Multi-drive 2.0 FC17 + JG/0 + simultaneous state read
+    -> Multi-drive 2.0 FC17 + JG/0 + simultaneous state read
 
 disable()
-    → Multi-drive 2.0 FC17 + SVOFF + simultaneous state read
+    -> Multi-drive 2.0 FC17 + SVOFF + simultaneous state read
 ```
 
-原則不是「所有事情都硬用 FC17」，而是：
+Principle:
 
-> **Runtime 優先使用 Multi-drive 2.0；在 Multi-drive 2.0 中依操作語意選 FC03 / FC17。**
+> Prefer Multi-drive 2.0 for runtime control, but do not force every operation
+> through FC17 when Multi-drive 2.0 FC03 is the natural read-only operation.
 
-因此純讀取使用 Multi-drive 2.0 FC03；需要同時下達 command 與取得 state 時使用 FC17。
-
-### 2.2 Standard Modbus 僅保留 configuration / maintenance
-
-以下類型不屬於正常 control loop：
-
-- `01-06` Encoder resolution
-- `02-14` Position format
-- `05-17 / 05-18 / 05-21` communication watchdog configuration
-- `09-19 / 09-20 / 09-26` communication / mapping configuration
-- `0x1400` NET-IN
-- 其他 M1 parameter/register access
-
-這些使用 Standard Modbus register access，不混入正常 ros2_control runtime。
+Standard Modbus register access remains available only for configuration,
+startup validation, maintenance, and diagnostics.
 
 ---
 
-## 3. 已驗證硬體基準
+## 4. Hardware baseline
 
-目前實機基準：
-
-| 項目 | 已驗證值 |
-|---|---:|
-| Serial device | `/dev/ttyUSB0` |
-| UART | 230400, 8N1 |
-| Right motor driver | ID1 |
-| Left motor driver | ID2 |
-| `09-26` Multi-drive 2.0 mapping | `0` |
-| Position format `02-14` | `1` |
-| Encoder resolution `01-06` | `2500 pulse/rev` |
-| Effective motor counts/rev | `10000` |
-| Gear ratio | `20.0:1` — verified on both sides |
-| Right native sign | `-1` relative to ROS forward |
-| Left native sign | `+1` relative to ROS forward |
-
-### 3.1 Position format
-
-正式 baseline 採用：
+Current verified baseline:
 
 ```text
+RS485 device       = /dev/ttyUSB0
+RTU settings       = 230400, 8N1
+
+ID1 = right motor
+ID2 = left motor
+
+09-26 = 0
 02-14 = 1
+01-06 = 2500 pulse/rev
+
+gear_ratio = 20.0
+
+right motor native sign = -1 relative to ROS-forward wheel direction
+left motor native sign  = +1 relative to ROS-forward wheel direction
 ```
 
-Multi-drive feedback `Data5 + Data6` 解析為 **signed int32 position_steps**。
-
-已實測：
-
-- ID1 `+80 RPM` → position step 正向增加。
-- ID1 `-80 RPM` → position step 反向減少。
-- ID2 `+80 RPM` → position step 正向增加。
-- ID2 `-80 RPM` → position step 反向減少。
-- 高低 word 跨 `0xFFFF ↔ 0x0000` 時 signed int32 解碼正確。
-
-`M1Driver` 僅解析 raw signed int32；跨整個 int32 lifetime rollover 的 unwrap 由 `M1Hardware::PositionTracker` 處理。
+The driver layer does not interpret the sign as left/right robot motion.
+It only preserves M1-native RPM and position values.
 
 ---
 
-## 4. Runtime Multi-drive 2.0 資料模型
-
-### 4.1 Read Data
-
-MVP 使用：
-
-| Multi-drive Read Data | 意義 | MotorState |
-|---|---|---|
-| Data0 | Motor status | `status` |
-| Data1 | Alarm | `alarm` |
-| Data2 | Actual RPM | `actual_rpm` |
-| Data5 | Position high word | `position_steps` high |
-| Data6 | Position low word | `position_steps` low |
-
-Data3 / Data4（Bus voltage / current）目前不進控制主資料模型；未來 diagnostics 有需求再加入。
-
-### 4.2 Write Data
-
-目前 `09-26 = 0`，Runtime command 使用已驗證的 Write Data8 / Data9 mapping：
-
-```text
-Write Data8 = Multi-drive Lite command
-Write Data9 = command Data1
-```
-
-MVP command：
-
-```text
-JG     → signed target RPM
-SVON   → data = 0
-SVOFF  → data = 0
-```
-
-`ALM-RST`、`NULL`、其他命令目前不納入 MVP runtime API。
-
----
-
-## 5. 公開資料結構
-
-建議最小資料模型：
+## 5. Runtime data model
 
 ```cpp
 struct MotorCommand
@@ -191,18 +163,22 @@ struct ExchangeResult
 };
 ```
 
-規則：
+Rules:
 
-- `M1Driver` 不知道 `left/right`。
-- 每筆 state 必須帶 `driver_id`。
-- `M1Hardware` 才負責 `ID1 → right`、`ID2 → left` 的 mapping。
-- RPM 在 protocol boundary 使用 integer；浮點 rad/s、gear ratio、sign、rounding/clamping 由 `M1Hardware` 完成。
+```text
+M1Driver does not know "left" or "right".
+Every state carries driver_id.
+RPM is already an integer motor-domain value.
+position_steps is raw M1 signed-int32 position semantics.
+```
+
+Continuous position tracking belongs to `M1Hardware`.
 
 ---
 
-## 6. M1Driver Runtime Public API
+## 6. Public API
 
-MVP 建議 API：
+MVP public API:
 
 ```cpp
 class M1Driver
@@ -211,199 +187,469 @@ public:
   Result<void> connect();
   Result<void> disconnect();
 
-  Result<ExchangeResult> read_state(int driver_a, int driver_b);
+  Result<ExchangeResult> read_state(
+      int driver_a,
+      int driver_b);
 
-  Result<ExchangeResult> enable(int driver_a, int driver_b);
+  Result<ExchangeResult> enable(
+      int driver_a,
+      int driver_b);
 
   Result<ExchangeResult> exchange(
       const MotorCommand& command_a,
       const MotorCommand& command_b);
 
-  Result<ExchangeResult> stop(int driver_a, int driver_b);
+  Result<ExchangeResult> stop(
+      int driver_a,
+      int driver_b);
 
-  Result<ExchangeResult> disable(int driver_a, int driver_b);
+  Result<ExchangeResult> disable(
+      int driver_a,
+      int driver_b);
 
-  // Configuration / maintenance only
-  Result<uint16_t> read_register(int driver_id, uint16_t address);
+  // Configuration / maintenance only.
+  Result<uint16_t> read_register(
+      int driver_id,
+      uint16_t address);
+
   Result<void> write_register(
       int driver_id,
       uint16_t address,
       uint16_t value);
+
+private:
+  modbus_t* ctx_{nullptr};
 };
 ```
 
-### 6.1 `read_state()`
+`modbus_t*` is private and must never appear in the public API.
 
-用途：純讀取兩顆 M1 狀態。
+---
+
+## 7. connect()
+
+`connect()` owns RTU setup through libmodbus.
+
+Conceptual responsibilities:
+
+```text
+reject a repeated connect while already connected
+create RTU context
+configure device / baud / parity / data bits / stop bits
+configure response timeout
+connect
+return Result<void>
+```
+
+Frozen lifecycle invariant:
+
+```text
+connect() success -> ctx_ != nullptr and communication is ready
+connect() failure -> all partial resources are released and ctx_ == nullptr
+repeated connect while ctx_ != nullptr -> ALREADY_CONNECTED
+```
+
+`ctx_` is deliberately the single connection-state indicator for the MVP; do
+not add a second `is_connected_` flag.
+
+For the current MVP:
+
+```text
+device = /dev/ttyUSB0
+baud   = 230400
+8N1
+```
+
+The exact final response timeout is intentionally not frozen yet.
+
+No motor enable or motion command occurs in `connect()`.
+
+---
+
+## 8. disconnect()
+
+`disconnect()` only releases communication resources.
+
+It does **not** replace the motor stop/disable lifecycle.
+
+Expected shutdown order is owned by `M1Hardware`:
+
+```text
+stop
+disable
+disconnect
+```
+
+`disconnect()` must remain safe to call after partial failures.
+
+Frozen cleanup behavior:
+
+```text
+ctx_ != nullptr -> modbus_close() + modbus_free() + ctx_ = nullptr
+ctx_ == nullptr -> return success
+```
+
+Therefore repeated `disconnect()` is intentionally safe/idempotent. A destructor
+may perform final communication-resource cleanup, but must not issue JG0, SVON,
+or SVOFF commands; motor safety actions belong to the explicit lifecycle.
+
+---
+
+## 9. Private transaction boundary
+
+Although there is no `SerialTransport` class, libmodbus calls should remain
+concentrated in a very small private boundary.
+
+Recommended internal shape:
+
+```cpp
+Result<std::vector<uint8_t>> transact(
+    const std::vector<uint8_t>& request_without_backend_crc);
+```
+
+Conceptually:
+
+```text
+protocol helper builds request
+        |
+        v
+transact()
+        |
+        +-- libmodbus raw send
+        +-- libmodbus receive confirmation
+        +-- map timeout/I/O failure
+        |
+        v
+raw response bytes
+        |
+        v
+M1Driver validator / parser
+```
+
+This preserves an extraction point if a future transport abstraction becomes
+necessary.
+
+Do not scatter raw libmodbus calls across every protocol helper.
+
+---
+
+## 10. CRC / RTU framing ownership
+
+With the selected libmodbus backend:
+
+```text
+M1Driver
+  -> constructs the Multi-drive 2.0 request semantics
+
+libmodbus RTU backend
+  -> owns backend RTU framing / CRC during actual transport
+```
+
+Therefore the production M1Driver request builder should not independently
+append a second RTU CRC before sending through the libmodbus raw-request path.
+
+However, M1Driver still owns response **semantic validation**:
+
+```text
+expected function code
+expected group/unit semantics
+byte count
+response length
+exception response
+driver block count/order
+Multi-drive payload structure
+```
+
+Do not assume low-level receive success means the response is semantically the
+response M1Driver expected.
+
+---
+
+## 11. Multi-drive 2.0 read_state()
+
+Purpose:
+
+```text
+read both M1 states without writing a motor command
+```
+
+Runtime implementation:
 
 ```text
 Multi-drive 2.0 FC03
-→ one request
-→ driver bitmap selects both drivers
-→ read Data0~Data6
-→ ExchangeResult
+one request
+driver bitmap selects ID1 + ID2
+Read Data0..Data6
 ```
 
-已實機驗證一包可同時讀 ID1 + ID2，且與 Standard Modbus reference 的 status / alarm / rpm / position 語意一致。
-
-### 6.2 `enable()`
+Returned state fields:
 
 ```text
-Multi-drive 2.0 FC17
-Write Data8/9:
-  ID1/ID2 = SVON, 0
-Read Data0~6 simultaneously
+Data0 -> status
+Data1 -> alarm
+Data2 -> actual_rpm
+Data5 + Data6 -> signed int32 position_steps
 ```
 
-`enable()` 回傳合法的 immediate `ExchangeResult`，但：
+Data3/Data4 are not part of the MVP control-state model.
 
-> **transaction success 不等於 Servo state 已完成轉換。**
-
-實測 immediate response 仍可能是 `status=6`，後續 poll 才變 `status=0`。
-
-因此 lifecycle transition success 判斷由 `M1Hardware` 做有限次 `read_state()` poll。
-
-### 6.3 `exchange()`
-
-正常 ACTIVE control loop 唯一的 motor motion transaction：
+Hardware test status:
 
 ```text
-Multi-drive 2.0 FC17
-Write:
-  each driver = JG + signed RPM
-Read:
-  Data0~6 for both drivers
+PASS
 ```
 
-`M1Hardware::write()` 呼叫一次 `exchange()`，並保存回傳的 `latest_motor_state`。
-
-### 6.4 `stop()`
-
-`stop()` 是 convenience API，本質仍使用同一個 FC17 command path：
-
-```text
-ID1 = JG 0
-ID2 = JG 0
-+
-simultaneous state read
-```
-
-實測送出 JG 0 後第一筆回應可能仍帶上一瞬間非零 RPM，因此上層 deactivate policy 必須有限次確認 RPM 已接近 0。
-
-### 6.5 `disable()`
-
-```text
-Multi-drive 2.0 FC17
-ID1/ID2 = SVOFF, 0
-+
-simultaneous state read
-```
-
-與 `enable()` 相同，immediate response 不保證 lifecycle state 已完成轉換；實測後續 poll 才由 `status=0` 轉為 `status=6`。
+One Multi-drive 2.0 FC03 request successfully returned both drivers and matched
+the Standard Modbus reference for status, alarm, RPM, and position semantics.
 
 ---
 
-## 7. Internal Helper 設計
+## 12. Generic FC17 command path
 
-### 7.1 Generic Runtime FC17 command builder
+Do not implement separate FC17 frame builders for JG, SVON, and SVOFF.
 
-不要為 JG / SVON / SVOFF 各自重寫一套 FC17 builder。
-
-內部使用單一 generic builder：
-
-```cpp
-build_command_request(commands)
-```
-
-概念輸入：
+Use one generic command builder internally:
 
 ```text
 (driver_id, command_code, data)
 (driver_id, command_code, data)
 ```
 
-應用：
+Applications:
 
 ```text
-exchange() → JG + RPM
-stop()     → JG + 0
-enable()   → SVON + 0
-disable()  → SVOFF + 0
+enable()   -> SVON, 0
+exchange() -> JG, signed RPM
+stop()     -> JG, 0
+disable()  -> SVOFF, 0
 ```
 
-### 7.2 FC03 read path
+Current `09-26 = 0` runtime mapping uses:
 
 ```text
-build_state_read_request()
-→ transport.write()
-→ transport.read()
-→ validate_state_read_response()
-→ parse_motor_states()
+Write Data8 = Multi-drive Lite command
+Write Data9 = command data
 ```
 
-### 7.3 FC17 command path
-
-```text
-build_command_request()
-→ transport.write()
-→ transport.read()
-→ validate_command_response()
-→ parse_motor_states()
-```
-
-### 7.4 Shared parser
-
-FC03 與 FC17 最終都應共用同一套 `parse_motor_states()`，避免 RPM / signed position 在兩條路徑出現不同解碼實作。
-
-```text
-Data0 → uint16 status
-Data1 → uint16 alarm
-Data2 → signed int16 actual_rpm
-Data5 + Data6 → signed int32 position_steps
-```
+The same FC17 command path simultaneously reads Data0..Data6.
 
 ---
 
-## 8. Response Validation
+## 13. enable()
 
-MVP validator 至少驗證：
+Runtime implementation:
 
-- Group/slave identifier。
-- Function code。
-- Modbus exception response。
-- Byte count。
-- Total response length。
-- CRC16。
-- Driver block count / order 與 request 一致。
+```text
+FC17
+ID1 -> SVON, 0
+ID2 -> SVON, 0
++
+simultaneous state read
+```
 
-Validator **不判斷**：
+Hardware-verified behavior:
 
-- `alarm != 0` 是否允許繼續控制。
-- `status` 是否符合 lifecycle 期待。
-- RPM 是否符合 ROS command。
-- position rollover。
+```text
+immediate response may still show status=6
+a later poll shows status=0
+RPM remains 0
+alarm remains 0
+```
 
-上述屬於 `M1Hardware` policy。
+Therefore:
+
+```text
+M1Driver enable() = transaction
+M1Hardware        = lifecycle transition policy / bounded polling
+```
+
+`M1Driver` must not hide an unbounded wait/retry state machine inside
+`enable()`.
 
 ---
 
-## 9. Error Model
+## 14. exchange()
 
-MVP 不只回 `bool`，也不建立複雜 exception hierarchy。
+Normal ACTIVE control transaction:
+
+```text
+FC17
+
+ID1 -> JG + target RPM
+ID2 -> JG + target RPM
+
+simultaneously read both states
+```
+
+`exchange()` receives already converted integer motor RPM commands.
+
+It must not perform:
+
+```text
+gear ratio conversion
+left/right sign conversion
+wheel rad/s conversion
+robot motion policy
+```
+
+Hardware test status:
+
+```text
+PASS
+```
+
+FC17 JG/RPM has already controlled both drives and returned state feedback.
+
+---
+
+## 15. stop()
+
+`stop()` is a convenience API using the same generic FC17 command path:
+
+```text
+ID1 -> JG 0
+ID2 -> JG 0
++
+state feedback
+```
+
+Hardware evidence shows the immediate response can still contain the previous
+non-zero RPM. Final stop confirmation is therefore an upper-layer policy.
+
+---
+
+## 16. disable()
+
+Runtime implementation:
+
+```text
+FC17
+ID1 -> SVOFF, 0
+ID2 -> SVOFF, 0
++
+simultaneous state read
+```
+
+Hardware-verified behavior:
+
+```text
+immediate response may still show status=0
+a later poll shows status=6
+RPM remains 0
+alarm remains 0
+```
+
+Again, bounded transition checking belongs to `M1Hardware`.
+
+---
+
+## 17. Standard Modbus register path
+
+Standard Modbus is intentionally outside the normal runtime control loop.
+
+Keep small helpers:
+
+```text
+read_register()
+write_register()
+```
+
+Typical use:
+
+```text
+02-14 position format
+05-17 / 05-18 / 05-21 watchdog configuration
+09-19 driver ID
+09-20 baud selection
+09-26 Multi-drive 2.0 mapping
+NET-IN maintenance/fallback access
+other startup/configuration checks
+```
+
+Do not interleave these register transactions into every ros2_control control
+cycle.
+
+---
+
+## 18. Response validation and parser
+
+The fixed protocol pipeline is:
+
+```text
+build request
+    -> transact()
+    -> validate response
+    -> parse MotorState
+```
+
+`transact()` does not decide whether an FC03/FC17 response has the expected
+M1 semantics. Validation occurs before parsing and checks, at minimum:
+
+```text
+expected function code
+exception response
+byte count / total response length consistency
+expected Multi-drive payload/block structure
+expected selected-driver block count/order
+```
+
+RTU CRC is not independently recalculated by the M1Driver semantic validator;
+backend RTU framing/CRC belongs to libmodbus.
+
+### 18.1 Response parser
+
+FC03 and FC17 share one MotorState parsing implementation after their
+respective framing/header validation. Driver IDs are placed in a deterministic
+ascending order when constructing the request, and returned state blocks are
+mapped using that same ordered-ID list. Robot left/right meaning is not inferred
+from response position.
+
+Minimum decode:
+
+```text
+Data0 -> uint16 status
+Data1 -> uint16 alarm
+Data2 -> int16 actual_rpm
+Data5 + Data6 -> int32 position_steps
+```
+
+Explicit signed conversion is required.
+
+Each selected driver contributes the verified Multi-drive state block:
+
+```text
+Data0..Data6 + Error_Check = 8 words = 16 bytes per driver
+```
+
+For the two-driver MVP the state payload is therefore 32 bytes. Parsing uses
+word indices rather than scattered magic byte offsets. The response payload
+start is derived from the libmodbus backend/header semantics used by the raw
+receive path.
+
+Do not perform position rollover unwrapping here.
+
+---
+
+## 19. Error model
+
+MVP uses a compact result/error model rather than `bool` or a large exception
+hierarchy.
 
 ```cpp
 enum class ErrorCode
 {
   NONE,
 
-  // Transport-originated
-  PORT_OPEN_FAILED,
-  IO_ERROR,
-  TIMEOUT,
-  SHORT_READ,
+  CONTEXT_CREATE_FAILED,
+  CONFIG_FAILED,
+  CONNECT_FAILED,
+  ALREADY_CONNECTED,
 
-  // Protocol-originated
-  BAD_CRC,
+  NOT_CONNECTED,
+  SEND_FAILED,
+  TIMEOUT,
+  RECEIVE_FAILED,
+
   BAD_FUNCTION,
   BAD_LENGTH,
   INVALID_RESPONSE,
@@ -411,7 +657,7 @@ enum class ErrorCode
 };
 ```
 
-使用：
+Example result:
 
 ```cpp
 template<typename T>
@@ -423,416 +669,160 @@ struct Result
 };
 ```
 
-重要規則：
+Error ownership is deliberately split:
 
 ```text
-合法 FC03 / FC17 response
-但 MotorState.alarm != 0
+connect/configuration
+  -> CONTEXT_CREATE_FAILED / CONFIG_FAILED / CONNECT_FAILED / ALREADY_CONNECTED
+
+transact() communication
+  -> NOT_CONNECTED / SEND_FAILED / TIMEOUT / RECEIVE_FAILED
+
+response semantic validation
+  -> BAD_FUNCTION / BAD_LENGTH / INVALID_RESPONSE / MODBUS_EXCEPTION
 ```
 
-仍屬於：
+Raw `errno` / libmodbus error details remain inside M1Driver and may be logged
+for diagnostics, but must not leak into M1Hardware.
+
+Important rule:
 
 ```text
-Result.ok = true
+valid transaction
+MotorState.alarm != 0
 ```
 
-因為 protocol transaction 成功；是否進入 ros2_control ERROR 由 `M1Hardware` 決定。
+is still a successful protocol transaction.
+
+Device-health policy belongs to `M1Hardware`.
 
 ---
 
-## 10. M1Hardware 與 M1Driver 的界線
+## 20. Unit-test boundary
 
-### M1Hardware 負責
+The following must remain pure and testable without hardware/libmodbus I/O:
 
-- `rad/s → RPM`。
-- gear ratio `20.0`。
-- left/right native sign。
-- operational RPM clamp。
-- RPM rounding。
-- `position_steps → PositionTracker → continuous int64 steps`。
-- step → wheel rad。
-- M1 alarm/status 對 ros2_control lifecycle 的 policy。
-- enable/disable transition polling policy。
-- 保存 A2 架構的 `latest_motor_state`。
+```text
+driver bitmap calculation
+FC03 request semantic construction
+FC17 request semantic construction
+signed RPM encoding/decoding
+signed int32 position decoding
+response semantic validation
+MotorState parsing
+driver order mapping
+boundary values
+```
 
-### M1Driver 負責
+The libmodbus-dependent integration surface is intentionally small:
 
-- M1 Driver bitmap。
-- Multi-drive 2.0 address / frame layout。
-- FC03 / FC17。
-- JG / SVON / SVOFF protocol encoding。
-- signed RPM encode/decode。
-- signed int32 position decode。
-- Modbus CRC / response validation。
-- Standard register access。
+```text
+connect()
+transact()
+disconnect()
+```
 
-### SerialTransport 負責
-
-待下一階段定案：
-
-- serial open/close。
-- raw bytes write/read。
-- per-transaction read timeout execution。
-- I/O / timeout / short-read error reporting。
-
-它不知道 M1、FC17、RPM、CRC 或 Driver ID。
+This is sufficient for MVP testability without introducing a third transport
+abstraction.
 
 ---
 
-## 11. ros2_control A2 integration（已定案，不因本次修正改變）
+## 21. Hardware evidence
+
+Current relevant hardware evidence:
 
 ```text
-CONTROL CYCLE N
+Multi-drive 2.0 FC03 ID1+ID2 read       PASS
+FC17 JG/RPM + simultaneous state        PASS
+FC17 JG0 stop path                      PASS
+FC17 SVON lifecycle                     PASS
+FC17 SVOFF lifecycle                    PASS
 
-M1Hardware::read()
-    ↓
-consume latest_motor_state
-    ↓
-position / velocity → ROS joint states
-    ↓
-controller update
-    ↓
-M1Hardware::write()
-    ↓
-wheel rad/s → integer motor RPM
-    ↓
-M1Driver::exchange()
-    ↓
-FC17 JG/RPM + state
-    ↓
-save latest_motor_state
+gear ratio 20:1 left                    PASS
+gear ratio 20:1 right                   PASS
 
-CONTROL CYCLE N+1
-    ↓
-read() consumes that state
+ID1 right-wheel native direction        verified
+ID2 left-wheel native direction         verified
+
+02-14 = 1 on both drivers               verified
 ```
 
-因此正常 ACTIVE control cycle 僅有 **一次 RS-485 FC17 transaction**。
+Thus the runtime protocol selected by this baseline has hardware evidence.
 
 ---
 
-## 12. 已完成的實機驗證證據
+## 22. Timing status
 
-### 12.1 Runtime feedback / JG
+Existing FC17 measurements showed response/transaction time reaching roughly
+the mid-20 ms range.
 
-已驗證：
-
-- ID1 = right wheel。
-- ID2 = left wheel。
-- FC17 可一包控制兩顆 Driver。
-- 可讓一顆運轉、另一顆保持 0 RPM。
-- signed RPM feedback 正確。
-- position feedback 正確。
-- JG 0 可停止。
-- alarm 維持 0。
-
-### 12.2 Mechanical / conversion
-
-已驗證：
-
-- Gear ratio `20:1`：左右各以約 20 motor rev 對應約 1 wheel rev。
-- Left native sign = `+1`。
-- Right native sign = `-1`。
-- `10000 motor steps/rev`。
-- `200000 motor steps/wheel rev`。
-- format-1 signed int32 position packing / conversion unit tests PASS。
-
-### 12.3 Multi-drive 2.0 FC03 — 2026-08-11 PASS
-
-Read-only 實測：
+Therefore:
 
 ```text
-one Multi-drive 2.0 FC03 request
-→ ID1 + ID2 state
+50 Hz control period = 20 ms
 ```
 
-與 Standard Modbus reference 比較：
+is not accepted as the current baseline.
+
+Still open:
 
 ```text
-ID1 status/alarm/rpm/position: PASS
-ID2 status/alarm/rpm/position: PASS
+final controller update_rate
+final libmodbus response timeout
+final watchdog timing
+final lifecycle poll delay/count
 ```
 
-因此 `M1Driver::read_state()` 正式採 Multi-drive 2.0 FC03。
-
-### 12.4 Multi-drive 2.0 lifecycle — 2026-08-11 PASS
-
-實測：
-
-```text
-status 6 / rpm 0
-    ↓ FC17 SVON
-poll → status 0 / rpm 0
-    ↓ FC17 JG 0
-status 0 / rpm 0
-    ↓ FC17 SVOFF
-poll → status 6 / rpm 0
-```
-
-兩顆 Driver 全程 `alarm=0`。
-
-因此 runtime `enable()/disable()` 正式採 Multi-drive 2.0 FC17 SVON/SVOFF，不再以 NET-IN 作為正常 lifecycle 主線。
-
-NET-IN 路徑保留為 bring-up / maintenance / emergency test fallback，不是 production runtime 正常路徑。
+These must be decided together using measured system behavior.
 
 ---
 
-## 13. Timing evidence 與目前未定案事項
+## 23. MVP non-goals
 
-目前 FC17 timing 實測：
-
-| Test | mean | p95 | p99 | max |
-|---|---:|---:|---:|---:|
-| requested 50 Hz | 17.317 ms | 23.867 ms | 24.019 ms | 24.050 ms |
-| requested 30 Hz | 16.555 ms | 23.328 ms | 24.130 ms | 24.387 ms |
-
-結論：
-
-- 50 Hz 的 20 ms budget 已被實測最大 transaction time 超過，不採為目前 baseline。
-- 30 Hz 是合理候選，但尚未把完整 `controller_manager + M1Hardware + diagnostics` overhead 納入。
-- **controller update rate 尚未在 M1Driver 階段定案。**
-- **Serial read timeout 尚未定案。**
-
-這兩項留到 SerialTransport / 三層整合後，以實機 timing/jitter 再決定。
-
-### Transport backend 與既有 libmodbus 決策
-
-既有 `SUB-001-base-control-plan.md` 曾定案以 **libmodbus** 實作 Modbus transport；本次三層設計則將邏輯邊界定為：
+Do not add yet:
 
 ```text
-M1Driver       = M1 / Multi-drive 2.0 protocol semantics
-SerialTransport = serial I/O / timeout
+SerialTransport abstraction
+generic ITransport hierarchy
+background communication thread
+automatic reconnect state machine
+complex retries
+automatic alarm reset
+support for arbitrary motor counts
+CAN backend
+TCP/RTU backend switching
 ```
 
-兩者在概念上不衝突，但若直接讓 libmodbus 負責 CRC、RTU framing、FC03/FC17 transaction，實作邊界就不再是「純 raw-byte SerialTransport」。
-
-因此本次 **不重新推翻 libmodbus 決策，也不在 M1Driver 階段硬定其放置位置**。下一個 SerialTransport 階段必須先做一個小決策：
-
-- 保留純 raw-byte `SerialTransport`，M1Driver 自己建立/驗證 Modbus frame；或
-- 建立以 libmodbus 為 backend 的 transport / protocol adapter，讓成熟函式庫負責 RTU framing/CRC，但仍維持 M1Driver 對 Multi-drive 2.0 address、command mapping、MotorState 語意的所有權。
-
-這個決策不改變本文件已定案的 M1Driver public API、MotorState、runtime protocol choice 或 ros2_control A2 flow。
-
-### Watchdog
-
-目前 `05-17=100 ms / 05-18=3 / 05-21=2` 曾出現 Alarm 21，但既有 watchdog 測試在預定 silence window 之前就已進 alarm，故不能證明「設計的 silence window 正確觸發 watchdog」。
-
-因此：
-
-- Register write：已驗證。
-- Alarm 21 與通信 timeout protection 有實機證據。
-- 精確 watchdog trip/recovery policy：**未定案**。
-
-watchdog 不納入本次 M1Driver baseline 的 production safety claim。
+If a real second backend appears, extract the transport abstraction then.
 
 ---
 
-## 14. Unit Test Baseline
-
-### Parser
-
-至少包含：
-
-- positive int16 RPM。
-- negative int16 RPM。
-- positive int32 position。
-- negative int32 position。
-- two-driver block mapping/order。
-- signed boundary values：
-  - RPM `+32767 / -32768`
-  - position `+2147483647 / -2147483648`
-
-### Response validator
-
-至少包含：
-
-- valid response。
-- bad CRC。
-- wrong function code。
-- wrong group/slave identifier。
-- wrong byte count。
-- wrong total length。
-- Modbus exception response。
-
-### Request builder
-
-至少包含：
-
-- two valid driver IDs。
-- driver bitmap。
-- JG positive/negative/zero RPM encoding。
-- SVON / SVOFF command encoding。
-- duplicate ID reject。
-- out-of-range ID reject。
-- CRC fixture。
-
-### Integration without hardware
-
-以 fake/mock `SerialTransport` 驗證：
+## 24. Frozen M1Driver baseline
 
 ```text
-request build
-→ write
-→ simulated response
-→ validate
-→ parse
-→ ExchangeResult
-```
-
----
-
-## 15. 明確不做的 MVP 功能
-
-本階段不增加：
-
-- automatic reconnect state machine。
-- protocol retry loop。
-- background communication thread。
-- alarm automatic reset。
-- degraded mode。
-- arbitrary 1~8 driver generic fleet abstraction。
-- FC10 runtime path（目前無必要 use case）。
-- FC17 NULL runtime path。
-- diagnostics 的 Bus voltage/current 擴充。
-
-這些有明確需求再加入，不提前抽象。
-
----
-
-## 16. 對既有 repo 文件的回寫影響
-
-目前 `docs/implementation/SUB-001-base-control-plan.md` 與 `docs/05_subsystem.md` 有部分已被新實機證據取代，後續實作前應修正：
-
-### 必須更新
-
-1. `02-14`：
-
-```text
-舊：0 = Index(turns) + pulse
-新：1 = signed int32 steps，已實機驗證左右正反方向
-```
-
-2. Encoder rollover：
-
-```text
-舊：signed 16-bit turns rollover
-新：signed int32 position_steps rollover
-```
-
-3. Gear ratio：
-
-```text
-舊：20.0 尚未實機驗證
-新：20.0 已左右實機驗證
-```
-
-4. Runtime Servo lifecycle：
-
-```text
-舊：NET-IN / SERVO-EN 為正常 lifecycle 路徑
-新：Multi-drive 2.0 FC17 SVON/SVOFF 為正常 lifecycle 路徑
-    NET-IN 僅保留 bring-up / maintenance fallback
-```
-
-5. Multi-drive 2.0 read：
-
-```text
-read_state() → Multi-drive 2.0 FC03，一包讀 ID1+ID2，已實機 PASS
-```
-
-6. FC17 timing：
-
-```text
-舊：約 10~15 ms
-新：實測分布約 8.6~24.4 ms；50 Hz 已不適合作為 baseline
-```
-
-### 本文件不改動
-
-- 三層架構。
-- ros2_control A2 read/write 設計。
-- wheel radius / separation 所屬 SUB-004 的邊界。
-- PositionTracker 屬於 M1Hardware。
-
----
-
-## 17. M1Driver 階段正式定案
-
-M1Driver MVP baseline：
-
-```text
+M1Hardware
+    |
+    v
 M1Driver
-│
-├── Runtime / Multi-drive 2.0
-│   │
-│   ├── read_state()
-│   │      └── FC03 → state for two drivers
-│   │
-│   ├── enable()
-│   │      └── FC17 SVON + state
-│   │
-│   ├── exchange()
-│   │      └── FC17 JG/RPM + state
-│   │
-│   ├── stop()
-│   │      └── FC17 JG/0 + state
-│   │
-│   └── disable()
-│          └── FC17 SVOFF + state
-│
-├── Protocol helpers
-│   ├── request builders
-│   ├── response validators
-│   ├── CRC
-│   └── shared MotorState parser
-│
-└── Configuration / maintenance
-    ├── read_register()
-    └── write_register()
-        └── Standard Modbus
+    |
+    +-- M1 / Multi-drive 2.0 semantics
+    +-- MotorCommand / MotorState
+    +-- runtime lifecycle protocol
+    +-- Standard Modbus maintenance access
+    +-- private libmodbus RTU context
+    +-- private transact() boundary
+    |
+    v
+libmodbus
+    |
+    v
+RS485 / M1 ID1 + ID2
 ```
 
-### Exit criteria — M1Driver stage
+Baseline rule:
 
-- [x] Runtime protocol choice defined。
-- [x] Multi-drive 2.0 FC03 read path hardware verified。
-- [x] Multi-drive 2.0 FC17 JG/RPM hardware verified。
-- [x] Multi-drive 2.0 FC17 JG0 stop hardware verified。
-- [x] Multi-drive 2.0 FC17 SVON hardware verified。
-- [x] Multi-drive 2.0 FC17 SVOFF hardware verified。
-- [x] signed int32 format-1 position hardware verified。
-- [x] Public API boundary defined。
-- [x] Error ownership defined。
-- [x] Unit-test scope defined。
-- [ ] C++ implementation — next implementation phase。
+> `M1Driver` owns M1 semantics and privately owns libmodbus communication.
+> `libmodbus` is an implementation detail, not an application-layer
+> abstraction.
 
-**M1Driver design stage: COMPLETE.**
-
-下一階段：**SerialTransport MVP design**，之後才將三層串接並開始 C++ implementation。
-
----
-
-## 18. Evidence / Reference Files
-
-官方文件：
-
-- `ref/M1-COMM_UM-01-S0686.pdf`
-- `ref/M1-UserManual_UM-01-S0701.pdf`
-
-Bring-up / verification：
-
-- `docs/m1_bringup_validation/`
-- `right_80rpm_safe.txt`
-- `left_80rpm_safe.txt`
-- `gear_ratio_right.txt`
-- `gear_ratio_left.txt`
-- `conversion_format1.txt`
-- `format1_right.txt`
-- `format1_left.txt`
-- `fc17_timing_50hz.txt`
-- `fc17_timing_30hz.txt`
-- Multi-drive 2.0 FC03 state test — PASS, 2026-08-11
-- Multi-drive 2.0 lifecycle SVON/JG0/SVOFF test — PASS, 2026-08-11
-
----
-
+**M1Driver MVP design: FROZEN.**
