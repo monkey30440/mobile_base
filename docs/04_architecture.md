@@ -128,7 +128,7 @@ Operator、Navigation Client / Upper Layer、teleoperation tool、commissioning 
 - Navigation Configuration 是獨立於場域 Navigation Resource Set 的 software deployment configuration；兩者均有效時，Navigation 才可進入 operational state。
 - Route Graph 描述 route-preferred movement resource；Station Catalog 將 Station ID 定義為 `map` frame 中的 Canonical Goal Pose。Station 不得因部署格式而被強制等同於 Route Graph node。
 - `mobile_base` 是 Drive Hardware 的唯一軟體控制邊界。外部 client 與 operator tool 不得繞過此邊界直接下達 drive command。
-- `mobile_base` 管理 Mapping 所產出的 Map Package，並回報 Mapping 與 Navigation 的成功、失敗或取消結果。
+- `mobile_base` 管理 Mapping 所產出的 Map Package；Mapping 回報 Success 或 Failure，Navigation 回報 Success、Failure 或 Canceled。
 - `mobile_base` 必須將 sensor validity、localization validity、drive state 與 fault 納入跨 subsystem 的 operational decision。
 
 本章只定義 system boundary 與外部交換資訊；實際的 subsystem responsibility allocation 於後續章節定義。
@@ -234,8 +234,12 @@ External Teleoperation Tool                   Navigation
          wheel command │         │ measured wheel state
                        ▼         │ readiness / validity / fault
                  Drive Hardware Interface
-                       │
-                       └── wheel odometry ──► State Estimation
+                       │         ▲
+          drive command│         │ motor feedback
+                       ▼         │
+                    Drive Hardware
+
+Motion Control ── wheel odometry ──► State Estimation
 ```
 
 在任一時間，Motion Control 只接受目前 operational flow 所授權的單一 command source。非授權來源的 command 不得影響 wheel command。Command source selection 的實作方式不在本文件定義。
@@ -478,7 +482,7 @@ Mapping 擁有二維 Occupancy Grid 的建立與持續更新，以及 Mapping mo
 | SYS-005 | Consumer：使用 State Estimation 提供的有效 system planar odometry。 |
 | SYS-006 | Primary owner：取得新的有效 perception 與 odometry 後持續更新地圖。 |
 | SYS-023 | Consumer：使用 Robot Description 提供的 frame relationships。 |
-| SYS-024 | Shared：回報 Mapping 是否成功開始、持續及產生 candidate map；Navigation Resource Management 負責 package 儲存與 reload validation。 |
+| SYS-024 | Primary owner：聚合 Mapping execution、candidate Occupancy Grid，以及 Navigation Resource Management 提供的 storage / reload-validation result，回報唯一 Mapping Result。 |
 
 SYS-002 與 SYS-007 由 Navigation Resource Management 擁有，不配置給 Mapping。
 
@@ -523,7 +527,7 @@ Mapping 的 architectural input 是「有效且足夠的 LiDAR perception」，�
 
 Mapping 不接收或轉送 External Teleoperation Tool 的 vehicle velocity command。Mapping active 時，external teleoperation source 才可被 operational flow 授權；Mapping 終止或失敗後，該 command authority 必須撤銷。所有停止行為仍經 Motion Control 與 Drive Hardware Interface 執行。
 
-Mapping 只產生 candidate Occupancy Grid。Navigation Resource Management 必須將其儲存為 Map Package 並驗證可重新載入；只有兩個階段皆成功，系統才能依 SYS-024 回報 Mapping Success。
+Mapping 只產生 candidate Occupancy Grid，不執行 Map Package storage 或 reload validation。Navigation Resource Management 必須提供上述 package-operation result；Mapping 聚合兩階段 evidence，只有兩階段皆成功時才可依 SYS-024 回報唯一 Mapping Success。
 
 ```text
 Mapping: candidate Occupancy Grid ready
@@ -532,7 +536,7 @@ Mapping: candidate Occupancy Grid ready
 Navigation Resource Management: package stored and reloadable
                     │
                     ▼
-System: Mapping Success
+Mapping: authoritative Mapping Success
 ```
 
 ### Excluded Responsibilities
@@ -576,7 +580,7 @@ Navigation Resource Management 是場域 Navigation Resource Set 的 selection�
 | SYS-010 | Provider：向 Map Localization 提供 active Occupancy Grid 與 map readiness。 |
 | SYS-012 | Primary owner：彙整 Navigation Resource Set 與 Navigation Configuration validation，並提供 navigation readiness。 |
 | SYS-013、SYS-018～SYS-021 | Provider：向 Navigation 提供同一 resource set 的 valid Route Graph；不擁有 strategy 或 execution。 |
-| SYS-024 | Shared：提供 Map Package storage 與 reload-validation result。 |
+| SYS-024 | Contributor：提供 Map Package storage 與 reload-validation result；不得自行以 package-operation result 取代完整 Mapping Result。 |
 
 ### Cross-subsystem Relationships
 
@@ -1461,14 +1465,20 @@ Stale、invalid、unavailable 或 resource-identity mismatch 的 output 不得�
 
 ### Result-and-safety Invariant
 
-Operation result 與 safe-stop outcome 是正交資訊：
+Operation result 與 safe-stop outcome 是正交資訊；每種 operation 的 terminal result set 由其上游 requirement 決定：
 
 ```text
-Operation result                 Safe-stop outcome
-├── Success                      ├── Stop Confirmed
-├── Failure                      ├── Stop Requested, Unconfirmed
-└── Canceled                     └── Stop Failed
+Operation result                  Safe-stop outcome
+├── Mapping                       ├── Stop Confirmed
+│   ├── Success                   ├── Stop Requested, Unconfirmed
+│   └── Failure                   └── Stop Failed
+└── Navigation
+    ├── Success
+    ├── Failure
+    └── Canceled
 ```
+
+Safe-stop outcome 不得新增、刪除或改寫特定 operation 的 terminal result set。
 
 Result reporting 必須在適用時保留：
 
@@ -1576,7 +1586,7 @@ reload validation
 Mapping Success   Mapping Failure
 ```
 
-停止確認或其他 safety action 失敗不得阻止其餘安全動作之嘗試，但此 operating flow 不得被宣告為正常完成。Candidate Occupancy Grid 可保留供診斷；它本身不構成 SYS-024 Success。
+停止確認或其他 safety action 失敗不得阻止其餘安全動作、Map Package finalization、storage 與 reload validation 的嘗試。SYS-024 Mapping Result 仍依 Map Package 是否成功建立、儲存且可重新載入判定；safe-stop failure 不得覆蓋該 product result，但必須另行回報 safe-stop outcome，並使 operating flow 維持 Fault state。Candidate Occupancy Grid 可保留供診斷，但其本身不構成 SYS-024 Success。
 
 Mapping Success 必須同時滿足：
 
@@ -1591,7 +1601,7 @@ Map Package reloadable
 SYS-024 Mapping Success
 ```
 
-Navigation Resource Management 負責 package storage 與 reload validation；Mapping 負責 candidate Occupancy Grid。任何一段失敗均不得回報已建立可重複使用之 Map Package。
+Navigation Resource Management 負責 package storage 與 reload validation；Mapping 負責 candidate Occupancy Grid，並聚合兩邊 evidence 產生唯一 Mapping Result。任何一段失敗時，Mapping 均不得回報已建立可重複使用之 Map Package。
 
 ### Result Boundary
 
@@ -1618,7 +1628,7 @@ Route Graph 與 Station Catalog 由後續 commissioning 建立或維護；Naviga
 | Manual Velocity Command stale / timeout | Motion Control 依 command freshness contract 使底盤停止並回報狀態。 |
 | Drive Hardware fault or invalid feedback | Drive Hardware Interface 與 Motion Control 執行各自 fault / safe-stop responsibility。 |
 | Candidate Occupancy Grid unavailable | Mapping 回報 Failure；不得要求 package success。 |
-| Map Package storage or reload validation failed | Navigation Resource Management 回報 Failure；不得回報 SYS-024 Success。 |
+| Map Package storage or reload validation failed | Navigation Resource Management 回報 package-operation failure；Mapping 聚合為 SYS-024 Failure，且不得回報 Success。 |
 | Flow cannot continue | 撤銷 teleoperation authority、嘗試使底盤停止、終止 Mapping flow 並保留原始 failure reason。 |
 
 Teleoperation process 是否可重新啟動並繼續同一次 Mapping、Mapping pause / resume、automatic retry、mapping algorithm、map serialization 與 package file layout 均屬 detailed design，不由本 operational flow 指定。
@@ -1848,7 +1858,7 @@ Drive feedback
 | Stop Requested, Unconfirmed | 已嘗試停止，但 feedback 缺失、無效或不足以確認實際停止。 |
 | Stop Failed | Stop / disable action 明確失敗，或有效 feedback 顯示底盤仍在運動。 |
 
-Safe-stop outcome 是附加於 Mapping、Navigation 或 operating-flow result 的 safety evidence，不取代原本的 Success、Failure 或 Canceled 語意。Navigation Success 必須要求 Stop Confirmed；Canceled 或 Failure 可保留其原始 result，但若停止未確認或失敗，必須一併回報並維持 Fault state。
+Safe-stop outcome 是附加於 Mapping、Navigation 或 operating-flow result 的 safety evidence，不取代或擴張該 operation 已定義的 terminal result set。Navigation Success 必須要求 Stop Confirmed；Navigation Canceled 或任何 operation Failure 可保留其原始 result，但若停止未確認或失敗，必須一併回報並維持 Fault state。
 
 例如：
 

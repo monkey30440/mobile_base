@@ -5,9 +5,9 @@
 ## Progress
 
 - 總議題：23
-- 已完成：22
-- 待討論：1
-- 目前進度：22 / 23
+- 已完成：23
+- 待討論：0
+- 目前進度：23 / 23
 
 狀態定義：
 
@@ -68,7 +68,7 @@
   - 完成條件：逐項確認 `01_use_cases.md`、`02_capabilities.md`、`03_requirements.md` 的 normative intent 均在 04 有明確 allocation 或 contract。
 - [x] 22. Internal-design leakage audit
   - 完成條件：只用 `05_subsystem.md` 辨識目前設計意圖與過度深入內容，移除 04 中單一 subsystem 的 internal design，不引用 05 作為設計依據。
-- [ ] 23. Final consistency review
+- [x] 23. Final consistency review
   - 完成條件：確認 decomposition、responsibility allocation、cross-subsystem relationships、operational flows 與 system-wide contracts 完整且一致。
 
 ## Deferred Decisions
