@@ -110,7 +110,7 @@ Operator、Navigation Client / Upper Layer、teleoperation tool、commissioning 
 
 | External Entity | Relationship with `mobile_base` |
 |---|---|
-| Operator | 操作 external teleoperation tool，並發起或監督 Mapping 工作。 |
+| Operator | 操作 external teleoperation tool、發起或監督 Mapping 工作，並在 v0.1 需要時提供 approximate initial pose 以初始化地圖定位。 |
 | External Teleoperation Tool | 將 Operator 輸入轉換為 Manual Velocity Command；不得直接控制 Drive Hardware。v0.1 的操作工具為 `teleop_twist_keyboard`。 |
 | Navigation Client / Upper Layer | 提交 Navigation Target、要求取消導航，並接收 navigation feedback 與 result。 |
 | Commissioning Operator / Tool | 依 Mapping 所建立的地圖建立或維護 Route Graph 與 Station Catalog，並將場域 navigation resources 提供給 `mobile_base`。此 entity 不參與 runtime route selection 或 navigation execution。 |
@@ -723,6 +723,7 @@ Map Localization 是 Navigation Mode 下，AMR 在 active Map Package 中之 glo
 - 接收 LiDAR Perception 提供的有效 scan measurement。
 - 接收 State Estimation 提供的 system planar odometry 與 odometry validity。
 - 使用 Robot Description 擁有的 frame relationships 解讀 sensor 與 base frames。
+- 當開機位置無法可靠得知時，接受 Operator / Tool 提供之 approximate initial pose 作為 localization initialization input。
 - 估測並提供 AMR 在 active map frame 中的 current pose。
 - 判斷並提供 localization validity / state，不得將 stale、未收斂或與 active resource set 不一致的 pose 宣告為有效。
 - 在 Navigation Mode 下獨占 `map → odom` 的發布權。
@@ -742,13 +743,38 @@ Map Localization 是 Navigation Mode 下，AMR 在 active Map Package 中之 glo
 Navigation Resource Management ── active Map Package / readiness ──┐
 LiDAR Perception ──────────────── valid scan measurement ──────────┤
 State Estimation ──────────────── planar odometry / validity ──────┼──► Map Localization
-Robot Description ─────────────── frame relationships ─────────────┘          │
+Robot Description ─────────────── frame relationships ─────────────┤          │
+Operator / Tool ───────────────── approximate initial pose ────────┘          │
                                                                               ├── current map pose
                                                                               ├── localization validity
                                                                               └── map → odom
 ```
 
 Navigation Resource Management 擁有 Map Package 的 selection、loading、readiness 與 active resource-set identity；Map Localization 擁有該地圖中的 pose estimation 與 validity。載入成功不等於 localization 已有效。
+
+### Initial Pose Provision Contract
+
+當 AMR 開機位置無法由系統可靠得知時，v0.1 由 Operator 透過外部工具提供 active map frame 中的 approximate `x`、`y` 與 `yaw`。Map Localization 擁有該輸入的接受、有效性檢查與 localization initialization responsibility。
+
+Initial Pose Provision、localization process active 與 localization valid 是不同狀態：
+
+```text
+active Map Package ready
+        │
+        ▼
+approximate initial pose provided, when required
+        │
+        ▼
+Map Localization converges
+        │
+        ▼
+localization valid
+        │
+        ▼
+Navigation may accept execution
+```
+
+Approximate initial pose 不是 Navigation Target，也不能單獨證明 current pose 有效。RViz `2D Pose Estimate`、AMCL initial-pose interface 或其他標準工具／介面屬 implementation choice，不是本文件的 system-wide contract。自動定位、固定開機點與保存上次位置不屬於 v0.1。
 
 ### Coordinate-frame Ownership Contract
 
@@ -1063,3 +1089,377 @@ Navigation 不負責：
 - 多個 command source 的最終 arbitration；
 - task queue、mission scheduling、fleet management 或 automatic retry；
 - planner、controller、Behavior Tree、route algorithm、Nav2 plugin、parameter 或 ROS interface 的 detailed design。
+
+## 4.11 System Operation Coordination
+
+System Operation Coordination 是 operating-flow selection、cross-subsystem lifecycle ordering 與 active command-authority assignment 的唯一 logical owner。它建立 Mapping Mode 或 Navigation Mode 所需的執行環境，但不取代各 subsystem 對自身 readiness、validity、fault 與輸出的 ownership。
+
+此 responsibility 不要求自訂 mode-manager node。v0.1 可由 launch composition、lifecycle orchestration 與 deployment configuration 實現，且不要求 runtime dynamic mode switching。
+
+### Responsibilities
+
+- 接受部署或操作流程所選擇的 Mapping、Navigation 或 Inactive intent。
+- 依 subsystem dependencies 啟動、停用並監控所選 operating flow。
+- 只有在 mode-specific prerequisites 均成立時，才宣告 Mapping Mode 或 Navigation Mode active。
+- 依 active operating mode 指派唯一 vehicle command authority。
+- 確保 Mapping 與 Map Localization 不會同時擁有 `map → odom`。
+- Mode 結束、transition 或必要 prerequisite 失效時，先撤銷 command authority，再協調 safe stop 與 subsystem deactivation。
+- 聚合並回報 operating-flow startup、transition 與 shutdown failure；不得改寫原始 subsystem failure ownership。
+
+### Requirement Allocation
+
+| Requirement | Allocation |
+|---|---|
+| SYS-001、SYS-006、SYS-024 | Coordinator：建立並終止 Mapping operating flow；Mapping 保持建圖與結果的 primary ownership。 |
+| SYS-010、SYS-012 | Coordinator：將 resource readiness 與 localization validity 作為 Navigation Mode prerequisites；原 subsystem 保持狀態判定 ownership。 |
+| SYS-025 | Supporting owner：Navigation 取消後協調 authority revocation 與 flow termination。 |
+| SYS-026、SYS-027、SYS-030 | Coordinator：在 fault、timeout、transition 或 shutdown 時協調 authority revocation 與 lifecycle ordering；Drive Hardware Interface 與 Motion Control 保持實際停止責任。 |
+
+### Cross-subsystem Relationships
+
+```text
+Deployment / Operator-selected flow
+                │
+                ▼
+     System Operation Coordination
+                │
+                ├── lifecycle ordering ──► required subsystems
+                ├── prerequisite checks ◄── readiness / validity / fault
+                ├── active mode ─────────► TF ownership constraints
+                └── command authority ───► Motion Control
+```
+
+System Operation Coordination 決定何時可宣告 operating mode active；Motion Control 強制執行該 mode 對應的 command authority。System Operation Coordination 不產生 vehicle command、wheel command、map、pose、path 或 navigation result。
+
+### Excluded Responsibilities
+
+System Operation Coordination 不負責：
+
+- Mapping、localization、planning、control 或 hardware communication；
+- 判斷各 subsystem 內部資料是否有效；
+- 取代 Drive Hardware Interface 或 Motion Control 的 safe-stop actions；
+- navigation target resolution、resource validation 或 result aggregation；
+- automatic recovery、automatic mode fallback 或 fault 後自動切換 operating flow；
+- lifecycle manager、launch file、service、topic、timeout 或 restart policy 的 detailed design。
+
+# 5. Cross-subsystem Architectural Contracts
+
+## 5.1 Teleoperation and Autonomous Command Authority
+
+任一時間只可有一個被授權的 vehicle motion command source。Mapping teleoperation 與 autonomous Navigation 不得同時控制 AMR，也不得以 command arrival order、last-writer-wins 或 command blending 決定實際運動。
+
+### Authority States
+
+| System State | Authorized Command Source | Required Treatment of Other Sources |
+|---|---|---|
+| Mapping Mode | External `teleop_twist_keyboard` 的 Manual Velocity Command | Navigation command 必須被拒絕或忽略。 |
+| Navigation Mode | Navigation 的 autonomous motion command | Manual Velocity Command 必須被拒絕或忽略。 |
+| Inactive / Transition / Fault | None | 所有 movement command 均無效；不得產生非零 wheel command。 |
+
+Command authority 由 active operating mode 決定；Motion Control 不自行選擇 Mapping Mode 或 Navigation Mode。Motion Control 負責強制執行已決定的 authority，只接受目前被授權來源的有效 command。
+
+### Authority-transition Contract
+
+Command source 切換必須先撤銷舊來源，再授權新來源；不得存在 ownership overlap：
+
+```text
+revoke current command authority
+                │
+                ▼
+reject further commands from old source
+                │
+                ▼
+request chassis stop
+                │
+                ▼
+confirm chassis stopped and Drive Hardware ready
+                │
+                ▼
+authorize new command source
+```
+
+若停止確認、Drive Hardware readiness 或其他 transition precondition 未成立，新來源不得取得非零 command authority。Transition failure 必須維持 None authority、繼續嘗試安全動作並回報原因。
+
+### Enforcement and Failure Contract
+
+Motion Control 必須：
+
+- 只將目前 authorized source 的 valid、fresh vehicle command 轉換為 wheel command；
+- 拒絕或忽略 unauthorized source 的 command，使其不得影響 wheel output；
+- 在 authority 撤銷、authorized source 失效、command timeout 或 Drive Hardware 不可用時輸出停止命令；
+- 在沒有 authorized source 時禁止非零輸出；
+- 不得融合 Manual Velocity Command 與 autonomous motion command。
+
+Navigation 完成、失敗或取消時，必須撤銷 autonomous motion command。Mapping flow 結束或離開 Mapping Mode 時，必須撤銷 Manual Velocity Command。來源 process 終止不等於已完成安全切換；Motion Control 仍須依 command freshness 與 timeout contract 使底盤停止。
+
+### Safety Boundary
+
+`teleop_twist_keyboard` 是 Mapping Mode 的人工 vehicle command source，不是 E-stop、safety controller、Navigation override 或 hardware emergency-stop mechanism。鍵盤停止命令與 process termination 不得取代實體 E-stop、Drive Hardware fault response 或 system safe-stop contract。
+
+本文件不指定 command topic、message routing、mux implementation、priority number、QoS、timeout value 或 launch structure。這些屬 detailed design，但其實作必須維持上述單一 authority 與 transition contracts。
+
+## 5.2 Operating Mode and Lifecycle
+
+Operating mode 表示一組已成立的 subsystem lifecycle、ownership 與 command-authority conditions，不只是 configuration value 或 process 是否存在。v0.1 定義下列 states：
+
+| State | Architectural Semantics |
+|---|---|
+| Inactive | 沒有 active Mapping flow、Navigation execution 或 vehicle command authority。 |
+| Mapping Mode | Mapping prerequisites 已成立，Mapping 擁有 `map → odom`，Manual Velocity Command 已授權。 |
+| Navigation Mode | Navigation resources 與 localization 等 prerequisites 已成立，Map Localization 擁有 `map → odom`，autonomous motion command 已授權。 |
+| Transition | Authority 已撤銷或尚未授權，正在建立或拆除 operating flow；不得輸出非零 wheel command。 |
+| Fault | 必要 prerequisite 已失效；不得授權非零 movement，系統正執行或已完成 fault handling。 |
+
+Transition 是 lifecycle transient state，不是供操作員執行任務的 operating mode。v0.1 可在 startup 由 deployment / launch flow 人工選擇 Mapping 或 Navigation；本文件不要求不中斷的 runtime hot switching。
+
+### Mapping Mode Contract
+
+Mapping Mode 的必要 activation sequence 為：
+
+```text
+Robot Description ready
+LiDAR / required perception ready
+Drive Hardware Interface ready
+Motion Control ready
+State Estimation valid
+            │
+            ▼
+Mapping active and owns map → odom
+            │
+            ▼
+Manual Velocity Command authority granted
+```
+
+Mapping Mode 中，Map Localization 不得發布 `map → odom`，Navigation 不得擁有 active execution 或 autonomous command authority。Navigation Resource Management 可接收 Mapping Result，但 Map Package 儲存成功不等於 navigation-ready。
+
+### Navigation Mode Contract
+
+Navigation Mode 的必要 activation sequence 為：
+
+```text
+Robot Description ready
+LiDAR / required perception ready
+Drive Hardware Interface ready
+Motion Control ready
+State Estimation valid
+Navigation resources ready
+Approximate initial pose provided, when required
+Map Localization valid and owns map → odom
+            │
+            ▼
+Navigation may accept execution
+            │
+            ▼
+autonomous motion command authority granted
+```
+
+Navigation Mode 中，Mapping 不得發布 `map → odom`，Manual Velocity Command 不得取得 authority。Navigation 或 localization process active、以及 initial pose 已提供，均不等於 Navigation Mode active；只有 Map Localization 已收斂、localization valid 且所有其他 prerequisites 成立後，Navigation 才可接受 execution 並產生有效 autonomous motion command。
+
+### Mutually Exclusive Ownership
+
+| Ownership | Mapping Mode | Navigation Mode |
+|---|---|---|
+| Vehicle command authority | External teleoperation | Navigation |
+| `map → odom` | Mapping | Map Localization |
+| Navigation execution | None | Navigation |
+| Map construction | Mapping | None |
+
+LiDAR Perception、IMU Perception、State Estimation、Motion Control、Drive Hardware Interface 與 Robot Description 可作為兩種 flow 的 shared dependencies，但 mode-specific ownership 不得重疊。
+
+### Activation and Deactivation Ordering
+
+Operating mode activation 必須遵守：
+
+```text
+start required subsystems
+        │
+        ▼
+verify readiness and validity
+        │
+        ▼
+activate mode-specific subsystem ownership
+        │
+        ▼
+confirm all mode prerequisites
+        │
+        ▼
+grant command authority
+```
+
+Operating mode 結束、切換或 fault handling 必須遵守：
+
+```text
+revoke command authority
+        │
+        ▼
+request chassis stop
+        │
+        ▼
+confirm chassis stopped when feedback is available
+        │
+        ▼
+terminate active execution / flow
+        │
+        ▼
+deactivate mode-specific subsystems
+        │
+        ▼
+disable Drive Hardware when required
+```
+
+任一安全動作失敗不得阻止其餘安全動作之嘗試。停止無法確認、Drive Hardware not ready 或其他 transition prerequisite 未成立時，系統不得授權新的 command source，並必須維持 Transition 或 Fault state 及回報原因。
+
+### Fault Contract
+
+Active mode 的必要 prerequisite 失效時，System Operation Coordination 必須撤銷 command authority、阻止新的 mode-specific execution、協調 safe-stop actions 並保留原始 failure reason。Mode-specific examples 包括：
+
+- Mapping 或 Navigation 共用的 Drive Hardware、Motion Control、State Estimation prerequisite 失效；
+- Mapping Mode 的 Mapping owner 意外終止；
+- Navigation Mode 的 resource readiness 或 localization validity 失效；
+- Navigation Mode 的 Navigation execution owner 無法維持有效狀態。
+
+Fault 不得自動將 Navigation Mode 轉成 Mapping Mode，也不得自動授權 teleoperation 作為 Navigation override。Fault recovery、restart policy 與重新進入 operating mode 的程序屬 detailed design，必須遵守相同 activation preconditions。
+
+# 6. Operational Flows
+
+## 6.1 Mapping Operational Flow
+
+Mapping operational flow 將 UC-001 串接為單一跨 subsystem 流程。它從使用者選擇 Mapping flow 開始，以成功儲存且可重新載入的 Map Package 或明確 Failure 結束；Route Graph、Station Catalog 與 Navigation readiness 不屬於此 flow 的完成條件。
+
+### Activation
+
+```text
+Operator requests Mapping
+          │
+          ▼
+System Operation Coordination
+selects Mapping flow and enters Transition
+          │
+          ▼
+verify Robot Description, required perception,
+Drive Hardware, Motion Control and State Estimation
+          │
+          ▼
+activate Mapping and grant map → odom ownership
+          │
+          ▼
+confirm Mapping prerequisites
+          │
+          ▼
+grant Manual Velocity Command authority
+```
+
+任一 prerequisite 未成立時，Mapping 不得宣告 active，Manual Velocity Command 不得取得 authority，System Operation Coordination 必須回報 startup failure。Map Localization 不得在 Mapping Mode 中同時發布 `map → odom`。
+
+### Environment Exploration and Map Update
+
+Mapping Mode 中存在兩條相互關聯但 ownership 分離的 data flow：
+
+```text
+Motion flow
+
+teleop_twist_keyboard
+        │ Manual Velocity Command
+        ▼
+Motion Control
+        │ wheel command
+        ▼
+Drive Hardware Interface
+        │ measured wheel state
+        ▼
+Motion Control ── wheel odometry ──► State Estimation
+
+Mapping flow
+
+LiDAR Perception ── valid independent scan(s) ──┐
+                                                │
+State Estimation ── planar odometry / validity ─┼──► Mapping
+                                                │       │
+Robot Description ── frame relationships ───────┘       ├── active Occupancy Grid
+                                                        ├── Mapping state
+                                                        └── map → odom
+```
+
+External teleoperation 只負責提供人工 vehicle command；Mapping 不接收或轉送該 command。Mapping 只使用有效且足夠的 perception、system planar odometry 與 frame relationships 持續更新 Occupancy Grid，不得以 stale 或 invalid input 宣告有效更新。
+
+Mapping 的 LaserScan input 仍遵守 independent-source-first contract：非必要不融合，且本文件不指定 merge algorithm。
+
+### Completion and Package Validation
+
+使用者完成環境巡覽後，flow 必須先撤銷 movement authority，再完成 map result：
+
+```text
+Operator requests Mapping completion
+          │
+          ▼
+revoke Manual Velocity Command authority
+          │
+          ▼
+reject further teleoperation commands
+          │
+          ▼
+request chassis stop and evaluate stopped state
+          │
+          ▼
+Mapping finalizes candidate Occupancy Grid
+          │
+          ▼
+Navigation Resource Management stores Map Package
+          │
+          ▼
+reload validation
+          │
+     ┌────┴────┐
+     │         │
+   passed    failed
+     │         │
+     ▼         ▼
+Mapping Success   Mapping Failure
+```
+
+停止確認或其他 safety action 失敗不得阻止其餘安全動作之嘗試，但此 operating flow 不得被宣告為正常完成。Candidate Occupancy Grid 可保留供診斷；它本身不構成 SYS-024 Success。
+
+Mapping Success 必須同時滿足：
+
+```text
+candidate Occupancy Grid produced
+                +
+Map Package stored
+                +
+Map Package reloadable
+                │
+                ▼
+SYS-024 Mapping Success
+```
+
+Navigation Resource Management 負責 package storage 與 reload validation；Mapping 負責 candidate Occupancy Grid。任何一段失敗均不得回報已建立可重複使用之 Map Package。
+
+### Result Boundary
+
+Mapping Success 只證明 Occupancy Grid 已建立，且 Map Package 已儲存並可重新載入：
+
+```text
+Mapping Success
+      │
+      └── Map Package stored and reloadable
+
+Mapping Success
+      ≠
+Navigation Ready
+```
+
+Route Graph 與 Station Catalog 由後續 commissioning 建立或維護；Navigation Resource Set、Navigation Configuration 與 Map Localization 仍須各自通過 Navigation flow 的 prerequisites。
+
+### Failure Flow
+
+| Failure Boundary | Required Response |
+|---|---|
+| Mapping prerequisite invalid | 不啟動 Mapping、不授權 Manual Velocity Command，回報 startup failure。 |
+| LiDAR、odometry 或 required frame input invalid during Mapping | Mapping 停止宣告有效更新並回報原因；System Operation Coordination 撤銷 authority 並協調停止。 |
+| Manual Velocity Command stale / timeout | Motion Control 依 command freshness contract 使底盤停止並回報狀態。 |
+| Drive Hardware fault or invalid feedback | Drive Hardware Interface 與 Motion Control 執行各自 fault / safe-stop responsibility。 |
+| Candidate Occupancy Grid unavailable | Mapping 回報 Failure；不得要求 package success。 |
+| Map Package storage or reload validation failed | Navigation Resource Management 回報 Failure；不得回報 SYS-024 Success。 |
+| Flow cannot continue | 撤銷 teleoperation authority、嘗試使底盤停止、終止 Mapping flow 並保留原始 failure reason。 |
+
+Teleoperation process 是否可重新啟動並繼續同一次 Mapping、Mapping pause / resume、automatic retry、SLAM algorithm、map serialization 與 package file layout 均屬 detailed design，不由本 operational flow 指定。

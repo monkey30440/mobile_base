@@ -77,6 +77,8 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 - 將 Navigation Target 解析為 Canonical Goal Pose。
 - 載入並驗證與目前 Map Package 相容的 Route Graph。
 - 載入並驗證 Station Target 所需的 Station Catalog。
+- 在開機位置無法可靠得知時，接受使用者提供的 approximate initial pose，供地圖定位初始化。
+- 判斷 localization validity，且只有定位有效後才接受 Navigation Target。
 - 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
 - 執行 First Mile，將 AMR 由目前位姿銜接至適用的 route entry。
 - 執行 On Route movement，沿選定 Route Graph route 移動。
@@ -122,6 +124,17 @@ Navigation Resources
 ```
 
 Route Graph 與 Station Catalog 必須與目前 Map Package 相容。缺失、無效或不相容的 Navigation Resource 屬於 configuration failure，不構成 free-space fallback 條件。
+
+Localization Initialization：
+
+```text
+Approximate Initial Pose, when required
+├── x
+├── y
+└── yaw
+```
+
+Approximate Initial Pose 只用於啟動地圖定位，不是 Navigation Target。提供該輸入不等於 localization valid；系統必須等待定位收斂並確認有效後，才可接受導航任務。
 
 ---
 

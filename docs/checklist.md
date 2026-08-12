@@ -5,9 +5,9 @@
 ## Progress
 
 - 總議題：23
-- 已完成：14
-- 待討論：9
-- 目前進度：14 / 23
+- 已完成：17
+- 待討論：6
+- 目前進度：17 / 23
 
 狀態定義：
 
@@ -35,7 +35,7 @@
 - [x] 8. Navigation Target Resolution
   - 完成條件：將 Station ID 與 Absolute Goal Pose 正規化為 Canonical Goal Pose，並排除 Relative Pose v0.1 scope。
 - [x] 9. Map Localization
-  - 完成條件：定義 current map pose、localization validity、`map → odom` ownership 與 localization-loss responsibility chain。
+  - 完成條件：定義 initial pose provision、current map pose、localization validity、`map → odom` ownership 與 localization-loss responsibility chain。
 - [x] 10. Navigation overall responsibility boundary
   - 完成條件：定義 Navigation 的輸入、輸出、唯一 execution ownership，以及與 Target Resolution、Localization、Resource Management、Motion Control 的邊界。
 - [x] 11. First Mile movement strategy
@@ -49,11 +49,11 @@
 
 ## B. Operational Flows and Cross-subsystem Contracts
 
-- [ ] 15. Teleoperation and autonomous command authority
+- [x] 15. Teleoperation and autonomous command authority
   - 完成條件：確認 mapping teleoperation 與 autonomous navigation 的 command authority、互斥與撤銷規則。
-- [ ] 16. Operating modes and subsystem lifecycle
-  - 完成條件：定義 Mapping Mode、Navigation Mode 的啟用條件、互斥資源與 mode transition responsibility。
-- [ ] 17. Mapping operational flow
+- [x] 16. Operating modes and subsystem lifecycle
+  - 完成條件：定義 Mapping Mode、Navigation Mode 的啟用條件（包含需要時提供 initial pose 並等待 localization valid）、互斥資源與 mode transition responsibility。
+- [x] 17. Mapping operational flow
   - 完成條件：從啟動、teleoperation、感測與估測，到 Map Package 產出的跨 subsystem 流程閉合。
 - [ ] 18. Navigation operational flow
   - 完成條件：從 terminal target、resource validation、localization、三階段移動，到 navigation result 的流程閉合。
@@ -77,3 +77,4 @@
 - Free-space Fallback implementation：v0.1 不實作；保留 eligibility 與 architecture extension boundary。
 - Relative navigation target：不屬於 v0.1；若要納入，須先建立上游 requirement。
 - Dynamic resource switching、resource versioning、checksum、rollback、remote deployment 與 resource database：不屬於 v0.1。
+- Automatic localization、fixed startup pose 與 last-pose persistence：不屬於 v0.1；v0.1 在需要時由使用者人工提供 approximate initial pose。

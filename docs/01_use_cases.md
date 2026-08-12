@@ -97,6 +97,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 - 已載入可供導航使用之 Map Package。
 - 已載入與目前 Map Package 相容且有效之 Route Graph。
 - Station Target 所需之 Station Catalog 已載入、有效且與目前 Map Package 相容。
+- 若 AMR 開機位置無法由系統可靠得知，使用者已提供目前地圖中的 approximate initial pose。
 - AMR 已在目前地圖中完成定位，且系統可接受導航任務。
 
 ---
@@ -121,6 +122,14 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ---
 
 ## Alternative Flow
+
+### Initial Pose Provision
+
+若 AMR 每次開機位置不固定，且系統無法可靠取得其在目前地圖中的初始位置，使用者應先提供 approximate initial pose，包含 `x`、`y` 與 `yaw`。系統應使用該資訊開始定位；只有 localization valid 後，才可接受 Navigation Target。
+
+此操作在 v0.1 由使用者人工完成。提供 initial pose 不等於定位已有效，系統仍須等待定位收斂並確認 localization validity。
+
+---
 
 ### Station Target
 
@@ -159,6 +168,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 - Route Graph 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
 - Station Target 所需之 Station Catalog 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
 - Navigation configuration 無效時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
+- 需要 initial pose 但尚未提供、initial pose 無效，或定位尚未有效時，系統不得接受導航任務，並應回報定位尚未就緒。
 - First Mile、On Route 或 Last Mile 無法安全執行時，系統應先用盡可用的 route-assisted alternatives。
 - 符合保留的 Free-space Fallback eligibility 但已無可用 route-assisted solution 時，v0.1 應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
 - 系統無法繼續導航時，系統終止導航任務並回報失敗。
