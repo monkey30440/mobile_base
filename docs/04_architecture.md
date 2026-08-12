@@ -50,7 +50,7 @@ Subsystem detailed design baselines 必須符合本架構，但其 internal desi
 - package、node、class 或 source-file structure；
 - ROS Topic、Service、Action 的詳細名稱與 message contract；
 - driver protocol、function code、register、frame encoding；
-- algorithm、plugin、Behavior Tree 或 recovery implementation；
+- algorithm、internal orchestration 或 recovery implementation；
 - ROS parameter 與硬體參數數值；
 - Map、Route Graph、Station 等檔案名稱、格式與 schema；
 - subsystem test case、verification procedure 或 hardware bring-up procedure；
@@ -76,7 +76,7 @@ Subsystem detailed design baselines 必須符合本架構，但其 internal desi
 
 本章只整理需求對架構造成的影響，不新增需求內容。
 
-Route Graph、Route-assisted Navigation、First Mile、On Route、Last Mile 與保留但未實作的 Free-space Fallback boundary 為 requirement-derived baseline。特定 planner、controller、Behavior Tree、route-search algorithm 或 recovery implementation 仍不是 Architecture Driver，應由下游 detailed design 與驗證決定。
+Route Graph、Route-assisted Navigation、First Mile、On Route、Last Mile 與保留但未實作的 Free-space Fallback boundary 為 requirement-derived baseline。特定 planning、control、internal orchestration、route-search 或 recovery implementation 仍不是 Architecture Driver，應由下游 detailed design 與驗證決定。
 
 # 3. System Context
 
@@ -111,7 +111,7 @@ Operator、Navigation Client / Upper Layer、teleoperation tool、commissioning 
 | External Entity | Relationship with `mobile_base` |
 |---|---|
 | Operator | 操作 external teleoperation tool、發起或監督 Mapping 工作，並在 v0.1 需要時提供 approximate initial pose 以初始化地圖定位。 |
-| External Teleoperation Tool | 將 Operator 輸入轉換為 Manual Velocity Command；不得直接控制 Drive Hardware。v0.1 的操作工具為 `teleop_twist_keyboard`。 |
+| External Teleoperation Tool | 將 Operator 輸入轉換為 Manual Velocity Command；不得直接控制 Drive Hardware。具體工具屬 downstream implementation choice。 |
 | Navigation Client / Upper Layer | 提交 Navigation Target、要求取消導航，並接收 navigation feedback 與 result。 |
 | Commissioning Operator / Tool | 依 Mapping 所建立的地圖建立或維護 Route Graph 與 Station Catalog，並將場域 navigation resources 提供給 `mobile_base`。此 entity 不參與 runtime route selection 或 navigation execution。 |
 | LiDAR Devices | 提供環境量測；不負責地圖建立、定位或避障決策。 |
@@ -179,7 +179,7 @@ Drive Hardware Interface
          measured wheel state / readiness / validity / fault
 ```
 
-Drive Hardware Interface 必須符合已核准的 M1 hardware 與 driver detailed design baselines；其 internal component、protocol、register、transport、conversion formula 與 timeout value 不在本文件定義。
+Drive Hardware Interface 的 downstream design 必須實現本節所配置之 requirements 與 system-wide contracts；其 internal component、protocol、register、transport、conversion formula 與 timeout value 不在本文件定義。
 
 ### Excluded Responsibilities
 
@@ -196,7 +196,7 @@ Vehicle velocity command 必須先經 Motion Control 轉換為 wheel command，�
 
 ## 4.2 Motion Control
 
-Motion Control 是 vehicle velocity command 與左右輪命令之間的唯一轉換邊界，並根據有效的 measured wheel state 產生 wheel odometry。建圖期間，外部 `teleop_twist_keyboard` 經 Manual Velocity Command 進入此邊界；導航期間則由 Navigation 提供 vehicle velocity command。
+Motion Control 是 vehicle velocity command 與左右輪命令之間的唯一轉換邊界，並根據有效的 measured wheel state 產生 wheel odometry。建圖期間，External Teleoperation Tool 經 Manual Velocity Command 進入此邊界；導航期間則由 Navigation 提供 vehicle velocity command。
 
 ### Responsibilities
 
@@ -224,7 +224,7 @@ Motion Control 是 vehicle velocity command 與左右輪命令之間的唯一轉
 ### Cross-subsystem Relationships
 
 ```text
-External teleop_twist_keyboard                 Navigation
+External Teleoperation Tool                   Navigation
         │ Manual Velocity Command                  │ vehicle velocity command
         └──────────────────┬───────────────────────┘
                            │ authorized source only
@@ -306,9 +306,9 @@ State Estimation 與 Map Localization 必須保持獨立。State Estimation 維�
 
 ### Auxiliary Odometry Constraint
 
-RF2O 或其他 LiDAR-derived odometry 不構成獨立的 architecture-level subsystem，也不是 SYS-005 的必要條件。只有在 approved estimation design 需要，且 integration evidence 證明其輸入、frame、timing 與品質適合時，才可作為 State Estimation 的 internal source。
+LiDAR-derived odometry 不構成獨立的 architecture-level subsystem，也不是 SYS-005 的必要條件。只有在 approved estimation design 需要，且 integration evidence 證明其輸入、frame、timing 與品質適合時，才可作為 State Estimation 的 internal source。
 
-本文件不要求固定融合 Wheel Odometry、RF2O Odometry 與 IMU 的特定組合。
+本文件不要求固定融合 Wheel Odometry、LiDAR-derived Odometry 與 IMU 的特定組合。
 
 ### Excluded Responsibilities
 
@@ -320,7 +320,7 @@ State Estimation 不負責：
 - 在已載入地圖中估測 global pose；
 - `map → odom` ownership；
 - navigation planning、control 或 arrival determination；
-- RF2O、filter algorithm、filter parameter、covariance 或 ROS interface 的 detailed design；
+- auxiliary-odometry implementation、filter algorithm、filter parameter、covariance 或 external interface 的 detailed design；
 - robot geometry 或 sensor mounting transform ownership。
 
 ## 4.4 LiDAR Perception
@@ -377,7 +377,7 @@ LiDAR Perception 不負責：
 
 - Occupancy Grid 建立或 Map Package 管理；
 - Map Localization 或 global pose estimation；
-- obstacle classification、costmap ownership 或 avoidance decision；
+- obstacle classification、navigation environment-model ownership 或 avoidance decision；
 - system odometry 或 LiDAR-derived odometry；
 - 預設進行 LaserScan merge；
 - `map → odom` 或 `odom → base_footprint` ownership；
@@ -521,7 +521,7 @@ Mapping 的 architectural input 是「有效且足夠的 LiDAR perception」，�
 
 ### Teleoperation and Result Contracts
 
-Mapping 不接收或轉送 `teleop_twist_keyboard` 的 vehicle velocity command。Mapping active 時，external teleoperation source 才可被 operational flow 授權；Mapping 終止或失敗後，該 command authority 必須撤銷。所有停止行為仍經 Motion Control 與 Drive Hardware Interface 執行。
+Mapping 不接收或轉送 External Teleoperation Tool 的 vehicle velocity command。Mapping active 時，external teleoperation source 才可被 operational flow 授權；Mapping 終止或失敗後，該 command authority 必須撤銷。所有停止行為仍經 Motion Control 與 Drive Hardware Interface 執行。
 
 Mapping 只產生 candidate Occupancy Grid。Navigation Resource Management 必須將其儲存為 Map Package 並驗證可重新載入；只有兩個階段皆成功，系統才能依 SYS-024 回報 Mapping Success。
 
@@ -547,7 +547,7 @@ Mapping 不負責：
 - system odometry；
 - LiDAR / IMU device communication；
 - `odom → base_footprint` ownership；
-- SLAM algorithm、plugin、topic、parameter 或 map file format 的 detailed design；
+- mapping algorithm、internal extension、external interface、parameter 或 map file format 的 detailed design；
 - LaserScan merge algorithm。
 
 ## 4.7 Navigation Resource Management
@@ -774,7 +774,7 @@ localization valid
 Navigation may accept execution
 ```
 
-Approximate initial pose 不是 Navigation Target，也不能單獨證明 current pose 有效。RViz `2D Pose Estimate`、AMCL initial-pose interface 或其他標準工具／介面屬 implementation choice，不是本文件的 system-wide contract。自動定位、固定開機點與保存上次位置不屬於 v0.1。
+Approximate initial pose 不是 Navigation Target，也不能單獨證明 current pose 有效。具體 initial-pose tool 與 localization interface 屬 implementation choice，不是本文件的 system-wide contract。自動定位、固定開機點與保存上次位置不屬於 v0.1。
 
 ### Coordinate-frame Ownership Contract
 
@@ -864,7 +864,7 @@ User ─────────────────────────
                                                                           └── final navigation result
 ```
 
-Navigation 將 autonomous motion command 提供給 Motion Control，但不擁有 command-source arbitration 或 Drive Hardware。Motion Control 決定可接受的 command authority，並將核准命令轉換為底盤運動。
+Navigation 將 autonomous motion command 提供給 Motion Control，但不擁有 command-source arbitration 或 Drive Hardware。System Operation Coordination 依 active operating mode 指派 command authority；Motion Control 強制執行該 authority，只將目前被授權來源的有效且未逾時命令轉換為 wheel command。
 
 ### Execution Ownership Contract
 
@@ -939,7 +939,7 @@ retry First Mile    SYS-021 fallback eligibility
 
 First Mile 只提供 stage outcome 與 failure reason；route-assisted candidate reselection、fallback eligibility 與最終 navigation result 仍由 Navigation execution 統一決定。
 
-First Mile 的 planner、entry scoring、acceptance tolerance、replanning limit、timeout、Behavior Tree、plugin 與 stage transition 是否要求完全停止，均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。本文件只要求 stage transition 可安全執行。
+First Mile 的 planning implementation、entry scoring、acceptance tolerance、replanning limit、timeout、internal orchestration 與 stage transition 是否要求完全停止，均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。本文件只要求 stage transition 可安全執行。
 
 ### On Route Strategy Contract
 
@@ -993,7 +993,7 @@ On Route
 
 Route Graph 缺失、無效、與 active Map Package 不相容、resource-set identity mismatch，或 Navigation Configuration 無效，均屬 SYS-012 resource/configuration failure，不是 On Route blocked，也不得觸發 Free-space Fallback。Navigation 必須終止 execution、撤銷 autonomous motion command 並回報原因。
 
-On Route 的 graph-search algorithm、route scoring、cost function、node / edge metadata schema、path generation、replanning limit、timeout、acceptance tolerance、Behavior Tree、plugin，以及 stage transition 是否要求完全停止，均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。本文件只要求 stage transition 可安全執行。
+On Route 的 graph-search algorithm、route scoring、cost function、node / edge metadata schema、path generation、replanning limit、timeout、acceptance tolerance、internal orchestration，以及 stage transition 是否要求完全停止，均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。本文件只要求 stage transition 可安全執行。
 
 ### Last Mile Strategy Contract
 
@@ -1042,7 +1042,7 @@ execution
 
 Last Mile 只提供 stage outcome 與 failure reason；route-assisted candidate reselection、fallback eligibility、arrival determination 與最終 navigation result 仍由 Navigation execution 統一決定。
 
-Last Mile 不擁有 Route Graph selection / loading、Station ID resolution、command arbitration 或 Drive Hardware。其 planner、route-exit scoring、goal tolerance、terminal-alignment algorithm、replanning limit、timeout、Behavior Tree、plugin、parameter 與 approach velocity profile 均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。
+Last Mile 不擁有 Route Graph selection / loading、Station ID resolution、command arbitration 或 Drive Hardware。其 planning implementation、route-exit scoring、goal tolerance、terminal-alignment algorithm、replanning limit、timeout、internal orchestration、parameter 與 approach velocity profile 均屬 detailed design 或待整合及實機驗證事項，不由本文件指定。
 
 ### Reserved Free-space Fallback Contract
 
@@ -1088,13 +1088,13 @@ Navigation 不負責：
 - Drive Hardware lifecycle、wheel command generation 或 motor communication；
 - 多個 command source 的最終 arbitration；
 - task queue、mission scheduling、fleet management 或 automatic retry；
-- planner、controller、Behavior Tree、route algorithm、Nav2 plugin、parameter 或 ROS interface 的 detailed design。
+- planning、control、internal orchestration、route algorithm、parameter 或 external interface 的 detailed design。
 
 ## 4.11 System Operation Coordination
 
 System Operation Coordination 是 operating-flow selection、cross-subsystem lifecycle ordering 與 active command-authority assignment 的唯一 logical owner。它建立 Mapping Mode 或 Navigation Mode 所需的執行環境，但不取代各 subsystem 對自身 readiness、validity、fault 與輸出的 ownership。
 
-此 responsibility 不要求自訂 mode-manager node。v0.1 可由 launch composition、lifecycle orchestration 與 deployment configuration 實現，且不要求 runtime dynamic mode switching。
+此 responsibility 不要求建立專用 runtime coordinator。v0.1 只要求 deployment-time operating-flow selection，不要求 runtime dynamic mode switching；實現方式屬 downstream design。
 
 ### Responsibilities
 
@@ -1142,6 +1142,68 @@ System Operation Coordination 不負責：
 - automatic recovery、automatic mode fallback 或 fault 後自動切換 operating flow；
 - lifecycle manager、launch file、service、topic、timeout 或 restart policy 的 detailed design。
 
+## 4.12 Robot Description
+
+Robot Description 是 AMR geometry、joint relationships、base-frame semantics 與 sensor static-frame relationships 的唯一 authoritative owner。它為 Perception、State Estimation、Mapping、Map Localization、Motion Control 與 Navigation 提供一致的實體結構模型，但不擁有任何 dynamic state estimate 或 movement decision。
+
+### Responsibilities
+
+- 提供 AMR body geometry 與 footprint semantics。
+- 提供 drive、caster 及其他必要 joint definitions 與 relationships。
+- 定義 `base_footprint`、`base_link` 與其他 base-fixed frames 的 semantics。
+- 定義 LiDAR、IMU 與其他 configured sensors 相對於 base frames 的 mounting relationships。
+- 發布或提供 authoritative static transform relationships。
+- 驗證 description 的必要內容完整、frame / joint identifiers 一致，且與目前 AMR configuration 相容。
+- 提供 description readiness / validity，供 Mapping Mode 與 Navigation Mode activation 使用。
+- Description invalid 或與 active hardware / sensor configuration 不相容時，禁止依賴該模型的 operating flow 啟動並回報原因。
+
+### Requirement Allocation
+
+| Requirement | Allocation |
+|---|---|
+| SYS-023 | Primary owner：提供機器人幾何、座標系、關節定義與 static frame relationships，供感知、定位、建圖與導航使用。 |
+| SYS-031 | Provider：提供 Drive Hardware / Motion Control configuration validation 所需的 authoritative joint 與 geometry semantics；不擁有 hardware parameter validation。 |
+
+### Cross-subsystem Relationships
+
+```text
+Robot Description
+        │
+        ├── body geometry / footprint semantics ──► Motion Control / Navigation
+        ├── joint definitions / relationships ────► Drive and state consumers
+        ├── base fixed-frame relationships ───────► State Estimation
+        ├── sensor mounting relationships ────────► Perception
+        │                                            Mapping
+        │                                            Map Localization
+        │                                            Navigation
+        └── readiness / validity ─────────────────► System Operation Coordination
+```
+
+All consumers 必須使用同一 authoritative description，不得各自維護互相矛盾的 robot geometry、joint mapping 或 sensor mounting transforms。Description ready 只證明結構模型可用，不證明 sensor measurement、odometry、localization、Drive Hardware 或 Navigation 已 ready。
+
+### Dynamic-frame Boundary
+
+Robot Description 只擁有 static geometry 與 fixed relationships，不擁有：
+
+```text
+map → odom             owned by Mapping or Map Localization
+odom → base_footprint  owned by State Estimation
+dynamic joint state    owned by measured-state provider
+```
+
+Static description 不得發布或覆蓋上述 dynamic transforms / state。
+
+### Excluded Responsibilities
+
+Robot Description 不負責：
+
+- `map → odom`、`odom → base_footprint` 或其他 dynamic transform ownership；
+- joint-state measurement、odometry、localization 或 state estimation；
+- sensor communication、measurement validity 或 calibration execution；
+- vehicle command、kinematics execution、planning、control 或 navigation result；
+- Drive Hardware lifecycle 或 hardware communication；
+- description format、mesh、package / file layout 或 external interface 的 detailed design。
+
 # 5. Cross-subsystem Architectural Contracts
 
 ## 5.1 Teleoperation and Autonomous Command Authority
@@ -1152,7 +1214,7 @@ System Operation Coordination 不負責：
 
 | System State | Authorized Command Source | Required Treatment of Other Sources |
 |---|---|---|
-| Mapping Mode | External `teleop_twist_keyboard` 的 Manual Velocity Command | Navigation command 必須被拒絕或忽略。 |
+| Mapping Mode | External Teleoperation Tool 的 Manual Velocity Command | Navigation command 必須被拒絕或忽略。 |
 | Navigation Mode | Navigation 的 autonomous motion command | Manual Velocity Command 必須被拒絕或忽略。 |
 | Inactive / Transition / Fault | None | 所有 movement command 均無效；不得產生非零 wheel command。 |
 
@@ -1194,7 +1256,7 @@ Navigation 完成、失敗或取消時，必須撤銷 autonomous motion command�
 
 ### Safety Boundary
 
-`teleop_twist_keyboard` 是 Mapping Mode 的人工 vehicle command source，不是 E-stop、safety controller、Navigation override 或 hardware emergency-stop mechanism。鍵盤停止命令與 process termination 不得取代實體 E-stop、Drive Hardware fault response 或 system safe-stop contract。
+External Teleoperation Tool 是 Mapping Mode 的人工 vehicle command source，不是 E-stop、safety controller、Navigation override 或 hardware emergency-stop mechanism。工具的停止命令與 process termination 不得取代實體 E-stop、Drive Hardware fault response 或 system safe-stop contract。
 
 本文件不指定 command topic、message routing、mux implementation、priority number、QoS、timeout value 或 launch structure。這些屬 detailed design，但其實作必須維持上述單一 authority 與 transition contracts。
 
@@ -1320,6 +1382,103 @@ Active mode 的必要 prerequisite 失效時，System Operation Coordination 必
 
 Fault 不得自動將 Navigation Mode 轉成 Mapping Mode，也不得自動授權 teleoperation 作為 Navigation override。Fault recovery、restart policy 與重新進入 operating mode 的程序屬 detailed design，必須遵守相同 activation preconditions。
 
+## 5.3 System-wide Contract Summary
+
+本節集中列出所有 subsystem 與 implementation 必須維持的 system-wide invariants。各 subsystem 與前述 contract 章節仍是完整責任定義；本摘要不得被解讀為建立新的平行 owner。
+
+| Contract | System-wide Invariant |
+|---|---|
+| Authoritative ownership | 每個 authoritative output 或 decision 在同一時間只能有一個 owner。 |
+| Vehicle command | 任一時間只能有一個 authorized vehicle command source。 |
+| Coordinate frame | 每條 authoritative transform 在同一時間只能有一個 owner / publisher。 |
+| Resource identity | 同一 localization context 與 Navigation execution 不得混用不同 active resource sets。 |
+| Validity propagation | Process、interface 或資料存在不等於 output valid 或 operation ready。 |
+| Result and safety | Operation result、primary failure 與 safe-stop outcome 必須分別保存。 |
+
+### Authoritative Ownership Invariant
+
+```text
+Drive Hardware access         → Drive Hardware Interface
+wheel command generation      → Motion Control
+system planar odometry        → State Estimation
+active resource-set identity  → Navigation Resource Management
+target normalization          → Navigation Target Resolution
+global localization pose      → Map Localization
+navigation execution / result → Navigation
+operating mode / authority    → System Operation Coordination
+```
+
+Coordinator 或 consumer 可使用、轉送或聚合 authoritative output，但不得接管原 owner 的 readiness、validity、fault classification 或 result decision。Internal implementation component 的數量不得造成 architecture-level ownership 重疊。
+
+### Vehicle-command Invariant
+
+```text
+Mapping Mode       → Manual Velocity Command only
+Navigation Mode    → autonomous Navigation command only
+Transition / Fault → no authorized non-zero command source
+```
+
+所有 vehicle movement command 必須經 Motion Control 與 Drive Hardware Interface 才能作用於 Drive Hardware。任何 subsystem 或 external tool 均不得繞過此 control chain，且不得以 last-writer-wins、arrival order、priority race 或 command blending 決定 authority。
+
+### Coordinate-frame Invariant
+
+```text
+Mapping Mode       Mapping owns map → odom
+Navigation Mode    Map Localization owns map → odom
+All modes          State Estimation owns odom → base_footprint
+All modes          Robot Description owns base_footprint → base_link
+                   and sensor static transforms
+```
+
+Mapping 與 Map Localization 不得同時發布 `map → odom`。Initial Pose Provision 只初始化 Map Localization，不建立新的 TF owner，也不直接證明 transform 或 localization 已有效。
+
+### Resource-identity Invariant
+
+```text
+one active resource-set identity
+    ├── Map Package
+    ├── Route Graph
+    └── Station Catalog, when required
+```
+
+Map Localization context、Canonical Goal Pose 與 Navigation execution 必須與同一 active resource-set identity 關聯。Resource 缺失、無效、不相容或 identity mismatch 屬 resource/configuration failure，不得被重新分類為 Free-space Fallback eligibility。
+
+### Validity-propagation Invariant
+
+每個 authoritative data owner 必須提供可判斷的 readiness、validity 或 fault；consumer 必須在 operation 開始前及執行中使用該狀態。以下事實均不得單獨視為有效性證據：
+
+```text
+process active
+interface or topic exists
+message received
+initial pose provided
+resource loaded
+        ≠
+output valid or operation ready
+```
+
+Stale、invalid、unavailable 或 resource-identity mismatch 的 output 不得繼續作為有效輸入。Consumer 不得自行把 provider 宣告的 invalid 狀態改寫為 degraded success；任何 degraded operation 都必須先有上游 requirement 與明確 architectural contract。
+
+### Result-and-safety Invariant
+
+Operation result 與 safe-stop outcome 是正交資訊：
+
+```text
+Operation result                 Safe-stop outcome
+├── Success                      ├── Stop Confirmed
+├── Failure                      ├── Stop Requested, Unconfirmed
+└── Canceled                     └── Stop Failed
+```
+
+Result reporting 必須在適用時保留：
+
+- primary failure reason 與其 owning boundary；
+- secondary safety failure；
+- active movement stage 或 operating flow；
+- safe-stop outcome 與其 evidence level。
+
+Navigation Success 必須搭配 Stop Confirmed。Failure 或 Canceled 不得被後續停止異常覆蓋；停止異常必須作為 secondary safety failure 與 safe-stop outcome 一併回報。
+
 # 6. Operational Flows
 
 ## 6.1 Mapping Operational Flow
@@ -1358,7 +1517,7 @@ Mapping Mode 中存在兩條相互關聯但 ownership 分離的 data flow：
 ```text
 Motion flow
 
-teleop_twist_keyboard
+External Teleoperation Tool
         │ Manual Velocity Command
         ▼
 Motion Control
@@ -1462,4 +1621,285 @@ Route Graph 與 Station Catalog 由後續 commissioning 建立或維護；Naviga
 | Map Package storage or reload validation failed | Navigation Resource Management 回報 Failure；不得回報 SYS-024 Success。 |
 | Flow cannot continue | 撤銷 teleoperation authority、嘗試使底盤停止、終止 Mapping flow 並保留原始 failure reason。 |
 
-Teleoperation process 是否可重新啟動並繼續同一次 Mapping、Mapping pause / resume、automatic retry、SLAM algorithm、map serialization 與 package file layout 均屬 detailed design，不由本 operational flow 指定。
+Teleoperation process 是否可重新啟動並繼續同一次 Mapping、Mapping pause / resume、automatic retry、mapping algorithm、map serialization 與 package file layout 均屬 detailed design，不由本 operational flow 指定。
+
+## 6.2 Navigation Operational Flow
+
+Navigation operational flow 將 UC-002 串接為單一跨 subsystem execution。它從 Navigation operating flow 的 prerequisites 建立開始，經 target resolution、route-assisted strategy construction 與 movement execution，以 Success、Failure 或 Canceled 結束。
+
+### Navigation Mode Preparation
+
+Navigation 接受 Navigation Target 前，必須完成：
+
+```text
+Robot Description ready
+LiDAR / required perception ready
+Drive Hardware Interface ready
+Motion Control ready
+State Estimation valid
+Navigation Resource Set and Configuration ready
+Approximate initial pose provided, when required
+Map Localization converged and valid
+        │
+        ▼
+Navigation may accept target
+```
+
+Initial Pose Provision 是 Map Localization 的初始化輸入，不是 Navigation Target。Localization process active 或 initial pose 已提供均不等於 localization valid。任一 prerequisite 未成立時，Navigation 不得接受 execution，System Operation Coordination 也不得授權 autonomous movement。
+
+### Target Acceptance and Validation
+
+```text
+Terminal Navigation Client
+        │ Station ID / Absolute Goal Pose
+        ▼
+Navigation Target Resolution
+        │
+        ├── invalid ──► reject and report target failure
+        │
+        ▼
+Canonical Goal Pose
+        │
+        ▼
+Navigation verifies execution preconditions
+```
+
+Navigation 接受 execution 前必須確認 Canonical Goal Pose 有效且與 active resource-set identity 關聯一致、必要 Navigation Resources / Configuration ready，且 localization 仍有效。Target failure、resource/configuration failure 與 localization failure 必須由原 responsibility owner 判定並分別回報，不得互相改寫。
+
+### Route-assisted Strategy Construction
+
+```text
+Current Pose
+Canonical Goal Pose
+Active Route Graph
+        │
+        ▼
+evaluate complete route-assisted candidates
+        │
+        ├── selected route entry
+        ├── selected graph route
+        └── selected route exit
+```
+
+Navigation 必須先確認 candidate 可形成完整 movement continuity：
+
+```text
+Current Pose
+    └── First Mile
+            └── On Route
+                    └── Last Mile
+                            └── Canonical Goal Pose
+```
+
+不得只因找到鄰近 route entry 就開始 movement；selected entry、graph route 與 exit 必須共同構成可朝 Canonical Goal Pose 安全前進的 route-assisted candidate。
+
+v0.1 不執行 Free-space Fallback movement。找不到可安全執行的 route-assisted candidate 時：
+
+- 若符合保留的 SYS-021 eligibility，Navigation 終止 execution、嘗試使底盤停止，並回報 Free-space Fallback unavailable；
+- 若原因是 resource/configuration、target 或 localization invalid，回報對應 failure，不得分類為 fallback；
+- 若仍存在其他 usable route-assisted candidate，必須優先選擇該 candidate，不得提前終止為 fallback unavailable。
+
+### Movement Execution
+
+```text
+First Mile
+  ├── Not Required
+  ├── Completed
+  └── Failed ──► exhaust usable route-assisted alternatives
+                         │
+                         ▼
+On Route
+  ├── Completed
+  └── Blocked ──► safe local adjustment
+                  └── route reselection
+                      └── exhaust usable alternatives
+                         │
+                         ▼
+Last Mile
+  ├── Not Required
+  ├── Completed
+  └── Failed ──► exhaust usable route-assisted alternatives
+```
+
+任一時間只能有一個 active movement stage。Stage transition 前，舊 stage 必須停止產生有效 autonomous motion command，新 stage 才可取得 execution authority；Navigation 全程維持唯一 execution owner。
+
+Navigation 將 active stage 的 autonomous motion command 提供給 Motion Control。Motion Control 只接受目前 Navigation Mode 授權來源的 valid、fresh command。Localization、active path、required environment measurement、system planar odometry 或其他必要 validity 失效時，Navigation 不得繼續該 stage 的有效 movement。
+
+### Arrival and Result
+
+```text
+Last Mile Completed or Not Required
+                │
+                ▼
+position accepted
+        +
+orientation accepted
+        +
+chassis stopped
+        │
+        ▼
+Navigation Success
+```
+
+Last Mile outcome 不直接等於 Navigation Success。Navigation 只有在 SYS-016 的 position、orientation 與 chassis stopped conditions 全部成立時，才可回報 Success。
+
+Navigation execution 的 terminal results 只有 Success、Failure 或 Canceled。所有 terminal path 均必須遵守：
+
+```text
+stop active movement stage
+        │
+        ▼
+revoke autonomous motion command
+        │
+        ▼
+request safe stop
+        │
+        ▼
+preserve original result and reason
+        │
+        ▼
+report final navigation result
+```
+
+Success 必須保留 arrival evidence；Canceled 必須保留使用者取消語意；Failure 必須保留 target、resource/configuration、localization、First Mile、On Route、Last Mile、Free-space Fallback unavailable、planning/control 或 hardware failure boundary。Safe-stop action 的額外失敗不得覆蓋原始 execution reason，但必須一併回報。
+
+### Detailed-design Boundary
+
+本 operational flow 不指定 navigation framework interface、internal orchestration、route interface、planning / control implementation、message routing、deployment structure、recovery behavior、timeout 或 retry policy。這些屬 subsystem 或 implementation design，但必須維持本節的單一 execution ownership、stage ordering、failure classification 與 command-revocation contracts。
+
+## 6.3 Failure and Safe-stop Flow
+
+Failure and safe-stop flow 統一規範跨 subsystem 的失效傳遞與停止責任。它不取代各 subsystem 的 failure ownership；其目的在於保留原始原因、阻止進一步 movement、嘗試使底盤停止，並分別回報 execution result 與 safe-stop outcome。
+
+### Unified Failure Sequence
+
+```text
+failure detected by owning subsystem
+                │
+                ▼
+mark affected output invalid
+                │
+                ▼
+block new execution / movement
+                │
+                ▼
+revoke active command authority
+                │
+                ▼
+attempt controlled stop
+                │
+                ▼
+disable Drive Hardware when required
+                │
+                ▼
+report original failure
++ safe-stop outcome
+```
+
+任一安全動作失敗不得阻止其餘安全動作之嘗試。後續 safe-stop failure 必須追加回報，但不得覆蓋最先導致 execution 或 operating flow 終止的 primary failure。
+
+### Failure Ownership
+
+| Failure Boundary | Detection / Classification Owner |
+|---|---|
+| Navigation Target invalid | Navigation Target Resolution |
+| Navigation Resource / Configuration invalid | Navigation Resource Management |
+| Initial Pose invalid、localization invalid / lost | Map Localization |
+| System planar odometry invalid | State Estimation |
+| LiDAR / IMU measurement invalid | 對應的 Perception subsystem |
+| First Mile、On Route、Last Mile 或 reserved fallback boundary | Navigation |
+| Planning、tracking、arrival 或 navigation cancellation | Navigation |
+| Command timeout、stale command 或 authority violation | Motion Control |
+| Drive communication、feedback 或 device fault | Drive Hardware Interface |
+| Operating-flow prerequisite loss | System Operation Coordination；原 prerequisite owner 保留根因判定。 |
+
+上層 subsystem 可聚合 failure，但不得將原始分類改寫為無法追溯的 generic failure。Failure report 必須可同時表達 primary failure、後續 secondary safety failure 與 safe-stop outcome。
+
+### Layered Stop Responsibilities
+
+```text
+Navigation / Mapping
+    └── stop producing valid movement intent
+            │
+            ▼
+System Operation Coordination
+    └── revoke command authority
+            │
+            ▼
+Motion Control
+    └── issue stop command and prevent non-zero output
+            │
+            ▼
+Drive Hardware Interface
+    └── transmit stop / disable request and report response
+            │
+            ▼
+Drive feedback
+    └── provide evidence of actual chassis stopped state
+```
+
+「已要求停止」、「已送出停止命令」、「Drive Hardware 已接受」與「有效 feedback 已確認底盤停止」是不同狀態。只有最後一項成立時，software flow 才可宣告 Stop Confirmed。
+
+### Safe-stop Outcome
+
+| Outcome | Architectural Semantics |
+|---|---|
+| Stop Confirmed | 有效 Drive Hardware / chassis feedback 證明底盤已停止。 |
+| Stop Requested, Unconfirmed | 已嘗試停止，但 feedback 缺失、無效或不足以確認實際停止。 |
+| Stop Failed | Stop / disable action 明確失敗，或有效 feedback 顯示底盤仍在運動。 |
+
+Safe-stop outcome 是附加於 Mapping、Navigation 或 operating-flow result 的 safety evidence，不取代原本的 Success、Failure 或 Canceled 語意。Navigation Success 必須要求 Stop Confirmed；Canceled 或 Failure 可保留其原始 result，但若停止未確認或失敗，必須一併回報並維持 Fault state。
+
+例如：
+
+```text
+Primary failure: Localization Lost
+Secondary safety failure: Drive Communication Lost
+Safe-stop outcome: Stop Requested, Unconfirmed
+```
+
+### Failure Timing
+
+開始 execution / flow 前發現 prerequisite invalid 時：
+
+```text
+reject startup or target
+    → do not grant command authority
+    → do not start movement
+    → report owning failure boundary
+```
+
+執行中 prerequisite 或 required output 失效時：
+
+```text
+invalidate affected output
+    → stop active stage / flow
+    → revoke command authority
+    → attempt safe stop
+    → report primary reason + safe-stop outcome
+```
+
+正常完成或使用者取消時：
+
+```text
+stop generating movement intent
+    → revoke command authority
+    → request and evaluate chassis stop
+    → report Success or Canceled with stop outcome
+```
+
+### Command-loss and Drive-fault Contract
+
+Navigation process、teleoperation process 或 command stream 消失時，Motion Control 不得維持最後一筆非零 command；command freshness timeout 後必須阻止非零輸出並要求停止。來源 process 終止不等於底盤已停止。
+
+Drive communication 或 feedback 遺失時，Motion Control 仍須嘗試停止，Drive Hardware Interface 仍須嘗試 stop / disable。Feedback 不可用時不得宣告 Stop Confirmed；System Operation Coordination 必須維持 Fault state，且不得重新授權其他 command source。
+
+### Physical E-stop Boundary
+
+本 AMR 已知配備實體 E-stop 按鈕，且其實體停止功能已確認正常。實體 E-stop 是獨立於 software command path 的安全層，不是 Navigation、Mapping、Motion Control 或 software safe-stop flow 的替代實作。
+
+Software safe stop 只負責撤銷 authority、阻止新命令、請求停止並依 feedback 判斷結果；它不得被宣稱等同於 E-stop、STO 或 certified safety function。當 software 無法確認停止或 Stop Failed 時，系統必須維持 Fault state、回報需要人工介入，並允許人員依現場安全程序使用實體 E-stop。已確認 E-stop 按鈕功能正常，不代表 STO、E-stop feedback integration、diagnostic coverage 或 safety certification 已被本架構驗證。
+
+### Detailed-design Boundary
+
+本 flow 不指定 stop timeout、deceleration / braking profile、retry count、USB reopen / automatic recovery、ROS interface、lifecycle transition、fault-code schema、logging backend，或 E-stop / STO 電氣設計。這些屬 detailed design 或獨立安全驗證範圍。

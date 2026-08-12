@@ -5,9 +5,9 @@
 ## Progress
 
 - 總議題：23
-- 已完成：17
-- 待討論：6
-- 目前進度：17 / 23
+- 已完成：22
+- 待討論：1
+- 目前進度：22 / 23
 
 狀態定義：
 
@@ -55,18 +55,18 @@
   - 完成條件：定義 Mapping Mode、Navigation Mode 的啟用條件（包含需要時提供 initial pose 並等待 localization valid）、互斥資源與 mode transition responsibility。
 - [x] 17. Mapping operational flow
   - 完成條件：從啟動、teleoperation、感測與估測，到 Map Package 產出的跨 subsystem 流程閉合。
-- [ ] 18. Navigation operational flow
+- [x] 18. Navigation operational flow
   - 完成條件：從 terminal target、resource validation、localization、三階段移動，到 navigation result 的流程閉合。
-- [ ] 19. Failure and safe-stop flow
+- [x] 19. Failure and safe-stop flow
   - 完成條件：定義 target、resource、localization、planning、control、hardware failure 的 owner、傳遞與停止責任。
-- [ ] 20. System-wide architectural contracts
+- [x] 20. System-wide architectural contracts
   - 完成條件：集中確認 command、TF、resource identity、validity、status/result 與 safety contracts 無矛盾或重複 owner。
 
 ## C. Final Architecture Audit
 
-- [ ] 21. Requirements allocation completeness
+- [x] 21. Requirements allocation completeness
   - 完成條件：逐項確認 `01_use_cases.md`、`02_capabilities.md`、`03_requirements.md` 的 normative intent 均在 04 有明確 allocation 或 contract。
-- [ ] 22. Internal-design leakage audit
+- [x] 22. Internal-design leakage audit
   - 完成條件：只用 `05_subsystem.md` 辨識目前設計意圖與過度深入內容，移除 04 中單一 subsystem 的 internal design，不引用 05 作為設計依據。
 - [ ] 23. Final consistency review
   - 完成條件：確認 decomposition、responsibility allocation、cross-subsystem relationships、operational flows 與 system-wide contracts 完整且一致。
@@ -78,3 +78,4 @@
 - Relative navigation target：不屬於 v0.1；若要納入，須先建立上游 requirement。
 - Dynamic resource switching、resource versioning、checksum、rollback、remote deployment 與 resource database：不屬於 v0.1。
 - Automatic localization、fixed startup pose 與 last-pose persistence：不屬於 v0.1；v0.1 在需要時由使用者人工提供 approximate initial pose。
+- Physical E-stop：已知 AMR 配備且實體停止功能正常；不據此宣稱 STO、software feedback integration 或 safety certification 已完成驗證。
