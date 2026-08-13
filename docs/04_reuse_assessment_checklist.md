@@ -21,46 +21,46 @@
 ## Progress
 
 - 總議題：40
-- 已完成：0
+- 已完成：11
 - 上游阻塞：0
-- 待討論：40
-- 目前進度：0 / 40
+- 待討論：29
+- 目前進度：11 / 40
 
 ## A. Common Reuse-assessment Rules
 
-- [ ] 1. Authority, scope, and downstream boundary
+- [x] 1. Authority, scope, and downstream boundary
   - 完成條件：確認 01–03→04→05 authority、04 可做與禁止的決定，以及上游問題的停止與回退規則。
-- [ ] 2. Coverage status and assessment-record format
+- [x] 2. Coverage status and assessment-record format
   - 完成條件：確認每個 SYS 的固定 record，以及 `Fully Covered`、`Partially Covered`、`Not Covered`、`Needs Verification` 與 `Not Applicable` 的使用方式。
-- [ ] 3. Exact-version and evidence-source rule
+- [x] 3. Exact-version and evidence-source rule
   - 完成條件：定義官方文件、vendor baseline、source、runtime、integration、real-hardware 與 assumption 的證據層級、版本與引用方式。
-- [ ] 4. Candidate comparison and minimum-gap rule
+- [x] 4. Candidate comparison and minimum-gap rule
   - 完成條件：定義多候選比較、configuration／composition coverage、constraint 與 minimum custom gap 的記錄方式，不提前設計 subsystem internal implementation。
-- [ ] 5. Assessment order and per-requirement completion rule
+- [x] 5. Assessment order and per-requirement completion rule
   - 完成條件：確認依成熟方案領域盤點但每個 SYS 獨立定案，以及 requirement record 的 Definition of Done。
 
 ## B. Requirement-by-requirement Assessment
 
 ### Robot Description
 
-- [ ] 6. SYS-023 Robot Description
+- [x] 6. SYS-023 Robot Description
   - 完成條件：完成機器人幾何、座標系與關節定義之成熟方案 coverage record。
 
 ### Perception and Odometry
 
-- [ ] 7. SYS-003 LiDAR Perception
-  - 完成條件：完成 LiDAR 掃描供建圖、定位與導航使用之成熟方案 coverage record。
-- [ ] 8. SYS-004 IMU Perception
+- [x] 7. SYS-003 LiDAR Perception
+  - 完成條件：完成 LiDAR 掃描供建圖、定位與導航使用之成熟方案 coverage record；維持 independent-source-first，並確認 RF2O 的單一 merged-scan dependency 由 ROS 2 Jazzy `dual_laser_merger` 0.3.1 覆蓋，其配置與實機 evidence 留待後續 closure。
+- [x] 8. SYS-004 IMU Perception
   - 完成條件：完成 IMU 量測供定位使用之成熟方案 coverage record。
-- [ ] 9. SYS-005 System Odometry
-  - 完成條件：完成平面里程供定位、建圖與導航使用之成熟方案 coverage record。
+- [x] 9. SYS-005 System Odometry
+  - 完成條件：完成 wheel odometry、`dual_laser_merger` 0.3.1 所產生之 merged-LaserScan-derived RF2O odometry 與 IMU 產生平面里程、唯一 `odom -> base_footprint` publication，以及輸入異常或逾時時沿用 `robot_localization` 原生 fusion／prediction 行為之成熟方案 coverage record。
 
 ### Motion and Drive
 
-- [ ] 10. SYS-022 Base Motion Control
-  - 完成條件：完成速度命令、差速輪運動學與底盤移動之成熟方案 coverage record。
-- [ ] 11. SYS-026 Base Fault Handling
-  - 完成條件：完成通訊、driver alarm、feedback failure、停止嘗試與故障回報之成熟方案 coverage record。
+- [x] 10. SYS-022 Base Motion Control
+  - 完成條件：完成 ROS 2 Jazzy `ros2_control + diff_drive_controller` 對 `TwistStamped` 速度命令、差速輪運動學、wheel velocity command interfaces 與底盤移動之成熟方案 coverage record。
+- [x] 11. SYS-026 Base Fault Handling
+  - 完成條件：完成 hardware interface 回傳 `ERROR` 時，由 ROS 2 Jazzy ros2_control 停止使用該硬體介面的 controllers，並使managed error state可被觀察之成熟方案 coverage record。
 - [ ] 12. SYS-027 Motion-command Timeout
   - 完成條件：完成有效速度命令 timeout 與停止行為之成熟方案 coverage record。
 - [ ] 13. SYS-028 Base Motion Limits
