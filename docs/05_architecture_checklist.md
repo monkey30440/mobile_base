@@ -1,6 +1,6 @@
-# 04 Architecture Refactoring Checklist
+# 05 Architecture Refactoring Checklist
 
-本清單只用於追蹤 `04_architecture.md` 的討論與重構進度，不是 normative input，也不作為架構設計依據。
+本清單只用於追蹤 `05_architecture.md` 的討論與重構進度，不是 normative input，也不作為架構設計依據。
 
 ## Progress
 
@@ -11,8 +11,8 @@
 
 狀態定義：
 
-- `[x]` 已完成：內容已討論、取得確認並寫入 `04_architecture.md`。
-- `[ ]` 待討論：尚未取得設計結論，不得預先寫入 04。
+- `[x]` 已完成：內容已討論、取得確認並寫入 `05_architecture.md`。
+- `[ ]` 待討論：尚未取得設計結論，不得預先寫入 05。
 - `討論中`：一次只能有一個議題使用此狀態。
 - `延後`：已明確決定不在目前階段處理。
 
@@ -65,9 +65,9 @@
 ## C. Final Architecture Audit
 
 - [x] 21. Requirements allocation completeness
-  - 完成條件：逐項確認 `01_use_cases.md`、`02_capabilities.md`、`03_requirements.md` 的 normative intent 均在 04 有明確 allocation 或 contract。
+  - 完成條件：逐項確認 `01_use_cases.md`、`02_capabilities.md`、`03_requirements.md` 的 normative intent 均在 05 有明確 allocation 或 contract。
 - [x] 22. Internal-design leakage audit
-  - 完成條件：只用 `05_subsystem.md` 辨識目前設計意圖與過度深入內容，移除 04 中單一 subsystem 的 internal design，不引用 05 作為設計依據。
+  - 完成條件：只用 `06_subsystem.md` 辨識目前設計意圖與過度深入內容，移除 05 中單一 subsystem 的 internal design，不引用 06 作為設計依據。
 - [x] 23. Final consistency review
   - 完成條件：確認 decomposition、responsibility allocation、cross-subsystem relationships、operational flows 與 system-wide contracts 完整且一致。
 

@@ -63,7 +63,7 @@ docker compose -f compose.yaml -f compose.hardware.yaml up -d --build
 
 ## 結論與已知事項
 
-- **ROS 2 Jazzy 基準於目標平台成立**，`04_architecture.md` 與 `05_subsystem.md` 之 ROS 版本基準無需修正。
+- **ROS 2 Jazzy 基準於目標平台成立**，`05_architecture.md` 與 `06_subsystem.md` 之 ROS 版本基準無需修正。
 - Base image 未預裝 `pip3`，已於 Dockerfile 補上 `apt-get install python3-pip`。
 - Base image 未預裝 ros2_control，已於 Dockerfile 安裝
   `ros-jazzy-ros2-control` 4.45.2 與 `ros-jazzy-ros2-controllers` 4.40.1。
@@ -80,4 +80,4 @@ docker compose -f compose.yaml -f compose.hardware.yaml up -d --build
 - [x] Verification
 - [x] Feature Freeze（2026-08-07）
 
-待辦：若後續安裝之套件版本與 `04_architecture.md` Design Principles 所列（Nav2、SLAM Toolbox、Robot Localization、Nav2 Route）有出入，回頭修正該章節。
+待辦：若後續安裝之套件版本與 `04_reuse_assessment.md` 的版本盤點或 `05_architecture.md` 的架構決策有出入，回到最早受影響的文件修正。

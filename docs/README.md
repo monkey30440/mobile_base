@@ -97,9 +97,10 @@ mobile_base/
 │   ├── 01_use_cases.md
 │   ├── 02_capabilities.md
 │   ├── 03_requirements.md
-│   ├── 04_architecture.md
-│   ├── 05_subsystem.md
-│   ├── 06_backlog.md
+│   ├── 04_reuse_assessment.md
+│   ├── 05_architecture.md
+│   ├── 06_subsystem.md
+│   ├── 07_backlog.md
 │   ├── design_baseline/
 │   │   ├── m1_driver.md
 │   │   └── m1_hardware.md
@@ -124,7 +125,7 @@ Repository 結構依需求自然成長，不預先建立未使用之目錄或檔
 docker compose -f compose.yaml -f compose.hardware.yaml up
 ```
 
-`01_use_cases.md` 至 `05_subsystem.md` 為系統層級正式規格；`docs/design_baseline/` 存放經確認之詳細設計基準；`docs/m1_bringup_validation/` 保存 M1 實機驗證方法與證據。
+`01_use_cases.md` 至 `06_subsystem.md` 為正式的需求、reuse assessment、architecture 與 subsystem design 文件；`docs/design_baseline/` 存放經確認之詳細設計基準；`docs/m1_bringup_validation/` 保存 M1 實機驗證方法與證據。
 
 `docs/implementation/` 存放各項實作計畫，屬過程性文件，非正式規格。
 
@@ -160,9 +161,10 @@ docker compose -f compose.yaml -f compose.hardware.yaml up
 | [`01_use_cases.md`](./01_use_cases.md) | Use Case 定義（使用者可操作之系統功能） |
 | [`02_capabilities.md`](./02_capabilities.md) | Capability 定義（系統對外提供之能力） |
 | [`03_requirements.md`](./03_requirements.md) | System Requirement 定義與 UC/CAP 追溯表 |
-| [`04_architecture.md`](./04_architecture.md) | 軟體架構、資料流與子系統責任劃分 |
-| [`05_subsystem.md`](./05_subsystem.md) | 各子系統之目的、邊界、介面、參數與驗證項目 |
-| [`06_backlog.md`](./06_backlog.md) | 未納入目前版本之功能與研究議題 |
+| [`04_reuse_assessment.md`](./04_reuse_assessment.md) | 成熟方案對 requirements 的覆蓋盤點、版本證據與最小 custom gap |
+| [`05_architecture.md`](./05_architecture.md) | 軟體架構、資料流與子系統責任劃分 |
+| [`06_subsystem.md`](./06_subsystem.md) | 各子系統之目的、邊界、介面、參數與驗證項目 |
+| [`07_backlog.md`](./07_backlog.md) | 未納入目前版本之功能與研究議題 |
 | [`design_baseline/m1_driver.md`](./design_baseline/m1_driver.md) | 已核准之 M1 通訊協定與 runtime communication layer 詳細設計基準 |
 | [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md) | 已核准之 `ros2_control` SystemInterface 與 M1Driver 整合詳細設計基準 |
 | [`m1_bringup_validation/`](./m1_bringup_validation/) | M1 實機 bring-up 驗證方法、檢查表與結果證據 |

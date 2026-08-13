@@ -1,8 +1,8 @@
-# 05 Subsystem Design Refactoring Checklist
+# 06 Subsystem Design Refactoring Checklist
 
-本清單只用於追蹤 `05_subsystem.md` 的討論、重構與整合稽核進度，不是 subsystem design 的 normative input。
+本清單只用於追蹤 `06_subsystem.md` 的討論、重構與整合稽核進度，不是 subsystem design 的 normative input。
 
-`04_architecture.md` 是 05 的 normative design input。若 05 發現 04 缺漏、矛盾或無法實現，必須標記為上游阻塞並回到 01–04 處理，不得在 05 靜默改寫 architecture responsibility 或 system-wide contract。
+`05_architecture.md` 是 06 的 normative design input。若 06 發現 01–05 缺漏、矛盾或無法實現，必須標記為上游阻塞並回到最早受影響的文件處理，不得在 06 靜默改寫 requirement、reuse assessment conclusion、architecture responsibility 或 system-wide contract。
 
 ## Status
 
@@ -10,7 +10,7 @@
 - `[~]` 討論中：目前唯一正在處理的議題。
 - `[x]` 已完成：內容已討論、核准、寫入並完成相應檢查。
 - `[-]` 延後：已明確決定不屬於目前 baseline。
-- `[!]` 上游阻塞：05 發現 01–04 缺漏或矛盾，必須先完成上游修正。
+- `[!]` 上游阻塞：06 發現 01–05 缺漏或矛盾，必須先完成上游修正。
 
 一次只能有一個 `[~]` 議題。取得核准前，不得預先寫入後續 subsystem 的未決設計。
 
@@ -18,19 +18,21 @@
 
 - 總議題：31
 - 已完成：3
-- 待討論：28
+- 上游阻塞：1
+- 待討論：27
 - 目前進度：3 / 31
 
 ## A. Common Subsystem-design Rules
 
 - [x] 1. Authority, scope, and downstream boundary
-  - 完成條件：確認 04→05→implementation→verification authority，以及發現上游問題時的停止與回退規則。
+  - 完成條件：確認 05→06→implementation→verification authority，以及發現上游問題時的停止與回退規則。
 - [x] 2. Uniform subsystem section template
   - 完成條件：確認每個 subsystem 的固定章節、必要內容及禁止內容。
 - [x] 3. Design status and evidence labels
   - 完成條件：定義 Approved、Candidate、Needs Official Verification、Needs Integration Test、Needs Real-hardware Validation 與 Deferred 的使用方式。
-- [ ] 4. Mature-solution and minimal-custom-code rule
-  - 完成條件：定義 exact-version 官方能力查證、configuration／composition 優先順序及 custom-gap justification。
+- [!] 4. Mature-solution and minimal-custom-code rule
+  - 暫停原因：先建立並核准 `04_reuse_assessment.md` 的 authority、scope、coverage model 與輸出格式；之後再從已核准 assessment 結果定義 06 的 solution-selection 與 minimal-custom-code handoff rule。
+  - 完成條件：定義 06 如何承接 exact-version 官方能力查證結果、configuration／composition 優先順序及 custom-gap justification，不在 subsystem design 重做或改寫 04 assessment。
 - [ ] 5. Interface and configuration ownership rule
   - 完成條件：定義 producer／consumer、authoritative publisher、frame、QoS、parameter、configuration 與 lifecycle ownership 的記錄方式。
 - [ ] 6. Verification model
@@ -84,12 +86,12 @@
 - [ ] 27. Failure, diagnostics, and safe-stop flow
   - 完成條件：primary failure、secondary safety failure、safe-stop evidence、fault propagation 與 physical E-stop boundary 可追溯且不互相覆蓋。
 - [ ] 28. Container deployment contract and implementation handoff
-  - 完成條件：05 定義 runtime components、device access、volumes、network、privileges／capabilities、environment configuration、health／readiness、startup ordering 與 shutdown obligations；實際 `Dockerfile`、Compose services 與 image build design 留待 implementation，且可追溯回上述 contracts。
+  - 完成條件：06 定義 runtime components、device access、volumes、network、privileges／capabilities、environment configuration、health／readiness、startup ordering 與 shutdown obligations；實際 `Dockerfile`、Compose services 與 image build design 留待 implementation，且可追溯回上述 contracts。
 
 ## D. Final Subsystem-design Audit
 
-- [ ] 29. 04→05 traceability completeness
-  - 完成條件：04 的每個 subsystem responsibility、requirement allocation、cross-subsystem relationship、operational flow 與 system-wide contract 都有 05 實現責任或明確 handoff。
+- [ ] 29. 05→06 traceability completeness
+  - 完成條件：05 的每個 subsystem responsibility、requirement allocation、cross-subsystem relationship、operational flow 與 system-wide contract 都有 06 實現責任或明確 handoff。
 - [ ] 30. Obsolete-design and over-design audit
   - 完成條件：移除舊 subsystem、重複 owner、premature framework、未核准 future feature 及僅因歷史 implementation 存在的設計。
 - [ ] 31. Final consistency and baseline review
@@ -99,7 +101,7 @@
 
 每個第 7–18 項 subsystem 只有在下列條件全部成立時才可標記完成：
 
-- 04 的 purpose、responsibilities、requirement allocation 與 excluded responsibilities 已承接。
+- 05 的 purpose、responsibilities、requirement allocation 與 excluded responsibilities 已承接。
 - Boundary、inputs、outputs、dependencies 與 authoritative interfaces 清楚。
 - Internal components 各自有單一責任與存在理由。
 - 成熟 solution 已依 exact version 的官方資料查證。
@@ -121,4 +123,4 @@
 ## Follow-up Documentation Work
 
 - 01–03 各自補一份精簡的維護 checklist，用於後續新增或修改時追蹤審核狀態，不回填成當時逐項審查的歷史證據，也不重複 `design_baseline/write_from_use_case_to_architecture.md` 的撰寫規範。
-- 原則上於 05 重構完成後建立；若 05 提前發現 01–03 的上游缺漏或矛盾，則提早建立並啟動相應 checklist。
+- 原則上於 06 重構完成後建立；若 06 提前發現 01–03 的上游缺漏或矛盾，則提早建立並啟動相應 checklist。

@@ -2,7 +2,7 @@
 
 `SUB-001 Base Control` 之實作計畫。
 
-正式規格以 `../05_subsystem.md` § SUB-001 為 Single Source of Truth，本文件不重複定義需求或介面。
+正式規格以 `../06_subsystem.md` § SUB-001 為 Single Source of Truth，本文件不重複定義需求或介面。
 
 | Requirement | Subsystem |
 |---|---|
@@ -122,7 +122,7 @@ undefined symbol: _ZN8eprosima7fastcdr3Cdr9serializeEj
 ### Stage B — SUB-012 Robot Description
 
 ros2_control 需要 URDF 提供 joint 定義與硬體介面描述。
-本階段實作 **SUB-012 Robot Description**（規格見 `05_subsystem.md`）。
+本階段實作 **SUB-012 Robot Description**（規格見 `06_subsystem.md`）。
 
 來源：`ref/FIH_AMR_ROBOT_V2.0_0731`（完整人形 AMR，84 links）。
 meshes 可直接沿用，URDF 須裁剪並調整。
@@ -177,7 +177,7 @@ URDF 幾何推算輪距 0.5545 m，與 Baseline 0.555 m 相符。
 
 ### Stage E — 實機驗證
 
-依 `05_subsystem.md` SUB-001 與 SUB-004 驗證項目逐項確認。
+依 `06_subsystem.md` SUB-001 與 SUB-004 驗證項目逐項確認。
 
 ---
 
@@ -236,6 +236,6 @@ URDF 幾何推算輪距 0.5545 m，與 Baseline 0.555 m 相符。
 
 ## 完成後之文件更新
 
-- [ ] `05_subsystem.md`：標記 SUB-001 / SUB-004 驗證項目結果。
+- [ ] `06_subsystem.md`：標記 SUB-001 / SUB-004 驗證項目結果。
 - [ ] `README.md`：更新里程碑與 Repository 樹狀圖。
-- [ ] 實作發現與規格不符時，先修正 `05_subsystem.md` 再繼續實作。
+- [ ] 實作發現與規格不符時，先修正 `06_subsystem.md` 再繼續實作。

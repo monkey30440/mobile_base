@@ -16,7 +16,7 @@
 
 本文件描述系統如何被分解，以及各 subsystem 如何協作以滿足已核准需求。
 
-## 1.1 Normative Inputs
+## 1.1 Normative Product Inputs and Reuse Evidence
 
 本架構僅以下列文件作為 normative input：
 
@@ -26,13 +26,15 @@
 
 本文件不得新增上述文件未定義的使用者功能、系統能力或系統需求。
 
-Architecture 可以配置責任、選擇成熟技術並定義 subsystem contract，但不得以 architecture decision 取代缺失的上游需求。
+`04_reuse_assessment.md` 是本架構必須使用的受控 feasibility evidence，負責記錄 exact-version 成熟方案對 requirements 的 coverage、constraints、evidence 與 minimum gaps；它不是 product requirement，也不直接決定 system decomposition、responsibility owner 或最終 architecture choice。
+
+Architecture 可以根據 04 evidence 配置責任、選擇成熟技術並定義 subsystem contract，但不得以 architecture decision 取代缺失的上游需求，也不得無證據地改寫已核准的 reuse coverage conclusion。若需要改變 assessment conclusion，必須先回到 04 更新並取得核准。
 
 ## 1.2 Downstream Documents
 
-`05_subsystem.md` 為本架構的下游文件，用於定義各 subsystem 的 boundary、interface、internal design、configuration 與 verification。
+`06_subsystem.md` 為本架構的下游文件，用於定義各 subsystem 的 boundary、interface、internal design、configuration 與 verification。
 
-`05_subsystem.md` 不得反向重新定義本文件的：
+`06_subsystem.md` 不得反向重新定義本文件的：
 
 - subsystem responsibility；
 - primary ownership；
@@ -56,7 +58,7 @@ Subsystem detailed design baselines 必須符合本架構，但其 internal desi
 - subsystem test case、verification procedure 或 hardware bring-up procedure；
 - future-only capability 或未納入 v0.1 的 extension。
 
-上述內容應由 `05_subsystem.md`、詳細設計 baseline、implementation plan、configuration 或 verification evidence 負責。
+上述內容應由 `06_subsystem.md`、詳細設計 baseline、implementation plan、configuration 或 verification evidence 負責。
 
 # 2. Architecture Drivers
 

@@ -2,13 +2,13 @@
 
 # 1. Purpose, Scope and Authority
 
-本文件定義 `mobile_base` v0.1 各 subsystem 的詳細設計，將 `04_architecture.md` 已核准的 system decomposition、responsibility allocation、cross-subsystem relationships、operational flows 與 system-wide contracts，落實為可實作、可整合及可驗證的 subsystem design。
+本文件定義 `mobile_base` v0.1 各 subsystem 的詳細設計，將 `05_architecture.md` 已核准的 system decomposition、responsibility allocation、cross-subsystem relationships、operational flows 與 system-wide contracts，落實為可實作、可整合及可驗證的 subsystem design。
 
 ## 1.1 Normative Input
 
-本文件僅以 `04_architecture.md` 作為 normative design input。
+本文件僅以 `05_architecture.md` 作為 normative design input。
 
-現有 source code、舊版設計、實機測試結果、implementation baseline 與 exact-version 官方文件可作為 feasibility、現況及技術能力的 evidence，但不得反向改寫 `04_architecture.md` 已定義的：
+現有 source code、舊版設計、實機測試結果、implementation baseline 與 exact-version 官方文件可作為 feasibility、現況及技術能力的 evidence，但不得反向改寫 `05_architecture.md` 已定義的：
 
 - subsystem decomposition；
 - responsibility allocation 與 primary ownership；
@@ -16,7 +16,7 @@
 - operational flows；
 - system-wide architectural contracts。
 
-若 evidence 顯示既有 architecture 缺漏、矛盾或不可實現，必須停止受影響的 subsystem 定案，回到最早受影響的 01–04 文件修正並取得核准；不得在本文件中靜默新增 user behavior、capability、requirement 或 architecture responsibility。
+若 evidence 顯示既有 architecture 缺漏、矛盾或不可實現，必須停止受影響的 subsystem 定案，回到最早受影響的 01–05 文件修正並取得核准；不得在本文件中靜默新增 user behavior、capability、requirement 或 architecture responsibility。
 
 ## 1.2 Scope
 
@@ -38,7 +38,7 @@
 本文件不得：
 
 - 新增或改寫 `01_use_cases.md`、`02_capabilities.md` 或 `03_requirements.md` 的內容；
-- 新增、移除或重新分割 `04_architecture.md` 已核准的 subsystem；
+- 新增、移除或重新分割 `05_architecture.md` 已核准的 subsystem；
 - 重新指派 responsibility owner、command authority、TF ownership 或 safety responsibility；
 - 改變 cross-subsystem relationship、operational flow 或 system-wide contract；
 - 僅因現有 package、node、process 或第三方套件的結構而重新定義 subsystem boundary；
@@ -60,7 +60,7 @@
 
 ## 1.5 Upstream-Issue Handling
 
-05 重構或驗證期間若發現上游問題，應依下列順序處理：
+06 重構或驗證期間若發現上游問題，應依下列順序處理：
 
 1. 停止受影響 subsystem 的定案，並在 refactoring checklist 標記 `[!]`；
 2. user-visible behavior 問題回到 01；
@@ -69,11 +69,11 @@
 5. subsystem allocation、cross-subsystem relationship、operational flow 或 system-wide contract 問題回到 04；
 6. 上游修改核准後，再恢復受影響的 05 設計。
 
-以下各 subsystem 的識別、模板與詳細內容，依 `docs/05_subsystem_checklist.md` 逐項討論與核准。
+以下各 subsystem 的識別、模板與詳細內容，依 `docs/06_subsystem_checklist.md` 逐項討論與核准。
 
 # 2. Uniform Subsystem Section Template
 
-`04_architecture.md` 定義的每個 subsystem 都必須使用本章模板。各節可以依 subsystem 特性使用表格、文字或小型 diagram 表達，但不得省略必要責任；不適用的項目應明確寫出原因，不得以空白代替設計判斷。
+`05_architecture.md` 定義的每個 subsystem 都必須使用本章模板。各節可以依 subsystem 特性使用表格、文字或小型 diagram 表達，但不得省略必要責任；不適用的項目應明確寫出原因，不得以空白代替設計判斷。
 
 一致的模板用於確認相鄰 subsystem 的 producer／consumer、ownership、failure handling 與 verification 能互相閉合，不表示所有 subsystem 必須具有相同的 internal component 數量或 implementation 形式。
 
@@ -83,7 +83,7 @@
 
 ## 2.2 Architectural Responsibilities
 
-列出從 `04_architecture.md` 承接的 responsibility、requirement allocation 與 relevant system-wide contracts。每項責任必須能追溯至 04，不得由現有 package 或舊版 05 反向產生。
+列出從 `05_architecture.md` 承接的 responsibility、requirement allocation 與 relevant system-wide contracts。每項責任必須能追溯至 05，不得由現有 package 或舊版 06 反向產生。
 
 ## 2.3 Boundary
 
