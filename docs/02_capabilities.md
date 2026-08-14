@@ -75,10 +75,10 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 - 接收 Navigation Target。
 - 驗證 Navigation Target。
 - 將 Navigation Target 解析為 Canonical Goal Pose。
-- 載入並驗證與目前 Map Package 相容的 Route Graph。
-- 載入並驗證 Station Target 所需的 Station Catalog。
+- 使用使用者從人工管理之場域資料夾選定的 Map Package、Route Graph 與 Navigation Configuration。
+- 使用 Station Target 時，使用同一人工選定資料夾中的 Station Catalog。
 - 在開機位置無法可靠得知時，接受使用者提供的 approximate initial pose，供地圖定位初始化。
-- 判斷 localization validity，且只有定位有效後才接受 Navigation Target。
+- 透過標準定位 pose 與 `map → odom` transform 提供地圖定位結果。
 - 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
 - 執行 First Mile，將 AMR 由目前位姿銜接至適用的 route entry。
 - 執行 On Route movement，沿選定 Route Graph route 移動。
@@ -120,10 +120,11 @@ Navigation Resources：
 Navigation Resources
 ├── Map Package
 ├── Route Graph
+├── Navigation Configuration
 └── Station Catalog（Station Target 使用）
 ```
 
-Route Graph 與 Station Catalog 必須與目前 Map Package 相容。缺失、無效或不相容的 Navigation Resource 屬於 configuration failure，不構成 free-space fallback 條件。
+V0.1 由使用者人工建立、選擇與確認場域資料夾中的 Navigation Resources；系統不提供跨資源 identity／compatibility admission。任一成熟元件無法載入其資源時，沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback 條件。
 
 Localization Initialization：
 
@@ -134,7 +135,7 @@ Approximate Initial Pose, when required
 └── yaw
 ```
 
-Approximate Initial Pose 只用於啟動地圖定位，不是 Navigation Target。提供該輸入不等於 localization valid；系統必須等待定位收斂並確認有效後，才可接受導航任務。
+Approximate Initial Pose 只用於啟動地圖定位，不是 Navigation Target；v0.1 透過 RViz `2D Pose Estimate` 提供，系統不另行定義 localization-valid 或收斂 gate。
 
 ---
 

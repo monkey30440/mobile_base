@@ -442,9 +442,9 @@ Route-assisted Strategy
 |---|---|
 | Robot Description | SYS-023 |
 | Perception and Odometry | SYS-003、SYS-004、SYS-005 |
-| Motion and Drive | SYS-022、SYS-026、SYS-027、SYS-028、SYS-029、SYS-030、SYS-031 |
+| Motion and Drive | SYS-022、SYS-026、SYS-027、SYS-028、SYS-029、SYS-030 |
 | Mapping | SYS-001、SYS-002、SYS-006、SYS-007、SYS-024 |
-| Target, Resource, and Localization | SYS-008、SYS-009、SYS-010、SYS-012 |
+| Target and Localization | SYS-008、SYS-009、SYS-032、SYS-033、SYS-010 |
 | Navigation Execution | SYS-011、SYS-014、SYS-015、SYS-016、SYS-017、SYS-025 |
 | Route-assisted Strategy | SYS-013、SYS-018、SYS-019、SYS-020、SYS-021 |
 
@@ -814,3 +814,627 @@ Architecture Decision Needed: 05 定義 generic hardware ERROR propagation與sys
 ### MVP Change Candidate
 
 `None`。核准後的簡化 requirement 已由成熟 framework capability 完整覆蓋。
+
+## SYS-027 Motion-command Timeout
+
+### Required Behavior / Constraint
+
+底盤執行運動期間，若系統未在設定之逾時時間內收到有效的新速度命令，必須使底盤停止；逾時值與停止行為必須經整合及實機驗證。必要 fragments 為判斷速度命令 freshness、逾時後產生停止用命令，以及以整合與實機 evidence 確認逾時設定和實際停止結果。
+
+### Candidate Assessment: ros2_control + diff_drive_controller command timeout
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `ros2_control` + `ros2_controllers/diff_drive_controller` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Jazzy rosdistro metadata：`ros2_controllers` 4.42.1-1；target image installed version 尚待確認 |
+| Coverage Status | `Fully Covered`（成熟 controller capability 層級，適用於 non-chained `TwistStamped` input 與非零 `cmd_vel_timeout`） |
+| Covered Scope | 非 chained 模式依 `TwistStamped.header.stamp` 判斷 command age；超過非零 `cmd_vel_timeout` 後將 linear／angular reference 設為零，經已設定的 velocity／acceleration／jerk limits 與差速運動學後寫入左右輪 velocity command interfaces |
+| Known Constraints | `cmd_vel_timeout=0.0` 會停用 timeout；controller 必須 active 且 update loop 持續執行；Jazzy 4.42.1 的 topic input 固定為 `TwistStamped`；chained mode 不使用 subscriber command-age timeout；limiters 可能使命令逐步減速而非單一 update 直接歸零 |
+| Uncovered Gap | Custom Behavior Gap：`None`；Configuration／Composition 與 Evidence Gaps 尚存 |
+| Evidence | ROS 2 Jazzy `diff_drive_controller` user documentation、migration guide，以及 `ros2_controllers` 4.42.1 tagged source、parameter definition 與 tests；詳見 `research/sys-027-motion-command-timeout.md` |
+| Missing Evidence | Target installed version；timeout、timestamp／clock 與 limiter configuration；controller update execution；hardware command delivery；wheel／body feedback；最壞停止時間、停止距離及實體底盤停止結果 |
+
+### Minimum-gap Record
+
+```text
+Gap Classification: Configuration Gap / Composition Gap / Evidence Gap
+Requirement Fragment: 成熟 controller capability 已覆蓋 command freshness timeout 與停止命令；尚須確認 target composition 的設定、命令傳遞與實體停止結果。
+Existing Coverage: 非 chained diff_drive_controller 依 TwistStamped timestamp 判斷 command age，逾時後將 body reference 設為零，並將經 limiters 與差速運動學處理的 wheel velocity commands 寫入 ros2_control interfaces。
+Configuration Limitation: 必須使用非零 cmd_vel_timeout，建立 clock／timestamp contract，並決定 timeout 後的 immediate-zero 或 limited-deceleration profile。
+Composition Limitation: Native timeout 適用於 non-chained topic path；controller update loop、hardware interface 與 motor drive 必須在 command source 中斷時仍能傳遞及執行停止命令。
+Minimum Missing Behavior: None
+Required Inputs: 有效且 clock-consistent 的 TwistStamped commands、非零 timeout，以及選定的 velocity／acceleration／jerk limits。
+Required Outputs: 逾時後的零 body reference 與相應左右輪停止命令，最終使實體底盤停止。
+Constraints: Chained mode 必須重新配置 command-freshness owner 並重做 coverage assessment；controller zero／ramp command 不得被當作 physical stop 已證明。
+Required Verification: Exact installed version、fresh／stale command behavior、timeout detection timing、wheel command 與 hardware write、wheel／body feedback、最壞停止時間及停止距離之整合與實機測試。
+Architecture Decision Needed: 05 保留 non-chained TwistStamped timeout path、非零 timeout constraint 與實體停止 verification obligation；若選擇 chained mode，必須重新分配 freshness responsibility 並回到 04 重評。
+```
+
+### Architecture Considerations
+
+05 應以 non-chained `TwistStamped -> diff_drive_controller` 與非零 `cmd_vel_timeout` 作為使用原生 timeout capability 的 composition constraint。逾時後的 reference 歸零可由已設定的 limiters 形成受控減速，但 controller command 不代表實體底盤已停止；hardware delivery、wheel／body feedback、停止時間與停止距離必須保留為 integration／real-hardware verification obligations。若 05 改採 chained mode，必須明確重新分配 command-freshness ownership，並重新開啟 SYS-027 assessment。
+
+### MVP Change Candidate
+
+`None`。成熟 controller capability 已覆蓋 SYS-027，不需要新增 custom watchdog 或弱化 requirement。
+
+## SYS-028 Base Motion Limits
+
+### Required Behavior / Constraint
+
+系統必須將 AMR 的直線與旋轉速度，以及相應的加速與減速，限制於設定之 operational limits；限制值必須依操作需求選定，並於部署前完成整合及實機驗證。必要 fragments 為 linear／angular velocity limits、各方向的 acceleration／deceleration limits、operational value selection，以及 integration／real-hardware evidence。
+
+### Candidate Assessment: diff_drive_controller body-motion limiters
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `ros2_controllers/diff_drive_controller` built-in linear／angular `SpeedLimiter` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；`ros2_controllers` 4.42.1；target image installed version 尚待確認 |
+| Coverage Status | `Fully Covered`（成熟 controller capability 層級） |
+| Covered Scope | 分別限制 `linear.x` 與 `angular.z` 的正／反向 velocity，以及正／反向 acceleration／deceleration；限制後才執行 differential-drive inverse kinematics |
+| Known Constraints | 所需限制值預設為 `.NAN`，代表未啟用，必須明確配置；limiter 依賴前兩次已限制命令與 controller update period；controller 必須 configured／active 且 update loop 正常執行；jerk limiting 可用但不是 SYS-028 requirement |
+| Uncovered Gap | Custom Behavior Gap：`None`；Configuration Gap 與 Evidence Gap 尚存 |
+| Evidence | `ros2_controllers` 4.42.1 tagged `diff_drive_controller` source、generated parameter definition、`SpeedLimiter` wrapper、官方 tests，以及 ROS 2 Jazzy `control_toolbox::RateLimiter` API；詳見 `research/sys-028-base-motion-limits.md` |
+| Missing Evidence | Operational limit 數值；target installed version；參數實際載入；update timing；正／反向速度與加減速 integration behavior；實體 AMR body motion evidence |
+
+### Minimum-gap Record
+
+```text
+Gap Classification: Configuration Gap / Evidence Gap
+Requirement Fragment: 成熟 controller capability 已完整覆蓋；尚須選定並驗證 AMR body-domain operational limits。
+Existing Coverage: diff_drive_controller 對 linear.x 與 angular.z 分別提供正／反向 velocity、acceleration 與 deceleration limiting，並在 inverse kinematics 前套用。
+Configuration Limitation: 必須為 linear.x 與 angular.z 明確設定 finite min/max velocity，以及正／反向 acceleration/deceleration values；.NAN 表示相應限制未啟用。
+Composition Limitation: 無額外 Composition Gap；沿用 SYS-022 已選定的 diff_drive_controller composition。
+Minimum Missing Behavior: None
+Required Inputs: 依操作需求核准的 AMR 直線／旋轉速度與正／反向加減速度 limits。
+Required Outputs: 經 operational limits 約束的 AMR body velocity command，再轉換為左右輪命令。
+Constraints: Controller 必須 active 且 update period 有效；wheel speed 與 motor RPM 只作 body limits 的下游可行性與配置檢查，不是 SYS-028 的獨立 fragments；不得把 command shaping 宣稱為 certified safety function。
+Required Verification: Exact installed version、parameter-load evidence、positive／negative linear／angular steps、acceleration／deceleration、direction reversal、update timing，以及實體 AMR body velocity／acceleration measurements。
+Architecture Decision Needed: 05 保留 body-domain operational-limit contract與下游 feasibility relationship；限制值由 configuration、integration 及實機 evidence 確立，不在 architecture 文件虛構。
+```
+
+### Architecture Considerations
+
+05 應以 `diff_drive_controller` 的 body-domain limiters 作為 SYS-028 的成熟能力，並把 operational values 視為 evidence-bound configuration。Wheel geometry、wheel speed 與 motor RPM 必須用來確認核准的 body limits 可被實體底盤實現，但它們是下游推導與裝置約束，不重新成為 SYS-028 的 requirement fragments，也不據此新增 custom limiter。
+
+### MVP Change Candidate
+
+`None`。成熟 controller capability 已完整覆蓋 SYS-028，不需要新增 velocity-smoother／limiter node 或弱化 requirement。
+
+## SYS-029 Base State Feedback
+
+### Required Behavior / Constraint
+
+系統必須提供由馬達驅動器有效回授取得的左右輪位置與速度狀態，供里程估測、控制與診斷使用；無有效回授時，不得以命令值取代量測狀態，並必須將狀態視為不可用或故障。必要 fragments 為 measured position／velocity acquisition、validity、standard consumption／observation、no-command-substitution，以及 invalid-state propagation。
+
+### Candidate Assessment: ros2_control measured wheel-state path
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `ros2_control` `SystemInterface` state interfaces + `ros2_controllers/diff_drive_controller` closed-loop feedback + `joint_state_broadcaster` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；`ros2_control` 4.47.0；`ros2_controllers` 4.42.1；target image installed versions 尚待確認 |
+| Coverage Status | `Partially Covered` |
+| Covered Scope | Framework 可承載左右輪 `position`／`velocity` state interfaces；`diff_drive_controller` closed-loop 模式使用 wheel position 或 velocity feedback；standard broadcaster 可發布 states；hardware cycle 可用 `ERROR` 表達失敗 |
+| Known Constraints | `open_loop=true` 不使用外部 wheel state interfaces，而以 command 計算 odometry，因此不符合 SYS-029；generic framework 不理解 M1 protocol、driver identity、raw units、position rollover 或 feedback freshness／validity |
+| Uncovered Gap | Custom Behavior Gap：既有 M1Driver／M1Hardware device boundary 內的雙馬達回授取得／驗證、driver-to-wheel mapping、unit／sign conversion、continuous position tracking、cached-state availability／freshness，以及禁止 command-to-state substitution並傳遞 invalid/no-feedback `ERROR` |
+| Evidence | `ros2_control` 4.47.0 tagged hardware state／read／error contracts、Controller Manager error behavior；`ros2_controllers` 4.42.1 tagged `diff_drive_controller` feedback semantics 與 `joint_state_broadcaster`；已核准 M1Driver／M1Hardware baseline；詳見 `research/sys-029-base-state-feedback.md` |
+| Missing Evidence | Target installed versions；M1 state decode／validation／conversion／rollover tests；A2 cache timing／freshness；state-interface export；closed-loop consumption；broadcaster observation；invalid-feedback injection 與 target-AMR state correctness |
+
+### Minimum-gap Record
+
+```text
+Gap Classification: Custom Behavior Gap / Configuration Gap / Composition Gap / Evidence Gap
+Requirement Fragment: 從兩顆 M1 馬達取得有效 measured position／velocity，轉為左右輪 states；無有效回授時不得以 command 取代，且狀態必須視為 unavailable／fault。
+Existing Coverage: ros2_control 提供標準 position／velocity state interfaces、hardware read ERROR seam、closed-loop controller consumption與standard state broadcasting。
+Configuration Limitation: 必須配置 open_loop=false、選定 diff_drive_controller position或velocity feedback mode，並一致設定 joint names與interfaces。
+Composition Limitation: M1Hardware exported states、closed-loop diff_drive_controller與joint_state_broadcaster必須透過標準interfaces組合；A2 cached-state timing須納入freshness validation。
+Minimum Missing Behavior: 在既有M1Driver／M1Hardware內驗證雙驅動器回授、完成driver mapping與unit/sign conversion、追蹤continuous position、判斷latest state availability／freshness，且invalid／missing feedback不得更新為command-derived state並須回傳hardware ERROR。
+Required Inputs: 驗證成功且包含兩顆預期driver identity之M1 measured RPM／position state，以及核准的mapping、gear ratio、sign與position scale。
+Required Outputs: 左右輪measured position [rad]／velocity [rad/s] state interfaces；invalid／missing feedback時的hardware ERROR／unavailable state。
+Constraints: open_loop=true禁止用於滿足SYS-029；topic收到數值不等於freshness已證明；不得由本需求新增custom feedback node、fault taxonomy或recovery framework。
+Required Verification: Decode／mapping／conversion／rollover／no-cache tests、successful-cache replacement、invalid-feedback ERROR與no-command-substitution、closed-loop runtime consumption、state publication及實機方向／速度／位置一致性。
+Architecture Decision Needed: 05 保留M1 measured-state authority、standard ros2_control state boundary、closed-loop-only constraint與invalid-state system relationship；不指定device-boundary internal algorithm。
+```
+
+### Architecture Considerations
+
+05 應以 M1Driver／M1Hardware 作為 measured wheel-state 的裝置邊界，透過標準 ros2_control `position`／`velocity` state interfaces 提供給 closed-loop `diff_drive_controller` 與需要的 broadcaster／consumers。`open_loop=true` 不得用於滿足 SYS-029。無有效回授時必須沿既有 hardware `ERROR` seam 傳遞 unavailable／fault condition，但不得由 SYS-029 額外推導新的 feedback node、診斷 schema 或 recovery framework。
+
+### MVP Change Candidate
+
+`None`。完整 measured-feedback requirement 必須保留；custom gap 已限制在既有 M1 device adaptation boundary，不需要新增 subsystem。
+
+## SYS-030 Safe Base Enable and Stop
+
+### Required Behavior / Constraint
+
+系統只有在底盤通訊正常、無馬達驅動器警報、輪端停止且驅動器已確認可運動後，才能接受非零運動命令。底盤停用或系統關閉時，必須嘗試使底盤停止、確認停止並停用馬達驅動；任一安全動作失敗不得阻止其餘安全動作之嘗試。狀態轉換等待時間與停止確認條件必須經實機驗證。
+
+### Candidate Assessment: ros2_control lifecycle + M1 device admission／shutdown behavior
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `ros2_control` hardware lifecycle + Controller Manager resource／lifecycle management + `ros2_controllers/diff_drive_controller` deactivation halt behavior |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；`ros2_control` 4.47.0；`ros2_controllers` 4.42.1；target image installed versions 尚待確認 |
+| Coverage Status | `Partially Covered` |
+| Covered Scope | Framework 將 movement command interfaces 限制在 ACTIVE hardware，管理 controller／hardware lifecycle 與 interface claiming；`diff_drive_controller::on_deactivate()` 會 halt 並將左右輪 command interfaces 寫為零 |
+| Known Constraints | Lifecycle callback 只提供執行 seam 與成功／失敗回傳；framework 不理解 M1 communication、alarm／status、RPM、SVON／SVOFF 或 JG0；controller 零命令不等於 JG0 已送達、實體已停止或 drive 已停用 |
+| Uncovered Gap | Custom Behavior Gap：既有 M1Driver／M1Hardware 內的 activation admission、bounded JG0／zero-RPM／SVOFF confirmation，以及前一步失敗時仍逐一嘗試其餘 stop／confirm／disable／disconnect actions 的 bounded best-effort sequencing |
+| Evidence | ROS 2 Jazzy／`ros2_control` 4.47.0 hardware lifecycle、hardware-component authoring與Controller Manager contracts；`diff_drive_controller` 4.42.1 tagged deactivation source／tests；已核准 M1Driver／M1Hardware baseline；詳見 `research/sys-030-safe-base-enable-stop.md` |
+| Missing Evidence | Target installed versions；actual lifecycle composition；SVON／SVOFF poll delay／count；zero-RPM threshold／sample count／deadline；各步失敗注入；normal deactivation與system shutdown path；實體停止與drive state evidence |
+
+### Minimum-gap Record
+
+```text
+Gap Classification: Custom Behavior Gap / Configuration Gap / Composition Gap / Evidence Gap
+Requirement Fragment: 非零命令前的M1 communication／alarm／zero-RPM／motion-enabled admission，以及停用／關閉時的stop、stop confirmation、drive disable與independent action attempts。
+Existing Coverage: ros2_control提供hardware/controller lifecycle與command-interface gate；diff_drive_controller停用時將wheel command interfaces歸零。
+Configuration Limitation: 必須選定並實機驗證communication timeout、SVON/SVOFF poll delay/count、zero-RPM threshold／consecutive samples與total transition deadline。
+Composition Limitation: Controller只能在M1Hardware activation admission成功後啟用；normal deactivation與system shutdown都必須到達同一核准的bounded device sequence，不能只依賴destructor。
+Minimum Missing Behavior: M1Hardware依M1Driver結果檢查communication、兩顆drive alarm與actual RPM，SVON後bounded確認motion-enabled；停用時獨立嘗試JG0、zero-RPM確認、SVOFF／狀態確認與disconnect，累積各步結果而不得因單一步驟失敗提前略過後續actions。
+Required Inputs: M1 communication結果、兩顆driver identity／alarm／status／actual RPM，以及核准的transition timing與zero-stop criteria。
+Required Outputs: Admission成功後才可用的movement command interfaces；停用／關閉時各stop／confirm／disable／disconnect action的attempt/result與aggregate lifecycle outcome。
+Constraints: ACTIVE、controller halt、zero command、JG0 sent、zero RPM confirmed、SVOFF sent與SVOFF confirmed是不同claims；這是operational safety behavior，不取代實體E-stop或構成功能安全認證。
+Required Verification: Admission拒絕情境、無early nonzero command、JG0／poll／SVOFF／disconnect逐步失敗注入、remaining-action attempts、normal deactivation／system shutdown，以及target-AMR停止與drive state measurements。
+Architecture Decision Needed: 05 保留framework lifecycle gate與M1 device admission／shutdown relationship、independent bounded-attempt contract及evidence boundaries；不新增generic safety manager或指定device internal algorithm。
+```
+
+### Architecture Considerations
+
+05 應將 ros2_control lifecycle 視為標準 system seam，並將 M1Driver／M1Hardware 視為 M1 admission、JG0、zero-RPM confirmation、SVOFF confirmation 與 bounded best-effort shutdown sequence 的既有裝置邊界。`BEST_EFFORT` controller switching 不得被誤認為 vendor actions 的獨立嘗試保證；controller command 歸零也不得被當作 physical stop 或 drive disable evidence。此 operational safety behavior 不取代已正常工作的實體 E-stop。
+
+### MVP Change Candidate
+
+`None`。完整 admission與bounded safe-stop／disable behavior 必須保留；缺口限定於既有 M1 device boundary，不需要新增 generic safety manager。
+
+## 6.4 Mapping
+
+## SYS-001 Map Creation
+
+### Required Behavior / Constraint
+
+系統應建立可供定位與導航使用的二維 Occupancy Grid 地圖；建圖功能無法完成初始化並進入可處理建圖資料的狀態時，應回報失敗及原因。
+
+### Candidate Assessment: slam_toolbox online asynchronous mapping
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `slam_toolbox` online asynchronous mapping |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Jazzy release `slam_toolbox` 2.8.5-1；target image installed version 尚待確認與固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | Managed lifecycle 原生提供 configure／activate 初始化邊界、transition result與失敗diagnostics；成功進入ACTIVE後，可接收單一選定的`sensor_msgs/msg/LaserScan`與TF／odometry，執行二維pose-graph SLAM並發布`nav_msgs/msg/OccupancyGrid`與Mapping Mode所需的`map -> odom` |
+| Known Constraints | 「進入可處理狀態」定義為configure／activate成功且lifecycle ACTIVE，不代表已收到或處理runtime scan；必須設定frames／mapping parameters、提供sensor TF及`odom -> base`，且Mapping Mode只能有一個`map -> odom` owner；`teleop_twist_keyboard`只是人工建圖的command source |
+| Uncovered Gap | `None`；不需要自製 SLAM、Occupancy Grid 產生器或雙 LiDAR merge behavior |
+| Evidence | ROS 2 Jazzy `slam_toolbox` 2.8.5 package／API documentation、upstream 2.8.5 interface與algorithm說明、official `online_async_launch.py`／`mapper_params_online_async.yaml`、Jazzy bloom release metadata；詳見 `research/sys-001-map-creation.md` |
+| Missing Evidence | Target image installed version；正常configure／activate與無效solver／plugin／parameter等初始化失敗注入；selected scan／TF／odometry整合；exclusive`map -> odom` ownership；部署參數；目標場域之覆蓋、幾何一致性、障礙物表現及後續定位／導航fitness |
+
+候選搜尋涵蓋ROS 2 Jazzy成熟二維SLAM package family。`slam_toolbox`與ROS 2 managed lifecycle已完整提供SYS-001的map-creation、初始化狀態與failure-diagnostic behavior，不需要自製mapping component、start timeout或首筆scan confirmation gate。ACTIVE後尚無scan或runtime TF／odometry不可用，不屬於SYS-001初始化失敗；持續更新與runtime input behavior留在SYS-006。地圖儲存、Navigation Mode startup load與Map Package read-back分別留在SYS-002、SYS-007與SYS-024。
+
+### Architecture Considerations
+
+05 應保留Mapping Mode的configure／activate supervision、selected scan、TF／odometry integration與`map -> odom` exclusive-ownership contracts；初始化成功界線是lifecycle ACTIVE，不追加runtime input readiness gate。雙LiDAR維持independent-source-first；SYS-001只要求選定足以建圖的scan source，不因其他consumer使用merged scan而要求Mapping也必須融合。參數與真機map fitness留在後續composition、configuration與verification closure。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-002 Map Storage
+
+### Required Behavior / Constraint
+
+系統應將建圖結果儲存為 Map Package；無法儲存 Map Package 時，系統應回報失敗及原因。
+
+### Candidate Assessment: nav2_map_server map saver
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `nav2_map_server` 的 `map_saver_cli` 或 lifecycle `map_saver`／`nav2_msgs/srv/SaveMap` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Jazzy release `nav2_map_server` 1.3.12-1；target image installed version 尚待確認與固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 從選定的 `nav_msgs/msg/OccupancyGrid` topic 取得地圖，依指定 basename 寫出 image 與 YAML metadata；在人工選定的場域目錄以固定 basename `map`、PGM image format 與 trinary map mode 產生 `map.pgm`、`map.yaml`；以 service boolean／CLI process result 回報成功或失敗，並以原生 ROS logs 回報失敗原因 |
+| Known Constraints | 必須預先建立／選定可寫且可持久保存的場域目錄，指定 authoritative map topic、完整 basename、format、mode、threshold 與 timeout；同名檔案會直接覆寫，image 與 YAML 分步寫入而非原子 package transaction |
+| Uncovered Gap | `None`；目前 requirement 未要求 structured error code、錯誤 taxonomy、原子寫入或自動復原，不需要自製 map encoder、file writer 或 package manager |
+| Evidence | ROS 2 Jazzy `nav2_map_server` 1.3.12 package／API documentation、upstream 1.3.12 `map_io.cpp`、Jazzy `map_saver.cpp`、`nav2_msgs/srv/SaveMap` 與 Jazzy binary release metadata；詳見 `research/sys-002-map-storage.md` |
+| Missing Evidence | Target image installed version；authoritative map topic QoS／freshness；target volume path、permission與persistence；成功產生非空 `map.pgm`／`map.yaml`；no-map timeout、invalid parameters、目錄／權限／filesystem failure 的 result 與 log；overwrite policy，以及寫入失敗後可能殘留部分更新檔案的操作與結果規則 |
+
+候選搜尋同時檢查 `nav2_map_server` 與 `slam_toolbox` 的 persistence interfaces。`slam_toolbox/save_map` 可作為較窄的 image-map convenience wrapper，但 `nav2_map_server` 的標準 SaveMap contract 可明確指定 topic、basename、format、mode 與 thresholds，並與後續 map-server reload 使用相同 MapIO format，因此是較直接且與 SLAM implementation 解耦的 reuse candidate。`slam_toolbox/serialize_map` 產生的 pose-graph／scan data 用於繼續建圖或 toolbox localization，不是目前 `map.pgm`、`map.yaml` 所構成的 Map Package。
+
+目前同一場域以一個人工命名目錄集中管理、不同場域使用不同目錄名稱、目錄內採固定檔名，只需要 path selection 與 configuration。`route_graph.geojson`、`stations.yaml` 與 Navigation configuration 是分離的 Navigation Resources；共同放在場域目錄不代表它們由 SYS-002 建立或儲存。SaveMap 的 boolean／process result 與原生 logs 已滿足目前的失敗及原因回報；image 與 YAML 分步寫入可能留下 partial residue，但該次操作仍回報失敗，儲存後能否重新解析則由 SYS-024 判定。Navigation Mode startup load 留在 SYS-007。
+
+### Architecture Considerations
+
+05 應保留 authoritative candidate Occupancy Grid 到 persistent Map Package 的標準儲存關係，以及 per-site directory selection、fixed basename、filesystem persistence、overwrite、failure result／logs 與 partial-write constraints。它不應新增自製 resource manager，只因標準 saver 不替專案命名場域或建立 parent directory；儲存後的 read-back validation 由 SYS-024 負責。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-006 Continuous Map Update
+
+### Required Behavior / Constraint
+
+建圖進行期間，系統應於取得新的有效感知與里程資料後更新目前二維 Occupancy Grid；資料暫時不可用時，系統應保留目前地圖並等待後續有效資料，直到使用者完成或終止建圖。
+
+### Candidate Assessment: slam_toolbox online asynchronous mapping
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `slam_toolbox` online asynchronous mapping |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Jazzy release `slam_toolbox` 2.8.5-1；target image installed version 尚待確認與固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | Active mapping session 透過 TF message filter 接收可轉換的單一 selected `LaserScan`，取得 scan timestamp 的 odometry pose，依 pause／throttle／time／travel／heading條件接受後續measurements並更新pose graph，再依`map_update_interval`將current graph rasterize／發布為`nav_msgs/msg/OccupancyGrid`；暫時不可用的資料會等待或被捨棄，既有graph／map保留，後續有效資料可在同一session繼續處理 |
+| Known Constraints | 「有效資料」是通過scan interface、TF／odometry與mapping acceptance rules的measurement，不是每筆raw scan都必須改圖或一對一立即發布；`map_update_interval`只控制current graph的輸出刷新週期，且publisher必須active並至少有一個subscriber；暫時沒有有效input不會自動終止建圖；pause不等於使用者完成或終止 |
+| Uncovered Gap | `None`；不需要自製continuous-map updater、scan queue或Occupancy Grid refresh loop |
+| Evidence | ROS 2 Jazzy `slam_toolbox` 2.8.5-1 release metadata；upstream 2.8.5 `slam_toolbox_common.cpp`／`slam_toolbox_async.cpp` 的scan admission、odom lookup、measurement acceptance、map refresh與lifecycle source；official async configuration／launch；詳見 `research/sys-006-continuous-map-update.md` |
+| Missing Evidence | Target image installed version；selected scan與scan-stamped TF／odometry freshness及QoS；message-filter drops、accepted-scan rate、CPU load與map publication cadence；暫時失去input期間既有地圖保留且恢復後可繼續更新；AMR移動後map content確實新增／修正；使用者完成／終止並deactivate後不再接受新measurement或發布mapping updates |
+
+SYS-001 已證明成熟套件能建立二維 Occupancy Grid；本項進一步確認 active Mapping session 會持續接受符合條件的後續 measurement、更新 pose graph，並按設定刷新 current Occupancy Grid。暫時缺少或無效的 scan／TF／odometry 會等待或被捨棄，既有 graph／map 保留並等待後續有效資料；這正是目前 SYS-006 核准的原生等待語意，因此不需要自訂 input-health monitor、failure classifier 或 automatic termination seam。
+
+### Architecture Considerations
+
+05 應保留 selected authoritative scan、scan-stamped TF／odometry、measurement acceptance、map refresh subscriber、Mapping Mode lifecycle，以及使用者完成／終止後deactivate並停止更新的composition contracts。雙LiDAR維持independent-source-first，`teleop_twist_keyboard`只提供移動命令；SYS-006不要求merge、input-health monitor、automatic failure termination或custom mapping controller。Map Package儲存與read-back分別由SYS-002與SYS-024負責，不由本項提前定義。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-007 Map Load
+
+### Required Behavior / Constraint
+
+系統應在 Navigation Mode 啟動期間載入所選定的 Map Package，將其中的二維 Occupancy Grid 提供給地圖定位與導航功能使用；Map Package 無法載入時，不得進入 navigation-ready 狀態，並應回報原因。
+
+### Candidate Assessment: Navigation2 localization startup composition
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `nav2_bringup/localization_launch.py map:=<selected map.yaml>`，組合 `nav2_map_server` lifecycle `map_server`、`nav2_lifecycle_manager` 與 `nav2_amcl` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 1.3.12／binary release 1.3.12-1；target image installed versions 尚待確認與固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | Launch argument將所選`map.yaml`寫入`map_server.yaml_filename`；map server在configure期間解析YAML／image並建立Occupancy Grid；lifecycle manager只有在map server與AMCL均configure成功後才activate；active map server以reliable／transient-local QoS發布地圖供AMCL及後續Nav2 consumers使用；載入失敗會記錄原因、使map server configure失敗並中止localization managed-node bringup |
+| Known Constraints | V0.1只支援Navigation Mode startup loading，不要求runtime `LoadMap`、hot switch或AMCL接收第二張地圖；map load success只證明Occupancy Grid可用，不代表initial pose已提供、AMCL已有新的pose／TF輸出或其他人工管理Navigation Resources內容正確 |
+| Uncovered Gap | `None`；不需要自製map parser、loader、publisher或AMCL map adapter |
+| Evidence | Navigation2 1.3.12 official `localization_launch.py`；Jazzy `nav2_map_server`／MapIO、`nav2_lifecycle_manager`與AMCL docs／source；詳見 `research/sys-007-map-reload.md` |
+| Missing Evidence | Target image installed versions；實際非空場域Map Package；正常啟動時map server與localization lifecycle ACTIVE及authoritative `/map`內容／QoS；YAML不存在、metadata錯誤、image不存在／損壞時的原因log、lifecycle startup failure，以及navigation-ready維持false |
+
+目前操作以人工選定場域後執行official localization launch為baseline：
+
+```text
+selected maps/<site>/map.yaml
+  -> localization_launch.py map argument
+  -> map_server configure: YAML + image -> OccupancyGrid
+  -> lifecycle manager activates map_server and AMCL
+  -> authoritative /map available to localization and navigation consumers
+```
+
+SYS-007只判定Navigation Mode startup期間的Map Package載入與localization managed-node bringup；它不另外定義AMCL收斂或localization-valid gate。其他Navigation Resources由使用者依01–02的MVP操作規則人工建立、選擇與確認；Runtime `LoadMap`雖為upstream附帶能力，但不列入本項covered scope、configuration或acceptance evidence。
+
+### Architecture Considerations
+
+05 應將Map Package selection與startup load放在Navigation Mode的localization bringup關係中，保留selected per-site `map.yaml`、map topic／frame／QoS、ordered lifecycle startup，以及load failure阻止navigation-ready的contract。不得因upstream存在`LoadMap`就新增runtime換圖責任，也不得把map load success等同AMCL已有pose／TF輸出或人工管理的其他Navigation Resources已被系統驗證。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-024 Map Package Read-back
+
+### Required Behavior / Constraint
+
+系統應於 Map Package 儲存後，確認其中的地圖可重新解析為二維 Occupancy Grid；無法解析時，系統應依標準解析結果回報失敗及原因。
+
+### Candidate Assessment: Navigation2 MapIO read-back
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 `nav2_map_server` public MapIO `loadMapFromYaml()` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Jazzy release `nav2_map_server` 1.3.12-1；target image installed version 尚待確認與固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 讀取指定`map.yaml`與其image reference，解析metadata與image並轉換為`nav_msgs/msg/OccupancyGrid`；以public `LOAD_MAP_STATUS`判定success／failure，並以標準status與原生logs回報YAML／image解析失敗原因 |
+| Known Constraints | SYS-024只採標準parser結果，不額外判定grid非空、地圖品質、定位fitness或Navigation Resources相容性；read-back必須指向剛儲存的同一Map Package；直接MapIO call不建立／activate map server，也不發布或替換`/map` |
+| Uncovered Gap | `None`；不需要自製parser、額外validation layer、error taxonomy或map server |
+| Evidence | Navigation2 Jazzy `nav2_map_server` 1.3.12-1 release metadata；upstream 1.3.12 public `map_io.hpp`／`map_io.cpp`之`loadMapFromYaml()`、`LOAD_MAP_STATUS`與原生exception logs；詳見 `research/sys-024-mapping-result.md` |
+| Missing Evidence | Target image installed version；實際Map Package成功解析；`MAP_DOES_NOT_EXIST`、`INVALID_MAP_METADATA`、`INVALID_MAP_DATA`之status與log；read-back path確實指向同一儲存結果，且操作不產生`/map` side effect |
+
+MapIO公開且與node object無關的`loadMapFromYaml()`已完整提供Map Package到Occupancy Grid的標準read-back。`LOAD_MAP_SUCCESS`就是目前SYS-024的成功條件；`MAP_DOES_NOT_EXIST`、`INVALID_MAP_METADATA`、`INVALID_MAP_DATA`及同次原生logs提供失敗與原因。呼叫public library API並轉送標準結果屬integration／composition，不形成custom behavior gap。
+
+### Architecture Considerations
+
+05 應保留SYS-002 SaveMap成功後，以剛儲存的authoritative `map.yaml`執行一次direct MapIO read-back並保留標準status／logs的順序關係。此read-back不應啟動MapServer或發布`/map`；Navigation Mode startup load仍由SYS-007負責，地圖品質與實機定位表現分別留給後續verification與SYS-010的AMCL整合證據。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-008 Navigation Target
+
+### Required Behavior / Constraint
+
+系統應支援以下 Navigation Target：
+
+- Station
+- Goal Pose
+
+### Candidate Assessment: NavigateToPose canonical goal plus terminal target-form adapter
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 `nav2_msgs/action/NavigateToPose`，canonical goal使用`geometry_msgs/msg/PoseStamped` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2／`nav2_msgs` Jazzy release 1.3.12-1；target image installed version 尚待確認與固定 |
+| Coverage Status | `Partially Covered` |
+| Covered Scope | Goal Pose可由標準`PoseStamped`完整表達frame、timestamp、position與orientation，並由SYS-009正規化為同一canonical型別；通過SYS-033 validation後，可沿用`NavigateToPose.Goal.pose`交給Nav2 |
+| Known Constraints | Nav2的navigation action與Simple Commander只接受pose goal，沒有Station ID欄位或Station target variant；SYS-008只要求接收並區分兩種外部target form，不負責Station查表、合法性判定、資源相容性或導航執行 |
+| Uncovered Gap | 最小terminal-facing target input schema／adapter：接受並明確區分Station與Goal Pose，Goal Pose原樣交給SYS-009，Station ID原樣交給SYS-032；不包含normalization、Station resolution或canonical-pose validation |
+| Evidence | Navigation2 Jazzy 1.3.12-1 `NavigateToPose.action`與Nav2 Simple Commander `goToPose()`官方API；ROS 2 Jazzy `geometry_msgs/msg/PoseStamped` interface；詳見 `research/sys-008-navigation-target.md` |
+| Missing Evidence | Target image installed version；兩種terminal forms之實際語法與discriminator；Goal Pose欄位完整交給SYS-009；Station ID原樣交給SYS-032；未通過SYS-033前不送入Nav2 |
+
+成熟Nav2完整覆蓋pose goal representation，但不提供Station ID target form，因此整體為Partially Covered。最小缺口只存在於terminal input boundary：辨識target form後，Goal Pose交給SYS-009，Station ID交給SYS-032；兩路形成canonical `PoseStamped`後共同由SYS-033驗證。Navigation Resources由使用者依MVP操作規則人工確認，不形成runtime admission responsibility，也不重複計入SYS-008 gap。不得因這個薄seam新增Mission Core、Station Registry、自訂navigation action、Web Panel或Docking scope。
+
+### Architecture Considerations
+
+05 應保留`人工確認場域資料夾 -> terminal input -> target-form discriminator -> Goal Pose交SYS-009／Station ID交SYS-032 -> canonical PoseStamped -> SYS-033 validation -> Nav2`的收斂關係。核心導航只接收validated canonical `PoseStamped`；Station與Goal Pose是外部輸入形式，不應在後續planner／controller形成兩條執行路徑。Relative Pose不在目前SYS-008 scope。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-009 Goal Pose Normalization
+
+### Required Behavior / Constraint
+
+系統應接受使用者透過終端提交以公尺表示之絕對 `x`、`y`，以及以度表示之 `yaw-deg` Goal Pose，並將其正規化為目前導航全域座標框架中的 canonical `geometry_msgs/msg/PoseStamped`；系統應保留其絕對位置與方向語意，將 `yaw-deg` 轉換為 quaternion，並依操作規則設定 frame 與 timestamp。必要欄位缺失或無法解析時，系統應拒絕該目標並回報原因。
+
+### Candidate Assessment: standard PoseStamped and tf2 with thin terminal normalization adapter
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy standard `geometry_msgs/msg/PoseStamped`、REP-103單位慣例、`tf2` quaternion APIs與標準CLI argument parser，組合一個最小terminal normalization adapter |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；`geometry_msgs` Jazzy release 5.3.8-1、`tf2` Jazzy release 0.36.22-1；target image installed versions與CLI implementation language尚待確認與固定 |
+| Coverage Status | `Partially Covered` |
+| Covered Scope | `PoseStamped`提供frame／stamp／position／orientation標準結構；REP-103固定ROS內部長度與角度單位；tf2提供roll／pitch／yaw quaternion建立、normalization與message conversion；標準argument parser可拒絕missing／unparseable options並回報原因 |
+| Known Constraints | V0.1外部CLI contract固定為absolute `x`／`y` meters與`yaw-deg` degrees；adapter須執行degrees-to-radians、設定2D `z=0`／roll=0／pitch=0、依操作規則填入global frame與timestamp，且不得將輸入解讀為relative displacement；finite／TF／frame／quaternion最終有效性由SYS-033負責 |
+| Uncovered Gap | 最小terminal CLI／normalization adapter：解析`nav_goal pose --x <m> --y <m> --yaw-deg <deg>`，組合成熟conversion APIs並輸出canonical `PoseStamped`；不需要自訂pose message、quaternion algorithm或navigation action |
+| Evidence | ROS 2 Jazzy `geometry_msgs/msg/PoseStamped`與REP-103；tf2 0.36.22-1 `Quaternion::setRPY()`／`normalize()`及`tf2_geometry_msgs::toMsg()`官方API／source；詳見 `research/sys-009-target-validation-resolution.md` |
+| Missing Evidence | Target installed versions；CLI語法與option parser；degrees-to-radians及quaternion conversion；absolute x／y與yaw語意保留；frame／timestamp policy；missing／unparseable option reasons；輸出交給SYS-033而非直接送入Nav2 |
+
+成熟ROS 2型別與tf2完整覆蓋canonical pose representation與角度轉換機制，但不提供專案核准的`nav_goal pose --x --y --yaw-deg`操作介面，因此整體為Partially Covered。自訂範圍只是一個薄terminal adapter；不得把SYS-033的pose-validity policy、SYS-032的Station resolution或人工Navigation Resource確認納入本項。
+
+### Architecture Considerations
+
+05 應保留`terminal Goal Pose -> SYS-009 normalization -> canonical PoseStamped -> SYS-033 validation`關係，並把global frame與timestamp視為明確operation policy。CLI與conversion可以組合成熟library，但不得讓navigation execution直接理解`x／y／yaw-deg`或建立第二種核心goal type。Relative Pose不在v0.1 scope。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-032 Station Target Resolution
+
+### Required Behavior / Constraint
+
+系統應使用目前場域之 Station Catalog，將使用者提交的 Station ID 解析為該 Station 預先定義之 canonical `geometry_msgs/msg/PoseStamped`；Station ID 為空、找不到對應 Station 或無法解析時，系統應拒絕該目標並回報原因。
+
+### Candidate Assessment: standard PoseStamped plus thin Station resolver
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy standard `geometry_msgs/msg/PoseStamped`與通用configuration／YAML parsing能力，組合一個最小Station resolver；Navigation2沒有原生Station ID或Station Catalog API |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；`geometry_msgs` Jazzy release 5.3.8-1、Navigation2 Jazzy release 1.3.12-1；Catalog parser與target image installed versions尚待05／06選定及固定 |
+| Coverage Status | `Partially Covered` |
+| Covered Scope | `PoseStamped`提供resolved target的標準表示；通用parser可讀取後續核准的Catalog資料格式；SYS-008提供Station form與原始ID，使用者依MVP操作規則提供人工確認的目前場域Catalog，SYS-033接續驗證resolved pose |
+| Known Constraints | Nav2不提供Station ID、canonical Station Catalog或lookup／resolution API；lookup必須對目前Catalog採deterministic exact match，保留命中pose之frame／stamp／position／orientation，不得把Station ID默認等同Route Graph node ID |
+| Uncovered Gap | 最小Station resolver：接收非空Station ID，在目前有效Catalog精確查找，輸出預定義canonical `PoseStamped`；empty、not found或命中資料無法形成`PoseStamped`時拒絕並回報可辨識原因 |
+| Evidence | ROS 2 Jazzy `geometry_msgs/msg/PoseStamped`；Navigation2 Jazzy 1.3.12-1 `NavigateToPose`／Waypoint Follower／Docking公開interfaces之scope檢查；詳見 `research/sys-032-station-target-resolution.md` |
+| Missing Evidence | Target installed versions；Station Catalog後續核准schema／parser；exact-match與case／whitespace policy；empty／unknown／unresolvable reason；resolved pose欄位保真與SYS-033 handoff；不同場域Catalog isolation |
+
+成熟ROS 2與Nav2提供pose goal表示及下游navigation consumer，但沒有專案需要的Station semantics，因此不能判為Fully Covered。最小自訂範圍只是一個薄lookup／resolution boundary；Catalog selection與場域內容正確性由使用者人工負責，parser失敗由resolver沿用成熟parser原因，pose validity由SYS-033負責。Waypoint Follower、Docking、Mission Core與Station Registry均不需要納入。
+
+### Architecture Considerations
+
+05 應保留`人工確認目前場域Station Catalog -> terminal Station ID -> SYS-032 parse／exact lookup -> canonical PoseStamped -> SYS-033 validation`關係。Station Catalog是人工管理的navigation resource，不代表必須建立runtime registry；Station target也不得因部署資料格式而與Route Graph node identity耦合。具體Catalog schema、parser與resolver internal API留給05／06收斂。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-033 Canonical Goal Pose Validation
+
+### Required Behavior / Constraint
+
+系統應於導航開始前驗證 canonical `geometry_msgs/msg/PoseStamped`。其位置與方向數值應為有限值、座標框架不得為空且應可轉換至目前導航使用之全域座標框架、方向 quaternion 應有效；驗證失敗時，系統應拒絕該目標並回報原因。只有通過驗證的 canonical `PoseStamped` 才可提供給後續導航流程。
+
+### Candidate Assessment: standard numeric and tf2 validation primitives plus thin combined gate
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | C++ standard finite-number checks、ROS 2 Jazzy `tf2`／`tf2_ros` quaternion與transform APIs，組合一個最小pre-navigation canonical-pose validator／gate |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；`tf2`／`tf2_ros` Jazzy release 0.36.22-1、`geometry_msgs` 5.3.8-1、Navigation2 1.3.12-1；target image installed versions尚待確認與固定 |
+| Coverage Status | `Partially Covered` |
+| Covered Scope | `std::isfinite`可檢查position／orientation components；tf2可計算quaternion norm並提供transform availability、timeout與error detail；Nav2可接收通過驗證的canonical `PoseStamped`，其goal handling保留為提交後defense-in-depth |
+| Known Constraints | `PoseStamped` message definition本身不執行validation；Nav2 `goalReceived()`／`initializeGoalPose()`發生在goal提交後，只覆蓋部分robot-pose／goal-transform條件，不完整檢查finite values、quaternion與project-level rejection reason；quaternion tolerance、TF timeout、frame／timestamp policy須由後續configuration固定 |
+| Uncovered Gap | 最小combined validator／gate：依序聚合finite、nonempty frame、TF transformability與valid quaternion檢查；任一失敗即拒絕、回報可辨識原因且不得提交下游，全部通過才原樣轉交canonical `PoseStamped` |
+| Evidence | ROS 2 Jazzy `tf2`／`tf2_ros` Buffer與Quaternion官方API／source；C++ finite-number standard；Navigation2 1.3.12-1 `NavigateToPoseNavigator::goalReceived()`／`initializeGoalPose()` source；詳見 `research/sys-033-canonical-goal-pose-validation.md` |
+| Missing Evidence | Target installed versions；finite components matrix；empty frame；quaternion zero／non-unit tolerance；TF connected／missing／extrapolation與timeout reasons；frame／timestamp policy；任一失敗均不送入Nav2，以及valid pose欄位保真 |
+
+成熟API完整提供各項validation primitives，但沒有一個upstream元件在Nav2 goal提交前形成SYS-033要求的完整組合與單一target-admission decision，因此為Partially Covered。缺口是薄gate，不是自製TF、quaternion math或navigation validator framework；map bounds、occupancy、path feasibility、人工Navigation Resource確認與localization不在本項。
+
+### Architecture Considerations
+
+05 應保留SYS-009與SYS-032兩路輸出共同進入SYS-033後才可送往導航的唯一gate。Requirement分開是為了traceability與獨立驗證，不表示必須建立三個ROS nodes；05可將target-form handling、normalization／resolution與共同validation收斂在同一個薄terminal-facing boundary，但須維持可分別測試的責任與failure reasons。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-010 Map Localization
+
+### Required Behavior / Constraint
+
+系統應根據已載入地圖與可用的感知及里程資料估測 AMR 位姿，並提供標準定位 pose 與 `map → odom` transform，供導航功能使用。當 AMR 開機位置無法可靠得知時，系統應接受使用者提供目前地圖中的 approximate initial pose，作為定位初始化輸入。
+
+### Candidate Assessment: Navigation2 AMCL localization
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 `nav2_amcl`，搭配`nav2_map_server`、localization lifecycle composition及RViz `2D Pose Estimate` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2／`nav2_amcl` Jazzy release 1.3.12-1；target image installed versions尚待確認與固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | AMCL使用loaded `nav_msgs/msg/OccupancyGrid`、selected `LaserScan`及odom／TF估測map pose，發布`amcl_pose`並維護`map -> odom`；接受standard `/initialpose`或`SetInitialPose`輸入，RViz `2D Pose Estimate`可提供v0.1人工approximate initial pose；標準lifecycle composition管理configure／activate |
+| Known Constraints | SYS-010不再要求project-level localization-valid、convergence threshold、navigation admission、loss termination或專屬failure classification；缺少scan／map／odom／TF時依AMCL原生等待、drop、warning或無新輸出行為；`map -> odom`必須維持單一authoritative owner |
+| Uncovered Gap | `None`；不需要自製localizer、initial-pose adapter、convergence monitor或localization admission gate |
+| Evidence | Navigation2 Jazzy 1.3.12-1 `nav2_amcl`官方documentation、interfaces與source；`nav2_bringup/localization_launch.py`、RViz standard Initial Pose tool；詳見 `research/sys-010-map-localization.md` |
+| Missing Evidence | Target installed versions；實際map／scan／odom／TF frames與QoS；AMCL parameters與sensor model；唯一`map -> odom` authority；RViz Initial Pose操作；正常pose／TF輸出、input／TF缺失原生行為，以及目標場域實機定位表現 |
+
+AMCL原生完整覆蓋目前簡化後的定位、standard pose／TF output及人工Initial Pose需求，因此為Fully Covered。Runtime input暫時缺失或TF不可用不新增project health policy；其原生行為需由整合與實機evidence確認。自動定位、固定開機點與保存上次pose不在v0.1 scope。
+
+### Architecture Considerations
+
+05 應保留Map Package、selected scan、odom／TF到AMCL的標準composition，AMCL對`map -> odom`的exclusive ownership，以及v0.1 RViz Initial Pose操作流程。不得重新加入04已移除的custom localization-valid gate；下游Nav2使用標準pose／TF時的原生失敗行為留在相應navigation requirements與integration verification。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-011 Path Planning
+
+### Required Behavior / Constraint
+
+系統應使用目前位姿與 active navigation stage 的目標，透過 Navigation2 產生有效且非空的路徑。無法產生路徑時，系統不得開始該 stage 的路徑追蹤，並應回報 Navigation2 原生規劃失敗結果。
+
+### Candidate Assessment: Navigation2 Planner Server
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 `nav2_planner` Planner Server與`nav2_core::GlobalPlanner` plugin |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 Jazzy release 1.3.12-1；target image installed version與selected planner plugin尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | `ComputePathToPose`可使用current robot pose或explicit start與active-stage `PoseStamped` goal呼叫selected planner；Planner Server等待global costmap ready、執行必要TF轉換、拒絕empty path，成功回傳`nav_msgs/msg/Path`，失敗回傳原生error code與message |
+| Known Constraints | 「有效」限於selected planner依configured global costmap、footprint、frames與plugin constraints接受且產生的non-empty path，不代表physical-safety certification；只有planning success後才可將path交給SYS-015開始tracking |
+| Uncovered Gap | `None`；不需要自製planner、stage orchestrator、alternative manager或failure taxonomy |
+| Evidence | Navigation2 1.3.12 `planner_server.cpp`、`ComputePathToPose.action`、`nav2_core::GlobalPlanner`及Planner Server官方configuration；詳見`research/sys-011-path-planning.md` |
+| Missing Evidence | Target installed versions與selected planner plugin；實際frames／TF／global costmap／footprint配置；各active stage成功path；empty／no-path／TF／timeout等失敗結果；planning失敗時未開始`FollowPath`；實機planning latency與path suitability |
+
+Navigation2 Planner Server已完整提供目前SYS-011要求的active-stage path computation、non-empty path acceptance與原生failure result。標準BT Sequence可使後續`FollowPath`只在`ComputePathToPose`成功後執行，因此失敗時不開始tracking也不需額外project gate。
+
+### Architecture Considerations
+
+05 應直接組合Planner Server、selected global planner plugin與標準BT planning-to-tracking sequence。SYS-011只擁有單一active stage的path computation；First Mile／On Route／Last Mile continuity、route-assisted alternatives、path tracking、停止、導航結果及`Free-space Fallback unavailable`分別由SYS-013、SYS-015、SYS-017及SYS-018～021承擔，不得在SYS-011建立重複orchestration責任。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-014 Obstacle Avoidance
+
+### Required Behavior / Constraint
+
+導航期間，系統應使用有效之環境障礙物資訊，避免規劃或執行穿越已判定占用區域之運動；無法維持可安全執行之導航時，系統應嘗試使底盤停止並回報失敗。
+
+### Candidate Assessment: Navigation2 collision-aware navigation composition
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 layered global/local costmaps、collision-aware planner/controller、Planner/Controller Server、standard BT failure propagation及`nav2_collision_monitor` defense-in-depth |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 Jazzy release 1.3.12-1；target image installed versions與selected plugins尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | sensor observations的marking／clearing與freshness；static/dynamic occupied costs及footprint inflation；planning與local trajectory collision checks；stale costmap、no-path或no-valid-control failure；Controller Server zero-velocity stop attempt及native error；Collision Monitor command-chain stop／slow／limit zones與source-timeout blocking behavior |
+| Known Constraints | Collision Monitor是核准納入的defense-in-depth，但不是hard-real-time、safety-certified或實體E-stop替代品；zero velocity只證明software stop attempt，不證明底盤已實際停止；transparent、遮蔽、超出range或未被sensor/costmap標記的真實障礙不在occupied-cell保證內 |
+| Uncovered Gap | `None`；不需要自製costmap、collision algorithm、obstacle-avoidance controller或failure taxonomy |
+| Evidence | Navigation2 1.3.12 `nav2_costmap_2d`、Smac Planner、MPPI／Regulated Pure Pursuit、Planner／Controller Server、BT與Collision Monitor官方documentation/source；詳見`research/sys-014-obstacle-avoidance.md` |
+| Missing Evidence | Target installed versions；實際LaserScan sources、QoS／TF／freshness；costmap marking／clearing／inflation；planner/controller collision injection；Collision Monitor sources/zones/source timeout/TF failure與cmd_vel chain；native failure與zero command；實機detection、braking及physical stop |
+
+成熟Nav2 composition已完整覆蓋SYS-014，Custom Behavior Gap為None。Collision Monitor雖非原始normative behavior不可或缺的元件，仍依核准決策納入MVP成熟方案，提供更靠近速度命令輸出的額外stop／slow／limit防線；它不得取代核心costmap/planner/controller avoidance flow。
+
+### Architecture Considerations
+
+05 應保留`obstacle observations -> global/local costmaps -> collision-aware planner/controller -> Controller Server/BT failure`主流程，並把Collision Monitor放在核准的velocity-command chain中作defense-in-depth。Perception提供measurement，costmaps擁有occupied representation，planner/controller擁有collision avoidance，Nav2 action提供native failure，motion/base負責命令傳遞與physical-stop evidence；SYS-014不重複SYS-011、SYS-015、SYS-017或SYS-022／027／030責任。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-015 Path Tracking
+
+### Required Behavior / Constraint
+
+系統應透過 Navigation2 `FollowPath` 控制 AMR 追蹤目前 active navigation stage 的有效路徑，並使用設定的 controller 與 progress checker 判定能否繼續追蹤。無法繼續追蹤時，系統應停止該 stage 的路徑追蹤、嘗試使底盤停止，並回報 Navigation2 原生追蹤失敗結果。追蹤接受條件應經整合及實機驗證。
+
+### Candidate Assessment: Navigation2 Controller Server and FollowPath
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 Controller Server、`FollowPath`、selected `nav2_core::Controller` plugin、Progress Checker、Goal Checker及standard BT composition |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 Jazzy release 1.3.12-1；target image installed versions與selected controller/progress plugins尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 接受non-empty `nav_msgs/msg/Path`；以selected controller持續產生velocity commands；監控controller、path、TF、local costmap與progress；提供distance/speed feedback；無法繼續時終止`FollowPath`、發布zero velocity並回傳原生error code/message |
+| Known Constraints | Progress Checker判定是否持續移動，不等同跨controller通用的lateral path-deviation量測；追蹤接受條件須依selected controller、progress policy與實機結果固定；zero velocity是software stop attempt，不證明physical stop |
+| Uncovered Gap | `None`；不需要自製path follower、tracking monitor、stage orchestrator或failure taxonomy |
+| Evidence | Navigation2 1.3.12 Controller Server、`FollowPath.action`、Progress/Goal Checker、MPPI／Regulated Pure Pursuit及standard BT官方documentation/source；詳見`research/sys-015-path-tracking.md` |
+| Missing Evidence | Target installed versions與selected plugins；controller/local costmap/TF/odom/rate配置；First Mile、On Route、Last Mile實際path tracking；progress/failure injection；native error/result；zero-command chain；實機tracking error、latency及停止表現 |
+
+Navigation2原生Controller Server與FollowPath完整覆蓋單一active stage的tracking、continue/failure判定、zero-velocity stop attempt及原生結果，因此Custom Behavior Gap為None。SYS-015不再重複stage transition、route-assisted candidate或fallback classification。
+
+### Architecture Considerations
+
+05 應讓SYS-011成功產生的active-stage path透過標準BT交給SYS-015 `FollowPath`，並由selected controller與Progress Checker負責單一路徑追蹤。First Mile、On Route與Last Mile均共用此tracking能力，但stage selection、transition與跨stage continuity必須由SYS-018～020後續assessment及05 contracts明確承接；route strategy／fallback與final result分別由SYS-013／021及SYS-017負責。不得因SYS-015簡化而刪除三階段移動原則或留下無owner的stage handoff。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-016 Goal Completion
+
+### Required Behavior / Constraint
+
+系統僅應在 AMR 目前位姿符合解析後 Navigation Target 所設定之位置與朝向接受條件，且底盤已停止時，判定導航成功。位置、朝向與停止判定門檻應經整合及實機驗證。
+
+### Candidate Assessment: Navigation2 StoppedGoalChecker
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 Controller Server、`FollowPath`、`nav2_controller::StoppedGoalChecker`及standard NavigateToPose BT |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2／`nav2_controller` Jazzy release 1.3.12-1；target image installed version尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 對final path endpoint檢查current pose的XY與yaw；使用odometry-derived twist檢查平移與旋轉速度低於停止門檻；四項條件全部通過才讓`FollowPath`成功，並由standard BT傳遞至NavigateToPose success |
+| Known Constraints | 必須使用`StoppedGoalChecker`而非只檢查pose的`SimpleGoalChecker`；final path endpoint須保留resolved Navigation Target position/yaw；navigation-level stopped使用odom feedback，不等同M1 wheel-stop hardware confirmation；`stateful`與所有thresholds須配置及實機驗證 |
+| Uncovered Gap | `None`；不需要自製goal-completion gate、velocity monitor或success message |
+| Evidence | Navigation2 1.3.12 `StoppedGoalChecker`／`SimpleGoalChecker`、Controller Server、`FollowPath`／`NavigateToPose` action及standard BT官方API/source；詳見`research/sys-016-goal-completion.md` |
+| Missing Evidence | Target installed versions與selected Goal Checker ID；final endpoint preservation；odom topic/source/rate/latency；XY/yaw、translational/rotational stop及minimum-velocity thresholds；`stateful` policy；boundary/noise/creep及final-stage-only success實機結果 |
+
+`StoppedGoalChecker`原生把position、orientation、odometry translational velocity與rotational velocity組成同一goal-reached predicate，完整覆蓋SYS-016，因此Custom Behavior Gap為None。Controller Server先套用minimum-velocity thresholds再呼叫checker；門檻過大可能過早成功，過小則可能受noise影響而無法成功，必須由整合及實機evidence固定。
+
+### Architecture Considerations
+
+05 應在final-stage `FollowPath`明確選用`StoppedGoalChecker`，並維持`final target endpoint -> StoppedGoalChecker -> FollowPath success -> final BT success -> NavigateToPose success`關係。Intermediate First Mile或On Route stage endpoint success不得直接形成整體Navigation Success；三階段transition仍由SYS-018～020承接，外部結果由SYS-017負責。SYS-016的odom stopped predicate不得被當作SYS-030 hardware stop confirmation。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-017 Navigation Result
+
+### Required Behavior / Constraint
+
+系統應透過 Navigation2 原生導航結果回報導航成功、失敗或取消；導航失敗時應回報可取得的 Navigation2 原生失敗結果。
+
+### Candidate Assessment: Navigation2 native action result
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy action result、Navigation2 1.3.12-1 `NavigateToPose`、BT Navigator，以及`ComputePathToPose`／`FollowPath`／`ComputeRoute`原生results |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2／`nav2_msgs` Jazzy release 1.3.12-1；target image installed versions尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | ROS 2 action wrapped result區分`SUCCEEDED`／`ABORTED`／`CANCELED`；`NavigateToPose`提供overall result payload；BT Navigator聚合child error codes；planner、controller與route actions提供各自native failure codes |
+| Known Constraints | 1.3.12不保證每個child的detail string完整傳到final `NavigateToPose.error_msg`；terminal client須同時觀察wrapped action status與result payload；CancelGoal request accepted不等於goal已完成取消，仍須等待final `CANCELED` result |
+| Uncovered Gap | `None`；不需要stage-aware result taxonomy、project failure enum、result aggregator或custom navigation action |
+| Evidence | ROS 2 Jazzy action semantics；Navigation2 1.3.12 `NavigateToPose`、BT Action Server、standard BT、`ComputePathToPose`、`FollowPath`與`ComputeRoute`官方interfaces/source；詳見`research/sys-017-navigation-result.md` |
+| Missing Evidence | Target installed versions；actual BT error-code ports；planning/tracking/route child result至final result的傳遞；success/failure/cancel及race scenarios；terminal實際顯示之status、code與可取得message |
+
+ROS 2 action與Navigation2原生result完整覆蓋目前SYS-017，因此Custom Behavior Gap為None。First Mile、On Route與Last Mile仍是SYS-018～020的執行原則，`Free-space Fallback unavailable`仍由SYS-021要求；SYS-017只回報它們最終形成的Nav2原生overall outcome，不再重複建立project stage分類。
+
+### Architecture Considerations
+
+05 應保留`child Nav2 action result -> BT Navigator result -> NavigateToPose wrapped status/payload -> terminal`的標準結果鏈。Terminal必須區分request accepted、canceling與final canceled；不得只用`error_code == 0`推論所有terminal states。不要為了標示First Mile／On Route／Last Mile而新增custom result framework；三階段與fallback責任仍須在SYS-018～021的execution flow中實現及驗證。
+
+### MVP Change Candidate
+
+`None`。

@@ -21,10 +21,11 @@
 ## Progress
 
 - 總議題：40
-- 已完成：11
+- 已完成：30
 - 上游阻塞：0
-- 待討論：29
-- 目前進度：11 / 40
+- 討論中：0
+- 待討論：10
+- 目前進度：30 / 40
 
 ## A. Common Reuse-assessment Rules
 
@@ -61,53 +62,52 @@
   - 完成條件：完成 ROS 2 Jazzy `ros2_control + diff_drive_controller` 對 `TwistStamped` 速度命令、差速輪運動學、wheel velocity command interfaces 與底盤移動之成熟方案 coverage record。
 - [x] 11. SYS-026 Base Fault Handling
   - 完成條件：完成 hardware interface 回傳 `ERROR` 時，由 ROS 2 Jazzy ros2_control 停止使用該硬體介面的 controllers，並使managed error state可被觀察之成熟方案 coverage record。
-- [ ] 12. SYS-027 Motion-command Timeout
-  - 完成條件：完成有效速度命令 timeout 與停止行為之成熟方案 coverage record。
-- [ ] 13. SYS-028 Base Motion Limits
-  - 完成條件：完成輪速、馬達 RPM 與 operational limits 之成熟方案 coverage record。
-- [ ] 14. SYS-029 Base State Feedback
+- [x] 12. SYS-027 Motion-command Timeout
+  - 完成條件：完成 ROS 2 Jazzy `diff_drive_controller` 在 non-chained `TwistStamped` input、非零 `cmd_vel_timeout` 條件下的 command-age timeout 與停止命令之成熟方案 coverage record；保留 limiter profile、hardware delivery 與實體停止時間／距離之整合及實機 evidence obligations。
+- [x] 13. SYS-028 Base Motion Limits
+  - 完成條件：完成 AMR 直線／旋轉速度與相應加速／減速 operational limits 之成熟方案 coverage record；wheel speed 與 motor RPM limits 視為由 system-level limits 推導的後續 architecture／subsystem configuration，不作為 SYS-028 的獨立 requirement fragments。
+- [x] 14. SYS-029 Base State Feedback
   - 完成條件：完成 measured wheel position／velocity、validity 與禁止 command substitution 之成熟方案 coverage record。
-- [ ] 15. SYS-030 Safe Base Enable and Stop
+- [x] 15. SYS-030 Safe Base Enable and Stop
   - 完成條件：完成 enable prerequisites、stop confirmation、driver disable 與 independent safety-action attempts 之成熟方案 coverage record。
-- [ ] 16. SYS-031 Base Configuration Validation
-  - 完成條件：完成 motor mapping、direction、gear ratio、position scale 與 operational-limit validation 之成熟方案 coverage record。
 
 ### Mapping
 
-- [ ] 17. SYS-001 Map Creation
-  - 完成條件：完成二維 Occupancy Grid 建立之成熟方案 coverage record。
-- [ ] 18. SYS-002 Map Storage
-  - 完成條件：完成建圖結果儲存為 Map Package 之成熟方案 coverage record。
-- [ ] 19. SYS-006 Continuous Map Update
-  - 完成條件：完成有效感知與里程輸入下持續更新 Occupancy Grid 之成熟方案 coverage record。
-- [ ] 20. SYS-007 Map Reload
-  - 完成條件：完成 Map Package 重載並供定位與導航使用之成熟方案 coverage record。
-- [ ] 21. SYS-024 Mapping Result
-  - 完成條件：完成 Map Package 可重載成功條件、失敗原因與結果回報之成熟方案 coverage record。
+- [x] 16. SYS-001 Map Creation
+  - 完成條件：完成 ROS 2 Jazzy `slam_toolbox` 2.8.5-1 online asynchronous mapping 對lifecycle configure／activate初始化、失敗diagnostics與二維Occupancy Grid建立之成熟方案coverage record；以ACTIVE作為可處理資料狀態，不追加runtime input readiness／首筆scan gate，並保留selected scan、TF／odometry整合、exclusive`map -> odom` ownership、部署參數與實機map-fitness evidence obligations。
+- [x] 17. SYS-002 Map Storage
+  - 完成條件：完成 ROS 2 Jazzy `nav2_map_server` 1.3.12-1 `map_saver_cli`／lifecycle `SaveMap` 將 authoritative Occupancy Grid 儲存為 per-site `map.pgm`、`map.yaml`，並以 boolean／process result 與原生 logs 回報儲存失敗及原因之成熟方案 coverage record；保留固定 basename／format、persistent writable filesystem、overwrite與partial residue之配置及evidence obligations，且將儲存後 read-back 明確留給 SYS-024，不混入Route Graph、Station Catalog或Navigation startup load。
+- [x] 18. SYS-006 Continuous Map Update
+  - 完成條件：完成 ROS 2 Jazzy `slam_toolbox` 2.8.5-1 online asynchronous mapping 對有效scan與scan-stamped odometry之measurement acceptance、pose-graph更新、週期性Occupancy Grid刷新，以及input暫時不可用時保留既有地圖並等待後續有效資料之成熟方案 coverage record；保留TF／QoS、acceptance parameters、active map subscriber、使用者完成／終止時的lifecycle stop ordering及真機cadence／drop／恢復／map progression evidence obligations，且不要求每筆raw scan一對一更新、雙LiDAR merge或自訂input-health／automatic-termination元件。
+- [x] 19. SYS-007 Map Load
+  - 完成條件：完成 ROS 2 Jazzy Navigation2 1.3.12-1 `localization_launch.py map:=...`、lifecycle `map_server`／manager與AMCL之startup Map Package載入、Occupancy Grid發布及載入失敗阻止navigation-ready之成熟方案coverage record；不納入runtime `LoadMap`／hot switch，並保留target version、實際Map Package、lifecycle／map QoS與failure evidence obligations。
+- [x] 20. SYS-024 Map Package Read-back
+  - 完成條件：完成 ROS 2 Jazzy Navigation2 `nav2_map_server` 1.3.12-1 public MapIO `loadMapFromYaml()` 對儲存後Map Package之YAML／image解析、Occupancy Grid conversion、標準`LOAD_MAP_STATUS`與原生失敗原因logs之成熟方案coverage record；採標準parser結果而不追加non-empty／quality validation，保留target version、成功與各failure status、path identity及無`/map` side effect之evidence obligations。
 
 ### Target, Resource, and Localization
 
-- [ ] 22. SYS-008 Navigation Target
-  - 完成條件：完成 Station 與 Goal Pose target forms 之成熟方案 coverage record。
-- [ ] 23. SYS-009 Navigation Target Validation and Resolution
-  - 完成條件：完成 target validation、Station resolution、Goal Pose acceptance 與 rejection reason 之成熟方案 coverage record。
-- [ ] 24. SYS-010 Map Localization
-  - 完成條件：完成 map pose、manual initial pose、localization validity、navigation gate 與 localization-loss behavior 之成熟方案 coverage record。
-- [ ] 25. SYS-012 Navigation Resource Validation
-  - 完成條件：完成 Map Package、Route Graph、Navigation configuration、Station Catalog 的 existence、validity 與 compatibility coverage record。
-
+- [x] 21. SYS-008 Navigation Target
+  - 完成條件：重新確認 Station／Goal Pose external target forms、最小terminal-facing discriminator，以及分別交由SYS-032／SYS-009形成canonical `PoseStamped`之coverage record；保留terminal syntax、欄位保真及admission boundary之evidence obligations。
+- [x] 22. SYS-009 Goal Pose Normalization
+  - 完成條件：完成v0.1 `nav_goal pose --x <m> --y <m> --yaw-deg <deg>`至canonical `PoseStamped`之成熟型別／tf2 coverage與最小terminal normalization adapter record；保留absolute semantics、degrees-to-radians／quaternion、global frame／timestamp、missing／unparseable reason及SYS-033 handoff之evidence obligations。
+- [x] 23. SYS-032 Station Target Resolution
+  - 完成條件：完成standard `PoseStamped`／通用parser可重用範圍、Nav2缺少Station semantics所需最小exact-match Station resolver，以及empty／unknown／unresolvable rejection reason之coverage record；保留人工確認Catalog、schema／parser、ID comparison、resolved-pose field preservation與SYS-033 handoff之evidence obligations。
+- [x] 24. SYS-033 Canonical Goal Pose Validation
+  - 完成條件：完成standard finite／tf2 validation primitives、Nav2提交後部分防線與最小pre-navigation combined validator／gate之coverage record；保留quaternion tolerance、TF timeout、frame／timestamp policy、failure reasons、valid-pose field preservation與invalid target不得下送之evidence obligations。
+- [x] 25. SYS-010 Map Localization
+  - 完成條件：完成ROS 2 Jazzy Navigation2 AMCL 1.3.12-1對loaded map／LaserScan／odom-TF定位、standard pose、exclusive`map -> odom`及RViz Initial Pose之原生coverage record；不追加localization-valid／admission／loss policy，並保留frames／QoS／parameters、人工操作與實機定位evidence obligations。
 ### Navigation Execution
 
-- [ ] 26. SYS-011 Path Planning
-  - 完成條件：完成 active-stage planning、movement continuity、route-assisted alternatives 與 failure boundary 之成熟方案 coverage record。
-- [ ] 27. SYS-014 Obstacle Avoidance
-  - 完成條件：完成障礙物資訊、occupied-space avoidance、unsafe-navigation stop 與 failure reporting 之成熟方案 coverage record。
-- [ ] 28. SYS-015 Path Tracking
-  - 完成條件：完成 active-stage tracking、transition monitoring、route-assisted alternatives 與 evidence-bound acceptance conditions 之成熟方案 coverage record。
-- [ ] 29. SYS-016 Goal Completion
-  - 完成條件：完成 position、orientation、stopped-state success gate 與 evidence-bound thresholds 之成熟方案 coverage record。
-- [ ] 30. SYS-017 Navigation Result
-  - 完成條件：完成 success／failure／cancel result 及各 navigation failure boundary differentiation 之成熟方案 coverage record。
+- [x] 26. SYS-011 Path Planning
+  - 完成條件：完成Navigation2 Jazzy Planner Server 1.3.12-1對current pose／active-stage goal、有效非空path、失敗時不開始tracking及原生規劃結果之coverage record；跨stage continuity、route alternatives、tracking、stop與fallback classification分別保留於SYS-013、SYS-015、SYS-017、SYS-018～021，不重複計入SYS-011。
+- [x] 27. SYS-014 Obstacle Avoidance
+  - 完成條件：完成Navigation2 Jazzy 1.3.12-1 layered global/local costmaps、collision-aware planner/controller、Planner/Controller Server、standard BT與核准納入之`nav2_collision_monitor`對障礙物資訊、occupied-space avoidance、native failure及zero-velocity stop attempt的coverage record；保留sensor freshness、costmap/footprint、Collision Monitor zones/timeouts、cmd_vel chain及physical-stop實機evidence obligations。
+- [x] 28. SYS-015 Path Tracking
+  - 完成條件：完成Navigation2 Jazzy 1.3.12-1 Controller Server、`FollowPath`、selected controller、Progress Checker與standard BT對active-stage path tracking、continue/failure判定、zero-velocity stop attempt及原生結果之coverage record；保留controller/progress configuration與實機tracking evidence，並要求SYS-018～020後續assessment承接stage transition及First Mile／On Route／Last Mile continuity。
+- [x] 29. SYS-016 Goal Completion
+  - 完成條件：完成Navigation2 Jazzy 1.3.12-1 Controller Server、`FollowPath`、`StoppedGoalChecker`與standard NavigateToPose BT對final target XY／yaw及odometry-derived translational／rotational stopped predicate之coverage record；保留goal/stop thresholds、`stateful`、odom minimum thresholds、final endpoint preservation與實機success-chain evidence obligations。
+- [x] 30. SYS-017 Navigation Result
+  - 完成條件：完成ROS 2 action與Navigation2 Jazzy 1.3.12-1 `NavigateToPose`／BT Navigator對`SUCCEEDED`／`ABORTED`／`CANCELED`、child native error-code aggregation及可取得原生failure result之coverage record；不建立stage-aware taxonomy，並保留cancel completion、error propagation與terminal呈現evidence obligations。
 - [ ] 31. SYS-025 Navigation Cancellation
   - 完成條件：完成 active navigation cancellation、termination 與 cancel result 之成熟方案 coverage record。
 

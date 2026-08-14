@@ -94,11 +94,10 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ## 前置條件
 
 - AMR 已完成啟動。
-- 已載入可供導航使用之 Map Package。
-- 已載入與目前 Map Package 相容且有效之 Route Graph。
-- Station Target 所需之 Station Catalog 已載入、有效且與目前 Map Package 相容。
+- 使用者已選定場域資料夾，並人工確認其中包含導航所需之 Map Package、Route Graph 與 Navigation Configuration。
+- 使用 Station Target 時，使用者亦已人工確認同一資料夾中包含 Station Catalog。
 - 若 AMR 開機位置無法由系統可靠得知，使用者已提供目前地圖中的 approximate initial pose。
-- AMR 已在目前地圖中完成定位，且系統可接受導航任務。
+- 地圖定位功能已啟動，並依 AMCL 原生介面提供標準定位 pose 與 `map → odom` transform。
 
 ---
 
@@ -111,7 +110,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ## 基本流程
 
 1. 使用者指定 Navigation Target。
-2. 系統驗證 Navigation Target 與導航所需資源，並將 Navigation Target 解析為 Canonical Goal Pose。
+2. 系統將 Navigation Target 正規化或解析為 Canonical Goal Pose，並驗證該 Pose。
 3. 系統根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
 4. 若目前位姿不在選定 route entry，系統執行 First Mile 銜接該 entry。
 5. 系統沿選定 Route Graph 執行 On Route movement。
@@ -125,9 +124,9 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ### Initial Pose Provision
 
-若 AMR 每次開機位置不固定，且系統無法可靠取得其在目前地圖中的初始位置，使用者應先提供 approximate initial pose，包含 `x`、`y` 與 `yaw`。系統應使用該資訊開始定位；只有 localization valid 後，才可接受 Navigation Target。
+若 AMR 每次開機位置不固定，且系統無法可靠取得其在目前地圖中的初始位置，使用者應先提供 approximate initial pose，包含 `x`、`y` 與 `yaw`。系統應將該資訊提供給 AMCL 作為定位初始化輸入。
 
-此操作在 v0.1 由使用者人工完成。提供 initial pose 不等於定位已有效，系統仍須等待定位收斂並確認 localization validity。
+此操作在 v0.1 由使用者透過 RViz `2D Pose Estimate` 人工完成；系統不另行定義 localization-valid 或收斂 gate。
 
 ---
 
@@ -165,10 +164,8 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ## Failure / Cancellation Flow
 
 - Station ID 不存在或 Goal Pose 無效時，系統拒絕導航任務並回報原因。
-- Route Graph 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
-- Station Target 所需之 Station Catalog 缺失、無效或與目前 Map Package 不相容時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
-- Navigation configuration 無效時，系統拒絕導航任務並回報原因，不得將此情況視為 free-space fallback。
-- 需要 initial pose 但尚未提供、initial pose 無效，或定位尚未有效時，系統不得接受導航任務，並應回報定位尚未就緒。
+- 使用者應在 Navigation 啟動前人工確認所選場域資料夾中的必要 Navigation Resources；任一成熟元件仍無法載入其資源時，系統沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback。
+- 需要 initial pose 時，使用者應透過 RViz `2D Pose Estimate` 提供；定位輸入或 TF 不可用時，系統沿用 AMCL／Nav2 原生行為。
 - First Mile、On Route 或 Last Mile 無法安全執行時，系統應先用盡可用的 route-assisted alternatives。
 - 符合保留的 Free-space Fallback eligibility 但已無可用 route-assisted solution 時，v0.1 應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
 - 系統無法繼續導航時，系統終止導航任務並回報失敗。
