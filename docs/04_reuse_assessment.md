@@ -1438,3 +1438,184 @@ ROS 2 action與Navigation2原生result完整覆蓋目前SYS-017，因此Custom B
 ### MVP Change Candidate
 
 `None`。
+
+## SYS-025 Navigation Cancellation
+
+### Required Behavior / Constraint
+
+系統應接受使用者對進行中導航任務提出之取消要求，終止該導航任務，並回報取消結果。
+
+### Candidate Assessment: ROS 2 action cancel and Navigation2 BT Navigator cancellation
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy action cancel 協定、Navigation2 1.3.12-1 `NavigateToPose`、`BtActionServer` / BT Navigator，以及 child action cancellation（`FollowPath`、`ComputePathToPose`、`ComputeRoute`） |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2／`nav2_msgs` Jazzy release 1.3.12-1；target image installed versions 尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 接收進行中導航之 cancel goal request；BT root halt 並級聯取消 active child actions；Controller Server 終止路徑追蹤並下發零速度命令；回傳標準 terminal `CANCELED` action result |
+| Known Constraints | Cancel request accepted 僅表示進入 `CANCELING` 狀態，terminal client 必須等待最終 `CANCELED` result；若取消請求與目標達成（Success）或失敗（Abort）並發，依 ROS 2 action 語意以 server 處理當下狀態決定最終 terminal state；零速度下發為 navigation-level 停止，實體減速停止受限於底盤加減速限制與運動學 |
+| Uncovered Gap | `None`；不需要自訂 cancellation watchdog、額外取消管理服務或客製化導航取消框架 |
+| Evidence | ROS 2 Jazzy action cancel protocol；Navigation2 1.3.12 `BtActionServer`、BT Action Node halt 機制、`ControllerServer` cancel 零速下發官方 interfaces/source；詳見 `research/sys-025-navigation-cancellation.md` |
+| Missing Evidence | Target installed exact versions；在 planning、tracking、recovery 及三階段各 stage 下之取消整合驗證；取消與即將成功／失敗之競態情境驗證；零速度發布與實體停止之時序量測；Terminal 端取消反饋與最終結果呈現驗證 |
+
+ROS 2 action 取消協定與 Navigation2 原生 BT 級聯取消機制完整覆蓋 SYS-025，因此 Custom Behavior Gap 為 None。取消時的零速度命令由 Navigation2 controller 發布，底盤超時保護由 SYS-027 承接，實體運動限制由 SYS-028 承接；SYS-025 不另行建立客製化取消狀態機。
+
+### Architecture Considerations
+
+05 應維持標準 `Client cancel_goal -> NavigateToPose/BtActionServer -> BT root halt -> child actions cancel -> zero cmd_vel -> final CANCELED result` 調度鏈。Terminal 必須區分 request accepted 與 final canceled 狀態；取消處理過程中的底盤停止命令應經由標準 velocity multiplexer 與 `diff_drive_controller` 下發，不繞過 base controller 安全與逾時保護。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-013 Route-preferred Navigation Strategy
+
+### Required Behavior / Constraint
+
+系統應根據目前位姿、Canonical Goal Pose 與有效 Route Graph 建立可安全執行的 route-assisted movement，並優先使用適用的 Route Graph 範圍。存在有效且可安全執行的 route-assisted solution 時，系統不得選擇完整 free-space movement。
+
+### Candidate Assessment: Navigation2 Route Server and Behavior Tree composition
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_route`（Route Server / `ComputeRoute.action`） + `nav2_planner`（Planner Server） + `nav2_behavior_tree` BT 組裝 |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 / `nav2_route` Jazzy release 1.3.12-1；target image installed versions 尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 依據 Current Pose、Canonical Goal Pose 與 Route Graph 搜尋並建立 route-assisted movement；在圖論路網可用範圍內優先採用 Route Graph；透過專案 BT 流程組裝確保優先採用 route 方案，並禁止在有可用 route 時執行完整 free-space 導航 |
+| Known Constraints | Route Graph 必須為合法且已載入之資源；route-assisted 方案之可行性需經 global/local costmap 檢查；在 v0.1 階段，BT 流程不得配置全局 free-space fallback，無可用 route 時應依 SYS-021 終止並回報 |
+| Uncovered Gap | `None`；不需要自行開發圖論搜尋演算法、自訂 Route Server 或客製化規劃核心 |
+| Evidence | Navigation2 1.3.12 `nav2_route`、`ComputeRoute.action`、Route Server 官方文件與 `nav2_behavior_tree` 調度機制；詳見 `research/sys-013-route-preferred-navigation-strategy.md` |
+| Missing Evidence | Target image installed exact versions；實際場域地圖與 Route Graph 拓撲之搜尋正確性驗證；驗證在有 route 情況下確實產生 route-assisted 移動；驗證無 route 時不會靜默轉為純 free-space 移動；實機規劃延遲與路徑可行性測試 |
+
+ROS 2 Jazzy Navigation2 之 `nav2_route` 與 Behavior Tree 調度機制完整覆蓋 SYS-013，因此 Custom Behavior Gap 為 None。三階段具體執行分別由 SYS-018（First Mile）、SYS-019（On Route）與 SYS-020（Last Mile）承接，無可用路線時的終止由 SYS-021（Fallback Boundary）承接；SYS-013 只確立「路線優先、禁止任意自由移動」之決策原則，不重複建立自訂規劃演算法。
+
+### Architecture Considerations
+
+05 應在導航決策層（BT Navigator）將 `nav2_route` 之 `ComputeRoute` 作為主要路徑規劃入口，並依序串接 First Mile、On Route、Last Mile 三階段執行鏈。嚴格禁止在專案 BT 中設置無條件回退至全域純自由空間規劃（`ComputePathToPose` 直接至目標）之 fallback 分支，以落實 SYS-013 與 SYS-021 的策略約束。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-018 First Mile
+
+### Required Behavior / Constraint
+
+目前位姿不在選定 route entry 時，系統應規劃並執行由目前位姿至該 entry 的安全連接；目前位姿已位於適用的 route entry 時，First Mile 應視為不需要執行，不得因此判定導航失敗。
+
+### Candidate Assessment: Navigation2 Planner and Controller with BT branching
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_planner`（Planner Server / `ComputePathToPose`） + `nav2_controller`（Controller Server / `FollowPath`） + `nav2_behavior_tree`（BT 條件判斷與順序控制） |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 Jazzy release 1.3.12-1；target image installed versions 尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 判定 Current Pose 與選定 Route Entry 之容差關係；不在 Entry 時，規劃起點至 Entry 之局部自由空間路徑並執行路徑追蹤；已在 Entry 時，判定為 Not-required 並成功放行至 On Route 階段，不判定為失敗；連接失敗時回報原生失敗供 SYS-021 處理 |
+| Known Constraints | Route Entry 必須為 Route Graph 上的有效節點／位姿；連接路徑受限於 global costmap 之障礙物占用；Not-required 判定容差（XY/Yaw tolerance）需合理配置；First Mile 成功僅代表抵達 Entry，不代表整體導航完成 |
+| Uncovered Gap | `None`；不需要自訂銜接演算法或專屬 First Mile 控制器，完全可由標準 Nav2 組件與 BT 條件分支達成 |
+| Evidence | Navigation2 1.3.12 `nav2_planner`、`nav2_controller`、`ComputePathToPose.action`、`FollowPath.action` 與 `nav2_behavior_tree` 條件分支機制；詳見 `research/sys-018-first-mile.md` |
+| Missing Evidence | Target image 之 exact installed versions；在 Route Entry 外不同距離與角度下之規劃與追蹤驗證；在 Route Entry 容差內直接跳過（Not-required）且成功進入 On Route 之驗證；Entry 被障礙物阻擋時之失敗回報驗證；實機銜接平順度與過渡時延量測 |
+
+Navigation2 Planner Server、Controller Server 與 Behavior Tree 條件分支機制完整覆蓋 SYS-018，因此 Custom Behavior Gap 為 None。First Mile 僅負責抵達 Route Entry，抵達後的路網移動由 SYS-019（On Route）承接，若無法連接 Entry 則交由 SYS-021（Fallback Boundary）處理；SYS-018 不承擔整體導航結果結算責任。
+
+### Architecture Considerations
+
+05 應在 BT Navigator 中以標準條件節點（Condition Node）檢查是否需執行 First Mile。若需執行，呼叫 `ComputePathToPose` 與 `FollowPath` 抵達 Entry；First Mile 完成後將控制權交給 On Route 階段（SYS-019），不在此處觸發整體導航成功結算（整體成功由最後階段 SYS-016 / SYS-017 負責）。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-019 On Route Navigation
+
+### Required Behavior / Constraint
+
+系統應沿選定 Route Graph route 由 route entry 移動至 route exit，並遵守 Route Graph 所定義的 connectivity、direction 與 availability constraints。
+
+### Candidate Assessment: Navigation2 Route Server and Controller path tracking
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_route`（Route Server / `ComputeRoute`） + `nav2_controller`（Controller Server / `FollowPath`） + Local Costmap 避障 |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 / `nav2_route` Jazzy release 1.3.12-1；target image installed versions 尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 自選定的 Route Entry 沿著路網節點與邊（Nodes & Edges）行駛至 Route Exit；依有向圖（Directed Graph）嚴格約束行駛方向（Direction）與連通性（Connectivity），保證不逆向行駛；在路段不可用或受阻時配合 Route Server 重選可用路線；抵達 Route Exit 時結束 On Route 階段並交接予 Last Mile |
+| Known Constraints | Route Graph 檔案必須合法定義連通性與方向性；AMR 在路網上的循跡貼合度由 local controller 參數（如 lookahead distance, path tolerance）決定；抵達 Route Exit 僅代表主線路網行駛結束，不代表整體導航完成 |
+| Uncovered Gap | `None`；不需要自訂圖論循跡引擎或專屬車道保持控制器，標準 `nav2_route` 與 Nav2 Controller 即可完整支援 |
+| Evidence | Navigation2 1.3.12 `nav2_route`、`route_server.cpp`、`ComputeRoute.action`、`FollowPath.action` 與 `controller_server.cpp` 之循跡與避障機制；詳見 `research/sys-019-on-route-navigation.md` |
+| Missing Evidence | Target image 之 exact installed versions；單向邊、雙向邊、分岔路口與交叉口之循跡與方向約束驗證；中途路網阻塞觸發重新選路或失敗回報驗證；Route Exit 抵達判斷與交接 Last Mile 之平順度測試 |
+
+ROS 2 Jazzy Navigation2 之 `nav2_route` 與 `nav2_controller` 完整覆蓋 SYS-019，因此 Custom Behavior Gap 為 None。AMR 從 Route Entry 出發，沿路網移動至 Route Exit，抵達 Exit 後順暢交接給 SYS-020（Last Mile）；若路網中途阻塞且無法重新選路，則依 SYS-021（Fallback Boundary）觸發降級終止。
+
+### Architecture Considerations
+
+05 應在 BT Navigator 中將 Route Path 的追蹤交由 `nav2_controller` 執行，並維持 local costmap 動態避障防線。On Route 抵達 Exit 點後，應平順觸發 Last Mile 子樹，不在此處做最終到站結算。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-020 Last Mile
+
+### Required Behavior / Constraint
+
+選定 route exit 未直接到達 Canonical Goal Pose 時，系統應規劃並執行由該 exit 至 Canonical Goal Pose 的安全連接；Canonical Goal Pose 已位於適用的 route exit 時，Last Mile 應視為不需要執行，不得因此判定導航失敗。
+
+### Candidate Assessment: Navigation2 Planner and Controller with BT branching and StoppedGoalChecker
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_planner`（Planner Server / `ComputePathToPose`） + `nav2_controller`（Controller Server / `FollowPath`） + `nav2_behavior_tree`（BT 條件判斷與順序控制） + `StoppedGoalChecker` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 Jazzy release 1.3.12-1；target image installed versions 尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 判定 Canonical Goal Pose 與 Route Exit 之容差關係；若未在 Exit 則規劃 Exit 至目標之局部自由空間路徑並執行追蹤；若已在 Exit 則判定為 Not-required 略過執行並順暢進入到站判定（SYS-016）；確保路徑終點保留 Canonical Goal Pose 之位置與朝向；連接失敗時回報原生失敗供 SYS-021 處理 |
+| Known Constraints | Canonical Goal Pose 必須為 global costmap 上的可達非占用點；Last Mile 路徑終點必須精確保留 Canonical Goal Pose 的位置與朝向；Not-required 判定容差需合理配置；Last Mile 追蹤完成後由 SYS-016 之 `StoppedGoalChecker` 進行最終停止與到站結算 |
+| Uncovered Gap | `None`；不需要自訂末端銜接演算法或專屬 Last Mile 控制器，完全可由標準 Nav2 組件與 BT 條件分支達成 |
+| Evidence | Navigation2 1.3.12 `nav2_planner`、`nav2_controller`、`stopped_goal_checker.cpp`、`ComputePathToPose.action`、`FollowPath.action` 與 `nav2_behavior_tree` 條件分支機制；詳見 `research/sys-020-last-mile.md` |
+| Missing Evidence | Target image 之 exact installed versions；在 Route Exit 外不同距離與朝向之目標點規劃與追蹤驗證；目標點剛好在 Exit 容差內直接跳過（Not-required）且成功結算之驗證；目標點周圍被障礙物阻擋時之失敗回報驗證；終點姿態精度與到站平順度量測 |
+
+Navigation2 Planner Server、Controller Server、StoppedGoalChecker 與 Behavior Tree 條件分支機制完整覆蓋 SYS-020，因此 Custom Behavior Gap 為 None。Last Mile 負責由 Route Exit 抵達目標點並保持姿態，追蹤完成後交由 SYS-016 進行最終到站與停止結算；若無法連接目標點則交由 SYS-021（Fallback Boundary）處理。
+
+### Architecture Considerations
+
+05 應在 BT Navigator 中將 Last Mile 作為三階段移動的最後一環，並確保末端路徑嚴格保留 Canonical Goal Pose 的座標與朝向。Last Mile 追蹤完成後，直接對接 SYS-016 `StoppedGoalChecker` 進行位姿容差與底盤停止結算，由 SYS-017 對外發布最終導航成功結果。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-021 Reserved Free-space Fallback Boundary
+
+### Required Behavior / Constraint
+
+系統應保留下列 Free-space Fallback eligibility，以供後續版本擴充：
+
+- Current Pose 無法連接任何可用 route entry。
+- Active、valid Route Graph 無法提供通往 Canonical Goal Pose 方向的可用 route。
+- On Route movement 因目前環境阻塞而無法維持，且重新選擇 Route Graph route 仍失敗。
+- 所有可用 route-assisted candidates 均無法由 route exit 透過 Last Mile 安全連接 Canonical Goal Pose。
+
+v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。Navigation Resource、Navigation Target、Navigation Configuration 或 localization 的缺失、無效或不相容仍屬其各自 failure boundary，不構成 fallback eligibility。
+
+### Candidate Assessment: Navigation2 Behavior Tree fallback handling and Action failure propagation
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_behavior_tree`（BT 流程與失敗捕捉） + `nav2_route` / `nav2_planner` / `nav2_controller` 失敗傳遞機制 + Action terminal `ABORTED` 結果回報 |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Navigation2 Jazzy release 1.3.12-1；target image installed versions 尚待確認及固定 |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 捕捉 First Mile 失敗、Route 搜尋無路、On Route 受阻重選失敗、Last Mile 失敗等 4 類無可用路線情境；在 BT 決策層落實 v0.1 禁用全局 free-space fallback 之約束；終止導航行為樹、主動發布零速命令煞停、回傳標準 `ABORTED` 狀態與失敗資訊；保持前置目標校驗（SYS-033）、資源載入（SYS-007）與定位有效性（SYS-010）之排他性失敗邊界 |
+| Known Constraints | v0.1 階段不執行任何未受約束的全域自由空間脫困移動；失敗回報需透過 Action Result payload 或專案終端介面呈現；前置資源/目標/定位錯誤必須在進入導航前或由各自節點獨立攔截，不得誤入此處 |
+| Uncovered Gap | `None`；不需要客製化降級管理器或專門的 fallback 守護進程，標準 Nav2 BT 流程組裝即可完全滿足 |
+| Evidence | Navigation2 1.3.12 `nav2_behavior_tree`、BT Action Server 終止機制、`pipeline_sequence.cpp` 與 Action error 傳遞機制；詳見 `research/sys-021-reserved-free-space-fallback-boundary.md` |
+| Missing Evidence | Target image 之 exact installed versions；針對 4 種 eligibility 條件的故障注入測試（起點堵塞、路網無路、中途堵死無替代、出口堵死）；驗證在失敗時絕不產生全局自由空間軌跡；驗證底盤平順煞停時序；Terminal 失敗訊息呈現驗證 |
+
+Navigation2 Behavior Tree 流程組裝與 Action 失敗傳遞機制完整覆蓋 SYS-021，因此 Custom Behavior Gap 為 None。4 種 eligibility 條件由各階段失敗直接捕捉，v0.1 禁用全局自由空間降級之約束透過 BT XML 結構移除 fallback 規劃分支達成，終止時由 Nav2 Controller 下發零速煞停並回報結果；前置目標、資源與定位問題由各自獨立邊界處理。
+
+### Architecture Considerations
+
+05 應在專案 Behavior Tree XML 中徹底移除任何未經路網約束的全局自由空間 fallback 分支。當三階段路網流程遭遇不可恢復之失敗時，BT 應立即觸發任務 abort 與零速發布，將錯誤碼傳遞至終端，確保 AMR 永遠在受控路網內運作或安全就地停下。
+
+### MVP Change Candidate
+
+`None`。

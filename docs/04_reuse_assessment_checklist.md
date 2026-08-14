@@ -21,11 +21,11 @@
 ## Progress
 
 - 總議題：40
-- 已完成：30
+- 已完成：40
 - 上游阻塞：0
 - 討論中：0
-- 待討論：10
-- 目前進度：30 / 40
+- 待討論：0
+- 目前進度：40 / 40 (100%)
 
 ## A. Common Reuse-assessment Rules
 
@@ -108,32 +108,32 @@
   - 完成條件：完成Navigation2 Jazzy 1.3.12-1 Controller Server、`FollowPath`、`StoppedGoalChecker`與standard NavigateToPose BT對final target XY／yaw及odometry-derived translational／rotational stopped predicate之coverage record；保留goal/stop thresholds、`stateful`、odom minimum thresholds、final endpoint preservation與實機success-chain evidence obligations。
 - [x] 30. SYS-017 Navigation Result
   - 完成條件：完成ROS 2 action與Navigation2 Jazzy 1.3.12-1 `NavigateToPose`／BT Navigator對`SUCCEEDED`／`ABORTED`／`CANCELED`、child native error-code aggregation及可取得原生failure result之coverage record；不建立stage-aware taxonomy，並保留cancel completion、error propagation與terminal呈現evidence obligations。
-- [ ] 31. SYS-025 Navigation Cancellation
-  - 完成條件：完成 active navigation cancellation、termination 與 cancel result 之成熟方案 coverage record。
+- [x] 31. SYS-025 Navigation Cancellation
+  - 完成條件：完成 ROS 2 Jazzy action cancel 協定、Navigation2 1.3.12-1 `NavigateToPose`／`BtActionServer` 對 active navigation cancel request 接收、BT root halt、active child actions 取消、Controller Server 零速下發、標準 terminal `CANCELED` result 回報，以及競態與實體停止邊界之成熟方案 coverage record。
 
 ### Route-assisted Strategy
 
-- [ ] 32. SYS-013 Route-preferred Navigation Strategy
-  - 完成條件：完成 Route Graph 優先、route-assisted movement 與禁止不必要完整 free-space movement 之成熟方案 coverage record。
-- [ ] 33. SYS-018 First Mile
-  - 完成條件：完成 current pose 至 route entry 的 safe connection 與 not-required semantics 之成熟方案 coverage record。
-- [ ] 34. SYS-019 On Route Navigation
-  - 完成條件：完成 Route Graph connectivity、direction、availability constraints 與 route execution 之成熟方案 coverage record。
-- [ ] 35. SYS-020 Last Mile
-  - 完成條件：完成 route exit 至 Canonical Goal Pose 的 safe connection 與 not-required semantics 之成熟方案 coverage record。
-- [ ] 36. SYS-021 Reserved Free-space Fallback Boundary
-  - 完成條件：完成 eligibility、v0.1 unavailable behavior、failure-boundary exclusions 與 future-extension coverage record。
+- [x] 32. SYS-013 Route-preferred Navigation Strategy
+  - 完成條件：完成 ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_route`（Route Server / `ComputeRoute`）與 Behavior Tree 組裝對 Route Graph 優先、三階段 route-assisted movement 建立、禁止不必要完整 free-space movement 及 v0.1 禁用全局 fallback 邊界之成熟方案 coverage record。
+- [x] 33. SYS-018 First Mile
+  - 完成條件：完成 Navigation2 Planner Server（`ComputePathToPose`）、Controller Server（`FollowPath`）與 Behavior Tree 條件分支對 Route Entry 距離判定、起點至 Entry 安全連接規劃與追蹤、已在 Entry 判定 Not-required 略過執行及連接失敗邊界之成熟方案 coverage record。
+- [x] 34. SYS-019 On Route Navigation
+  - 完成條件：完成 ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_route`（Route Server / `ComputeRoute`）與 `nav2_controller`（Controller Server / `FollowPath`）對 Route Graph 連通性、有向圖行駛方向保證、可用性障礙重選及抵達 Route Exit 交接 Last Mile 之成熟方案 coverage record。
+- [x] 35. SYS-020 Last Mile
+  - 完成條件：完成 Navigation2 Planner Server（`ComputePathToPose`）、Controller Server（`FollowPath`）、`StoppedGoalChecker` 與 Behavior Tree 條件分支對 Route Exit 至 Canonical Goal Pose 安全連接規劃與追蹤、目標朝向保真、目標已在 Exit 判定 Not-required 略過執行及連接失敗邊界之成熟方案 coverage record。
+- [x] 36. SYS-021 Reserved Free-space Fallback Boundary
+  - 完成條件：完成 Navigation2 Behavior Tree 流程組裝與 Action 失敗傳遞對 4 類無可用路線 eligibility 捕捉、v0.1 禁用全局自由空間降級之約束、零速安全煞停、回報 `ABORTED` / `Free-space Fallback unavailable` 以及前置排他性失敗邊界之成熟方案 coverage record。
 
 ## C. Final Reuse-assessment Audit
 
-- [ ] 37. SYS coverage completeness
-  - 完成條件：31 個唯一 SYS requirements 各有一份已核准 coverage record，沒有遺漏、重複或被 group conclusion 取代。
-- [ ] 38. Evidence, version, and source consistency
-  - 完成條件：candidate、exact version／platform、官方或實證來源、適用範圍與尚缺 evidence 一致且可追溯。
-- [ ] 39. Minimum-gap and prohibited-content audit
-  - 完成條件：每個 partial／not-covered gap 都直接對應 requirement fragment；04 未新增 requirement、architecture owner、subsystem 或 custom implementation design。
-- [ ] 40. 04→05 handoff and final baseline review
-  - 完成條件：coverage、constraints、minimum gaps、candidate comparison 與 unresolved verification obligations 可供 05 做 architecture decision，且 04 已完成整體一致性審查與核准。
+- [x] 37. SYS coverage completeness
+  - 完成條件：完成 31 個唯一 SYS requirements 1-to-1 比對，確認各有一份已核准之 coverage record，無任何遺漏、重複或被 group conclusion 取代。
+- [x] 38. Evidence, version, and source consistency
+  - 完成條件：完成全體 31 項 Assessment 之 target platform（Ubuntu 24.04 / Jazzy）、Navigation2 1.3.12-1 等套件版本、官方/源碼依據及 Missing Evidence 驗證義務之一致性審查與追溯確認。
+- [x] 39. Minimum-gap and prohibited-content audit
+  - 完成條件：完成全篇 6 個 Thin Adapter Gaps 錨定審查，確認其餘 25 項均為成熟方案 Composition / Configuration 覆蓋，且 04 未侵犯 05/06 架構邊界，無私造需求或自訂導航元件。
+- [x] 40. 04→05 handoff and final baseline review
+  - 完成條件：完成 04 Reuse Assessment 全體 40 項議題之審查、定案與核准，並產出 `docs/handoff/2026-08-15_00-55-00.md` 作為 05 Architecture 之權威輸入基準。
 
 ## Per-requirement Definition of Done
 
