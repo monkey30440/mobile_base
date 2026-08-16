@@ -128,7 +128,7 @@ Navigation2 1.3.12 `NavigateToPoseNavigator::goalReceived()`先載入behavior tr
 - robot footprint是否能放在goal；
 - 是否存在可行route或path；
 - planner／controller能否到達；
-- Map Package、Route Graph或Navigation Configuration是否admitted；
+- Map Package 或 Route Graph 是否 admitted；
 - localization是否有效。
 
 這些是map／planning／obstacle、operator precondition或SYS-010邊界。canonical pose可通過SYS-033但之後因無路可達而失敗；這不表示SYS-033漏驗證。

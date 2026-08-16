@@ -54,7 +54,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ## 完成條件
 
-建立完整且可重新載入之 Map Package。
+建立完整且可重新載入之 Map Package（即 `map.pgm` 與 `map.yaml`）。
 
 ---
 
@@ -94,8 +94,8 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ## 前置條件
 
 - AMR 已完成啟動。
-- 使用者已選定場域資料夾，並人工確認其中包含導航所需之 Map Package、Route Graph 與 Navigation Configuration。
-- 使用 Station Target 時，使用者亦已人工確認同一資料夾中包含 Station Catalog。
+- 使用者已選定場域資料夾，並人工確認其中包含導航所需之 Map Package（`map.pgm` 與 `map.yaml`），以及人工建立之 Route Graph（`route_graph.geojson`）。
+- 使用 Station Target 時，使用者亦已人工確認同一資料夾中包含人工建立之 Station Catalog（`stations.yaml`）。
 - 若 AMR 開機位置無法由系統可靠得知，使用者已提供目前地圖中的 approximate initial pose。
 - 地圖定位功能已啟動，並依 AMCL 原生介面提供標準定位 pose 與 `map → odom` transform。
 

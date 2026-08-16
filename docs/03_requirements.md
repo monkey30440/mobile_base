@@ -136,7 +136,7 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 - On Route movement 因目前環境阻塞而無法維持，且重新選擇 Route Graph route 仍失敗。
 - 所有可用 route-assisted candidates 均無法由 route exit 透過 Last Mile 安全連接 Canonical Goal Pose。
 
-v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。Navigation Resource、Navigation Target、Navigation Configuration 或 localization 的缺失、無效或不相容仍屬其各自 failure boundary，不構成 fallback eligibility。
+v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。Navigation Resource、Navigation Target 或 localization 的缺失、無效或不相容仍屬其各自 failure boundary，不構成 fallback eligibility。
 
 ---
 

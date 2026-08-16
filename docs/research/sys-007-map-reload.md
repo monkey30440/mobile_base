@@ -112,7 +112,7 @@ navigation-ready requires
 此gate只界定Map Package startup load：
 
 - approximate initial pose與AMCL標準定位輸出由SYS-010處理；
-- Route Graph、Station Catalog與Navigation Configuration由使用者在啟動前人工選擇與確認。
+- Route Graph 與 Station Catalog 由使用者在啟動前人工選擇與確認。
 
 所以map load成功只是navigation-ready的必要條件，不是充分條件；反過來，map load失敗則足以阻止navigation-ready。
 

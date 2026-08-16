@@ -35,7 +35,7 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 ## 輸出
 
-- Map Package（成功時）
+- Map Package（包含 `map.pgm` 與 `map.yaml`，成功時）
 - Map Creation Result
   - Success
   - Failure
@@ -75,8 +75,8 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 - 接收 Navigation Target。
 - 驗證 Navigation Target。
 - 將 Navigation Target 解析為 Canonical Goal Pose。
-- 使用使用者從人工管理之場域資料夾選定的 Map Package、Route Graph 與 Navigation Configuration。
-- 使用 Station Target 時，使用同一人工選定資料夾中的 Station Catalog。
+- 使用使用者從場域資料夾選定之 Map Package（建圖產物）與人工建立之 Route Graph。
+- 使用 Station Target 時，使用同一場域資料夾中人工建立之 Station Catalog。
 - 在開機位置無法可靠得知時，接受使用者提供的 approximate initial pose，供地圖定位初始化。
 - 透過標準定位 pose 與 `map → odom` transform 提供地圖定位結果。
 - 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
@@ -117,14 +117,13 @@ Navigation Target
 Navigation Resources：
 
 ```text
-Navigation Resources
-├── Map Package
-├── Route Graph
-├── Navigation Configuration
-└── Station Catalog（Station Target 使用）
+Navigation Resources（場域資料夾）
+├── Map Package（map.pgm 與 map.yaml，UC-001 建圖產物）
+├── Route Graph（route_graph.geojson，人工離線標註建立）
+└── Station Catalog（stations.yaml，人工離線編輯建立，Station Target 使用）
 ```
 
-V0.1 由使用者人工建立、選擇與確認場域資料夾中的 Navigation Resources；系統不提供跨資源 identity／compatibility admission。任一成熟元件無法載入其資源時，沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback 條件。
+v0.1 由使用者選定場域資料夾，並確認其中的 Map Package（建圖產物）以及人工建立之 Route Graph 與 Station Catalog；系統不提供跨資源 identity／compatibility admission。任一成熟元件無法載入其資源時，沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback 條件。
 
 Localization Initialization：
 
