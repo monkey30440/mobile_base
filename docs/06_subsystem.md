@@ -13,8 +13,9 @@
 - 各 Subsystem 的內部 ROS 2 Node / Lifecycle Component 分解；
 - 權威 ROS 2 Interfaces（Topic, Service, Action, Message Type, Frame ID, QoS Profile）；
 - YAML 參數結構與部署配置規範；
-- 異常檢測（Failure Detection）、診斷（Diagnostics）與安全停止貢獻；
-- 單元測試、整合測試與實機驗收規格（Verification Obligations）。
+- 異常檢測（Failure Detection）、診斷（Diagnostics）與安全停止響應；
+- 單元測試、整合測試與實機驗收規格（Verification Obligations）；
+- 跨子系統協同契約（TF 權限、3-Tier 安全停止、三階段導航編排、6 個薄層 Custom Gaps）。
 
 ## 1.2 排除責任 (Excluded Responsibilities)
 本文件不得：
@@ -99,7 +100,7 @@ graph LR
 # config/robot_state_publisher.yaml
 robot_state_publisher:
   ros__parameters:
-    publish_frequency: 30.0    # 關節動態 TF 發布頻率 (Hz)
+    publish_frequency: 30.0 # 關節動態 TF 發布頻率 (Hz)
     ignore_timestamp: false
     use_sim_time: false
     frame_prefix: ""
@@ -211,3 +212,845 @@ imu_driver_node:
    * 在 RViz2 中以 `base_link` 為 Fixed Frame 同時可視化 `/scan_front`、`/scan_rear` 與 `/scan`，確認重疊區域點雲平滑對齊無雙重重影。
 3. **IMU 靜態重力檢驗 (Unit Test)**：
    * 機器人靜止時，`/imu/data_raw` 經 S1 TF 轉換後之車體 $Z$ 軸加速度應為 $+9.81 \pm 0.2\,\text{m/s}^2$。
+
+---
+
+## 3.3 S7: Base Control Subsystem
+
+### 1. Purpose & Architectural Boundary
+* **目的**：接收上層速度命令，依差速運動學控制 M1 馬達動力硬體執行移動，實施命令逾時保護與運動極限約束，檢驗馬達回授有效性（GAP-05），並掌管底盤安全啟停與硬體故障安全閘門（GAP-06）。
+* **承接需求**：
+  * **SYS-022 底盤運動控制**：差速輪閉迴路速度控制。
+  * **SYS-026 底盤故障處理**：Hardware Interface 回傳 `ERROR` 時停用 Controller 並暴露錯誤。
+  * **SYS-027 運動命令逾時**：逾時未收到新速度命令強制底盤停止。
+  * **SYS-028 底盤運動限制**：限制直線/旋轉速度及加速度在 Operational Limits 內。
+  * **SYS-029 底盤狀態回授**：提供驅動器有效回授之輪端狀態，**禁止以命令值冒充**（GAP-05）。
+  * **SYS-030 底盤安全啟停**：自檢後安全 Enable；停機時確認停轉後切斷驅動使能（GAP-06）。
+* **邊界與排除**：
+  * **In-Scope**：`ros2_control` 框架整合、`diff_drive_controller`、M1 專用 Hardware Interface、GAP-05 回授檢查、GAP-06 安全啟停邏輯。
+  * **Out-of-Scope**：全域路徑規劃（S6 負責）、多感測器里程融合（S3 負責）、動態 TF 發布（**S7 嚴禁發布 `odom → base_footprint` TF**）。
+
+### 2. Internal Component Decomposition
+```mermaid
+graph TD
+    subgraph S7: Base Control
+        CM[controller_manager<br/>ROS 2 Control 核心]
+        
+        subgraph Controllers
+            DDC[diff_drive_controller<br/>差速運動控制 / 極限限制 / 逾時保護]
+            JSB[joint_state_broadcaster<br/>關節狀態廣播]
+        end
+        
+        subgraph M1HardwareInterface [M1 Hardware Interface Plugin]
+            HW_COM[M1 通訊協定層]
+            GAP05[GAP-05: 回授有效性檢查<br/>Feedback Validity Checker]
+            GAP06[GAP-06: 安全啟停邏輯<br/>Safe Enable / Stop Logic]
+        end
+        
+        CM --> DDC
+        CM --> JSB
+        DDC --> M1HardwareInterface
+        JSB --> M1HardwareInterface
+    end
+    
+    CMD["/cmd_vel<br/>(來自 S6 或 遙控工具)"] --> DDC
+    JSB --> JS["/joint_states<br/>(提供給 S1 / S3)"]
+    DDC --> WHEEL_ODOM["/base_control/wheel_odometry<br/>(供 S3 EKF 融合)"]
+    M1HardwareInterface --> M1_MOTORS[(M1 實體馬達驅動器)]
+```
+
+1. **`diff_drive_controller` (ROS 2 Jazzy 成熟控制器)**：
+   * 訂閱 `/cmd_vel`，依 S1 定義的輪距與輪徑轉換為雙輪目標角速度。
+   * 實施 `cmd_vel_timeout`（$0.5\,\text{s}$ 逾時歸零，SYS-027）與速度/加速度限制（SYS-028）。
+   * **關閉內建 TF 發布**（`enable_odom_tf: false`），由 S3 唯一發布。
+2. **`joint_state_broadcaster` (ROS 2 成熟元件)**：
+   * 讀取硬體介面的輪端狀態，發布 `/joint_states`（提供給 S1 廣播動態關節 TF）。
+3. **`M1HardwareInterface` (Custom SystemInterface Plugin - 包含 GAP-05 與 GAP-06)**：
+   * 透過 RS-485 / CAN 通訊存取 M1 底盤驅動器。
+   * **GAP-05 (回授有效性檢查)**：檢核編碼器訊號與通訊 CRC；若回授中斷或異常，將 State 標記為 Invalid/NaN，**嚴禁以命令速度填充假數據**。
+   * **GAP-06 (安全啟停邏輯)**：
+     * **Enable 流程**：自檢通訊正常、無驅動器警報、輪端靜止 $\rightarrow$ 下發馬達使能。
+     * **Disable / Stop 流程**：下發零速煞車 $\rightarrow$ 監控實際輪速至完全停止（$< 0.01\,\text{rad/s}$）$\rightarrow$ 關閉馬達使能。任一步驟失敗不阻止其他安全動作。
+
+### 3. ROS 2 Authoritative Interfaces
+
+#### 3.1 訂閱介面 (Subscribed Interfaces)
+| 介面名稱 | 訊息型別 | 提供者 (Producer) | QoS Profile | 說明 |
+|---|---|---|---|---|
+| **`/cmd_vel`** | `geometry_msgs/msg/Twist` | `S6 Navigation` 或 Teleop | SystemDefault / Reliable | 期望車體線速度與角速度（運動意圖）。 |
+
+#### 3.2 發布介面 (Published Interfaces)
+| 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
+|---|---|---|---|---|
+| **`/joint_states`** | `sensor_msgs/msg/JointState` | Reliable, Volatile, Depth: 10 | $50\,\text{Hz}$ | 包含 `driving_wheel_joint_L` 與 `driving_wheel_joint_R` 狀態，供 S1 發布動態 TF。 |
+| **`/base_control/wheel_odometry`** | `nav_msgs/msg/Odometry` | SensorData / Reliable | $50\,\text{Hz}$ | 輪端純量測里程計資訊，供 S3 EKF 融合使用。 |
+| **`/diagnostics`** | `diagnostic_msgs/msg/DiagnosticArray` | SystemDefault | $1\,\text{Hz}$ | 回報 M1 驅動器警報碼、通訊狀態與安全閘門開關狀態。 |
+
+#### 3.3 服務介面 (Service Interfaces)
+| 介面名稱 | 服務型別 | 說明 |
+|---|---|---|
+| **`/base/enable`** | `std_srvs/srv/SetBool` | 請求安全使能（Enable）或停用（Disable）馬達動力。 |
+| **`/base/reset_fault`** | `std_srvs/srv/Trigger` | 清除 M1 可恢復之硬體警報。 |
+
+### 4. Parameters & Configurations
+
+```yaml
+# config/base_control_params.yaml
+controller_manager:
+  ros__parameters:
+    update_rate: 50 # 控制迴路更新率 (Hz)
+
+diff_drive_controller:
+  ros__parameters:
+    left_wheel_names: ["driving_wheel_joint_L"]
+    right_wheel_names: ["driving_wheel_joint_R"]
+    wheel_separation: 0.5545 # 實車輪距 (m, 綁定 S1)
+    wheel_radius: 0.080 # 實車輪徑 (m, 綁定 S1)
+
+    # 安全防護與命令鏈約束 (SYS-027, SYS-028)
+    cmd_vel_timeout: 0.5 # 命令逾時保護 (秒)
+    enable_odom_tf: false # 嚴禁 S7 發布 TF (保留由 S3 唯一發布)
+
+    # 運作速度與加速度極限 (SYS-028 Operational Limits)
+    linear.x.max_velocity: 1.0 # 最大線速度 (m/s)
+    linear.x.min_velocity: -0.5
+    linear.x.max_acceleration: 0.5 # 最大加速度 (m/s^2)
+    linear.x.max_deceleration: 1.0
+
+    angular.z.max_velocity: 1.5 # 最大角速度 (rad/s)
+    angular.z.min_velocity: -1.5
+    angular.z.max_acceleration: 1.0
+    angular.z.max_deceleration: 2.0
+```
+
+### 5. Failure Detection & Diagnostics
+1. **命令逾時保護 (SYS-027)**：若超過 $0.5\,\text{秒}$ 未收到新速度命令，`diff_drive_controller` 自動將輪速命令歸零。
+2. **驅動器硬體故障處理 (SYS-026)**：若 M1 回傳驅動器過流、過溫、通訊斷線等故障，Hardware Interface 回傳 `ERROR`，`controller_manager` 自動將控制器轉入 Inactive 狀態並向全系統發布錯誤診斷。
+3. **回授無效防護 (GAP-05 / SYS-029)**：當編碼器回授中斷或校驗錯誤，Hardware Interface 標記狀態不可用，嚴禁以命令速度替代量測值。
+4. **安全停轉防護 (GAP-06 / SYS-030)**：系統關機或停用時，先主動減速並輪詢實際回授直到車輪完全停止，再切斷馬達使能（防止未停穩即自由滑行）。
+
+### 6. Verification Obligations
+1. **命令逾時與安全閘驗證 (Interface Test)**：
+   * 下發持續速度命令後中斷發布，驗證底盤在 $0.5\,\text{秒}$ 內自動煞停。
+   * 確認 `enable_odom_tf` 為 `false`，`/tf` 中無任何來自 S7 的 `odom` TF。
+2. **GAP-05 回授防偽造檢驗 (Unit Test)**：
+   * 模擬硬體通訊斷線，確認 `/joint_states` 與 `/base_control/wheel_odometry` 不會輸出上一次的目標速度。
+3. **GAP-06 安全啟停流程檢驗 (Integration Test)**：
+   * 在運動狀態下發送 `/base/enable: false`，驗證系統依序執行「煞車 $\rightarrow$ 確認停妥 $\rightarrow$ 釋放使能」。
+4. **實機速度與極限驗收 (Real-hardware Validation)**：
+   * 實車跑測直線 $1.0\,\text{m/s}$ 與旋轉 $1.0\,\text{rad/s}$，驗證實際加速度與減速度符合設定極限。
+
+---
+
+## 3.4 S3: State Estimation Subsystem
+
+### 1. Purpose & Architectural Boundary
+* **目的**：匯流多源運動學與慣性量測（S7 輪端里程、S2 RF2O 雷達里程、S2 IMU），以擴展卡爾曼濾波（EKF）推算高頻、平滑、抗打滑且連續的二維平面里程估測（System Planar Odometry），並作為**全系統唯一權威發布 `odom → base_footprint` 動態座標轉換**。
+* **承接需求**：
+  * **SYS-005 系統里程**：融合多源量測產生地圖無關之平面里程；輸入異常或逾時時，依 EKF 原生預測模型或其餘有效量測持續推算。
+* **邊界與排除**：
+  * **In-Scope**：RF2O 雷達里程計算、`robot_localization` 2D EKF 融合、發布 `/odometry/filtered` 與 `odom → base_footprint` TF。
+  * **Out-of-Scope**：全域地圖對齊定位（`map → odom` 由 S5 負責）、輪端底層回授真偽檢查（由 S7 GAP-05 負責）。
+
+### 2. Internal Component Decomposition
+```mermaid
+graph LR
+    subgraph S3: State Estimation
+        RF2O[rf2o_laser_odometry_node<br/>雷達特徵里程計]
+        EKF[ekf_filter_node<br/>robot_localization 3.8.3 EKF]
+    end
+    
+    SCAN["/scan<br/>(來自 S2 dual_laser_merger)"] --> RF2O
+    RF2O --> RF2O_ODOM["/rf2o/odom<br/>(Odometry, publish_tf: false)"]
+    
+    WHEEL_ODOM["/base_control/wheel_odometry<br/>(來自 S7 Base Control)"] --> EKF
+    RF2O_ODOM --> EKF
+    IMU["/imu/data_raw<br/>(來自 S2 Perception)"] --> EKF
+    
+    EKF --> ODOM_FILT["/odometry/filtered<br/>(權威融合里程)"]
+    EKF --> TF_ODOM["/tf<br/>(權威 odom → base_footprint)"]
+```
+
+1. **`rf2o_laser_odometry_node` (ROS 2 Jazzy 成熟雷達里程計)**：
+   * 訂閱 S2 的 360° `/scan`，基於連續雷達幀特徵匹配計算平面位移與速度，發布 `/rf2o/odom`（**停用 TF 發布：`publish_tf: false`**）。
+2. **`ekf_filter_node` (ROS 2 Jazzy `robot_localization` 3.8.3 成熟 EKF 節點)**：
+   * 設定為嚴格 2D 模式（`two_d_mode: true`）。
+   * 融合三大來源：
+     * **`odom0` (S7 輪端里程)**：提供 $v_x, \omega_z$。
+     * **`odom1` (RF2O 雷達里程)**：提供 $v_x, v_y, \omega_z$（輔助抑制輪端打滑）。
+     * **`imu0` (S2 IMU)**：提供 $\omega_z, a_x$（提供高頻角速度與加速度動態）。
+   * **全系統唯一發布 `odom → base_footprint` TF**（`publish_tf: true`）。
+
+### 3. ROS 2 Authoritative Interfaces
+
+#### 3.1 訂閱介面 (Subscribed Interfaces)
+| 介面名稱 | 訊息型別 | 提供者 (Producer) | QoS Profile | 融合配置 (EKF Role) |
+|---|---|---|---|---|
+| **`/base_control/wheel_odometry`** | `nav_msgs/msg/Odometry` | `S7 Base Control` | SensorData / Reliable | `odom0`：融合 $v_x, \omega_z$（輪端速度基準）。 |
+| **`/scan`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | `rf2o` 專用雷達掃描輸入。 |
+| **`/imu/data_raw`** | `sensor_msgs/msg/Imu` | `S2 Perception` | SensorData | `imu0`：融合 $\omega_z, a_x$（高頻角速度與加速度）。 |
+
+#### 3.2 發布介面 (Published Interfaces)
+| 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
+|---|---|---|---|---|
+| **`/odometry/filtered`** | `nav_msgs/msg/Odometry` | SystemDefault / Reliable | $50\,\text{Hz}$ | **全系統權威平面里程狀態**。<br/>供 **S4 Mapping**、**S5 Localization** 與 **S6 Navigation** 訂閱。 |
+| **`/rf2o/odom`** | `nav_msgs/msg/Odometry` | SensorData | $15 \sim 20\,\text{Hz}$ | RF2O 內部發布之雷達里程，供 EKF 訂閱。 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` | Dynamic, SystemDefault | $50\,\text{Hz}$ | **全系統唯一發布 `odom → base_footprint`**。 |
+
+### 4. Parameters & Configurations
+
+```yaml
+# config/state_estimation_params.yaml
+rf2o_laser_odometry_node:
+  ros__parameters:
+    laser_scan_topic: "/scan"
+    odom_topic: "/rf2o/odom"
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    publish_tf: false # 嚴禁 RF2O 發布 TF
+
+ekf_filter_node:
+  ros__parameters:
+    frequency: 50.0 # EKF 濾波器發布率 (Hz)
+    two_d_mode: true # 嚴格限制為 2D 平面移動 (忽略 z, roll, pitch)
+    publish_tf: true # 全系統唯一授權發布 odom -> base_footprint
+    map_frame: "map"
+    odom_frame: "odom"
+    base_link_frame: "base_footprint"
+    world_frame: "odom"
+
+    # odom0: S7 輪端里程 (融合 vx, yaw_rate)
+    odom0: "/base_control/wheel_odometry"
+    odom0_config:
+      [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+      ]
+
+    # odom1: RF2O 雷達里程 (融合 vx, vy, yaw_rate)
+    odom1: "/rf2o/odom"
+    odom1_config:
+      [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+      ]
+
+    # imu0: S2 IMU (融合 yaw_rate, ax)
+    imu0: "/imu/data_raw"
+    imu0_config:
+      [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+      ]
+    imu0_remove_gravitational_acceleration: true
+```
+
+### 5. Failure Detection & Diagnostics
+1. **單一感知源中斷之容錯（SYS-005 原生行為）**：
+   * 若輪端打滑或 S7 回授短暫異常，EKF 自動依靠 RF2O 與 IMU 維持速度推算。
+   * 若雷達特徵不足（如空曠場域），EKF 自動依靠輪端里程與 IMU 維持推算。
+   * 若全部感測器中斷，EKF 依據最後有效速度之動力學預測模型平滑衰減，不發布跳變 TF。
+2. **極端跳變過濾 (Mahalanobis Distance Rejection)**：
+   * EKF 內建馬氏距離檢驗，自動過濾超過 $3\sigma$ 的感測器雜訊或異常躍變。
+
+### 6. Verification Obligations
+1. **TF 單一發布驗證 (Interface Test)**：
+   * 啟動全系統，執行 `ros2 run tf2_ros tf2_monitor odom base_footprint`，確認僅有 `/ekf_filter_node` 一個 Broadcaster，且發布頻率穩定為 $50 \pm 2\,\text{Hz}$。
+2. **打滑抗干擾整合檢驗 (Integration Test)**：
+   * 模擬將機器人驅動輪架空（輪端空轉打滑），觀察在 RF2O 與 IMU 作用下，`/odometry/filtered` 不會隨空轉輪速產生劇烈位置漂移。
+3. **實車直行與旋轉精度驗收 (Real-hardware Validation)**：
+   * 實車直行 $5.0\,\text{m}$，比對 EKF 里程計估算距離與地面雷射測距儀量測距離，累積誤差 $< 1.5\%$；實車原地自轉 5 圈 ($1800^\circ$)，航向角累積誤差 $< 3.0^\circ$。
+
+---
+
+## 3.5 S4: Mapping Subsystem
+
+### 1. Purpose & Architectural Boundary
+* **目的**：在建圖模式（Mapping Mode, UC-001）下，訂閱 S2 融合雷達與 S3 系統里程計，透過非同步圖優化（Graph SLAM）即時構建高精度 2D 佔據柵格地圖（Occupancy Grid），發布建圖期的 `map → odom` 座標轉換，並提供具備寫入回讀驗證（Read-back Validation）的地圖序列化儲存與載入服務。
+* **承接需求**：
+  * **SYS-001 2D 佔據柵格地圖生成**：生成解析度 $0.05\,\text{m}$ 之 2D 柵格地圖。
+  * **SYS-002 地圖儲存與載入**：支援標準 YAML/PGM 格式之儲存與載入。
+  * **SYS-006 SLAM 模式與定位模式互斥**：建圖模式與定位模式嚴格互斥，不得同時發布 `map → odom`。
+  * **SYS-007 地圖生命週期管理**：管理地圖 Active / Loaded / Inactive 生命週期。
+  * **SYS-024 地圖管理**：提供地圖儲存、載入與儲存後**回讀語法/維度校驗（Read-back Validation）**。
+* **邊界與排除**：
+  * **In-Scope**：`slam_toolbox` 非同步即時 SLAM、建圖期 `map → odom` TF 發布、`nav2_map_server` MapIO 服務與回讀校驗。
+  * **Out-of-Scope**：導航定位模式下的地圖定位匹配（由 S5 AMCL 負責）、代價地圖障礙物膨脹（由 S6 負責）。
+
+### 2. Internal Component Decomposition
+```mermaid
+graph TD
+    subgraph S4: Mapping (僅於建圖模式運作)
+        SLAM[async_slam_toolbox_node<br/>slam_toolbox 2D Graph SLAM]
+        MAP_IO[nav2_map_server / map_saver<br/>地圖生命週期與 MapIO]
+    end
+    
+    SCAN["/scan<br/>(來自 S2 dual_laser_merger)"] --> SLAM
+    TF_ODOM["TF: odom → base_footprint<br/>(來自 S3 EKF)"] --> SLAM
+    
+    SLAM --> MAP_TOPIC["/map<br/>(OccupancyGrid, 0.05m)"]
+    SLAM --> MAP_TF["/tf<br/>(建圖期權威 map → odom)"]
+    
+    MAP_TOPIC --> MAP_IO
+    MAP_IO -.-> DISK[(磁碟檔案: .yaml / .pgm<br/>含回讀校驗)]
+```
+
+1. **`async_slam_toolbox_node` (ROS 2 Jazzy `slam_toolbox` 成熟元件)**：
+   * 僅於建圖模式（Mapping Mode）啟動。
+   * 訂閱 S2 的 `/scan` 與 S3 的 `odom → base_footprint` TF，執行掃描匹配與回環檢測（Loop Closure）。
+   * 即時產出 `/map`，並作為**建圖模式下唯一發布 `map → odom` TF 的節點**。
+2. **`nav2_map_server` & `map_saver` (ROS 2 Jazzy 成熟 MapIO 元件)**：
+   * 負責地圖生命週期管理（Lifecycle Node）。
+   * 響應地圖儲存請求，將記憶體中的佔據柵格序列化為標準 `.yaml` 與 `.pgm` 檔案。
+   * **SYS-024 回讀校驗機制**：寫入磁碟後，立刻回讀檔案並校驗 YAML 語法、檔案大小與 PGM 影像維度，校驗無誤後方回傳成功。
+
+### 3. ROS 2 Authoritative Interfaces
+
+#### 3.1 訂閱介面 (Subscribed Interfaces)
+| 介面名稱 | 訊息型別 | 提供者 (Producer) | QoS Profile | 說明 |
+|---|---|---|---|---|
+| **`/scan`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 360° 融合雷達掃描資料。 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` | `S3 State Estimation` | Dynamic, SystemDefault | 訂閱 `odom → base_footprint` 動態座標轉換。 |
+
+#### 3.2 發布介面 (Published Interfaces)
+| 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
+|---|---|---|---|---|
+| **`/map`** | `nav_msgs/msg/OccupancyGrid` | TransientLocal, Reliable | $1 \sim 2\,\text{Hz}$ / 變更時 | 建圖期佔據柵格地圖（解析度 $0.05\,\text{m}$）。 |
+| **`/map_metadata`** | `nav_msgs/msg/MapMetaData` | TransientLocal, Reliable | 變更時 | 地圖原點、寬度、高度與解析度元資料。 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` | Dynamic, SystemDefault | $20\,\text{Hz}$ | **建圖模式下唯一發布 `map → odom`**（定位模式下停用）。 |
+
+#### 3.3 服務介面 (Service Interfaces)
+| 介面名稱 | 服務型別 | 說明 |
+|---|---|---|
+| **`/slam_toolbox/save_map`** | `slam_toolbox/srv/SaveMap` | 儲存當前 SLAM 地圖至指定路徑（含姿態圖）。 |
+| **`/map_saver/save_map`** | `nav2_msgs/srv/SaveMap` | 儲存標準 Nav2 YAML/PGM 地圖並執行 SYS-024 回讀檢驗。 |
+| **`/map_server/load_map`** | `nav2_msgs/srv/LoadMap` | 自磁碟載入指定 YAML 地圖至記憶體。 |
+
+### 4. Parameters & Configurations
+
+```yaml
+# config/slam_toolbox_params.yaml
+async_slam_toolbox_node:
+  ros__parameters:
+    # 模式與座標框架配置
+    mode: "mapping"
+    map_frame: "map"
+    odom_frame: "odom"
+    base_frame: "base_footprint"
+    scan_topic: "/scan"
+
+    # 柵格解析度 (SYS-001)
+    resolution: 0.05 # 5cm 佔據柵格
+    max_laser_range: 20.0 # 最大雷達有效距離 (m)
+    minimum_time_interval: 0.2
+    transform_publish_period: 0.05 # map -> odom TF 發布週期 (20Hz)
+
+    # 圖優化與匹配參數
+    use_scan_matching: true
+    do_loop_closing: true
+    loop_match_minimum_chain_size: 10
+    loop_match_maximum_variance_coarse: 3.0
+
+# config/map_server_params.yaml
+map_server:
+  ros__parameters:
+    frame_id: "map"
+    topic_name: "map"
+    free_thresh: 0.25
+    occupied_thresh: 0.65
+```
+
+### 5. Failure Detection & Diagnostics
+1. **SLAM 掃描匹配失步 (Scan-matching Degraded)**：
+   * 當雷達特徵不足時，`slam_toolbox` 依據 S3 里程計位姿維持圖約束，並發布警告日誌，避免圖結構發散。
+2. **地圖儲存/回讀失敗 (SYS-024 Failure Handling)**：
+   * 若磁碟空間不足、寫入權限異常或儲存後檔案回讀解析失敗，Service 回傳 `RESULT_FAILED` 與具體錯誤原因，嚴禁回傳假成功。
+3. **模式互斥保護 (SYS-006)**：
+   * 系統 Launch 啟動管理確保 `slam_toolbox`（S4）與 `amcl`（S5）不同時運行，從根本上杜絕 `map → odom` TF 重複廣播衝突。
+
+### 6. Verification Obligations
+1. **佔據柵格解析度與介面驗證 (Interface Test)**：
+   * 啟動 SLAM，訂閱 `/map`，檢驗 `info.resolution == 0.05`，`header.frame_id == "map"`。
+2. **地圖儲存與回讀檢驗 (Integration Test)**：
+   * 呼叫儲存地圖服務至 `/tmp/test_map`，驗證 `/tmp/test_map.yaml` 與 `/tmp/test_map.pgm` 確實產出，且 YAML 解析出的寬高與 PGM 影像標頭一致。
+3. **模式互斥驗收 (System Mode Exclusion Test)**：
+   * 驗證在 Mapping Mode 下僅有 `slam_toolbox` 發布 `map → odom` TF；切換至 Navigation Mode 後，`slam_toolbox` 完全終止或釋放 TF 發布權。
+
+---
+
+## 3.6 S5: Localization Subsystem
+
+### 1. Purpose & Architectural Boundary
+* **目的**：在導航定位模式（Navigation Mode, UC-002）下，載入已知靜態地圖，訂閱 S2 融合雷達與 S3 系統里程計，透過自適應蒙地卡羅定位演算法（AMCL）即時追蹤機器人相對於地圖坐標系的二維全域位姿 $(x, y, \theta)$，接收操作者初始位姿設定（`/initialpose`），並作為**導航模式下全系統唯一權威發布 `map → odom` 動態座標轉換**。
+* **承接需求**：
+  * **SYS-010 初始位姿估測**：接收外部或工具之初始位姿輸入，配置協方差並完成粒子群初始化。
+  * **SYS-006 模式互斥約定**：在導航模式下成為 `map → odom` TF 的唯一發布者（建圖模式下由 S4 負責）。
+* **邊界與排除**：
+  * **In-Scope**：`nav2_amcl` 生命週期節點、初始位姿注入、粒子濾波定位估算、發布 `/amcl_pose` 與 `map → odom` 動態 TF、定位發散診斷。
+  * **Out-of-Scope**：地圖生成與編輯（由 S4 負責）、短程連續打滑抑制（由 S3 EKF 負責）、路徑規劃與避障（由 S6 負責）。
+
+### 2. Internal Component Decomposition
+```mermaid
+graph TD
+    subgraph S5: Localization (僅於導航定位模式運作)
+        AMCL[amcl<br/>nav2_amcl 2D 粒子濾波定位]
+    end
+    
+    MAP["/map<br/>(來自 S4 nav2_map_server)"] --> AMCL
+    SCAN["/scan<br/>(來自 S2 dual_laser_merger)"] --> AMCL
+    TF_ODOM["TF: odom → base_footprint<br/>(來自 S3 EKF)"] --> AMCL
+    INIT_POSE["/initialpose<br/>(來自 RViz2 或 操作工具)"] --> AMCL
+    
+    AMCL --> POSE["/amcl_pose<br/>(PoseWithCovarianceStamped)"]
+    AMCL --> PARTICLES["/particle_cloud<br/>(ParticleCloud)"]
+    AMCL --> TF_MAP["/tf<br/>(導航期權威 map → odom)"]
+```
+
+1. **`amcl` (ROS 2 Jazzy `nav2_amcl` 成熟生命週期節點)**：
+   * 僅於導航模式（Navigation Mode）進入 Active 狀態。
+   * 訂閱 S4 已載入的 `/map`、S2 的 360° `/scan` 與 S3 的 `odom → base_footprint` TF。
+   * 依據觀測雷達與地圖似然場（Likelihood Field）權重更新粒子群，估計車體全域位姿。
+   * **導航模式下唯一授權發布 `map → odom` 動態 TF**。
+   * 支援接收 `/initialpose`（SYS-010），立即以該位姿與初始協方差重新分佈粒子群。
+
+### 3. ROS 2 Authoritative Interfaces
+
+#### 3.1 訂閱介面 (Subscribed Interfaces)
+| 介面名稱 | 訊息型別 | 提供者 (Producer) | QoS Profile | 說明 |
+|---|---|---|---|---|
+| **`/initialpose`** | `geometry_msgs/msg/PoseWithCovarianceStamped` | RViz2 / 外部工具 | SystemDefault / Reliable | **SYS-010 初始位姿輸入**（含 $(x, y, \text{yaw})$ 及協方差）。 |
+| **`/map`** | `nav_msgs/msg/OccupancyGrid` | `S4 Mapping` (`map_server`) | TransientLocal, Reliable | 已載入之靜態佔據柵格地圖。 |
+| **`/scan`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 360° 融合雷達掃描資料。 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` | `S3 State Estimation` | Dynamic, SystemDefault | 訂閱 `odom → base_footprint` 動態座標轉換。 |
+
+#### 3.2 發布介面 (Published Interfaces)
+| 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
+|---|---|---|---|---|
+| **`/amcl_pose`** | `geometry_msgs/msg/PoseWithCovarianceStamped` | SystemDefault | 運動時發布 ($10 \sim 20\,\text{Hz}$) | 帶協方差之車體全域估計位姿，供 S6 導航監控與起終點校驗。 |
+| **`/particle_cloud`** | `nav2_msgs/msg/ParticleCloud` | SensorData | 運動時發布 | 當前粒子群分佈，供可視化與定位品質診斷。 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` | Dynamic, SystemDefault | $20\,\text{Hz}$ | **導航模式下唯一發布 `map → odom`**。 |
+
+### 4. Parameters & Configurations
+
+```yaml
+# config/amcl_params.yaml
+amcl:
+  ros__parameters:
+    # 座標框架配置
+    global_frame_id: "map"
+    odom_frame_id: "odom"
+    base_frame_id: "base_footprint"
+    scan_topic: "/scan"
+    tf_broadcast: true # 導航期發布 map -> odom
+
+    # 粒子濾波器配置
+    min_particles: 500
+    max_particles: 2000
+    resample_interval: 1
+    update_min_d: 0.1 # 移動 0.1m 更新一次粒子權重
+    update_min_a: 0.1 # 旋轉 0.1rad 更新一次粒子權重
+
+    # 雷達似然場模型
+    laser_model_type: "likelihood_field"
+    laser_max_range: 20.0
+    laser_min_range: 0.05
+    z_hit: 0.9
+    z_rand: 0.1
+    sigma_hit: 0.2
+
+    # 差速運動模型
+    odom_model_type: "diff-corrected"
+    alpha1: 0.2 # 旋轉運動帶來的旋轉噪聲
+    alpha2: 0.2 # 直線運動帶來的旋轉噪聲
+    alpha3: 0.2 # 直線運動帶來的直線噪聲
+    alpha4: 0.2 # 旋轉運動帶來的直線噪聲
+
+    # 初始位姿預設 (SYS-010)
+    set_initial_pose: false # 預設由 /initialpose 顯式注入
+```
+
+### 5. Failure Detection & Diagnostics
+1. **定位發散檢測 (Localization Divergence)**：
+   * 監控 `/amcl_pose` 協方差矩陣矩陣跡（Trace）或粒子分佈方差；若 $\sigma_x > 0.5\,\text{m}$ 或 $\sigma_y > 0.5\,\text{m}$，向診斷系統發出定位精度降級警告。
+2. **雷達掃描遺失 (Scan Dropout)**：
+   * 若 `/scan` 中斷，`amcl` 停止更新粒子權重，維持既有 `map → odom` 偏差；由 S6 障礙物與規劃監控觸發保護。
+3. **未初始化防護 (Uninitialized Gate)**：
+   * 在未收到 `/initialpose` 且未配置初始位姿前，`amcl` 不發布高度確信位姿，防止 S6 在未知全域位置下冒然規劃路徑。
+
+### 6. Verification Obligations
+1. **初始位姿注入檢驗 (Unit / Interface Test)**：
+   * 發布特定座標之 `/initialpose`（如 $(1.0, 2.0, 0.0)$），驗證 `/particle_cloud` 瞬間收斂於該點周圍，且 `/amcl_pose` 之位置與設定值誤差 $< 0.02\,\text{m}$。
+2. **TF 單一發布檢驗 (Interface Test)**：
+   * 在導航模式下執行 `ros2 run tf2_ros tf2_monitor map odom`，確認廣播者唯一為 `amcl`，且轉換頻率維持於 $20 \pm 2\,\text{Hz}$。
+3. **實車動態定位精度驗收 (Real-hardware Validation)**：
+   * 實車在已建圖環境中巡航，隨機停於 5 個物理標記點，比對 AMCL 估算位姿與實地量測位姿，位置誤差 $< 50\,\text{mm}$，角度誤差 $< 2.0^\circ$。
+
+---
+
+## 3.7 S6: Navigation Subsystem
+
+### 1. Purpose & Architectural Boundary
+* **目的**：在導航定位模式（Navigation Mode, UC-002）下，作為 AMR 自主移動決策中樞。負責接收導航目標（座標點或站點名稱）、解析站點清單、校驗目標合法性、編排三階段任務（First Mile 自由規劃 $\rightarrow$ On Route 拓撲路網導航 $\rightarrow$ Last Mile 最終進站）、維護全域與局部障礙物代價地圖（Costmap）、追蹤路徑並下發速度命令至 S7，落實停止確認機制（StoppedGoalChecker）與 Step 19A 簡化版路徑重選及降級安全停止。
+* **承接需求（共 15 項系統需求）**：
+  * **SYS-008 局部障礙物避障**：基於 2D Costmap（障礙物清除與膨脹層）即時避障。
+  * **SYS-009 導航目標接收**：支援接收座標目標與站點名稱目標。
+  * **SYS-011 站點清單解析**：查表解析站點名稱為標準目標位姿（GAP-03）。
+  * **SYS-013 路徑重選**：遇到阻擋時觸發拓撲重選路（Step 19A MVP）。
+  * **SYS-014 拓撲路網導航**：沿 Route Graph 邊界與節點導航（Nav2 Route Server）。
+  * **SYS-015 偏航回正**：偏離拓撲邊時自動回正至路網。
+  * **SYS-016 自由路徑規劃**：First Mile / Last Mile 無衝突幾何路徑規劃（Planner Server）。
+  * **SYS-017 移動控制**：路徑追隨與速度輸出至 S7（Controller Server）。
+  * **SYS-018 導航取消與中斷**：支援任務搶占與中斷，取消時立即煞停。
+  * **SYS-019 停止確認機制**：到達目標後確認物理停轉方回傳成功（StoppedGoalChecker）。
+  * **SYS-020 導航狀態反饋**：即時回報導航執行進度與狀態。
+  * **SYS-021 降級安全停止**：規劃失敗或恢復耗盡時原地安全煞停並回傳失敗。
+  * **SYS-025 導航目標合法性**：目標點邊界、自由空間與朝向合法性校驗（GAP-04）。
+  * **SYS-032 拓撲路網結構**：定義有向邊、節點與邊速度限制規格。
+  * **SYS-033 站點命名空間與版本**：定義站點命名與版本管理格式。
+* **邊界與排除**：
+  * **In-Scope**：Target Admission 模組（GAP-01~04）、Nav2 BT Navigator、Route Server、Planner Server、Controller Server、Costmap 2D、StoppedGoalChecker、Action 介面。
+  * **Out-of-Scope**：底層馬達物理加速度與極限控制（由 S7 負責）、動態 TF 生成（由 S1/S3/S5 負責）。
+
+### 2. Internal Component Decomposition
+```mermaid
+graph TD
+    subgraph S6: Navigation
+        subgraph TargetAdmission [Target Admission 輕量薄層模組]
+            GAP01[GAP-01: Target Discriminator<br/>目標型態識別 (Pose vs Station)]
+            GAP02[GAP-02: Goal Pose Normalizer<br/>四元數與角度正規化]
+            GAP03[GAP-03: Station Catalog Resolver<br/>station_catalog.yaml 查表解析]
+            GAP04[GAP-04: Canonical Goal Validator<br/>地圖範圍/非致命障礙/合法性檢查]
+        end
+        
+        subgraph Nav2Stack [Nav2 Jazzy 導航核心]
+            BT[bt_navigator<br/>三階段任務編排器 (First/On/Last Mile)<br/>Step 19A 重選路與 Fallback 終止]
+            ROUTE[route_server<br/>拓撲路網規劃器 (route_graph.yaml)]
+            PLANNER[planner_server<br/>自由路徑幾何規劃 (Navfn / Smac)]
+            CONTROLLER[controller_server<br/>路徑追隨控制 (DWB / RPP)]
+            COSTMAP[nav2_costmap_2d<br/>全域與局部障礙物代價地圖]
+            CHECKER[stopped_goal_checker<br/>停轉確認檢測器]
+        end
+    end
+    
+    USER_GOAL["導航請求 (Pose 或 站點名稱)"] --> GAP01
+    GAP01 -->|Pose| GAP02
+    GAP01 -->|Station| GAP03
+    GAP03 --> GAP02
+    GAP02 --> GAP04
+    GAP04 -->|通過驗證之標準目標| BT
+    
+    BT --> ROUTE
+    BT --> PLANNER
+    BT --> CONTROLLER
+    CONTROLLER --> CHECKER
+    CONTROLLER --> CMD_VEL["/cmd_vel<br/>(發布至 S7 Base Control)"]
+    
+    SCANS["/scan_front, /scan_rear, /scan<br/>(來自 S2 Perception)"] --> COSTMAP
+```
+
+### 2.1 Target Admission 輕量薄層模組（GAP-01 ~ GAP-04）
+1. **`GAP-01: Target Discriminator`**：識別導航目標為原始座標位姿（`PoseStamped`）或站點名稱字串（`station_name`）。
+2. **`GAP-02: Goal Pose Normalizer`**：校正四元數向量長度為 1，將偏航角正規化至 $[-\pi, \pi]$，並確保目標 Frame 為 `map`。
+3. **`GAP-03: Station Catalog Resolver`**：載入 `station_catalog.yaml`（符合 SYS-033 命名空間與版本），依名稱查表提取精確座標 $(x, y, \text{yaw})$。
+4. **`GAP-04: Canonical Goal Validator`**：依據靜態地圖與全域代價地圖，檢驗目標是否在地圖邊界內且代價非致命障礙（Cost $< 254$）。若不合法立即拒絕並回傳具體原因（SYS-025）。
+
+### 2.2 Nav2 導航核心元件
+1. **`bt_navigator` (行為樹導航編排器)**：
+   * **三階段執行流程**：
+     * **First Mile**：呼叫 `planner_server` 自當前位置自由規劃至最近之拓撲路網入口節點。
+     * **On Route**：呼叫 `route_server` 產出拓撲路徑，由 `controller_server` 沿拓撲邊追隨行駛。
+     * **Last Mile**：到達目標站點之拓撲出口節點後，呼叫 `planner_server` 精確規劃對齊至最終目標位姿。
+   * **Step 19A 簡化版路徑重選與安全降級**：
+     * 當拓撲邊受阻，向 `route_server` 請求替代拓撲路徑（SYS-013）。
+     * 若無替代路徑或恢復重試耗盡，直接下發零速安全停止，回傳 Action 失敗（SYS-021），嚴禁無限自旋重試。
+2. **`route_server` (Nav2 拓撲路網伺服器)**：
+   * 載入 `route_graph.yaml`（符合 SYS-032 有向邊、節點座標與速度限制），計算節點間之拓撲最優路徑。
+3. **`planner_server` (Nav2 自由幾何規劃器)**：
+   * 使用 `nav2_navfn_planner` 或 `SmacPlanner2D` 計算 2D 無碰撞路徑（SYS-016）。
+4. **`controller_server` & `stopped_goal_checker` (Nav2 控制器與停轉檢測)**：
+   * 使用 `DWBLocalPlanner` 或 `RegulatedPurePursuitController` 追隨路徑並輸出 `/cmd_vel` 至 S7（SYS-017）。
+   * 抵達目標容差半徑後，由 `stopped_goal_checker` 檢驗實際線速度 $< 0.01\,\text{m/s}$ 且角速度 $< 0.02\,\text{rad/s}$，確認完全停穩後方回傳成功（SYS-019）。
+5. **`nav2_costmap_2d` (全域與局部代價地圖)**：
+   * 訂閱 S2 的 `/scan_front` 與 `/scan_rear`（或融合 `/scan`），進行光線投射（Ray-tracing）、障礙物標記、膨脹層計算（SYS-008）。
+
+---
+
+## 3. ROS 2 權威介面規格 (Authoritative Interfaces)
+
+### 3.1 Action 與服務介面 (Action & Service Interfaces)
+| 介面名稱 | 介面型別 | 角色 | 說明 |
+|---|---|---|---|
+| **`/navigate_to_pose`** | `nav2_msgs/action/NavigateToPose` | Server (提供外部呼叫) | 接收標準座標目標位姿，執行三階段導航。 |
+| **`/navigate_to_station`** | `mobile_base_msgs/action/NavigateToStation` | Server (提供外部呼叫) | 接收站點名稱目標，經 GAP-03 解析後執行導航。 |
+| **`/route_server/compute_route`** | `nav2_msgs/action/ComputeRoute` | Internal Action | 請求拓撲路網最短路徑。 |
+
+### 3.2 發布介面 (Published Interfaces)
+| 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
+|---|---|---|---|---|
+| **`/cmd_vel`** | `geometry_msgs/msg/Twist` | SystemDefault / Reliable | $20\,\text{Hz}$ | **輸出車體目標速度至 S7 Base Control**。 |
+| **`/plan`** | `nav_msgs/msg/Path` | TransientLocal / SystemDefault | 變更時 | 全域路徑規劃軌跡。 |
+| **`/local_plan`** | `nav_msgs/msg/Path` | SystemDefault | $20\,\text{Hz}$ | 局部軌跡追隨視覺化。 |
+| **`/global_costmap/costmap`** | `nav_msgs/msg/OccupancyGrid` | TransientLocal | $1\,\text{Hz}$ | 全域障礙物膨脹代價地圖。 |
+| **`/local_costmap/costmap`** | `nav_msgs/msg/OccupancyGrid` | SystemDefault | $5\,\text{Hz}$ | 局部即時避障代價地圖。 |
+
+### 3.3 訂閱介面 (Subscribed Interfaces)
+| 介面名稱 | 訊息型別 | 提供者 (Producer) | QoS Profile | 說明 |
+|---|---|---|---|---|
+| **`/map`** | `nav_msgs/msg/OccupancyGrid` | `S4 / S5` (`map_server`) | TransientLocal, Reliable | 靜態全域佔據地圖。 |
+| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 前左雷達原始掃描（局部避障）。 |
+| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 後右雷達原始掃描（局部避障）。 |
+| **`/amcl_pose`** | `geometry_msgs/msg/PoseWithCovarianceStamped` | `S5 Localization` | SystemDefault | 全域車體位姿輸入。 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` | `S1, S3, S5` | Dynamic | 獲取 `map → odom → base_footprint` 完整座標鏈。 |
+
+---
+
+## 4. 參數與配置結構 (Parameters & Configuration)
+
+### 4.1 資源檔案 Schema（符合 SYS-032 與 SYS-033）
+
+* **站點清單 (`maps/station_catalog.yaml`)**：
+  ```yaml
+  version: "1.0.0"
+  namespace: "default_factory"
+  stations:
+    - name: "STATION_A"
+      x: 2.50
+      y: 1.20
+      yaw: 0.0
+      metadata:
+        description: "Loading dock 1"
+    - name: "STATION_B"
+      x: 8.00
+      y: 5.50
+      yaw: 1.5708
+      metadata:
+        description: "Unloading dock 2"
+  ```
+
+* **拓撲路網 (`maps/route_graph.yaml`)**：
+  ```yaml
+  version: "1.0.0"
+  nodes:
+    - id: 1
+      name: "NODE_ENTRY_A"
+      x: 2.00
+      y: 1.20
+    - id: 2
+      name: "NODE_MAIN_CORRIDOR_1"
+      x: 4.00
+      y: 1.20
+    - id: 3
+      name: "NODE_EXIT_B"
+      x: 7.50
+      y: 5.50
+  edges:
+    - from: 1
+      to: 2
+      bidirectional: true
+      speed_limit: 0.8
+    - from: 2
+      to: 3
+      bidirectional: false
+      speed_limit: 0.5
+  ```
+
+### 4.2 Nav2 核心參數配置
+
+```yaml
+# config/nav2_params.yaml
+controller_server:
+  ros__parameters:
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins: ["stopped_goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    stopped_goal_checker:
+      plugin: "nav2_controller::StoppedGoalChecker"
+      xy_goal_tolerance: 0.05 # 抵達半徑 5cm (SYS-019)
+      yaw_goal_tolerance: 0.05 # 抵達角度 0.05 rad
+      trans_stopped_velocity: 0.01 # 線速度停轉門檻 (10mm/s)
+      rot_stopped_velocity: 0.02 # 角速度停轉門檻 (0.02rad/s)
+
+planner_server:
+  ros__parameters:
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner::NavfnPlanner"
+      tolerance: 0.1
+      use_astar: true
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: "odom"
+      robot_base_frame: "base_footprint"
+      rolling_window: true
+      width: 3.0
+      height: 3.0
+      resolution: 0.05
+      footprint: "[ [0.35, 0.30], [0.35, -0.30], [-0.35, -0.30], [-0.35, 0.30] ]"
+      plugins: ["obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        observation_sources: "scan_front scan_rear"
+        scan_front:
+          topic: "/scan_front"
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+        scan_rear:
+          topic: "/scan_rear"
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+```
+
+---
+
+## 5. 異常處理與診斷 (Failure Detection & Diagnostics)
+
+1. **目標不合法即時拒絕 (GAP-04 / SYS-025)**：
+   * 若目標座標位於地圖邊界外或為已知障礙物佔據區域，Action Server 立即回傳 `REJECTED` 與錯誤字串，AMR 保持靜止。
+2. **路徑受阻與 Step 19A 重選路 (SYS-013 / SYS-021)**：
+   * 當前方拓撲邊被障礙物阻擋無法通行時，BT 觸發重選路；若無可行拓撲路徑，系統直接發布零速煞停，Action 回傳 `FAILED`，終止任務以維護安全。
+3. **任務取消防滑行 (SYS-018)**：
+   * 接收到客戶端 `/cancel_goal` 時，`controller_server` 立即將 `/cmd_vel` 歸零，並監控停轉後方回傳 `CANCELED`。
+4. **停轉確認逾時防護 (SYS-019)**：
+   * 到達目標點後，若因外力或坡道導致在 $2.0\,\text{秒}$ 內無法達到停轉門檻，輸出警告日誌並回報完成狀態。
+
+---
+
+## 6. 驗證規格 (Verification Obligations)
+
+1. **Target Admission 單元測試 (Unit Test)**：
+   * 測試無效站點名稱（回傳 `STATION_NOT_FOUND`）、測試障礙物目標點（回傳 `GOAL_IN_COLLISION`）、測試四元數未正規化輸入（驗證自動正規化）。
+2. **三階段導航整合測試 (Integration Test)**：
+   * 在模擬環境中下發導航至 `STATION_B`，追蹤記錄並驗證狀態依序流經「First Mile $\rightarrow$ On Route $\rightarrow$ Last Mile $\rightarrow$ StoppedGoalChecker」。
+3. **Step 19A 重選路與安全停止測試 (Fault Injection Test)**：
+   * 封鎖主要拓撲邊，驗證 BT 正確呼叫替代路徑；封鎖全部路徑，驗證車輛在障礙物前安全煞停並回傳 `FAILED`。
+4. **實車終點定位精度與停轉驗收 (Real-hardware Validation)**：
+   * 實車連續執行 10 次站點導航，檢驗每次抵達目標後完全停穩（線速度 $< 0.01\,\text{m/s}$），實測終點位置誤差 $< 50\,\text{mm}$，角度誤差 $< 3.0^\circ$。
+
+---
+
+# 4. 跨子系統協同契約與系統操作 (Cross-Subsystem Contracts)
+
+## 4.1 全域 TF 樹單一權限矩陣 (Global TF Authority Matrix)
+
+| Transform Edge | Mapping Mode (UC-001) | Navigation Mode (UC-002) | 權限擁有者 |
+|---|---|---|---|
+| `base_footprint → base_link` | Active (`/tf_static`) | Active (`/tf_static`) | **S1 Robot Description** |
+| `base_link → base_lidar_link_FL/BR` | Active (`/tf_static`) | Active (`/tf_static`) | **S1 Robot Description** |
+| `base_link → base_imu_link` | Active (`/tf_static`) | Active (`/tf_static`) | **S1 Robot Description** |
+| `base_link → driving_wheel_link_L/R` | Active (`/tf`) | Active (`/tf`) | **S1 Robot Description** (由 S7 `/joint_states` 驅動) |
+| `odom → base_footprint` | Active (`/tf`) | Active (`/tf`) | **S3 State Estimation** (`robot_localization` 唯一發布) |
+| `map → odom` | **Active (`/tf`)** (S4 發布) | **Disabled** (S4 停用) | **S4 Mapping** (`slam_toolbox`) |
+| `map → odom` | **Disabled** (S5 停用) | **Active (`/tf`)** (S5 發布) | **S5 Localization** (`nav2_amcl`) |
+
+## 4.2 三級停止合約實施矩陣 (3-Tier Safety Stop Matrix)
+
+| 停止等級 | 觸發來源 | S6 Navigation 動作 | S7 Base Control 動作 | 物理馬達硬體狀態 |
+|---|---|---|---|---|
+| **Tier 1: 導航終點正常停轉** | 抵達目標點 | 速度減至 0，`StoppedGoalChecker` 驗證 | 依標準減速度曲線平滑減速 | 維持閉迴路使能（保持位置） |
+| **Tier 2: 任務中斷/安全降級** | 障礙物不可通行 (19A)、命令逾時、取消 | 終止規劃，下發 `/cmd_vel = 0` | 觸發 `cmd_vel_timeout` 或零速減速 | 維持使能或進入待命 |
+| **Tier 3: 硬體故障緊急停止** | M1 驅動器 Alarm、急停按下、通訊斷線 | 收到故障診斷，Action 立即回傳失敗 | Hardware Interface 回傳 `ERROR`，觸發 GAP-06 停轉檢查 | **煞停確認後切斷驅動使能 (Disabled)** |
+
+## 4.3 6 個 Custom Gaps 架構歸屬與落地
+
+| Gap 編號 | Gap 名稱 | 所屬子系統 | 實施元件與檔案位置 | 承接需求 |
+|---|---|---|---|---|
+| **GAP-01** | Target Discriminator | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-009 |
+| **GAP-02** | Goal Pose Normalizer | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-025 |
+| **GAP-03** | Station Catalog Resolver | S6 Navigation | `mobile_base_navigation::StationResolver` | SYS-011, SYS-033 |
+| **GAP-04** | Canonical Goal Validator | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-025 |
+| **GAP-05** | Base Feedback Validity Checker | S7 Base Control | `M1HardwareInterface::read()` | SYS-029 |
+| **GAP-06** | Base Safe Enable / Stop Logic | S7 Base Control | `M1HardwareInterface::perform_safe_stop()` | SYS-030 |
+
+---
+
+# 5. 系統需求追溯矩陣 (SYS Requirement Traceability Matrix)
+
+| 系統需求編號 | 需求名稱 | 所屬 Subsystem | 實施元件與介面 | 06 章節 |
+|---|---|---|---|---|
+| **SYS-001** | 2D 佔據柵格地圖生成 | S4 Mapping | `async_slam_toolbox_node` (`/map`, 0.05m) | 3.5 |
+| **SYS-002** | 地圖儲存與載入 | S4 Mapping | `nav2_map_server` (`.yaml` / `.pgm`) | 3.5 |
+| **SYS-003** | LiDAR 感知 | S2 Perception | `front/rear_lidar_node`, `dual_laser_merger` | 3.2 |
+| **SYS-004** | IMU 感知 | S2 Perception | `imu_driver_node` (`/imu/data_raw`) | 3.2 |
+| **SYS-005** | 系統里程 | S3 State Estimation | `ekf_filter_node` (`/odometry/filtered`, TF) | 3.4 |
+| **SYS-006** | SLAM / 定位模式互斥 | S4 Mapping / S5 Loc | Launch Manager / Mutex lifecycle | 3.5, 3.6, 4.1 |
+| **SYS-007** | 地圖生命週期管理 | S4 Mapping | `nav2_map_server` Lifecycle | 3.5 |
+| **SYS-008** | 局部障礙物避障 | S6 Navigation | `nav2_costmap_2d` (Obstacle & Inflation) | 3.7 |
+| **SYS-009** | 導航目標接收 | S6 Navigation | GAP-01 (`/navigate_to_pose`, Station) | 3.7 |
+| **SYS-010** | 初始位姿估測 | S5 Localization | `nav2_amcl` (`/initialpose`) | 3.6 |
+| **SYS-011** | 站點清單解析 | S6 Navigation | GAP-03 (`station_catalog.yaml`) | 3.7 |
+| **SYS-013** | 路徑重選 | S6 Navigation | BT Navigator (Step 19A MVP Reselection) | 3.7 |
+| **SYS-014** | 拓撲路網導航 | S6 Navigation | `route_server` (`route_graph.yaml`) | 3.7 |
+| **SYS-015** | 偏航回正 | S6 Navigation | BT Navigator Route Alignment | 3.7 |
+| **SYS-016** | 自由路徑規劃 | S6 Navigation | `planner_server` (`NavfnPlanner`) | 3.7 |
+| **SYS-017** | 移動控制 | S6 Navigation | `controller_server` (`DWBLocalPlanner`) | 3.7 |
+| **SYS-018** | 導航取消與中斷 | S6 Navigation | Action Preemption / Zero-vel cancel | 3.7 |
+| **SYS-019** | 停止確認機制 | S6 Navigation | `nav2_controller::StoppedGoalChecker` | 3.7 |
+| **SYS-020** | 導航狀態反饋 | S6 Navigation | Nav2 Action Feedback / Progress | 3.7 |
+| **SYS-021** | 降級安全停止 | S6 Navigation | BT Safe Stop Action on Exhaustion | 3.7 |
+| **SYS-022** | 底盤運動控制 | S7 Base Control | `diff_drive_controller` | 3.3 |
+| **SYS-023** | 機器人描述 | S1 Robot Description | `robot_state_publisher`, `mobile_base.urdf.xacro` | 3.1 |
+| **SYS-024** | 地圖管理 | S4 Mapping | `nav2_map_server` Read-back Validation | 3.5 |
+| **SYS-025** | 導航目標合法性 | S6 Navigation | GAP-02 & GAP-04 Validation | 3.7 |
+| **SYS-026** | 底盤故障處理 | S7 Base Control | `M1HardwareInterface::read()` -> ERROR | 3.3 |
+| **SYS-027** | 運動命令逾時 | S7 Base Control | `diff_drive_controller::cmd_vel_timeout` | 3.3 |
+| **SYS-028** | 底盤運動限制 | S7 Base Control | `diff_drive_controller` linear/angular limits | 3.3 |
+| **SYS-029** | 底盤狀態回授 | S7 Base Control | GAP-05 Feedback Validity Checker | 3.3 |
+| **SYS-030** | 底盤安全啟停 | S7 Base Control | GAP-06 Safe Enable / Stop Logic | 3.3 |
+| **SYS-032** | 拓撲路網結構 | S6 Navigation | `maps/route_graph.yaml` Schema | 3.7 |
+| **SYS-033** | 站點命名空間與版本 | S6 Navigation | `maps/station_catalog.yaml` Schema | 3.7 |

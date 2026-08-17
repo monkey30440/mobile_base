@@ -16,10 +16,10 @@
 ## Progress
 
 - 總項目：22
-- 已完成：4
-- 討論中：1
-- 待討論：17
-- 目前進度：4 / 22
+- 已完成：22
+- 討論中：0
+- 待討論：0
+- 目前進度：22 / 22 (100%)
 
 ---
 
@@ -42,45 +42,45 @@
   - 完成條件：定義 URDF/Xacro 結構、關節名稱（`driving_wheel_joint_L`, `driving_wheel_joint_R`）、`base_footprint` $\rightarrow$ `base_link` $\rightarrow$ `sensor_links` 靜態 TF、`robot_state_publisher` 節點配置與幾何驗證（承接 SYS-023）。
 - [x] 6. S2 Perception Subsystem Design
   - 完成條件：定義 LiDAR 驅動節點（發布 `sensor_msgs/msg/LaserScan`，`frame_id: base_lidar_link_FL/BR`）、`dual_laser_merger` 360° 融合節點（發布 `/scan`，`frame_id: base_link`）、IMU 驅動節點（發布 `sensor_msgs/msg/Imu`，`frame_id: base_imu_link`）、QoS 與資料有效性檢核（承接 SYS-003, SYS-004）。
-- [~] 7. S7 Base Control Subsystem Design
+- [x] 7. S7 Base Control Subsystem Design
   - 完成條件：定義 `ros2_control` 架構、`diff_drive_controller`（綁定 S1 關節名稱、速度極限與逾時保護）、M1 專用 Hardware Interface、GAP-05 回授有效性檢查（禁止冒充）與 GAP-06 安全啟停邏輯（承接 SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030）。
-- [ ] 8. S3 State Estimation Subsystem Design
+- [x] 8. S3 State Estimation Subsystem Design
   - 完成條件：定義 `robot_localization` EKF 節點（匯流 S7 輪端回授 + S2 IMU + S2 RF2O）、`odom → base_footprint` 動態 TF 發布權限、協方差矩陣配置與異常容錯（承接 SYS-005）。
-- [ ] 9. S4 Mapping Subsystem Design
+- [x] 9. S4 Mapping Subsystem Design
   - 完成條件：定義 `slam_toolbox` Online Async SLAM 節點（訂閱 S2 LaserScan + S3 Odom）、Mapping Mode 下 `map → odom` TF 發布、`nav2_map_server` MapIO 服務（儲存、讀回驗證、載入地圖）（承接 SYS-001, SYS-002, SYS-006, SYS-007, SYS-024）。
-- [ ] 10. S5 Localization Subsystem Design
+- [x] 10. S5 Localization Subsystem Design
   - 完成條件：定義 `nav2_amcl` 節點（訂閱已載入地圖、S2 LaserScan、S3 Odom）、Navigation Mode 下 `map → odom` 唯一發布權限、接收 RViz Initial Pose 初始化（承接 SYS-010）。
-- [ ] 11. S6 Navigation Subsystem Design
+- [x] 11. S6 Navigation Subsystem Design
   - 完成條件：定義 Target Admission 模組（GAP-01 目標識別、GAP-02 正規化、GAP-03 Station 查表解析、GAP-04 合法性驗證）、Nav2 Route Server、BT Navigator（三階段編排 First/On/Last Mile、Step 19A 重選路與 Fallback 終止）、Planner/Controller/Costmap2D/StoppedGoalChecker 與最終結果收斂（承接 SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033）。
 
 ---
 
 ## C. 跨子系統整合鏈稽核 (Cross-Subsystem Integration Audit)
 
-- [ ] 12. 座標框架與 TF Tree 鏈稽核 (TF Tree Chain Audit)
+- [x] 12. 座標框架與 TF Tree 鏈稽核 (TF Tree Chain Audit)
   - 完成條件：確認靜態 TF（S1）與動態 TF（S3 的 `odom→base_footprint`、S5/S4 的 `map→odom`）無任何多重發布或斷鏈。
-- [ ] 13. 速度命令與安全防護鏈稽核 (Velocity Command & Safety Chain Audit)
+- [x] 13. 速度命令與安全防護鏈稽核 (Velocity Command & Safety Chain Audit)
   - 完成條件：S6 期望命令 $\rightarrow$ S7 Safety Gate $\rightarrow$ S7 Diff-Drive $\rightarrow$ M1 馬達驅動之命令鏈完全閉合。
-- [ ] 14. 狀態回授與里程融合鏈稽核 (Wheel Feedback & Odometry Chain Audit)
+- [x] 14. 狀態回授與里程融合鏈稽核 (Wheel Feedback & Odometry Chain Audit)
   - 完成條件：M1 編碼器 $\rightarrow$ S7 有效性檢查 $\rightarrow$ S3 EKF 融合 $\rightarrow$ S4/S5/S6 之資料鏈完全閉合。
-- [ ] 15. 感知資料鏈稽核 (Perception Data Chain Audit)
+- [x] 15. 感知資料鏈稽核 (Perception Data Chain Audit)
   - 完成條件：S2 LiDAR/IMU $\rightarrow$ S3, S4, S5, S6 之 Topic、Message Type、Frame ID 與 QoS 完全匹配。
-- [ ] 16. 建圖端到端流程稽核 (Mapping Integrated Flow Audit - UC-001)
+- [x] 16. 建圖端到端流程稽核 (Mapping Integrated Flow Audit - UC-001)
   - 完成條件：遙控運動、即時建圖、地圖儲存與讀回驗證流程閉合。
-- [ ] 17. 導航端到端流程稽核 (Navigation Integrated Flow Audit - UC-002)
+- [x] 17. 導航端到端流程稽核 (Navigation Integrated Flow Audit - UC-002)
   - 完成條件：目標接收 $\rightarrow$ 驗證 $\rightarrow$ 三階段移動 $\rightarrow$ 停妥到站之端到端流程閉合。
-- [ ] 18. 三層停止與故障安全處置稽核 (Three-Tier Stop Audit)
+- [x] 18. 三層停止與故障安全處置稽核 (Three-Tier Stop Audit)
   - 完成條件：Task Cancel、Command Timeout、Hardware Safe Stop 在各 Subsystem 內部機制對應無誤。
-- [ ] 19. 操作模式與生命週期啟動依賴稽核 (Operational Modes & Lifecycle Audit)
+- [x] 19. 操作模式與生命週期啟動依賴稽核 (Operational Modes & Lifecycle Audit)
   - 完成條件：Mapping Mode 與 Navigation Mode 互斥啟動依賴與 Nav2 Lifecycle 轉換完全定義。
 
 ---
 
 ## D. 最終一致性與基線審查 (Final Baseline Audit)
 
-- [ ] 20. 05 $\rightarrow$ 06 需求與客製缺口完整覆蓋 (Traceability Completeness)
+- [x] 20. 05 $\rightarrow$ 06 需求與客製缺口完整覆蓋 (Traceability Completeness)
   - 完成條件：31 項 SYS 需求與 6 個 Custom Gaps 均在 06 有具體 Node / Component 承接。
-- [ ] 21. 無過度設計與無未授權實作洩漏審查 (No Overdesign & Leakage Audit)
+- [x] 21. 無過度設計與無未授權實作洩漏審查 (No Overdesign & Leakage Audit)
   - 完成條件：無多餘未核准框架，無實作層私自新增之行為。
-- [ ] 22. `06_subsystem.md` 最終定案與核准 (Final Approval)
+- [x] 22. `06_subsystem.md` 最終定案與核准 (Final Approval)
   - 完成條件：全文件一致性審核通過，正式定案為下游實作依據。
