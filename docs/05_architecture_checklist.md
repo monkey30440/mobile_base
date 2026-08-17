@@ -1,81 +1,90 @@
-# 05 Architecture Refactoring Checklist
+# 05 Architecture Checklist
 
-本清單只用於追蹤 `05_architecture.md` 的討論與重構進度，不是 normative input，也不作為架構設計依據。
+本清單用於追蹤並確認 `mobile_base` v0.1 系統架構（`05_architecture.md`）之決策完整性、跨系統契約閉合性與需求追溯性。
 
 ## Progress
 
-- 總議題：23
-- 已完成：23
+- 總項目：25
+- 已完成：25
 - 待討論：0
-- 目前進度：23 / 23
+- 目前進度：25 / 25
 
-狀態定義：
+---
 
-- `[x]` 已完成：內容已討論、取得確認並寫入 `05_architecture.md`。
-- `[ ]` 待討論：尚未取得設計結論，不得預先寫入 05。
-- `討論中`：一次只能有一個議題使用此狀態。
-- `延後`：已明確決定不在目前階段處理。
+## A. 架構邊界與基本原則 (Architecture Scope & Baseline)
 
-## A. System Decomposition and Responsibility Allocation
+- [x] 1. 架構職權與範圍界定 (Authority & Boundaries)
+  - 完成條件：確立 05 僅定義責任領域、成熟方案配置、跨系統資料／控制流、TF 擁有權與安全邊界；禁止過早決定 class/function、node 名稱、topic/action schema、QoS 與演算法細節（保留至 06）。
+- [x] 2. 上游基準與可行性證據約束 (Normative Inputs & Evidence Traceability)
+  - 完成條件：確認以 `01_use_cases.md`、`02_capabilities.md`、`03_requirements.md` 為唯一 normative 基準；以 `04_reuse_assessment.md` 為 exact-version 方案配置依據，不發明上游未定義需求。
 
-- [x] 1. Drive Hardware Interface
-  - 完成條件：定義 Drive Hardware lifecycle、feedback、fault 與唯一 hardware ownership。
-- [x] 2. Motion Control
-  - 完成條件：定義 motion-command ownership、command arbitration、wheel odometry 與 safe-stop responsibility。
-- [x] 3. State Estimation
-  - 完成條件：定義 system planar odometry、validity 與 `odom → base_footprint` ownership。
-- [x] 4. LiDAR Perception
-  - 完成條件：定義各 LiDAR source ownership、validity，以及非必要不融合、merge algorithm 未定的限制。
-- [x] 5. IMU Perception
-  - 完成條件：定義 IMU measurement、validity、calibration state 與 frame semantics。
-- [x] 6. Mapping
-  - 完成條件：定義 Mapping Mode、teleoperation input、Occupancy Grid output 與 map result boundary。
-- [x] 7. Navigation Resource Management
-  - 完成條件：定義 Map Package、Route Graph、Station Catalog 的 atomic selection、readiness 與 failure boundary。
-- [x] 8. Navigation Target Resolution
-  - 完成條件：將 Station ID 與 Absolute Goal Pose 正規化為 Canonical Goal Pose，並排除 Relative Pose v0.1 scope。
-- [x] 9. Map Localization
-  - 完成條件：定義 initial pose provision、current map pose、localization validity、`map → odom` ownership 與 localization-loss responsibility chain。
-- [x] 10. Navigation overall responsibility boundary
-  - 完成條件：定義 Navigation 的輸入、輸出、唯一 execution ownership，以及與 Target Resolution、Localization、Resource Management、Motion Control 的邊界。
-- [x] 11. First Mile movement strategy
-  - 完成條件：定義 current pose 到 usable route entry 的選擇、成功與失敗語意。
-- [x] 12. On Route movement strategy
-  - 完成條件：定義 Route Graph 上的 route selection、execution、reselection 與 blocked semantics。
-- [x] 13. Last Mile movement strategy
-  - 完成條件：定義 route exit 到 Canonical Goal Pose 的銜接、完成與失敗語意。
-- [x] 14. Free-space Fallback
-  - 完成條件：保留已核准的 fallback eligibility，禁止把 resource/configuration failure 當成 fallback，並明確定義 v0.1 不執行 fallback movement。
+---
 
-## B. Operational Flows and Cross-subsystem Contracts
+## B. 7 大 Subsystem 劃分與責任定義 (System Decomposition)
 
-- [x] 15. Teleoperation and autonomous command authority
-  - 完成條件：確認 mapping teleoperation 與 autonomous navigation 的 command authority、互斥與撤銷規則。
-- [x] 16. Operating modes and subsystem lifecycle
-  - 完成條件：定義 Mapping Mode、Navigation Mode 的啟用條件（包含需要時提供 initial pose 並等待 localization valid）、互斥資源與 mode transition responsibility。
-- [x] 17. Mapping operational flow
-  - 完成條件：從啟動、teleoperation、感測與估測，到 Map Package 產出的跨 subsystem 流程閉合。
-- [x] 18. Navigation operational flow
-  - 完成條件：從 terminal target、resource validation、localization、三階段移動，到 navigation result 的流程閉合。
-- [x] 19. Failure and safe-stop flow
-  - 完成條件：定義 target、resource、localization、planning、control、hardware failure 的 owner、傳遞與停止責任。
-- [x] 20. System-wide architectural contracts
-  - 完成條件：集中確認 command、TF、resource identity、validity、status/result 與 safety contracts 無矛盾或重複 owner。
+- [x] 3. S1 Robot Description
+  - 完成條件：定義機器人靜態幾何、關節與固定 TF 關係的單一擁有權；明確排除 runtime pose、odom TF 與動態運動狀態。
+- [x] 4. S2 Perception
+  - 完成條件：定義 LiDAR（LaserScan）與 IMU 標準感測資料的取得與提供責任；明確排除地圖計算、位姿推算與路徑決策責任。
+- [x] 5. S3 State Estimation
+  - 完成條件：定義平面里程估測（融合 Wheel Odometry、RF2O、IMU）與 `odom → base_footprint` TF 唯一擁有權；明確與 Localization（地圖定位）分離。
+- [x] 6. S4 Mapping
+  - 完成條件：定義二維 Occupancy Grid 之建立、即時更新、Map Package 儲存、讀回驗證與載入責任；明確排除導航路網與站點管理。
+- [x] 7. S5 Localization
+  - 完成條件：定義基於已載入地圖、感知與里程估測機器人位姿，以及發布權威 `map → odom` TF 的責任；明確排除建圖與導航決策。
+- [x] 8. S6 Navigation
+  - 完成條件：定義接收外部目標、正規化／解析、目標驗證、路網導航策略、階段執行（First Mile / On Route / Last Mile）、到站判定與結果回報的完整任務擁有權。
+- [x] 9. S7 Base Control
+  - 完成條件：定義差速底盤速度控制執行、命令逾時保護、運動極限約束、馬達回授有效性驗證與硬體安全啟停／故障處理責任。
 
-## C. Final Architecture Audit
+---
 
-- [x] 21. Requirements allocation completeness
-  - 完成條件：逐項確認 `01_use_cases.md`、`02_capabilities.md`、`03_requirements.md` 的 normative intent 均在 05 有明確 allocation 或 contract。
-- [x] 22. Internal-design leakage audit
-  - 完成條件：只用 `06_subsystem.md` 辨識目前設計意圖與過度深入內容，移除 05 中單一 subsystem 的 internal design，不引用 06 作為設計依據。
-- [x] 23. Final consistency review
-  - 完成條件：確認 decomposition、responsibility allocation、cross-subsystem relationships、operational flows 與 system-wide contracts 完整且一致。
+## C. 場域資源與操作模式 (Resources & Operational Modes)
 
-## Deferred Decisions
+- [x] 10. 場域資源模型收斂 (Navigation Resources)
+  - 完成條件：確立場域資源僅包含人工建立之 `Map Package`、`Route Graph` 與 `Station Catalog`；移除產品層 `Navigation Configuration`（回歸各模組部署參數）。
+- [x] 11. 資源載入擁有權 (Resource Loading Responsibility)
+  - 完成條件：明確 Map Package 由 S4 Mapping 載入；Route Graph 與 Station Catalog（條件式）由 S6 Navigation 載入；不設立額外 Resource Manager。
+- [x] 12. 互斥操作模式 (Operational Modes & Mode Boundaries)
+  - 完成條件：確立 Mapping Mode（SLAM 擁有 `map → odom`）與 Navigation Mode（Localization 擁有 `map → odom`）互斥；共用底層感知、狀態估測與底盤控制。
 
-- LaserScan merge algorithm：未定；只有證據顯示 consumer 必須使用融合輸入時才討論。
-- Free-space Fallback implementation：v0.1 不實作；保留 eligibility 與 architecture extension boundary。
-- Relative navigation target：不屬於 v0.1；若要納入，須先建立上游 requirement。
-- Dynamic resource switching、resource versioning、checksum、rollback、remote deployment 與 resource database：不屬於 v0.1。
-- Automatic localization、fixed startup pose 與 last-pose persistence：不屬於 v0.1；v0.1 在需要時由使用者人工提供 approximate initial pose。
-- Physical E-stop：已知 AMR 配備且實體停止功能正常；不據此宣稱 STO、software feedback integration 或 safety certification 已完成驗證。
+---
+
+## D. 跨系統資料流、控制流與核心契約 (Cross-Subsystem Contracts)
+
+- [x] 13. 座標框架與 TF Tree 唯一權威 (TF Authority Contract)
+  - 完成條件：確認 `map → odom`（Localization / 建圖時 Mapping）、`odom → base_footprint`（State Estimation）、`base_footprint → base_link → sensors`（Robot Description）無重疊發布者。
+- [x] 14. 速度命令與執行權限鏈 (Velocity Command Chain Contract)
+  - 完成條件：Navigation 僅提出期望運動意圖（Desired motion）；Base Control 擁有最終安全執行、否決權（Safety Gate）、運動極限定界與逾時保護。
+- [x] 15. 三層停止與安全語意分離 (Three-Tier Stop Contract)
+  - 完成條件：清楚分離 Navigation Cancel（任務停止意圖）、Command Timeout（通訊中斷保護停止）與 Hardware Safe Stop（底盤硬體安全狀態與馬達停用）。
+- [x] 16. 環境障礙物資訊邊界 (Obstacle Information Contract)
+  - 完成條件：Perception 負責提供標準量測；Nav2 Costmaps / Collision Handling 負責障礙物解讀與代價計算；Navigation 擁有避障行為責任。
+
+---
+
+## E. 導航編排與 MVP 決策 (Navigation Orchestration & MVP Strategy)
+
+- [x] 17. 三階段導航編排 (Stage Execution & Transition)
+  - 完成條件：定義 First Mile → On Route → Last Mile → Goal Completion 責任鏈；規範零長度連接階段之合法略過行為。
+- [x] 18. MVP 重新選路策略 (MVP Route Reselection)
+  - 完成條件：路網受阻或階段失敗時，以當前最新位姿與原目標重新執行既有路網選路；不發明複雜重路由引擎。
+- [x] 19. Fallback 邊界與終止語意 (Reserved Fallback & Termination Boundary)
+  - 完成條件：保留 4 種 Fallback eligibility 語意作為未來擴充點；v0.1 在路網用盡時直接終止並回報 `NO_ROUTE_ASSISTED_SOLUTION`，不執行 free-space 導航。
+- [x] 20. 到站判定與結果統一收斂 (Goal Completion & Unified Navigation Result)
+  - 完成條件：僅在 Canonical Goal Pose 之位置、朝向與底盤停止皆滿足時判定 Success；統一收斂為 Success、Failure、Canceled 三種結果。
+
+---
+
+## F. 6 個 Custom Gaps 與需求閉合稽核 (Gaps Placement & Traceability Audit)
+
+- [x] 21. Navigation Target Gaps (SYS-008, SYS-009, SYS-032, SYS-033) 落位
+  - 完成條件：4 個目標辨識、正規化、站點解析與目標驗證薄轉接層明確配置於 S6 Navigation Target Admission。
+- [x] 22. Base Control Gaps (SYS-029, SYS-030) 落位
+  - 完成條件：馬達回授有效性檢查（禁止以命令值冒充）與安全啟停邏輯明確配置於 S7 Base Control。
+- [x] 23. 31 項系統需求完整覆蓋 (Requirement Ownership Allocation)
+  - 完成條件：逐項審核 SYS-001 ～ SYS-033（共 31 項，排除未啟用編號），確認 100% 具有明確且唯一的 Subsystem Owner。
+- [x] 24. 成熟方案配置審核 (Mature Solution Placement Audit)
+  - 完成條件：確認 Nav2、ros2_control、slam_toolbox、AMCL、robot_localization 等成熟元件正確落位於各責任領域，非包裝為混淆子系統。
+- [x] 25. 架構簡化與無洩漏審核 (Architecture Simplification & Non-leakage Audit)
+  - 完成條件：確認 7 個 Subsystem 無冗餘切分或不當合併；確認未引入 06 Subsystem Detailed Design 細節。
