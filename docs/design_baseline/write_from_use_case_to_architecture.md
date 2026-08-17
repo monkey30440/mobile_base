@@ -718,7 +718,7 @@ Operational flow 描述 subsystem 間的順序與責任，不展開 subsystem in
 
 ## 8.4 Responsibility Allocation
 
-每項 SYS requirement 必須在 04 具有可辨識 allocation：
+每項 SYS requirement 必須在 05 具有可辨識 allocation：
 
 | Allocation Role | Meaning |
 |---|---|
@@ -780,7 +780,7 @@ Resource loaded 不等於 valid；valid 不一定等於 operation ready。每一
 
 ## 8.7 Validity Contract
 
-04 必須明確區分：
+05 必須明確區分：
 
 ```text
 process active
@@ -861,7 +861,7 @@ custom framework
 - verification procedure；
 - 由 06 或 implementation 反向帶入的設計結論。
 
-具名工具或 platform 只有在它是經 01–03 核准的 external contract 時才能出現在 04；若只是 implementation choice，應使用 architecture-level generic term。
+具名工具或 platform 只有在它是經 01–03 核准的 external contract 時才能出現在 05；若只是 implementation choice，應使用 architecture-level generic term。
 
 ## 8.11 Architecture Review Gate
 
