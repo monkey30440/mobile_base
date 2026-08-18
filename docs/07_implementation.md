@@ -148,7 +148,7 @@ Source dependencies 保留在 repository 的 `src/`，不藏入 Docker image bui
 - Timestamp 欄位格式為 `YYYY-MM-DDThh:mm:ss±HH:MM`（ISO 8601，含 timezone offset），只在取得對應 evidence 時填寫；無 evidence 時留 `—`。
 - Evidence storage path 規則由 §4（Verification Evidence Storage Convention）確立；格式為 `docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt`。
 - Build 與 test command 規範由 §5（Build and Test Command Baseline）確立；Command 欄位記錄實際執行的精確命令。
-- 若 hardware preflight 尚未由 checklist #6 確立，於對應欄位填寫 `[pending #6]`。
+- Hardware safety preflight 規範由 §6（Runtime and Hardware Safety Preflight）確立；Hardware 驗證前必須通過對應層級之 Preflight Checklist。
 
 ---
 
@@ -274,7 +274,7 @@ _僅適用於 06 明確要求 real-hardware validation 的 item。若本 item �
 |---|---|---|---|---|---|
 | YYYY-MM-DDThh:mm:ss±HH:MM | Jetson + M1 / picoScan / TDK IMU | <preflight #6 條件> | <量測結果> | <證明了什麼；模擬不可取代> | `docs/verification/IMP-XXX/<YYYY-MM-DD>T<HHmmss>_hw_<desc>.txt` |
 
-_（無 evidence 時整列填 `—`；hardware preflight 程序待 #6 確立時補填）_
+_（無 evidence 時整列填 `—`；hardware preflight 程序依 §6 規範填寫）_
 
 ---
 
@@ -486,7 +486,7 @@ Proved:            <what this hardware test actually proved>
 Not-proved:        <what this hardware test cannot prove>
 ```
 
-**注意：** 本節只定義 evidence **保存格式**。硬體安全操作前置條件（E-stop、STO、架車、速度上限、watchdog、人工復歸）屬於 checklist #6 的責任，本節不定義。在 #6 完成之前，hardware evidence artifact 的 `Test condition` 欄填寫 `[pending #6 preflight procedure]`。
+**注意：** 本節定義 evidence **保存格式**。硬體安全操作前置條件（E-stop、架車、速度上限、watchdog、人工復歸）由 §6 完整定義。Hardware evidence artifact 的 `Test condition` 欄必須標明驗證等級與安全前置條件（依 §6.3 / §6.9 規範填寫）。
 
 ### 4.7 Relationship to §3 Template
 
@@ -502,7 +502,7 @@ docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt
 - `layer` 對應 evidence 類型（`build` / `unit` / `intg` / `hw` / `neg`）。
 - `desc` 為簡短描述。
 
-Storage path 由 §4 確立，build/test command 規範由 §5 確立，**不再使用 `[pending #4]` 與 `[pending #5]`**；`[pending #6]` placeholder 仍保留在 §3.2 與 §4.6 中，表示 hardware preflight 程序（待 #6）尚未確立。
+Storage path 由 §4 確立，build/test command 規範由 §5 確立，硬體安全前置由 §6 確立，**不再使用 `[pending #4]`、`[pending #5]` 與 `[pending #6]`**；所有治理前置項（Checklist #1–#6）均已就緒。
 
 ### 4.8 Known Limits and Next Boundary
 
@@ -510,8 +510,8 @@ Storage path 由 §4 確立，build/test command 規範由 §5 確立，**不再
 - `.gitignore` 中已存在 `*.log` 排除規則；`docs/verification/` 下的 `.txt` 與 `.ref.txt` 不受此規則影響，可正常 commit。
 - Large artifact（ROS bag 等）的外部保存位置尚未統一；`[external: ...]` + `.ref.txt` 機制為目前最低限度 reference，具體外部位置由各 item 執行時決定。
 - Build 與 test 的完整 command workflow 由 §5（Build and Test Command Baseline）確立。
-- Hardware safety preflight 由 checklist #6 確立；本節只定義 hardware evidence 的保存格式。
-- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 5 項已完成，第 6 項為 Runtime and hardware safety preflight。
+- Hardware safety preflight 由 §6（Runtime and Hardware Safety Preflight）確立。
+- 第 1–6 項治理基線已全數完成；下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 7 項 S7 `M1Driver` transport vertical slice。
 
 ---
 
@@ -741,5 +741,193 @@ echo "Evidence saved to ${EVID_FILE} [Result: ${RESULT}]"
 ### 5.10 Known Limits and Next Boundary
 
 - 本 command baseline 僅涵蓋建置、靜態檢查與套件單元測試，**不涵蓋** ROS 2 runtime 整合、多節點資料流與實機硬體驅動驗證。
-- 硬體安全操作前置流程（E-stop、STO、架車、速度限制、watchdog、人工復歸）屬於 checklist #6 的責任。
-- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 6 項 Runtime and hardware safety preflight。
+- 硬體安全操作前置流程由 §6（Runtime and Hardware Safety Preflight）確立。
+- 第 1–6 項治理基線已全數完成；下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 7 項 S7 `M1Driver` transport vertical slice。
+
+---
+
+## 6. Runtime and Hardware Safety Preflight
+
+本節定義在任何指令可能造成致動器（Actuator）、馬達或車體產生實體動作之前，必須通過的強制安全閘門（Mandatory Safety Gates）與分級驗證前置程序。
+
+本節是**唯一關於硬體安全前置與授權邊界的 normative source**；`07_implementation.md` §3 template 的 `Hardware Evidence` 欄位與所有實機操作均以本節為準。
+
+### 6.1 Hardware Validation Level Model（逐級提升風險、嚴禁跳級）
+
+硬體驗證必須嚴格遵循「由無風險至高風險、逐級解鎖、嚴禁跳級」的模型：
+
+```text
+Level 0 — Software-only（純軟體／無裝置）
+        ↓
+Level 1 — Hardware presence / read-only（裝置存在／OS唯讀）
+        ↓
+Level 2 — Hardware communication / no motion（通訊唯讀／零扭矩）
+        ↓
+Level 3 — Safety primitive validation（安全防護與 Watchdog 驗證）
+        ↓
+Level 4 — Controlled actuator motion（架車／受約束致動器運動）
+        ↓
+Level 5 — Integrated base motion（落地／受控場域整車運動）
+```
+
+#### 各級別詳細規則矩陣
+
+| Level | 級別名稱 | 允許操作 (Allowed) | 禁止操作 (Prohibited) | 前置條件 (Prerequisites) | 人工授權要求 | 中止與失敗條件 (Exit / Abort) |
+|---|---|---|---|---|---|---|
+| **L0** | **Software-only** | 單元測試、Mock 介面、`colcon build`、`colcon test`、運動學純計算 | 開啟任何實體 `/dev/tty*` 裝置檔進行寫入、發布實體驅動訊號 | 無（標準開發環境） | 自動化可執行 | 編譯錯誤、測試未通過 |
+| **L1** | **Hardware presence** | `ls /dev/tty*`、檢查裝置權限、讀取 udev 資訊、LiDAR 網路 ping 偵測 | 開啟裝置進行寫入、致動器供電、任何通訊寫入 | 實體線路已連接 | 自動化可執行（唯讀） | 裝置節點不存在、權限不足、網路不通 |
+| **L2** | **Hardware communication** | 開啟 Serial/Modbus/Ethernet 連線、讀取驅動器暫存器（參數、警報碼、靜態編碼器數值） | 寫入控制暫存器（`SERVO-ON`、速度 JG 暫存器、目標 RPM）、修改 Flash 參數 | L1 PASS、Baud/Port 確認 | 操作人員知悉 | 通訊 CRC 錯誤、封包逾時、ID 不匹配、存在硬體警報 |
+| **L3** | **Safety primitives** | 測試通訊逾時 Watchdog（`05-17`）、命令逾時歸零（$0.5\,\text{s}$ timeout）、Lifecycle 狀態切換、靜態故障注入 | 命令非零速度、未架車直接動作、無人值守 | L2 PASS、車輪架空或靜止 | **強制當下即時授權** | Watchdog 未觸發、逾時未煞停、警報未上報 |
+| **L4** | **Controlled actuator** | **雙輪架空（架車）**狀態下以極低速（$\le 80\,\text{RPM}$）、短脈衝（$\le 1.0\,\text{s}$）測試轉向、齒比、編碼器增量 | 車輪著地、連續長時間運轉（$> 1.0\,\text{s}$）、無約束高速運轉（$> 80\,\text{RPM}$） | L3 PASS、架車確認、實體急停手邊待命、§6.3 前置清單 100% 通過 | **強制當下即時授權** | 轉向與預期相反、飛車、驅動器報警、異常震動、操作員中止 |
+| **L5** | **Integrated base** | 平整地面、淨空隔離區域（$\ge 2\,\text{m}$）內進行手動低速點動（$\le 0.2\,\text{m/s}$）、原地旋轉、低速導航追隨 | 高速脫機運行、在有人員穿梭或未淨空區域自主導航 | L4 PASS、YAML 運作極限生效、隨車安全人員手持實體急停 | **強制當下即時授權** | 偏離路徑、障礙物侵入、通訊抖動、急停被觸發 |
+
+### 6.2 Automation vs Human Authorization Boundary
+
+為確保自動化工具（Codex / AI Agent）與實體環境的人身與設備安全，明確劃定授權邊界：
+
+#### 1. 可由自動化工具自行執行的操作（Autonomous Scope）
+- Level 0 所有操作（建置、單元測試、靜態檢查、Mock 測試）。
+- Level 1 唯讀檢查（確認 `/dev/ttyUSB0`、`/dev/ttyACM0` 存在、ping LiDAR IP）。
+- Level 2 唯讀檢查（執行不帶 `--arm` 的讀取腳本，如 `01_scan_bus.py`、`02_read_config.py`、`03_md2_read.py`）。
+- ROS 2 唯讀 graph 檢視（`ros2 topic list`, `ros2 node list`, `ros2 topic echo`）。
+
+#### 2. 嚴禁由自動化工具自行執行的操作（Mandatory Human Authorization）
+- **任何致動器使能（Servo-On / Motor Enable）**。
+- **任何馬達輸出扭矩、旋轉或車體位移指令**。
+- **任何帶有 `--arm` 旗標或寫入控制暫存器的腳本**。
+- **進入 Level 3、Level 4、Level 5 的任何測試**。
+
+#### 3. 禁止「通用/永久授權」（No Blanket Approval）
+- 過去曾同意進行硬體驗證**不構成**未來操作的永久授權。
+- **每次**發送可能造成致動器動作的指令前，必須向操作人員提出明確請求（包含：目的、命令大小、方向、持續時間、安全層級），並獲得當下的明確授權（Explicit Authorization at Execution Time）。
+
+### 6.3 Physical Preflight Checklist（物理安全前置清單）
+
+在操作人員授權並執行任何 Level 4（架車動態）或 Level 5（地面動態）測試之前，必須逐項確認下列條件：
+
+```text
+[ ] 1. 實體環境淨空：AMR 周圍半徑 >= 2.0 m 範圍內無雜物、鬆脫電線、非測試人員。
+[ ] 2. 輪端物理狀態（依等級確認）：
+       - Level 4：AMR 穩固架於支撐架上，驅動輪離地 >= 20 mm，徒手撥動確認無干涉。
+       - Level 5：AMR 置於平整、乾燥、無油漬與階梯之地面。
+[ ] 3. 實體急停機制（Emergency Stop）：
+       - 操作人員全程在場，手部隨時置於實體急停按鈕或主電源切斷開關旁（距離 < 0.5 m）。
+       - 測試人員完全清楚實體斷電程序。
+[ ] 4. 運動參數嚴格約束（Command Bounding）：
+       - 首次測試速度約束：輪速 <= 80 RPM（車速 <= 0.2 m/s）。
+       - 首次測試時間約束：單次命令脈衝 <= 1.0 s。
+       - 加速度約束：符合 SYS-028 限制。
+[ ] 5. 預期方向確認：操作人員已知期望轉動方向（例如：下發正轉 -> 右輪向前順時針）。
+[ ] 6. 裝置識別性確認：確認 /dev/ttyUSB0 確實為 M1 RS-485 匯流排，/dev/ttyACM0 確實為 IMU。
+[ ] 7. 軟體版本確認：記錄當前乾淨的 Git Commit SHA。
+```
+
+#### 硬體安全能力現況聲明（Reality & Disclaimer）
+
+| 能力項目 | 目前狀態 | 說明與安全準則 |
+|---|---|---|
+| **STO (Safe Torque Off)** | **`UNVERIFIED`** | 目前硬體基線無經過功能安全認證之硬體 STO 迴路證據；**嚴禁假設 STO 存在**。 |
+| **Certified Safety PLC / Relay** | **`UNVERIFIED`** | 本系統目前為直接通訊架構，無外部認證安全控制器介入。 |
+| **Software Stop (`cmd_vel=0` / ROS 2 Disable)** | **Non-Certified Software Mechanism** | 軟體停機依賴 ROS 2、作業系統核心與 RS-485 通訊鏈路；**絕不可等同於安全急停（Certified Safety E-stop）**。實體安全唯一依賴人員手動物理斷電。 |
+
+### 6.4 Read-Only-First Rule（唯讀先於控制原則）
+
+對 M1 驅動器、LiDAR 與 IMU 的整合，嚴格落實四階段存取準則：
+
+```text
+Phase 1: 物理存在與通訊鏈路確認（Presence & Transport Read）
+   ↓ (PASS)
+Phase 2: 驅動器靜態參數與警報碼讀取（Configuration & Alarm Read）
+   ↓ (PASS)
+Phase 3: 零扭矩狀態下回授讀取（Zero-Torque Feedback Read）
+   ↓ (PASS 且記錄於 docs/verification/)
+Phase 4: 經授權之受約束運動寫入（Authorized Controlled Motion Write）
+```
+
+在 Phase 1–3 取得完整記錄並標記 PASS 前，**嚴禁進入 Phase 4 下發任何控制或寫入指令**。
+
+### 6.5 M1-Specific Controlled-Motion Gate（M1 專屬運動前置閘門）
+
+在執行 S7 `M1Driver` / `M1Hardware` 首次馬達運動指令前，必須滿足下列 10 項前置條件：
+
+1. **Read-only 證據完備**：`01_scan_bus.py`、`02_read_config.py`、`03_md2_read.py` 執行 PASS。
+2. **通訊協定語意核可**：依據 M1 官方手冊確認 Multi-drive 2.0 FC17 JG 暫存器映射與 Signed 16-bit 格式。
+3. **單位轉換通過純軟體測試**：$rad/s \leftrightarrow RPM$ 與 $step \leftrightarrow rad$ 轉換已由 Level 0 單元測試驗證通過。
+4. **驅動器 ID 與輪別映射固定**：確認 ID 1 為右輪（RIGHT），ID 2 為左輪（LEFT）。
+5. **轉向定義明確**：正轉命令定義為車體前進方向，正向旋轉定義編碼器數值正向遞增。
+6. **指令幅度約束**：目標轉速限制 $\le 80\,\text{RPM}$。
+7. **指令時間約束**：單次命令持續時間 $\le 1.0\,\text{s}$。
+8. **逾時防護有效**：Controller 內建 $0.5\,\text{s}$ 命令逾時歸零；M1 驅動器啟用通訊逾時保護（`05-17 > 0`）。
+9. **明確停止路徑已測試**：零速 FC17 指令與 SERVO-OFF 停用路徑已就緒。
+10. **操作人員手持實體急停就位**：車輛已架空，人員在場監控。
+
+### 6.6 Failure & Abort Rules（異常中止與安全降級）
+
+#### 1. 即刻中止觸發條件（Immediate Abort Triggers）
+- 馬達旋轉方向與預期相反。
+- 馬達轉速超過設定命令或出現飛車現象。
+- RS-485 通訊斷線、CRC 錯誤或連續逾時。
+- M1 驅動器回傳非零警報碼（如 Alarm 21 通訊逾時、過流、過溫）。
+- 編碼器回授中斷、跳變或數值出現 NaN。
+- 操作人員按下實體急停或發出手動中止口令。
+
+#### 2. 中止處理流程（5 步標準程序）
+1. **CUT / ZERO（切斷／歸零）**：立即發送零速指令 $\rightarrow$ 釋放 Servo 使能 $\rightarrow$ 若無回應立即切斷實體主電源。
+2. **LOG FAIL（記錄失敗）**：將當前輸出與異常現象保存為 `# Result: FAIL` evidence。
+3. **FREEZE & DEMOTE（凍結並降級）**：凍結測試流程，嚴禁繼續推進至下一 Level，立即降級回 Level 1 / Level 2 唯讀狀態。
+4. **INVESTIGATE（靜態排查）**：在馬達完全斷電或處於零扭矩唯讀狀態下，讀取警報記錄與暫存器排查原因。
+5. **RE-PREFLIGHT（重走前置）**：修復問題後，必須自 Level 0 重新開始逐級驗證，並重新執行 §6.3 物理前置檢查。**嚴禁在未排查原因前直接「重試（Retry）」**。
+
+### 6.7 Explicit Stop Paths Hierarchy（分層停止機制）
+
+| 停止等級 | 名稱 | 觸發方式 | 系統依賴 | 安全等級與宣告 |
+|---|---|---|---|---|
+| **Stop Level A** | **Software Zero Speed** | 發布 `/cmd_vel = 0` 或 Modbus FC17 寫入 Speed = 0 | ROS 2、`diff_drive_controller`、RS-485 匯流排、M1 速度閉迴路 | **軟體控制行為**（非 Certified Safety，依賴通訊正常） |
+| **Stop Level B** | **Lifecycle Disable** | 調用 `/base/enable: false`，M1HardwareInterface 清除 SERVO-ON | ROS 2 Lifecycle 框架、M1Driver NET-IN 暫存器寫入 | **軟體狀態切換**（非 Certified Safety，馬達自由滑行停轉） |
+| **Stop Level C** | **Driver Loss Watchdog** | RS-485 斷線超過 `05-17` 設定值，M1 觸發 Alarm 21 煞停 | M1 驅動器內部硬體計時器與韌體保護邏輯 | **驅動器韌體保護**（依賴硬體參數正確設定） |
+| **Stop Level D** | **Physical E-stop / Power Cut** | 操作人員手動按下實體急停開關或斷開主電池電源 | 實體機械／電氣開關，完全獨立於軟體與處理器 | **物理電源隔離**（本系統目前唯一絕對安全保障） |
+
+### 6.8 Device Identity & Port Disambiguation Rules
+
+Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB*`、`/dev/ttyACM*`）可能發生飄移。為防止誤寫入非目標裝置：
+
+1. **M1 RS-485 辨識**：連線後首先發送 Modbus FC03 讀取 Driver ID 1 與 ID 2；若無回應或 ID 不匹配，**嚴禁執行任何寫入**。
+2. **TDK IMU 辨識**：連線後首先檢查資料流標頭（NMEA / ASCII 格式特徵）；若格式不符立即關閉串列埠。
+3. **LiDAR 辨識**：透過指定 IP（如 `192.168.0.1`）進行 ping 測試與通訊握手，確認回傳裝置型號為 SICK LiDAR。
+4. **裝置不匹配處置**：若發現裝置路徑飄移，停止操作並更新配置，不可強制下發指令。
+
+### 6.9 Evidence Integration with §4 and §5
+
+所有硬體驗證與安全前置操作必須依 §4 / §5 規範產出 raw evidence 檔案：
+
+- **檔案命名**：`docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_hw_<desc>.txt`（負向測試使用 `_neg_`）。
+- **Metadata Header**：
+  ```text
+  # IMP: IMP-NNN
+  # Layer: hardware | negative
+  # Timestamp: YYYY-MM-DDThh:mm:ss±HH:MM
+  # Env: mobile_base:latest / jazzy / Ubuntu 24.04 (Noble)
+  # Target: M1 Driver ID1+ID2 (/dev/ttyUSB0)
+  # Command: <exact test command or script reference>
+  # Version: <git rev-parse --short HEAD>
+  # Result: PASS | FAIL
+  # Proved: <one-sentence: what physical fact was proved>
+  # Not-proved: <one-sentence: boundary statement>
+  ```
+- **內文結構（依 §4.6 規範）**：
+  ```text
+  Target hardware:   M1 Dual-Driver Base
+  Device identity:   ID 1 (Right), ID 2 (Left) on /dev/ttyUSB0
+  Software version:  <git commit SHA>
+  Test condition:    Level 4 (Wheels Lifted, Preflight §6.3 PASSED, max 80 RPM, 1.0s burst)
+  Observed result:   <exact output, measurement, or operator observation>
+  PASS / FAIL:       PASS | FAIL
+  Proved:            <what this test actually proved>
+  Not-proved:        <what this test cannot prove>
+  ```
+
+### 6.10 Known Limits and Next Boundary
+
+- **未驗證安全硬體**：STO 與硬體安全控制器目前標記為 `UNVERIFIED`；實體安全完全依賴操作人員在場監督與實體電源切斷。
+- **治理階段全數就緒**：Checklist #1–#6 治理前置項（Docker 基線、外部依賴、紀錄 Template、Evidence 儲存規範、建置測試基準、硬體安全前置）已全數建立完畢。
+- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 7 項 S7 `M1Driver` transport vertical slice（可正式進入第一項程式碼實作）。

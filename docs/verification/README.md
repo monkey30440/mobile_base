@@ -131,4 +131,4 @@ Build and test commands to generate evidence artifacts are defined in [`docs/07_
 
 ---
 
-> See [`07_implementation.md §4`](../07_implementation.md) for evidence storage rules and [`07_implementation.md §5`](../07_implementation.md) for canonical build/test commands.
+> See [`07_implementation.md §4`](../07_implementation.md) for evidence storage rules, [`07_implementation.md §5`](../07_implementation.md) for canonical build/test commands, and [`07_implementation.md §6`](../07_implementation.md) for hardware safety preflight gates.
