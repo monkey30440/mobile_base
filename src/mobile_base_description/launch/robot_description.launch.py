@@ -53,6 +53,7 @@ def generate_launch_description():
 
     response_timeout_ms_arg = DeclareLaunchArgument(
         'response_timeout_ms',
+        default_value='1000',
         description='Response timeout in milliseconds (required parameter, no implicit default)',
     )
 
