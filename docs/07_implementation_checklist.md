@@ -15,12 +15,12 @@
 ## Progress
 
 - 總項目：27
-- 已完成：3
+- 已完成：4
 - 進行中：0
-- 待實作：24
+- 待實作：23
 - 上游阻塞：0
-- 目前進度：3 / 27 (11%)
-- 建議下一項：第 4 項 Verification evidence storage convention；第 3–6 項完成後才進入 S7 `M1Driver`。
+- 目前進度：4 / 27 (15%)
+- 建議下一項：第 5 項 Build and test command baseline；第 3–6 項完成後才進入 S7 `M1Driver`。
 
 ---
 
@@ -32,7 +32,7 @@
   - 完成條件：`rf2o_laser_odometry` 與 `tdk_ros2_imu` 可在目前 container baseline 完成 rosdep、colcon build 並被 ROS 2 找到；相容性修正與證據邊界已記錄。
 - [x] 3. Per-item implementation record template
   - 完成條件：後續每項固定記錄 requirement/subsystem trace、artifacts、mature/custom boundary、interfaces/config、failure handling、build/test/hardware evidence、known limits 與 freeze status。
-- [ ] 4. Verification evidence storage convention
+- [x] 4. Verification evidence storage convention
   - 完成條件：確立 command、target、timestamp、版本、原始輸出／log path、PASS/FAIL 與 evidence boundary 的保存規則；禁止只寫口頭「已測過」。
 - [ ] 5. Build and test command baseline
   - 完成條件：固定 container 內 rosdep、colcon build、package test、result inspection 與 selective rebuild 流程，並確認不依賴未記錄的 running-container 手動修改。

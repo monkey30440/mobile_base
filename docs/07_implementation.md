@@ -246,7 +246,7 @@ _每筆 evidence 只記錄已執行且有結果的操作。未執行、計畫中
 
 | Date | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| YYYY-MM-DD | `<exact command>` | PASS / FAIL | <此結果實際證明了什麼> | `<path or [pending #4]>` |
+| YYYY-MM-DD | `<exact command>` | PASS / FAIL | <此結果實際證明了什麼> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_<layer>_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`；build command 格式待 #5 確立時補填）_
 
@@ -254,7 +254,7 @@ _（無 evidence 時整列填 `—`；build command 格式待 #5 確立時補填
 
 | Date | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| YYYY-MM-DD | `<package::test>` | `<exact command>` | PASS / FAIL | <證明了什麼> | `<path or [pending #4]>` |
+| YYYY-MM-DD | `<package::test>` | `<exact command>` | PASS / FAIL | <證明了什麼> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_<layer>_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`）_
 
@@ -262,7 +262,7 @@ _（無 evidence 時整列填 `—`）_
 
 | Date | Scenario | Observed result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| YYYY-MM-DD | <e.g. ROS graph + topic echo> | <observed output> | <證明了什麼；container running ≠ integration evidence> | `<path or [pending #4]>` |
+| YYYY-MM-DD | <e.g. ROS graph + topic echo> | <observed output> | <證明了什麼；container running ≠ integration evidence> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_<layer>_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`）_
 
@@ -272,7 +272,7 @@ _僅適用於 06 明確要求 real-hardware validation 的 item。若本 item �
 
 | Date | Target hardware | Test condition | Observed result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| YYYY-MM-DD | Jetson + M1 / picoScan / TDK IMU | <preflight #6 條件> | <量測結果> | <證明了什麼；模擬不可取代> | `<path or [pending #4]>` |
+| YYYY-MM-DD | Jetson + M1 / picoScan / TDK IMU | <preflight #6 條件> | <量測結果> | <證明了什麼；模擬不可取代> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_hw_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`；hardware preflight 程序待 #6 確立時補填）_
 
@@ -308,7 +308,7 @@ _（無 evidence 時整列填 `—`；hardware preflight 程序待 #6 確立時�
 
 下表說明各 checklist section 對 template 各節的適用性：
 
-| Template 節 | Governance (#7–#8) | Subsystem Impl (#9–#17) | Cross-subsystem (#18–#22) | Use-case Verification (#23–#27) |
+| Template 節 | Critical HW Slice (#7–#8) | Subsystem Impl (#9–#17) | Cross-subsystem (#18–#22) | Use-case Verification (#23–#27) |
 |---|---|---|---|---|
 | 3.2.1 Identity / Scope / Status | ✓ | ✓ | ✓ | ✓ |
 | 3.2.2 Traceability | ✓ (Cross-cutting) | ✓ | ✓ | ✓ |
@@ -322,3 +322,191 @@ _（無 evidence 時整列填 `—`；hardware preflight 程序待 #6 確立時�
 | 3.2.10 Feature Freeze / Next | ✓ | ✓ | ✓ | ✓ |
 
 「✓」表示必填；「N/A 通常」表示多數 item 在此節填 `N/A` 並說明理由。
+
+---
+
+## 4. Verification Evidence Storage Convention
+
+本節定義 checklist #5–#27 每次執行 build、test、integration 與 hardware validation 時，原始 evidence 的保存位置、metadata、命名、raw vs summary 界定、重測處理與 hardware recording 規則。
+
+本節是**唯一關於 evidence storage 的 normative source**；`07_implementation.md` §3 template 的 `Storage path` 欄位均以本節為準。
+
+### 4.1 Evidence Repository Location
+
+```text
+docs/verification/
+  IMP-007/          ← 每個 implementation item 一個子目錄
+  IMP-008/          ← 目錄名稱與 checklist item 編號一致
+  IMP-009/
+  ...
+  IMP-027/
+```
+
+**規則：**
+
+- 每個 implementation item 使用獨立子目錄 `docs/verification/IMP-NNN/`，`NNN` 為三位數字，與 checklist 編號一致（`IMP-007` 到 `IMP-027`）。
+- 子目錄在第一筆 evidence 產生前建立，僅含 `.gitkeep`；`.gitkeep` 在有真實 evidence 加入時可移除。
+- `docs/verification/` 根目錄下放置 `README.md`（本節 §4 的快速參照索引）；各 item 目錄下**不**強制放置 sub-README，但可選擇性增加說明。
+- `docs/m1_bringup_validation/logs/manual/` 中現有的 pre-IMP hardware evidence 保留在原位；後續 IMP-007 之後的 hardware evidence 遷入 `docs/verification/IMP-NNN/`。
+
+### 4.2 Evidence Metadata
+
+每一筆 evidence artifact（文字檔案）的 **第一行起** 必須包含以下 metadata header，以 `#` 開頭：
+
+```text
+# IMP: IMP-NNN
+# Layer: build | unit | integration | hardware | negative
+# Date: YYYY-MM-DD
+# Env: <container image digest or tag, or 'host'> / <ROS distro> / <OS>
+# Target: <package(s) or hardware identity>
+# Command: <exact command or procedure reference>
+# Version: <git commit SHA (short) of workspace at test time>
+# Result: PASS | FAIL
+# Proved: <one-sentence: what this evidence actually proves>
+# Not-proved: <one-sentence: what this evidence cannot prove>
+```
+
+**說明：**
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `IMP` | ✓ | 對應 checklist item，格式 `IMP-NNN` |
+| `Layer` | ✓ | 五選一：`build` / `unit` / `integration` / `hardware` / `negative` |
+| `Date` | ✓ | 執行日期，格式 `YYYY-MM-DD` |
+| `Env` | ✓ | 執行環境；container 使用 image digest 或 tag，裸機寫 `host`；附 ROS distro 與 OS |
+| `Target` | ✓ | 受測 package 名稱、node、topic、或硬體 device identity |
+| `Command` | ✓ | 可重現的完整命令；若為 hardware 手動程序，寫程序文件引用 |
+| `Version` | ✓ | `git rev-parse --short HEAD` 的輸出，代表測試當下的 workspace commit |
+| `Result` | ✓ | `PASS` 或 `FAIL`，不得填其他值 |
+| `Proved` | ✓ | 一句話：此結果**實際**證明了什麼（具體事實） |
+| `Not-proved` | ✓ | 一句話：此結果**無法**推論什麼（邊界聲明） |
+
+**禁止：** 只寫 `# Result: PASS` 而沒有 `Proved` 與 `Not-proved`；禁止 `tested successfully`、`OK`、`done` 等無意義標記。
+
+### 4.3 Naming Convention
+
+Evidence artifact 檔名格式：
+
+```text
+<YYYY-MM-DD>_<layer>_<desc>.txt
+```
+
+| 欄位 | 規則 |
+|---|---|
+| `YYYY-MM-DD` | 執行日期，與 metadata `Date` 欄位一致 |
+| `layer` | `build` / `unit` / `intg` / `hw` / `neg`（integration 縮寫 `intg`，hardware 縮寫 `hw`，negative 縮寫 `neg`） |
+| `desc` | 以底線分隔的小寫簡短描述，足以辨識測試對象，例如 `colcon_build`、`m1_read_path`、`ros_graph`、`servo_enable`；**不要**使用空格或特殊字元 |
+
+範例：
+
+```text
+docs/verification/IMP-007/
+  2026-08-20_build_colcon_all.txt
+  2026-08-20_unit_m1driver_read.txt
+  2026-08-21_hw_servo_enable.txt
+  2026-08-21_neg_modbus_timeout.txt
+  2026-08-25_build_colcon_all.txt          ← 重測，新檔保留
+```
+
+**命名規則確保：** 同一 item 的同類型多次測試不互相覆蓋（日期不同即不同檔名）；人類可直接讀懂層次與內容；不需要 database 或外部 tooling 解析。
+
+### 4.4 Raw Evidence vs Summary
+
+#### Raw Evidence（保存至 `docs/verification/IMP-NNN/`）
+
+下列內容為 raw evidence，應保存至 repository：
+
+- colcon build 的完整 stdout/stderr（截斷超過 500 行時保留前 200 行 + 後 100 行 + 截斷說明）
+- ROS 2 test runner 原始輸出（`--event-handlers console_direct+` 輸出）
+- `ros2 topic echo`、`ros2 node list`、`ros2 interface show` 等 ROS graph 觀察輸出
+- Modbus / hardware 驅動器診斷輸出
+- 故障注入結果（negative path）
+- hardware 量測觀察紀錄（operator 手動記錄）
+
+#### 不應直接 commit 進 Git 的 artifact
+
+下列 artifact **不應**直接 commit：
+
+- 超過 ~1 MB 的連續 log（典型情境：長時間 ROS bag、壓力測試輸出）
+- Binary artifact（bag 檔、image、pcap）
+- Build 中間產物（`build/`、`install/`、`log/` 已被 `.gitignore` 排除）
+
+**若 raw artifact 不適合進 Git，`07_implementation.md` item record 的 `Storage path` 欄填：**
+
+```text
+[external: <storage-location-description>, ref: docs/verification/IMP-NNN/<YYYY-MM-DD>_<layer>_<desc>.ref.txt]
+```
+
+並在 `docs/verification/IMP-NNN/<YYYY-MM-DD>_<layer>_<desc>.ref.txt` 中寫入 metadata header（§4.2）加上：
+
+```text
+# ExternalRef: <storage location, e.g. shared drive path, USB label, local path on test machine>
+# SizeBytes: <approximate>
+# Checksum: <sha256 if available>
+# Retained-by: <person/machine responsible for keeping this artifact>
+```
+
+此 `.ref.txt` 檔案本身進入 Git，確保可追溯性不依賴外部 artifact 是否仍存在。
+
+#### Summary（寫入 `07_implementation.md` item record）
+
+`07_implementation.md` 中的 item record 只寫：
+
+- `Date`、`Command`（或程序描述）、`Result`
+- `Evidence boundary`（對應 §4.2 的 `Proved` + `Not-proved`）
+- `Storage path`（指向 `docs/verification/IMP-NNN/` 的具體檔名）
+
+**07_implementation.md 不取代 raw evidence；raw evidence 不省略 metadata header。**
+
+### 4.5 Re-run / Superseded Evidence
+
+| 情境 | 處理方式 |
+|---|---|
+| 同一測試重跑（PASS → PASS） | 新增新日期檔案；舊檔保留；`07_implementation.md` item record 更新 `Date` 與 `Storage path` 指向最新檔案 |
+| 修正後重跑（FAIL → PASS） | 新增新日期 PASS 檔案；舊 FAIL 檔案**保留，不得刪除或改寫**；`07_implementation.md` 記錄最新 PASS，但 Known Limits 節應說明曾有 FAIL 及修正摘要 |
+| 重複 FAIL | 每次 FAIL 均新增獨立檔案；不覆蓋；有助追蹤問題演進 |
+| Authoritative evidence | **同一 item + 同一 layer** 中，日期最新且 Result = PASS 的檔案為目前 authoritative evidence；若最新為 FAIL，authoritative 為空，不得以舊 PASS 冒充 |
+
+**禁止：** 刪除或改寫 FAIL evidence；以較舊的 PASS 回填最新失敗。
+
+### 4.6 Hardware Evidence Recording
+
+Hardware evidence artifact 記錄下列資訊（在 raw 文字檔中，metadata header 之後）：
+
+```text
+Target hardware:   <device name + serial/ID if available>
+Device identity:   <e.g. M1 driver ID, /dev/ttyUSB0 enumeration, picoScan IP, IMU /dev/ttyACM0>
+Software version:  <git SHA, ROS node version, driver firmware if known>
+Test condition:    <hardware state at test start; preflight reference to #6 procedure>
+Observed result:   <exact output, measurement, or operator observation>
+PASS / FAIL:       PASS | FAIL
+Proved:            <what this hardware test actually proved>
+Not-proved:        <what this hardware test cannot prove>
+```
+
+**注意：** 本節只定義 evidence **保存格式**。硬體安全操作前置條件（E-stop、STO、架車、速度上限、watchdog、人工復歸）屬於 checklist #6 的責任，本節不定義。在 #6 完成之前，hardware evidence artifact 的 `Test condition` 欄填寫 `[pending #6 preflight procedure]`。
+
+### 4.7 Relationship to §3 Template
+
+§3.2 template 的 `Storage path` 欄位使用本節的命名格式：
+
+```text
+docs/verification/IMP-NNN/<YYYY-MM-DD>_<layer>_<desc>.txt
+```
+
+其中：
+- `IMP-NNN` 與本 item 的 checklist 編號一致。
+- `layer` 對應 evidence 類型（`build` / `unit` / `intg` / `hw` / `neg`）。
+- `YYYY-MM-DD` 為執行日期。
+- `desc` 為簡短描述。
+
+`[pending #5]` 與 `[pending #6]` placeholder 仍保留在 §3.2 的說明注意事項中，表示 build/test command 格式（待 #5）與 hardware preflight（待 #6）尚未確立；storage path 本身已由本節確立，**不再使用 `[pending #4]`**。
+
+### 4.8 Known Limits and Next Boundary
+
+- 本 convention 不依賴外部 artifact server、CI 系統或 database；所有 in-repo evidence 均為純文字，適合 `git log` 追蹤。
+- `.gitignore` 中已存在 `*.log` 排除規則；`docs/verification/` 下的 `.txt` 與 `.ref.txt` 不受此規則影響，可正常 commit。
+- Large artifact（ROS bag 等）的外部保存位置尚未統一；`[external: ...]` + `.ref.txt` 機制為目前最低限度 reference，具體外部位置由各 item 執行時決定。
+- Build 與 test 的完整 command workflow 由 checklist #5 確立；本節只定義 evidence 保存，不預先決定命令格式。
+- Hardware safety preflight 由 checklist #6 確立；本節只定義 hardware evidence 的保存格式。
+- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 5 項 Build and test command baseline。
