@@ -11,6 +11,7 @@ pkg_check_modules(MODBUS REQUIRED libmodbus)
 
 add_library(m1_driver
   src/m1_driver.cpp
+  src/m1_control_check_core.cpp
 )
 
 target_include_directories(m1_driver PUBLIC
@@ -32,9 +33,16 @@ add_executable(m1_l2_read_check
 target_link_libraries(m1_l2_read_check m1_driver)
 target_compile_features(m1_l2_read_check PUBLIC cxx_std_17)
 
+# Level 3/4 Controlled Write Validation Harness
+add_executable(m1_control_check
+  src/m1_control_check_main.cpp
+)
+target_link_libraries(m1_control_check m1_driver)
+target_compile_features(m1_control_check PUBLIC cxx_std_17)
+
 # Install rules
 install(
-  TARGETS m1_driver m1_l2_read_check
+  TARGETS m1_driver m1_l2_read_check m1_control_check
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -53,6 +61,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_m1_driver test/test_m1_driver.cpp)
   target_link_libraries(test_m1_driver m1_driver)
+
+  ament_add_gtest(test_m1_control_check test/test_m1_control_check.cpp)
+  target_link_libraries(test_m1_control_check m1_driver)
 endif()
 
 ament_export_include_directories(include)

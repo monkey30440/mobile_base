@@ -971,7 +971,10 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | C++ Header | `src/mobile_base_control/include/mobile_base_control/m1_driver.hpp` | `M1Driver` 類別定義、`Result<T>`/`ErrorCode` 型別、`MotorCommand`/`MotorState` 結構、協定打包與解析輔助函式 | ros2_control SystemInterface、kinematics、wheel dimensions |
 | C++ Implementation | `src/mobile_base_control/src/m1_driver.cpp` | libmodbus RTU 生命週期管理、Multi-drive 2.0 FC03/FC17 封包建構與回應解析、Standard Modbus FC03/FC06 單暫存器讀寫、錯誤與逾時對映 | TF 發布、里程計累積、ROS node |
 | L2 Read Check Tool | `src/mobile_base_control/src/m1_l2_read_check.cpp` | 實機 Level 2 唯讀驗證獨立工具（唯讀 02-14、09-26、FC03 state、slave 99 timeout 注入） | 馬達輸出、使能寫入、運動指令 |
-| Unit Tests | `src/mobile_base_control/test/test_m1_driver.cpp` | 8 項 GTest（ID/bitmask、signed 16/32-bit、FC03/FC17 request、response parsing、mock transact、negative fault injection） | 實機物理旋轉 |
+| Validation Harness | `src/mobile_base_control/include/mobile_base_control/m1_control_check.hpp`, `src/m1_control_check_core.cpp`, `src/m1_control_check_main.cpp` | Level 3/4 受控寫入驗證獨立 Harness（支援 `read`, `enable`, `stop`, `disable`, `exchange`；強制 `--dry-run` 與 `--execute` 安全確認防護；單一失敗立即中斷不重試） | ros2_control controller、生產節點 |
+| Driver Unit Tests | `src/mobile_base_control/test/test_m1_driver.cpp` | 9 項 GTest（ID/bitmask、signed 16/32-bit、FC03/FC17 request、response parsing、mock transact、negative fault injection、connect failure） | 實機物理旋轉 |
+| Harness Unit Tests | `src/mobile_base_control/test/test_m1_control_check.cpp` | 8 項 GTest（CLI 解析、參數檢驗、Dry-run 無寫入保證、指令預覽匹配、執行安全標籤確認、失敗立即中斷不重試） | 實機物理旋轉 |
+| Validation Procedure | `docs/m1_bringup_validation/16_imp007_controlled_write_procedure.md` | Level 3/4 實機驗證前置檢查、執行指令語法、各步驟預期狀態、中止條件與急停路徑規範 | — |
 | Build & Metadata | `src/mobile_base_control/CMakeLists.txt`, `package.xml` | ROS 2 Jazzy ament_cmake 套件建置與依賴定義 | — |
 
 ---
@@ -981,7 +984,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | 欄位 | 內容 |
 |---|---|
 | Mature component(s) used | `libmodbus` (v3.1.10-1ubuntu1, system library) |
-| Custom implementation | M1 Multi-drive 2.0 廣播協定打包/解包、驅動器 ID 位元遮罩計算、signed 32-bit 位置轉換、MotorState 解析、自訂 Result<T>/ErrorCode 錯誤模型 |
+| Custom implementation | M1 Multi-drive 2.0 廣播協定打包/解包、驅動器 ID 位元遮罩計算、signed 32-bit 位置轉換、MotorState 解析、自訂 Result<T>/ErrorCode 錯誤模型、受控驗證 Harness |
 | Boundary rule | `libmodbus` 私有負責底層 Serial RTU context、CRC16 產生與驗證、逾時設定與收發；`M1Driver` 負責 M1 專屬協定語意與馬達狀態結構封裝，不對上層洩漏 libmodbus 型別或 raw Modbus 細節。 |
 
 ---
@@ -1022,14 +1025,16 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| 2026-08-18T11:59:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 函式庫與 `m1_l2_read_check`（含 explicit timeout_ms 簽章）建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt) |
+| 2026-08-18T12:03:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 函式庫、`m1_l2_read_check` 工具與 `m1_control_check` 驗證 Harness 建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T120241_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120241_build_m1_driver.txt) |
+| 2026-08-18T11:59:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）`mobile_base_control` 套件含 explicit timeout_ms 簽章建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt) |
 | 2026-08-18T11:46:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）初版 `mobile_base_control` 套件建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt) |
 
 #### Unit / Interface Evidence
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T11:59:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 9 項 GTests（含 ConnectFailureHandling）與 6 項 ament linters 通過，0 failures（46 tests total）。 | [`docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt) |
+| 2026-08-18T12:03:02+08:00 | `mobile_base_control` (All tests) | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 17 項 GTests（`test_m1_driver` 9 項 + `test_m1_control_check` 8 項）與 6 項 ament linters 通過，0 failures（71 tests total）。 | [`docs/verification/IMP-007/2026-08-18T120243_unit_m1_control_check.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120243_unit_m1_control_check.txt) |
+| 2026-08-18T11:59:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）9 項 GTests 與 6 項 ament linters 通過（46 tests total）。 | [`docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt) |
 | 2026-08-18T11:46:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）初版 8 項 GTests 與 6 項 ament linters 通過（45 tests total）。 | [`docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt) |
 | 2026-08-18T11:46:03+08:00 | `M1DriverTest.NegativeHandling` | `test_m1_driver --gtest_filter=M1DriverTest.NegativeHandling` | PASS | 驗證無效驅動器 ID、逾時模擬與發送失敗之錯誤對映。 | [`docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt) |
 
@@ -1045,15 +1050,15 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | `m1_driver` 在 ROS 2 Jazzy 環境中成功編譯並通過所有 9 項單元測試與 linter；在實機 `/dev/ttyUSB0` (230400 8N1) 上成功讀取 ID 1 與 ID 2 之 02-14=1、09-26=0，並透過 Multi-drive 2.0 FC03 正確讀取兩驅動器之狀態（status=6, alarm=0, bus~51.1V）；故障注入驗證非存在 ID 99 正確逾時回傳 `TIMEOUT`。 |
-| 尚未證明 | 實機 SERVO-ON 使能寫入、馬達實體旋轉、JG 速度控制輸出、馬達實體運動阻抗與急停煞停時間。 |
+| 已證明 | `m1_driver` 與 `m1_control_check` 驗證 Harness 在 ROS 2 Jazzy 環境中成功編譯並通過所有 17 項單元測試與 linter（71 tests total）；在實機 `/dev/ttyUSB0` (230400 8N1) 上完成 Level 2 唯讀測試；`m1_control_check` 完成 dry-run 預覽驗證與參數邊界防護；Level 3/4 實機受控寫入驗證程序已建立於 `docs/m1_bringup_validation/16_imp007_controlled_write_procedure.md`。 |
+| 尚未證明 | 實機 SERVO-ON 使能寫入、馬達實體旋轉、JG 速度控制輸出、馬達實體運動阻抗與急停煞停時間（須待操作人員現場即時授權後執行）。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
 - **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`M1Driver` 不硬編預設逾時常數，精確 production response timeout 尚待後續 `M1Hardware` (IMP-008) 實機整合與時序量測後確定。
-- 實機使能與運動控制寫入依 §6 安全前置程序，受限於 Level 3/4 需操作人員在場即時授權閘門，未在本次自動執行。
+- **實機受控寫入（Level 3/4）待操作人員即時授權**：依 §6 安全前置程序，所有會向馬達發送 SVON / JG / SVOFF 的寫入操作均須操作人員在場授權並確認架車與斷電路徑，未在本次自動執行。
 - `M1Driver` 僅提供通訊傳輸與狀態封裝，上層 `M1Hardware` (`SystemInterface` plugin) 將於 #8 實作。
 
 ---
