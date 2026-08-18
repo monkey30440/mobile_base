@@ -1,0 +1,56 @@
+# IMP: IMP-007
+# Layer: hw
+# Timestamp: 2026-08-18T12:20:35+08:00
+# Env: mobile_base:latest / jazzy / Ubuntu 24.04 (Noble)
+# Target: Jetson + M1 Dual-Driver Base (/dev/ttyUSB0 @ 230400 8N1)
+# Command: ./install/mobile_base_control/lib/mobile_base_control/m1_control_check --execute --op stop --device /dev/ttyUSB0 --baud 230400 --timeout-ms 100 --driver-a 1 --driver-b 2
+# Version: 00cc8c9
+# Result: PASS
+# Level: Level 3 (Zero-speed-intent control write)
+# Proved: Real M1 drivers (ID1 Right, ID2 Left) in Servo-On state accept Multi-drive 2.0 FC17 JG 0 (0x0001 with 0 RPM) write command under operator authorization; drivers maintain Status=0 (STOP, Servo-On active) with Actual RPM=0 and Alarm=0; holding torque remains active with zero wheel rotation. Session completed with final cleanup disable() returning drives safely to Status=6 (Servo-Off).
+# Not-proved: Deceleration/braking from non-zero speed, stopping distance, stopping time, certified safety stop, or independent communication watchdog trip.
+
+[Pre-check Baseline (after pre-stop enable)]
+ID 1: Status=0, Alarm=0, RPM=0
+ID 2: Status=0, Alarm=0, RPM=0
+
+[Execution Output (stop)]
+========================================
+M1 Controlled Write Validation Harness
+Operation       : stop
+Target Device   : /dev/ttyUSB0 @ 230400 bps (8N1)
+Response Timeout: 100 ms
+Driver IDs      : Driver A=1, Driver B=2
+Mode            : REAL HARDWARE EXECUTION
+========================================
+[Step 1] Connecting to /dev/ttyUSB0 @ 230400...
+PASS: Connected.
+[Step 2] Sending Multi-drive 2.0 JG 0 (zero-speed-intent control write)...
+PASS: Stop command sent. Current state:
+  Driver ID 1: Status=0 Alarm=0 RPM=0 Bus=51.10V Pos=0 steps
+  Driver ID 2: Status=0 Alarm=0 RPM=0 Bus=51.08V Pos=0 steps
+[Final] Disconnecting...
+PASS: Validation step completed successfully.
+
+[Subsequent Read-Only Confirmation (FC03 read_state)]
+========================================
+M1 Controlled Write Validation Harness
+Operation       : read
+Target Device   : /dev/ttyUSB0 @ 230400 bps (8N1)
+Response Timeout: 100 ms
+Driver IDs      : Driver A=1, Driver B=2
+Mode            : REAL HARDWARE EXECUTION
+========================================
+[Step 1] Connecting to /dev/ttyUSB0 @ 230400...
+PASS: Connected.
+[Step 2] Reading dual driver state...
+  Driver ID 1: Status=0 Alarm=0 RPM=0 Bus=51.13V Pos=0 steps
+  Driver ID 2: Status=0 Alarm=0 RPM=0 Bus=51.08V Pos=0 steps
+[Final] Disconnecting...
+PASS: Validation step completed successfully.
+
+[Final Session Cleanup (disable)]
+Command: ./install/mobile_base_control/lib/mobile_base_control/m1_control_check --execute --op disable --device /dev/ttyUSB0 --baud 230400 --timeout-ms 100 --driver-a 1 --driver-b 2
+Result: PASS
+Subsequent read_state: Driver 1 Status=6, Driver 2 Status=6, Alarm=0, RPM=0
+Session closed in Servo-Off state.

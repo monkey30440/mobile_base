@@ -1044,7 +1044,10 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Target hardware | Test condition | Observed result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T11:46:04+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 2 (No Motion / Read-Only), 230400 8N1, timeout=100ms | ID1 (Right) & ID2 (Left) 成功讀取 02-14=1, 09-26=0; Multi-drive 2.0 FC03 成功讀取雙驅動器狀態 (status=6, alarm=0, bus~51.1V); slave 99 成功逾時 | 證明實機 Modbus RTU 唯讀通訊健全；未下發任何使能、速度或扭矩指令。 | [`docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt) |
+| 2026-08-18T12:20:35+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 3 (Zero-speed-intent write), 230400 8N1, timeout=100ms | 兩台 M1 在 Servo-On 下成功接收 Multi-drive 2.0 FC17 JG 0 (`0x0001` 0 RPM) 指令，維持 Status=0 (`STOP`)、RPM=0、Alarm=0，最終調用 disable() 安全回復至 Status=6。 | 證明 JG 0 停轉 primitive 能在 Servo-On 零速狀態下被實機接受；不證明非零速煞停減速、煞停距離或時間。 | [`docs/verification/IMP-007/2026-08-18T122035_hw_m1_l3_stop.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T122035_hw_m1_l3_stop.txt) |
+| 2026-08-18T12:17:25+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 3 (Zero-speed-intent write), 230400 8N1, timeout=100ms | 兩台 M1 成功接收 Multi-drive 2.0 FC17 SVOFF (`0x0007`) 指令，Status 由 0 (`STOP`) 回復為 6 (`WAIT/INHIBIT`)，激磁保持阻抗解除，RPM=0、Alarm=0。 | 證明 disable primitive 正常運作且馬達能安全釋放使能。 | [`docs/verification/IMP-007/2026-08-18T121725_hw_m1_l3_disable.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T121725_hw_m1_l3_disable.txt) |
+| 2026-08-18T12:15:49+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 3 (Zero-speed-intent write), 230400 8N1, timeout=100ms | 兩台 M1 成功接收 Multi-drive 2.0 FC17 SVON (`0x0006`) 指令，Status 由 6 (`WAIT/INHIBIT`) 轉為 0 (`STOP`)，馬達產生激磁保持扭矩，無任何輪端旋轉，RPM=0、Alarm=0。 | 證明 enable primitive 正常運作且馬達能安全進入使能保持態。 | [`docs/verification/IMP-007/2026-08-18T121549_hw_m1_l3_enable.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T121549_hw_m1_l3_enable.txt) |
+| 2026-08-18T11:46:04+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 2 (No Motion / Read-Only), 230400 8N1, timeout=100ms | ID1 (Right) & ID2 (Left) 成功讀取 02-14=1, 09-26=0; Multi-drive 2.0 FC03 成功讀取雙驅動器狀態 (status=6, alarm=0, bus~51.1V); slave 99 成功逾時。 | 證明實機 Modbus RTU 唯讀通訊健全；未下發任何寫入指令。 | [`docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt) |
 
 ---
 
@@ -1052,16 +1055,16 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | `m1_driver` 與 `m1_control_check` 驗證 Harness 在 ROS 2 Jazzy 環境中成功編譯並通過所有 20 項單元測試與 linter（74 tests total）；在實機 `/dev/ttyUSB0` (230400 8N1) 上完成 Level 2 唯讀測試；`m1_control_check` 完成 dry-run 預覽驗證、參數邊界防護、Process-Crash 安全警告、Best-Effort cleanup 語意與 mock 執行測試；Level 3 零速意圖控制寫入程序與 Level 4 BLOCKED 宣告已建立於 `docs/m1_bringup_validation/16_imp007_controlled_write_procedure.md`。 |
-| 尚未證明 | 實機 SERVO-ON 使能寫入、馬達實體旋轉、JG 速度控制輸出、馬達實體運動阻抗與急停煞停時間（須待操作人員現場即時授權後執行）。 |
+| 已證明 | `m1_driver` 與 `m1_control_check` 驗證 Harness 在 ROS 2 Jazzy 環境中成功編譯並通過所有 20 項單元測試與 linter（74 tests total）；在實機 `/dev/ttyUSB0` (230400 8N1) 上完成 Level 2 唯讀測試與 Level 3 零速意圖控制寫入測試（`read_state`、`enable`、`stop`、`disable` 均在實機驗證通過且狀態轉換正確：6 → 0 → 0 → 6，全過程無非預期運動、無警報）。 |
+| 尚未證明 | 非零速度實體運動（Level 4 exchange motion）、從非零速度煞停之減速曲線與煞停距離/時間、第三方認證安全停機（Certified Safety Stop）、硬體通訊 Watchdog 逾時跳脫與復歸行為（待後續整合驗證）。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
-- **Process-Crash Hazard 與 Level 4 BLOCKED**：`m1_control_check` 之軟體運動計時器與自動停機流程並非獨立於 Process 的安全機制；若 Host Process 在非零 JG 下發後 Crash / SIGKILL，自動 stop() 將不保證執行。因目前尚無經完整實測證明的硬體通訊 Watchdog 或認證安全控制器，**Level 4 實機運動控制驗證目前嚴格標記為 `BLOCKED`**。
+- **Level 3 控制寫入完成與 Level 4 狀態**：`M1Driver` 核心通訊傳輸與零速控制 Primitives（`read_state`、`enable`、`stop`、`disable`）已全部具備實機 Level 3 驗證證據；非零速度運動（Level 4 exchange motion）因 Process-Crash Hazard 考量目前保持 `BLOCKED`，留待 #8 `M1Hardware` 整合與閉環控制時進行受控驗證。
+- **通訊 Watchdog 行為**：M1 通訊 Watchdog 在硬體層面仍為 `UNVERIFIED`，安全等級為 `NOT ESTABLISHED`，其具體參數（`05-17` 等）留待 control loop 實機時序量測後審慎決定。
 - **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`M1Driver` 不硬編預設逾時常數，精確 production response timeout 尚待後續 `M1Hardware` (IMP-008) 實機整合與時序量測後確定。
-- **Level 3 實機寫入待操作人員即時授權**：依 §6 安全前置程序，所有會向馬達發送 SVON / JG 0 / SVOFF 的零速意圖控制寫入均須操作人員在場授權並確認架車與斷電路徑，未在本次自動執行。
 - `M1Driver` 僅提供通訊傳輸與狀態封裝，上層 `M1Hardware` (`SystemInterface` plugin) 將於 #8 實作。
 
 ---
