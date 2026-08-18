@@ -132,21 +132,33 @@ DynamicStageD1Options parse_stage_d1_command_line(int argc, char ** argv)
 std::string build_stage_d1_urdf(const DynamicStageD1Options & opts)
 {
   std::ostringstream ss;
-  ss                          <<
-    R"(<?xml version="1.0"?>
+  ss <<
+    R"xml(<?xml version="1.0"?>
 <robot name="mobile_base_stage_d1">
+  <link name="base_link"/>
+  <link name="left_wheel"/>
+  <link name="right_wheel"/>
+  <joint name="driving_wheel_joint_L" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel"/>
+  </joint>
+  <joint name="driving_wheel_joint_R" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_wheel"/>
+  </joint>
   <ros2_control name="M1Hardware" type="system">
     <hardware>
       <plugin>mobile_base_control/M1Hardware</plugin>
-      <param name="device">)"
-                              << opts.device << R"(</param>
-      <param name="baud">)" << opts.baud << R"(</param>
-      <param name="timeout_ms">)" << opts.timeout_ms <<
-    R"(</param>
-      <param name="left_driver_id">)" << opts.driver_b <<
-    R"(</param>
-      <param name="right_driver_id">)" << opts.driver_a <<
-    R"(</param>
+      <param name="serial_port">)xml"
+     << opts.device << R"xml(</param>
+      <param name="baud_rate">)xml" << opts.baud <<
+    R"xml(</param>
+      <param name="response_timeout_ms">)xml" << opts.timeout_ms <<
+    R"xml(</param>
+      <param name="left_driver_id">)xml" << opts.driver_b <<
+    R"xml(</param>
+      <param name="right_driver_id">)xml" << opts.driver_a <<
+    R"xml(</param>
       <param name="gear_ratio">20.0</param>
       <param name="left_wheel_sign">1</param>
       <param name="right_wheel_sign">-1</param>
@@ -164,7 +176,7 @@ std::string build_stage_d1_urdf(const DynamicStageD1Options & opts)
       <state_interface name="velocity"/>
     </joint>
   </ros2_control>
-</robot>)";
+</robot>)xml";
   return ss.str();
 }
 

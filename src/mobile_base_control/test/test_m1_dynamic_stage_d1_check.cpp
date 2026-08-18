@@ -173,9 +173,9 @@ TEST(DynamicStageD1Test, URDFStructureAndParams)
 
   std::string urdf = build_stage_d1_urdf(opts);
   EXPECT_NE(urdf.find("mobile_base_control/M1Hardware"), std::string::npos);
-  EXPECT_NE(urdf.find("<param name=\"device\">/dev/ttyUSB0</param>"), std::string::npos);
-  EXPECT_NE(urdf.find("<param name=\"baud\">230400</param>"), std::string::npos);
-  EXPECT_NE(urdf.find("<param name=\"timeout_ms\">50</param>"), std::string::npos);
+  EXPECT_NE(urdf.find("<param name=\"serial_port\">/dev/ttyUSB0</param>"), std::string::npos);
+  EXPECT_NE(urdf.find("<param name=\"baud_rate\">230400</param>"), std::string::npos);
+  EXPECT_NE(urdf.find("<param name=\"response_timeout_ms\">50</param>"), std::string::npos);
   EXPECT_NE(urdf.find("<param name=\"left_driver_id\">2</param>"), std::string::npos);
   EXPECT_NE(urdf.find("<param name=\"right_driver_id\">1</param>"), std::string::npos);
   EXPECT_NE(urdf.find("driving_wheel_joint_L"), std::string::npos);
