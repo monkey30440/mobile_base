@@ -1,0 +1,68 @@
+================================================================
+IMP-008 Level 4 Stage D2 Right Wheel Dynamic Feedback Software Preparation Evidence
+Timestamp: 2026-08-18T14:32:45+08:00
+Target Package: mobile_base_control
+Harness: m1_dynamic_stage_d2_check
+Test Target: test_m1_dynamic_stage_d2_check
+================================================================
+
+[Step 1] Build & Automated Test Execution:
+  Command: colcon test --packages-select mobile_base_control
+  Test Results:
+    - test_m1_dynamic_stage_d2_check: 6/6 tests PASS
+      * DryRunCausesZeroTransportCalls: PASS (0 serial calls, displays plan and -95 RPM target)
+      * ProhibitedCliParametersRejected: PASS (rejects --rpm, --left, --both, --reverse, etc.)
+      * RightWheelVelocityBoundsValidation: PASS (rejects 0.0, negative, NaN, >1.5 rad/s)
+      * CycleCountBoundsValidation: PASS (enforces [10, 150] active cycles, <=30 warmup/cooldown)
+      * MathematicalSignAndGearConversionRightWheel: PASS (+0.5 rad/s -> -95 RPM, +1.0 rad/s -> -191 RPM, 0.0 rad/s -> 0 RPM; negative motor steps -> positive ROS wheel displacement)
+      * URDFStructureAndParams: PASS (correct plugin, parameters, right_wheel_sign=-1, and joints)
+    - Full package suite: 14/14 test suites PASS, 225/225 tests PASS (0 failures, 0 errors)
+    - Linters: copyright, cppcheck, cpplint, lint_cmake, uncrustify, xmllint all PASS (0 warnings)
+
+[Step 2] Dry-Run Plan Validation:
+  Command: m1_dynamic_stage_d2_check --dry-run
+  Output Summary:
+    - Target Device: /dev/ttyUSB0 @ 230400 bps
+    - Target Rate: 30.0 Hz (Period = 33.333 ms)
+    - Response Timeout: 50 ms (PROVISIONAL TEST CONDITION)
+    - Target Wheel: Right Wheel Only (Driver ID 1, Sign -1)
+    - Commanded Velocity: +0.5 rad/s (~0.04 m/s surface speed)
+    - Converted Target RPM: -95 RPM (Right motor, negative native sign)
+    - Left Wheel Target: 0.0 rad/s (0 RPM, strictly hard-bound)
+    - Duration: 10 warmup + 60 active (2.0 s) + 10 cooldown cycles
+    - Expected Physical Direction: Expected Robot-Forward (CW viewed from robot's right side; UNVERIFIED; requires operator visual confirmation)
+    - Transport Calls: 0
+
+================================================================
+ACCEPTANCE SEMANTICS & BOUNDARY DEFINITIONS
+================================================================
+1. Harness Velocity Bounds Derivation:
+   - Right wheel command hard ceiling (1.5 rad/s) is a HARNESS-INTERNAL CLI SANITY LIMIT for Stage D2 low-speed validation.
+   - It is NOT an upstream system safety bound (SYS-028 specifies robot max linear speed 0.8 m/s, max angular speed 1.0 rad/s).
+   - The provisional execution condition remains strictly +0.5 rad/s (~ -95 motor RPM, 0.04 m/s surface speed).
+
+2. Qualitative / Coarse Acceptance Semantics (First D2):
+   - Right +0.5 rad/s command reaches Driver ID 1 with correct native negative sign (-95 RPM).
+   - Real Right actual RPM responds with the expected native negative sign.
+   - M1Hardware converts that native negative feedback back to positive ROS Right velocity.
+   - Right encoder displacement is dynamically consistent with physical rotation and positive ROS position convention.
+   - Physical Right wheel direction is independently confirmed by operator as robot-forward (CW from right side).
+   - Left command remains strictly zero.
+   - Left actual RPM and encoder displacement remain zero.
+   - Operator independently confirms physical Left wheel remains motionless.
+   - Zero alarms, zero timeouts, zero transport/lifecycle failures, zero NaN/Inf.
+   - Cooldown returns velocity to zero; final state safely returns to Servo-Off (Status=6, Alarm=0, RPM=0).
+   - Raw per-cycle samples preserved in CSV for subsequent empirical tolerance derivation.
+
+3. Stage D2 Evidence Boundary (What Stage D2 Does NOT Prove):
+   - Reverse-direction validity (negative commands).
+   - Simultaneous dual-wheel dynamic validity (Stage D3).
+   - Floor-driving behavior, braking-distance performance, or odometry accuracy.
+   - General quantitative speed calibration.
+   - Hardware communication watchdog trip/recovery behavior (05-17 = 0).
+   - Full diff_drive_controller dynamic behavior.
+   - Full Checklist #8 completion (Checklist #8 remains [~]).
+
+================================================================
+STATUS: LEVEL 4 STAGE D2 SOFTWARE PREPARATION VERIFIED (PREPARATION ONLY)
+================================================================

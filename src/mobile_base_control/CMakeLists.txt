@@ -110,6 +110,20 @@ target_link_libraries(m1_dynamic_stage_d1_check
 )
 target_compile_features(m1_dynamic_stage_d1_check PUBLIC cxx_std_17)
 
+# Level 4 Stage D2 Right Wheel Dynamic Feedback Validation Harness
+add_executable(m1_dynamic_stage_d2_check
+  src/m1_dynamic_stage_d2_check_main.cpp
+  src/m1_dynamic_stage_d2_check_core.cpp
+)
+target_link_libraries(m1_dynamic_stage_d2_check
+  m1_hardware
+  m1_driver
+  controller_manager::controller_manager
+  hardware_interface::hardware_interface
+  rclcpp::rclcpp
+)
+target_compile_features(m1_dynamic_stage_d2_check PUBLIC cxx_std_17)
+
 # Install rules
 install(
   TARGETS
@@ -121,6 +135,7 @@ install(
     m1_fc17_latency_check
     m1_full_loop_timing_check
     m1_dynamic_stage_d1_check
+    m1_dynamic_stage_d2_check
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -182,6 +197,18 @@ if(BUILD_TESTING)
     src/m1_dynamic_stage_d1_check_core.cpp
   )
   target_link_libraries(test_m1_dynamic_stage_d1_check
+    m1_hardware
+    m1_driver
+    controller_manager::controller_manager
+    hardware_interface::hardware_interface
+    rclcpp::rclcpp
+  )
+
+  ament_add_gtest(test_m1_dynamic_stage_d2_check
+    test/test_m1_dynamic_stage_d2_check.cpp
+    src/m1_dynamic_stage_d2_check_core.cpp
+  )
+  target_link_libraries(test_m1_dynamic_stage_d2_check
     m1_hardware
     m1_driver
     controller_manager::controller_manager
