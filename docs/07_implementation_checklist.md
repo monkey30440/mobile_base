@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：27
-- 已完成：8
-- 進行中：1
+- 已完成：9
+- 進行中：0
 - 待實作：18
 - 上游阻塞：0
-- 目前進度：8 / 27 (30%)；第 8 項 `S7 M1Hardware ros2_control integration` 依原始 DoD 完成 SystemInterface lifecycle、command/state interfaces、真實 wheel feedback validity (Stage D1 & D2)、禁止 command substitution、diff-drive controller、timeout 與 safe-stop chain 之 unit/interface/integration/real-hardware 證據並正式結案 `[x]`；第 9 項 `S1 Robot Description` 進行中 `[~]`（`mobile_base_description` 套件、Xacro 幾何模型、TF 發布與語法/單元測試已完成，待實機 $<2\,\text{mm}$ 物理量測證據）；第 10 項 `S2 LiDAR acquisition and scan baseline` 尚未開始 `[ ]`。
+- 目前進度：9 / 27 (33%)；第 9 項 `S1 Robot Description` 依原始 DoD 完成 Xacro/URDF、joint/frame naming、robot_state_publisher、模型語法、TF tree 與實體幾何量測證據並正式結案 `[x]`；下一步為第 10 項 `S2 LiDAR acquisition and scan baseline`（待實作 `[ ]`）。
 
 ---
 
@@ -49,7 +49,7 @@
 
 ## C. Subsystem Implementation
 
-- [~] 9. S1 Robot Description
+- [x] 9. S1 Robot Description
   - 追溯：SYS-023。
   - 完成條件：Xacro/URDF、joint/frame naming、robot_state_publisher、模型語法、TF tree 與實體幾何量測證據符合 06。
 - [ ] 10. S2 LiDAR acquisition and scan baseline

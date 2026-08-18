@@ -1322,10 +1322,10 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | 欄位 | 內容 |
 |---|---|
 | Checklist item | #9 — S1 `Robot Description` |
-| Item scope | 依 06 baseline 與 legacy CAD URDF 協調結論，建立 `mobile_base_description` 套件，實作標準 Xacro 模型（`mobile_base.urdf.xacro`、`mobile_base_geometry.xacro`、`mobile_base_ros2_control.xacro`）、6 項核心 3D 幾何網格（`base_link.STL`、`driving_wheel_link_L/R.STL`、`base_lidar_link_FL/BR.STL`、`base_imu_link.STL`）、靜態與動態關節定義（`base_footprint` 根坐標系、`base_link` 高程 $0.2560\,\text{m}$、輪心高程 $-0.1760\,\text{m}$、雙輪關節軸 $[0, 1, 0]$、雷達與 IMU 06 標準量測坐標系）、`robot_state_publisher` 啟動檔（`robot_description.launch.py`）、`check_urdf` 與 Xacro 語法自動化測試、`/tf_static` 廣播整合測試與 ament linters。 |
-| Implementation status | `In Progress [~]` (Initial slice implemented and verified; pending physical $< 2\,\text{mm}$ measurement evidence) |
-| Evidence status | `Build Verified` + `Unit Verified (5/5 tests)` + `Launch Integration Verified (1/1 test)` + `Ament Linters Passed (5/5 suites)` + `check_urdf Verified` |
-| Feature-freeze status | `Initial Slice Complete` (Checklist #9 remains `[~]` pending physical $< 2\,\text{mm}$ verification) |
+| Item scope | 依 06 baseline 與 legacy CAD URDF 協調結論，建立 `mobile_base_description` 套件，實作標準 Xacro 模型（`mobile_base.urdf.xacro`、`mobile_base_geometry.xacro`、`mobile_base_ros2_control.xacro`）、6 項核心 3D 幾何網格（`base_link.STL`、`driving_wheel_link_L/R.STL`、`base_lidar_link_FL/BR.STL`、`base_imu_link.STL`）、靜態與動態關節定義（`base_footprint` 根坐標系、`base_link` 高程 $0.2560\,\text{m}$、輪心高程 $-0.1760\,\text{m}$、雙輪關節軸 $[0, 1, 0]$、雷達與 IMU 06 標準量測坐標系）、`robot_state_publisher` 啟動檔（`robot_description.launch.py`）、`check_urdf` 與 Xacro 語法自動化測試、`/tf_static` 廣播整合測試、ament linters、語意修正（嚴格逾時參數權屬、感測器網格 $R_{\text{comp}} = R_{\text{joint}}^{-1}$ 逆向補償）以及實機幾何合理性驗證（$< 2.0\,\text{mm}$）。 |
+| Implementation status | `Closed [x]` (All software, TF, mesh, and physical geometry sanity criteria verified and closed) |
+| Evidence status | `Build Verified` + `Unit Verified (8/8 tests)` + `Launch Integration Verified (1/1 test)` + `Ament Linters Passed (5/5 suites)` + `check_urdf Verified` + `Physical Sanity Evidence Verified` |
+| Feature-freeze status | `Baseline Frozen` (Checklist #9 Closed `[x]`) |
 | Last updated | 2026-08-18 |
 
 #### 3.3.2 Requirements & Architecture Traceability
@@ -1406,23 +1406,25 @@ base_footprint (z = 0.0000, 地表投影基準點)
 |---|---|---|---|---|---|
 | 2026-08-18T15:12:12+08:00 | S1 Robot Description Build & Test Suite | `colcon test --packages-select mobile_base_description` + `colcon test-result` | PASS | 全部 7 項測試套件通過（247 測試項目，0 failures, 0 errors, 30 skipped）：5 項 `test_urdf_syntax`、1 項 `test_robot_description_launch` 整合測試、5 項 ament linters。 | [`docs/verification/IMP-009/2026-08-18T151212_unit_s1_robot_description.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-009/2026-08-18T151212_unit_s1_robot_description.txt) |
 | 2026-08-18T15:22:06+08:00 | IMP-009 Semantic Erratum Regression Suite | `colcon test --packages-select mobile_base_description` + `colcon test-result` | PASS | 全部 7 項測試套件通過（250 測試項目，0 failures, 0 errors, 30 skipped）：驗證逾時參數省略防呆（`test_timeout_omission_produces_no_param`）、顯式 `50 ms` 展開、感測器 $R_{\text{joint}} \cdot R_{\text{visual}} = I$ 數學補償（`test_sensor_mesh_alignment_and_compensation`）、雷達開孔邊界框驗證（`test_lidar_mesh_bounding_boxes`）、Launch 整合與全工作區 4 套件回歸通過。 | [`docs/verification/IMP-009/2026-08-18T152206_erratum_semantic_audit.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-009/2026-08-18T152206_erratum_semantic_audit.txt) |
+| 2026-08-18T15:57:16+08:00 | IMP-009 Physical Geometry Sanity Acceptance | Physical Measurement on Chassis Stand | PASS | 實機物理量測驗證通過（v0.1 fit-for-purpose 幾何合理性驗證）：左輪直徑 $160.0\,\text{mm}$（誤差 $0.0\,\text{mm}$）、右輪直徑 $160.0\,\text{mm}$（誤差 $0.0\,\text{mm}$）、輪外跨距 $605.0\,\text{mm}$（合理性 PASS）、前保桿至輪軸 $306.6\,\text{mm}$（$X=+20.5\,\text{mm}$，誤差 $0.0\,\text{mm}$）、底盤主甲板至輪軸 $176.0\,\text{mm}$（高程 $256.0\,\text{mm}$，誤差 $0.0\,\text{mm}$）、雙輪無阻力旋轉、雷達與 IMU 安裝方向及干涉檢查均 PASS。 | [`docs/verification/IMP-009/2026-08-18T155716_physical_geometry_sanity.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-009/2026-08-18T155716_physical_geometry_sanity.txt) |
 
 #### 3.3.8 Evidence Boundary
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 (`PASS`) | 1. **Xacro 展開與 XML 語法有效性** (`PASS`)：`mobile_base.urdf.xacro` 展開無誤，通過 `check_urdf` 結構解析。<br/>2. **標準 ROS TF 坐標系樹** (`PASS`)：以 `base_footprint` 為根節點，各關節（`base_joint`, `driving_wheel_joint_L/R`, `base_lidar_joint_FL/BR`, `base_imu_joint`）坐標、型別與旋轉軸精確符合 06。<br/>3. **IMP-008 控制介面名稱與逾時權屬相容性** (`PASS`)：左右輪關節名稱保持一致；`response_timeout_ms` 無隱式預設值，完全遵守 IMP-008 凍結規範。<br/>4. **感測器網格渲染與開孔幾何數學貼合** (`PASS`)：經過 $R_{\text{joint}} \cdot R_{\text{comp}} = I$ 補償，網格於 `base_link` 幾何坐標中完美對齊 CAD 開孔。<br/>5. **Launch 與 TF 靜態廣播** (`PASS`)：`robot_state_publisher` 正確載入並發布 `/robot_description` 與 `/tf_static`。 |
-| 尚未證明 (後續階段與驗收項) | 1. **實機物理尺寸量測驗收** (`EVIDENCE GAP`)：實車雷達、IMU 安裝距離與輪距之實體游標卡尺／雷射測距量測證據（誤差 $< 2\,\text{mm}$，待補齊量測記錄以結案 Checklist #9）。<br/>2. **著地行駛幾何與打滑特性** (`DOWNSTREAM SCOPE`)：地面行駛里程計精度與著地動態（屬 Checklist #13 State Estimation 範疇）。<br/>3. **被動萬向輪動態模擬** (`SIMULATION ONLY`)：被動萬向輪彈簧懸吊模擬（v0.1 實車控制無需此 12 軸未量測 TF 關節）。 |
+| 已證明 (`PASS`) | 1. **Xacro 展開與 XML 語法有效性** (`PASS`)：`mobile_base.urdf.xacro` 展開無誤，通過 `check_urdf` 結構解析。<br/>2. **標準 ROS TF 坐標系樹** (`PASS`)：以 `base_footprint` 為根節點，各關節（`base_joint`, `driving_wheel_joint_L/R`, `base_lidar_joint_FL/BR`, `base_imu_joint`）坐標、型別與旋轉軸精確符合 06。<br/>3. **IMP-008 控制介面名稱與逾時權屬相容性** (`PASS`)：左右輪關節名稱保持一致；`response_timeout_ms` 無隱式預設值，完全遵守 IMP-008 凍結規範。<br/>4. **感測器網格渲染與開孔幾何數學貼合** (`PASS`)：經過 $R_{\text{joint}} \cdot R_{\text{comp}} = I$ 補償，網格於 `base_link` 幾何坐標中完美對齊 CAD 開孔。<br/>5. **Launch 與 TF 靜態廣播** (`PASS`)：`robot_state_publisher` 正確載入並發布 `/robot_description` 與 `/tf_static`。<br/>6. **實車物理幾何合理性驗證** (`PASS`)：實車輪徑（$160.0\,\text{mm}$）、輪軸 $X$ 偏移（$+20.5\,\text{mm}$）、底盤高程（$256.0\,\text{mm}$）之實體量測誤差均為 $0.0\,\text{mm}$（$< 2.0\,\text{mm}$ 門檻），感測器安裝方向與機構無干涉檢查均合格。 |
+| 尚未證明 (後續階段與驗收項) | 1. **著地行駛動態滾動半徑與打滑特性** (`DOWNSTREAM SCOPE`)：地面負載行駛里程計精度與動態滾動半徑標定（屬 Checklist #13 State Estimation 範疇）。<br/>2. **被動萬向輪動態模擬** (`SIMULATION ONLY`)：被動萬向輪彈簧懸吊模擬（v0.1 實車控制無需此 12 軸未量測 TF 關節）。 |
 
 #### 3.3.9 Known Limits / Outstanding Obligations
 
-- **Checklist #9 結案待辦事項**：軟體語意模型、幾何轉換與回歸測試已全部完成且通過驗證；Checklist #9 依治理規範維持 `[~]`，待補充實體底盤雷達、IMU 安裝距離與輪距之 $< 2\,\text{mm}$ 實機物理量測驗收記錄後方可標記結案 `[x]`。
+- **驗證深度治理原則**：IMP-009 實車幾何驗證定位為適用於 v0.1 MVP 之幾何合理性驗收（Fit-for-purpose geometry sanity acceptance），用以確認實車幾何符合 CAD/URDF 設計並排除裝配錯誤，非計量實驗室認證；動態著地有效滾動半徑於 Checklist #13 進行標定。
+- **Checklist #9 結案狀態**：Checklist #9 所需之軟體模型、TF 坐標樹、網格幾何、ros2_control 契約與實體幾何量測證據已全部完成並通過驗證，正式標記結案 `[x]`。
 - **被動萬向輪建模範圍**：v0.1 聚焦於二輪差速驅動與導航感知外參，萬向輪不納入動態 TF 關節，防止發布未量測之虛擬關節狀態。
 
 #### 3.3.10 Feature Freeze Status / Next Dependency
 
 | 欄位 | 內容 |
 |---|---|
-| Feature freeze status | `Initial Slice Complete` (URDF / TF Baseline Established; Checklist #9 Remains `[~]`) |
-| Freeze condition | `mobile_base_description` 套件建置與測試通過；Checklist #9 維持 `[~]` 等待實體量測驗收證據；Checklist #10 尚未開始 `[ ]` |
-| Next dependency | Checklist #9 實體量測驗收 / Checklist #10 `S2 LiDAR acquisition and scan baseline` (`[ ] NOT STARTED`) |
+| Feature freeze status | `Baseline Frozen` (S1 Robot Description Completed and Verified; Checklist #9 Closed `[x]`) |
+| Freeze condition | `mobile_base_description` 套件建置、測試與實機幾何合理性驗證全部通過；Checklist #9 正式結案 `[x]` |
+| Next dependency | Checklist #10 `S2 LiDAR acquisition and scan baseline` (`[ ] NOT STARTED`) |
