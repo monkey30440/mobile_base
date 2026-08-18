@@ -30,8 +30,32 @@ Test Target: test_m1_dynamic_stage_d1_check
     - Converted Target RPM: 95 RPM (Left motor)
     - Right Wheel Target: 0.0 rad/s (0 RPM, strictly hard-bound)
     - Duration: 10 warmup + 60 active (2.0 s) + 10 cooldown cycles
-    - Expected Physical Direction: Counter-Clockwise looking from left side (top moving forward)
+    - Expected Physical Direction: Expected CCW looking from robot's left side (UNVERIFIED; requires operator visual confirmation)
     - Transport Calls: 0
+
+================================================================
+ACCEPTANCE SEMANTICS & BOUNDARY DEFINITIONS
+================================================================
+1. Harness Velocity Bounds Derivation:
+   - Left wheel command hard ceiling (1.5 rad/s) is a HARNESS-INTERNAL CLI SANITY LIMIT for Stage D1 low-speed validation (preventing operator from accidentally passing high velocity arguments during initial checkout).
+   - It is NOT an upstream system safety bound (SYS-028 specifies robot max linear speed 0.8 m/s, max angular speed 1.0 rad/s).
+   - The provisional execution condition remains strictly 0.5 rad/s (~95 motor RPM, 0.04 m/s surface speed).
+
+2. Qualitative / Coarse Acceptance Semantics (First D1):
+   - Correct positive sign (> 0 RPM).
+   - Clearly non-zero real driver feedback.
+   - Magnitude reasonably consistent with the 95 RPM target.
+   - Zero NaN / stale / target-substitution behavior.
+   - Raw per-cycle samples preserved in CSV for subsequent empirical tolerance derivation.
+
+3. Right-Wheel Isolation Semantics:
+   - Right wheel command is strictly hard-bound to 0.0 rad/s (0 RPM) by architecture.
+   - Any physical Right wheel rotation constitutes an immediate primary test FAIL.
+   - Numeric feedback jitter / noise is recorded in CSV without applying unverified arbitrary filtering thresholds.
+
+4. Operator Presence & Physical Direction:
+   - Operator is physically present throughout the ENTIRE HARDWARE VALIDATION SESSION with E-Stop in hand.
+   - The physical rotation direction (whether Left ID 2 native positive RPM produces Counter-Clockwise robot-forward wheel spin) is UNVERIFIED on real hardware pending operator visual observation in Stage D1.
 
 ================================================================
 EVIDENCE BOUNDARY & PROOF MATRIX
@@ -46,7 +70,7 @@ PROVED:
 NOT PROVED (Awaiting Level 4 Execution Authorization):
   1. Physical motor rotation under non-zero velocity commands.
   2. Actual RPM magnitude tracking accuracy on physical hardware.
-  3. Physical rotation direction matching ROS joint convention on real vehicle.
+  3. Physical rotation direction matching ROS joint convention on real vehicle (UNVERIFIED).
   4. Real encoder position accumulation during physical motion.
   5. Real dynamic wheel feedback validity (Level 4 remains BLOCKED).
 

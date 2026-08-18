@@ -78,7 +78,7 @@ TEST(DynamicStageD1Test, LeftWheelVelocityBoundsValidation)
   res = validate_stage_d1_options(opts);
   EXPECT_FALSE(res.valid);
 
-  // Exceeds safety limit (> 1.5 rad/s) rejected
+  // Exceeds harness sanity clamping limit (> 1.5 rad/s) rejected
   opts.left_wheel_cmd_rad_s = 2.0;
   res = validate_stage_d1_options(opts);
   EXPECT_FALSE(res.valid);

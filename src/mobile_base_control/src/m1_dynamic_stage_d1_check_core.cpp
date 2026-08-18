@@ -58,7 +58,7 @@ DynamicStageD1ValidationResult validate_stage_d1_options(
     return {false, "Stage D1 requires a strictly positive left wheel velocity command."};
   }
   if (options.left_wheel_cmd_rad_s > STAGE_D1_MAX_LEFT_WHEEL_VEL_RAD_S) {
-    return {false, "Left wheel velocity exceeds Stage D1 safety limit (" +
+    return {false, "Left wheel velocity exceeds Stage D1 harness sanity limit (" +
       std::to_string(STAGE_D1_MAX_LEFT_WHEEL_VEL_RAD_S) + " rad/s)."};
   }
   if (options.warmup_cycles > STAGE_D1_MAX_WARMUP_CYCLES) {
@@ -196,8 +196,8 @@ static void print_stage_d1_plan(
       << " deg (~" << std::setprecision(2) << expected_rot_rad << " rad)\n"
       << "Warmup / Cooldown     : " << opts.warmup_cycles << " warmup / "
       << opts.cooldown_cycles << " cooldown cycles (0 RPM)\n"
-      << "Expected Physical Dir : Counter-Clockwise looking from "
-      << "robot's left side (top moving forward)\n"
+      << "Expected Physical Dir : Expected CCW looking from robot's left side "
+      << "(UNVERIFIED; requires operator visual confirmation)\n"
       << "================================================================\n";
 }
 
@@ -224,8 +224,9 @@ int run_dynamic_stage_d1_check(
         << "  [ ] BOTH driving wheels completely off the ground (elevated)\n"
         << "  [ ] Controlled area clear of cables and foreign objects\n"
         << "  [ ] Physical E-Stop / power isolation switch immediately accessible\n"
-        << "  [ ] Operator physically present throughout execution\n"
-        << "  [ ] Operator understands expected LEFT wheel physical CCW rotation\n"
+        << "  [ ] Operator physically present throughout hardware validation session\n"
+        << "  [ ] Operator will visually observe and confirm LEFT wheel "
+        << "physical rotation direction\n"
         << "================================================================\n";
     return 0;
   }

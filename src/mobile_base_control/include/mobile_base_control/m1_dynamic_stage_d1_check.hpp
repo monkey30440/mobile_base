@@ -28,8 +28,8 @@
 namespace mobile_base_control
 {
 
-// Architectural safety limits for Level 4 Stage D1 (Left-Wheel Only)
-constexpr double STAGE_D1_MAX_LEFT_WHEEL_VEL_RAD_S = 1.5;  // ~286 motor RPM (~0.12 m/s linear)
+// Harness-internal CLI sanity limits for Stage D1 (not upstream safety bound)
+constexpr double STAGE_D1_MAX_LEFT_WHEEL_VEL_RAD_S = 1.5;  // Clamping limit (~286 motor RPM)
 constexpr size_t STAGE_D1_MAX_WARMUP_CYCLES = 30;           // max 1.0 s @ 30 Hz
 constexpr size_t STAGE_D1_MAX_ACTIVE_CYCLES = 150;          // max 5.0 s @ 30 Hz
 constexpr size_t STAGE_D1_MAX_COOLDOWN_CYCLES = 30;         // max 1.0 s @ 30 Hz
