@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit and syntax tests for S2 dual SICK LiDAR launch and configuration."""
+"""Unit and syntax tests for S2 dual SICK picoScan150 LiDAR launch and configuration."""
 
 import importlib.util
 import os
@@ -48,8 +48,8 @@ def test_package_and_configs_installed():
     assert os.path.isfile(launch_file), f'Missing launch file: {launch_file}'
 
 
-def test_yaml_configs_syntax_and_values():
-    """Validate YAML parsing and parameter contracts for FL and BR LiDARs."""
+def test_yaml_configs_picoscan_contracts():
+    """Validate YAML parsing and picoScan150 parameter contracts for FL and BR LiDARs."""
     pkg_share = get_package_share_directory('mobile_base_perception')
     front_cfg = os.path.join(pkg_share, 'config', 'sick_front_lidar.yaml')
     rear_cfg = os.path.join(pkg_share, 'config', 'sick_rear_lidar.yaml')
@@ -63,27 +63,40 @@ def test_yaml_configs_syntax_and_values():
     assert 'front_lidar_node' in fl_data, 'front_lidar_node missing in FL config'
     assert 'rear_lidar_node' in br_data, 'rear_lidar_node missing in BR config'
 
-    fl_params = fl_data['front_lidar_node']['ros__parameters']
-    br_params = br_data['rear_lidar_node']['ros__parameters']
+    fl_p = fl_data['front_lidar_node']['ros__parameters']
+    br_p = br_data['rear_lidar_node']['ros__parameters']
 
-    # Contract checks for Front-Left
-    assert fl_params['hostname'] == '192.168.0.1'
-    assert fl_params['frame_id'] == 'base_lidar_link_FL'
-    assert fl_params['laserscan_topic'] == '/scan_front'
-    assert fl_params['tf_publish_rate'] == 0.0, 'FL TF publish must be 0.0'
-    assert fl_params['ros_qos'] == 4, 'FL QoS must be SensorDataQoS (4)'
+    # Scanner model profile check
+    assert fl_p['scanner_type'] == 'sick_picoscan'
+    assert br_p['scanner_type'] == 'sick_picoscan'
 
-    # Contract checks for Rear-Right
-    assert br_params['hostname'] == '192.168.0.2'
-    assert br_params['frame_id'] == 'base_lidar_link_BR'
-    assert br_params['laserscan_topic'] == '/scan_rear'
-    assert br_params['tf_publish_rate'] == 0.0, 'BR TF publish must be 0.0'
-    assert br_params['ros_qos'] == 4, 'BR QoS must be SensorDataQoS (4)'
+    # Host receiver check
+    assert fl_p['udp_receiver_ip'] == '192.168.0.100'
+    assert br_p['udp_receiver_ip'] == '192.168.0.100'
 
-    # Isolation check: FL and BR must have distinct IP, frame, and topic
-    assert fl_params['hostname'] != br_params['hostname']
-    assert fl_params['frame_id'] != br_params['frame_id']
-    assert fl_params['laserscan_topic'] != br_params['laserscan_topic']
+    # Contract checks for Front-Left picoScan150
+    assert fl_p['hostname'] == '192.168.0.1'
+    assert fl_p['udp_port'] == 2115
+    assert fl_p['publish_frame_id'] == 'base_lidar_link_FL'
+    assert fl_p['publish_laserscan_fullframe_topic'] == '/scan_front'
+    assert fl_p['tf_publish_rate'] == 0.0, 'FL TF publish must be 0.0'
+    assert fl_p['all_segments_min_deg'] == -138.0
+    assert fl_p['all_segments_max_deg'] == 138.0
+
+    # Contract checks for Rear-Right picoScan150
+    assert br_p['hostname'] == '192.168.0.2'
+    assert br_p['udp_port'] == 2116
+    assert br_p['publish_frame_id'] == 'base_lidar_link_BR'
+    assert br_p['publish_laserscan_fullframe_topic'] == '/scan_rear'
+    assert br_p['tf_publish_rate'] == 0.0, 'BR TF publish must be 0.0'
+    assert br_p['all_segments_min_deg'] == -138.0
+    assert br_p['all_segments_max_deg'] == 138.0
+
+    # Multi-device isolation checks
+    assert fl_p['hostname'] != br_p['hostname'], 'FL and BR share the same IP!'
+    assert fl_p['udp_port'] != br_p['udp_port'], 'FL and BR collide on UDP port!'
+    assert fl_p['publish_frame_id'] != br_p['publish_frame_id']
+    assert fl_p['publish_laserscan_fullframe_topic'] != br_p['publish_laserscan_fullframe_topic']
 
 
 def test_launch_description_generation():

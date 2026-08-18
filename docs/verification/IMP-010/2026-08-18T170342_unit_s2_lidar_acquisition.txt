@@ -1,15 +1,15 @@
 ================================================================================
 IMP-010 S2 LIDAR ACQUISITION UNIT & LAUNCH SYNTAX VERIFICATION EVIDENCE
 ================================================================================
-Timestamp: 2026-08-18T17:03:42+08:00
+Timestamp: 2026-08-18T17:23:33+08:00
 Target: S2 Perception Subsystem (mobile_base_perception)
-Scope: Dual SICK 2D LiDAR Launch & Configuration Syntax Verification (v0.1 MVP)
+Scope: Dual SICK picoScan150 2D LiDAR Launch & Configuration Syntax Verification (v0.1 MVP)
 Environment: ROS 2 Jazzy Container (ARM64, Ubuntu 24.04)
 
 1. BUILD LOG
 --------------------------------------------------------------------------------
 Command: colcon build --symlink-install --packages-select mobile_base_perception
-Result: SUCCESS (Finished in 0.45s)
+Result: SUCCESS (Finished in 0.44s)
 
 2. TEST EXECUTION LOG
 --------------------------------------------------------------------------------
@@ -17,8 +17,8 @@ Command: colcon test --packages-select mobile_base_perception --event-handlers c
 Results:
 - test_lidar_launch_syntax: PASSED (3/3 tests)
   * test_package_and_configs_installed: PASS
-  * test_yaml_configs_syntax_and_values: PASS (FL: 192.168.0.1, base_lidar_link_FL, /scan_front; BR: 192.168.0.2, base_lidar_link_BR, /scan_rear; QoS=SensorDataQoS, tf_publish_rate=0.0)
-  * test_launch_description_generation: PASS (generates 2 distinct Node actions using sick_scan_xd/sick_generic_caller; zero dual_laser_merger, zero duplicate static TF broadcaster)
+  * test_yaml_configs_picoscan_contracts: PASS (FL: 192.168.0.1, UDP port 2115, base_lidar_link_FL, /scan_front; BR: 192.168.0.2, UDP port 2116 (isolated), base_lidar_link_BR, /scan_rear; receiver: 192.168.0.100; profile=sick_picoscan; tf_publish_rate=0.0; FOV native [-138, 138] deg)
+  * test_launch_description_generation: PASS (generates 2 distinct Node actions using sick_scan_xd/sick_generic_caller with sick_picoscan.launch; zero dual_laser_merger, zero duplicate static TF broadcaster)
 - flake8: PASSED (0 errors)
 - lint_cmake: PASSED (0 errors)
 - pep257: PASSED (0 errors)
@@ -34,6 +34,6 @@ Summary: 263 tests, 0 errors, 0 failures, 30 skipped.
 
 4. CONCLUSION
 --------------------------------------------------------------------------------
-The S2 LiDAR acquisition software preparation slice is complete and verified.
-Real-hardware execution (Stages L1, L2, L3) is prepared and pending operator review.
+The S2 LiDAR acquisition software baseline using the authoritative SICK picoScan150 profile is complete and verified.
+Real-hardware execution (Stages L1, L2, L3) is prepared and ready for execution.
 ================================================================================

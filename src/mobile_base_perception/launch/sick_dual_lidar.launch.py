@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Launch composition for dual SICK 2D LiDAR acquisition in S2 Perception."""
+"""Launch composition for dual SICK picoScan150 2D LiDAR acquisition in S2 Perception."""
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -22,32 +22,50 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    """Generate launch description for dual SICK LiDAR acquisition."""
+    """Generate launch description for dual SICK picoScan150 LiDAR acquisition."""
     sick_scan_pkg = get_package_share_directory('sick_scan_xd')
 
     # Declare launch arguments
     front_hostname_arg = DeclareLaunchArgument(
         'front_hostname',
         default_value='192.168.0.1',
-        description='IP address of Front-Left SICK LiDAR'
+        description='IP address of Front-Left SICK picoScan150 LiDAR'
     )
 
     rear_hostname_arg = DeclareLaunchArgument(
         'rear_hostname',
         default_value='192.168.0.2',
-        description='IP address of Rear-Right SICK LiDAR'
+        description='IP address of Rear-Right SICK picoScan150 LiDAR'
     )
 
-    front_port_arg = DeclareLaunchArgument(
-        'front_port',
-        default_value='2112',
-        description='TCP port for Front-Left SICK LiDAR'
+    udp_receiver_ip_arg = DeclareLaunchArgument(
+        'udp_receiver_ip',
+        default_value='192.168.0.100',
+        description='Host IP address to receive LiDAR UDP scan packets'
     )
 
-    rear_port_arg = DeclareLaunchArgument(
-        'rear_port',
-        default_value='2112',
-        description='TCP port for Rear-Right SICK LiDAR'
+    front_udp_port_arg = DeclareLaunchArgument(
+        'front_udp_port',
+        default_value='2115',
+        description='Host UDP port for Front-Left scan data'
+    )
+
+    rear_udp_port_arg = DeclareLaunchArgument(
+        'rear_udp_port',
+        default_value='2116',
+        description='Host UDP port for Rear-Right scan data (isolated)'
+    )
+
+    front_imu_udp_port_arg = DeclareLaunchArgument(
+        'front_imu_udp_port',
+        default_value='7503',
+        description='Host UDP port for Front-Left IMU data'
+    )
+
+    rear_imu_udp_port_arg = DeclareLaunchArgument(
+        'rear_imu_udp_port',
+        default_value='7504',
+        description='Host UDP port for Rear-Right IMU data (isolated)'
     )
 
     front_frame_arg = DeclareLaunchArgument(
@@ -74,103 +92,94 @@ def generate_launch_description():
         description='Authoritative output topic for Rear-Right LaserScan'
     )
 
-    scanner_type_arg = DeclareLaunchArgument(
-        'scanner_type',
-        default_value='sick_tim_5xx',
-        description='Scanner model type for sick_scan_xd launch resolution'
-    )
-
     tf_publish_rate_arg = DeclareLaunchArgument(
         'tf_publish_rate',
         default_value='0.0',
         description='Rate of internal TF publishing in Hz (0.0 to disable; TF owned by S1)'
     )
 
-    ros_qos_arg = DeclareLaunchArgument(
-        'ros_qos',
-        default_value='4',
-        description='ROS 2 QoS profile (4: rclcpp::SensorDataQoS)'
-    )
-
     # Launch configuration substitutions
     front_hostname = LaunchConfiguration('front_hostname')
     rear_hostname = LaunchConfiguration('rear_hostname')
-    front_port = LaunchConfiguration('front_port')
-    rear_port = LaunchConfiguration('rear_port')
+    udp_receiver_ip = LaunchConfiguration('udp_receiver_ip')
+    front_udp_port = LaunchConfiguration('front_udp_port')
+    rear_udp_port = LaunchConfiguration('rear_udp_port')
+    front_imu_udp_port = LaunchConfiguration('front_imu_udp_port')
+    rear_imu_udp_port = LaunchConfiguration('rear_imu_udp_port')
     front_frame_id = LaunchConfiguration('front_frame_id')
     rear_frame_id = LaunchConfiguration('rear_frame_id')
     front_topic = LaunchConfiguration('front_topic')
     rear_topic = LaunchConfiguration('rear_topic')
-    scanner_type = LaunchConfiguration('scanner_type')
     tf_publish_rate = LaunchConfiguration('tf_publish_rate')
-    ros_qos = LaunchConfiguration('ros_qos')
 
-    # Path to underlying SICK template launch file
-    sick_launch_file = PathJoinSubstitution([
-        sick_scan_pkg, 'launch',
-        [scanner_type, '.launch']
+    # Path to upstream SICK picoScan template launch file
+    picoscan_launch_file = PathJoinSubstitution([
+        sick_scan_pkg, 'launch', 'sick_picoscan.launch'
     ])
 
-    # Front-Left SICK LiDAR node instance
+    # Front-Left SICK picoScan150 node instance
     front_lidar_node = Node(
         package='sick_scan_xd',
         executable='sick_generic_caller',
         name='front_lidar_node',
         output='screen',
         arguments=[
-            sick_launch_file,
+            picoscan_launch_file,
             ['hostname:=', front_hostname],
-            ['port:=', front_port],
+            ['udp_receiver_ip:=', udp_receiver_ip],
+            ['udp_port:=', front_udp_port],
+            ['imu_udp_port:=', front_imu_udp_port],
             ['nodename:=', 'front_lidar_node'],
-            ['frame_id:=', front_frame_id],
-            ['laserscan_topic:=', front_topic],
-            ['cloud_topic:=', '/cloud_front'],
+            ['publish_frame_id:=', front_frame_id],
+            ['publish_laserscan_fullframe_topic:=', front_topic],
+            ['publish_laserscan_segment_topic:=', '/scan_segment_front'],
             ['tf_publish_rate:=', tf_publish_rate],
-            ['ros_qos:=', ros_qos],
             ['sw_pll_only_publish:=', 'true'],
         ],
         remappings=[
-            ('scan', front_topic),
-            ('/scan', front_topic),
+            ('scan_fullframe', front_topic),
+            ('/scan_fullframe', front_topic),
         ],
     )
 
-    # Rear-Right SICK LiDAR node instance
+    # Rear-Right SICK picoScan150 node instance
     rear_lidar_node = Node(
         package='sick_scan_xd',
         executable='sick_generic_caller',
         name='rear_lidar_node',
         output='screen',
         arguments=[
-            sick_launch_file,
+            picoscan_launch_file,
             ['hostname:=', rear_hostname],
-            ['port:=', rear_port],
+            ['udp_receiver_ip:=', udp_receiver_ip],
+            ['udp_port:=', rear_udp_port],
+            ['imu_udp_port:=', rear_imu_udp_port],
             ['nodename:=', 'rear_lidar_node'],
-            ['frame_id:=', rear_frame_id],
-            ['laserscan_topic:=', rear_topic],
-            ['cloud_topic:=', '/cloud_rear'],
+            ['publish_frame_id:=', rear_frame_id],
+            ['publish_laserscan_fullframe_topic:=', rear_topic],
+            ['publish_laserscan_segment_topic:=', '/scan_segment_rear'],
             ['tf_publish_rate:=', tf_publish_rate],
-            ['ros_qos:=', ros_qos],
             ['sw_pll_only_publish:=', 'true'],
         ],
         remappings=[
-            ('scan', rear_topic),
-            ('/scan', rear_topic),
+            ('scan_fullframe', rear_topic),
+            ('/scan_fullframe', rear_topic),
         ],
     )
 
     return LaunchDescription([
         front_hostname_arg,
         rear_hostname_arg,
-        front_port_arg,
-        rear_port_arg,
+        udp_receiver_ip_arg,
+        front_udp_port_arg,
+        rear_udp_port_arg,
+        front_imu_udp_port_arg,
+        rear_imu_udp_port_arg,
         front_frame_arg,
         rear_frame_arg,
         front_topic_arg,
         rear_topic_arg,
-        scanner_type_arg,
         tf_publish_rate_arg,
-        ros_qos_arg,
         front_lidar_node,
         rear_lidar_node,
     ])
