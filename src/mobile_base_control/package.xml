@@ -9,6 +9,9 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>controller_manager</depend>
+  <depend>diff_drive_controller</depend>
+  <depend>geometry_msgs</depend>
   <depend>hardware_interface</depend>
   <depend>libmodbus-dev</depend>
   <depend>pluginlib</depend>
@@ -18,9 +21,6 @@
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
-  <test_depend>controller_manager</test_depend>
-  <test_depend>diff_drive_controller</test_depend>
-  <test_depend>geometry_msgs</test_depend>
   <test_depend>ros2_control_test_assets</test_depend>
 
   <export>

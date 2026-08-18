@@ -125,6 +125,40 @@ struct LatencyStats
 
     return stats;
   }
+
+  static LatencyStats compute_from_values(const std::vector<double> & values)
+  {
+    LatencyStats stats;
+    stats.total_samples = values.size();
+    stats.success_count = values.size();
+
+    if (values.empty()) {
+      return stats;
+    }
+
+    std::vector<double> sorted = values;
+    std::sort(sorted.begin(), sorted.end());
+
+    stats.min_us = sorted.front();
+    stats.max_us = sorted.back();
+
+    const double sum = std::accumulate(sorted.begin(), sorted.end(), 0.0);
+    stats.mean_us = sum / static_cast<double>(sorted.size());
+
+    double variance_sum = 0.0;
+    for (const double val : sorted) {
+      const double diff = val - stats.mean_us;
+      variance_sum += diff * diff;
+    }
+    stats.stddev_us = std::sqrt(variance_sum / static_cast<double>(sorted.size()));
+
+    stats.p50_us = compute_percentile(sorted, 50.0);
+    stats.p90_us = compute_percentile(sorted, 90.0);
+    stats.p95_us = compute_percentile(sorted, 95.0);
+    stats.p99_us = compute_percentile(sorted, 99.0);
+
+    return stats;
+  }
 };
 
 }  // namespace mobile_base_control

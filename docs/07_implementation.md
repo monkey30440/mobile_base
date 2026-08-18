@@ -1160,16 +1160,21 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | `motor_steps_per_rev` | URDF `<param>` | 馬達每轉編碼器 Steps（預設 `10000.0`） | `06 §3.3` |
 | `max_motor_rpm` | URDF `<param>` | 操作馬達轉速上限（預設 `3000.0` RPM） | `06 §3.3` |
 
-#### Controller Timing Model (Model A2)
+#### Controller Timing Model (Candidate under validation: Synchronous Model A2 @ 30 Hz)
 
 - **Controller Manager Cycle Flow**:
   1. `M1Hardware::read()`：無通訊開銷，直接讀取上一週期 `write()`（或 `on_activate` 初始化）所快取之最新雙馬達狀態，更新連續累積位置與輪速。
   2. `diff_drive_controller::update()`：依據當前狀態與輸入速度參考指令，計算兩輪目標角速度 $[rad/s]$ 並寫入 Loaned Command Interface。
   3. `M1Hardware::write()`：檢查指令有效性（禁止 NaN/Inf），將輪速轉換為雙馬達目標 RPM，執行單次 FC17 Multi-drive 2.0 交易並快取回傳狀態供下一週期使用。
-- **Update Rate Semantics & Hardware Timing Measurement**:
+- **Update Rate Semantics & Timing Evidence**:
   * 實機 Level 2 唯讀通訊延遲量測（1000 samples @ 230400 bps）：Min 11.2 ms, Mean 16.0 ms, Median (p50) 16.0 ms, p99 16.2 ms, Max 20.8 ms (StdDev 0.32 ms)。
-  * **20 ms (50 Hz) 週期分析**：平均延遲佔 20 ms 之 80.0%，最大延遲 (20.8 ms) 超出 20 ms (104.0%)。因此若採用同步阻塞式通訊，50 Hz controller update rate 存在 overrun 風險。
-  * **Production Decision**：Final production controller update rate 與 `response_timeout_ms` 均維持 **UNFROZEN**；暫定候選測試逾時區間為 35 ms–50 ms（僅作為 NEXT-TEST CONDITION，非 production default）。
+  * 實機 Level 3 FC17 Zero-Speed Stage A 量測（20 samples @ 230400 bps）：Min 15.85 ms, Mean 15.99 ms, Median (p50) 15.99 ms, p99 16.15 ms, Max 16.15 ms (StdDev 0.07 ms)。
+  * 實機 Level 3 FC17 Zero-Speed Stage B 量測（200 samples @ 230400 bps）：Min 10.99 ms, Mean 16.00 ms, Median (p50) 16.00 ms, p99 16.20 ms, Max 21.01 ms (StdDev 0.51 ms)。
+  * **Timing Architecture Analysis**:
+    - 50 Hz ($T = 20.0\text{ ms}$): Max observed serial transaction (21.013 ms) exceeds 20.0 ms budget, causing cycle deadline overruns on tail events.
+    - 40 Hz ($T = 25.0\text{ ms}$): Residual budget after max observed serial transaction is $+3.987\text{ ms}$.
+    - 30 Hz ($T = 33.333\text{ ms}$): Residual budget after max observed serial transaction is $+12.320\text{ ms}$ ($63.0\%$ consumption). This provides substantial observed timing headroom under Linux non-real-time scheduling without requiring multithreaded concurrency. Note: this is observed timing headroom, not a hard real-time bound or deterministic guarantee. Full ros2_control loop remains to be measured.
+  * **Candidate under validation**: Synchronous Model A2 @ 30 Hz ($T = 33.333\text{ ms}$). Production update rate and production `response_timeout_ms` remain **UNFROZEN**.
 
 ---
 
@@ -1193,6 +1198,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
+| 2026-08-18T13:45:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_full_loop_timing_check` 工具與 `test_m1_full_loop_timing_check` 測試建置成功（0 errors）。 | [`src/mobile_base_control/src/m1_full_loop_timing_check_core.cpp`](file:///home/zzz/mobile_base/src/mobile_base_control/src/m1_full_loop_timing_check_core.cpp) |
 | 2026-08-18T13:15:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_fc17_latency_check` 工具與 `test_m1_fc17_latency_check` 測試建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T131500_sw_m1_fc17_latency_prep.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T131500_sw_m1_fc17_latency_prep.txt) |
 | 2026-08-18T13:10:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_latency_check` 量測工具與 `test_m1_latency_stats` 測試建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T131000_hw_m1_l2_latency.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T131000_hw_m1_l2_latency.txt) |
 | 2026-08-18T13:05:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫及 `DiffDriveController` 整合測試建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T130500_diff_drive_controller_integration.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T130500_diff_drive_controller_integration.txt) |
@@ -1203,6 +1209,9 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
+| 2026-08-18T13:47:00+08:00 | Full ros2_control Loop 30 Hz Timing Check Software Preparation | `test_m1_full_loop_timing_check` + Dry-Run CLI test | PASS | 全部 5 項 GTests（Dry-Run 0 transport calls、CLI 拒絕非零運動參數、邊界選項檢驗、零速不變量 Zero-Command Invariant 數學證明、URDF 生成結構）與 dry-run 輸出驗證通過，0 failures。 | [`src/mobile_base_control/test/test_m1_full_loop_timing_check.cpp`](file:///home/zzz/mobile_base/src/mobile_base_control/test/test_m1_full_loop_timing_check.cpp) |
+| 2026-08-18T13:30:00+08:00 | Real Hardware L3 FC17 Zero-Speed Latency Stage B | `m1_fc17_latency_check --execute --device /dev/ttyUSB0 --baud 230400 --timeout-ms 50 --driver-a 1 --driver-b 2 --warmup 20 --samples 200 --raw-output docs/verification/IMP-008/2026-08-18T133000_m1_fc17_stage_b_raw.csv` | PASS | 200 筆實機 FC17 zero-speed exchange 量測完成，成功率 100.0%（0 failures, 0 timeouts）；Min 10.99 ms, Mean 16.00 ms, p50 16.00 ms, p99 16.20 ms, Max 21.01 ms (StdDev 0.51 ms)。實機全程維持 0 RPM 與 0 Alarm。 | [`docs/verification/IMP-008/2026-08-18T133000_m1_fc17_stage_b_raw.csv`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T133000_m1_fc17_stage_b_raw.csv) |
+| 2026-08-18T13:24:20+08:00 | Real Hardware L3 FC17 Zero-Speed Latency Stage A | `m1_fc17_latency_check --execute --device /dev/ttyUSB0 --baud 230400 --timeout-ms 50 --driver-a 1 --driver-b 2 --warmup 5 --samples 20 --raw-output docs/verification/IMP-008/2026-08-18T132420_m1_fc17_stage_a_raw.csv` | PASS | 20 筆實機 FC17 zero-speed exchange 量測完成，成功率 100.0%（0 failures, 0 timeouts）；Min 15.85 ms, Mean 15.99 ms, p50 15.99 ms, p99 16.15 ms, Max 16.15 ms (StdDev 0.07 ms)。實機全程維持 0 RPM 與 0 Alarm。 | [`docs/verification/IMP-008/2026-08-18T132420_m1_fc17_stage_a_raw.csv`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T132420_m1_fc17_stage_a_raw.csv) |
 | 2026-08-18T13:15:00+08:00 | Level 3 FC17 Zero-Speed Latency Check Software Preparation | `test_m1_fc17_latency_check` + Dry-Run CLI test | PASS | 全部 7 項 GTests（Dry-Run 0 transport calls、CLI 拒絕非零運動參數、樣本數硬性上限檢驗、`exchange_zero` 協定封包 JG 0 結構驗證、完整 Mock 生命週期、異常轉速中止與清理、Alarm 中止與清理）與 dry-run 輸出驗證通過，0 failures。 | [`docs/verification/IMP-008/2026-08-18T131500_sw_m1_fc17_latency_prep.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T131500_sw_m1_fc17_latency_prep.txt) |
 | 2026-08-18T13:10:00+08:00 | Real Hardware L2 Communication Latency & Jitter | `m1_latency_check --device /dev/ttyUSB0 --baud 230400 --timeout-ms 100 --driver-a 1 --driver-b 2 --warmup 20 --samples 1000` | PASS | 1000 筆實機連續雙驅動器 `read_state(1, 2)` 通訊延遲量測完成，成功率 100.0%（0 failures, 0 timeouts）；Min 11.2 ms, Mean 16.0 ms, p50 16.0 ms, p99 16.2 ms, Max 20.8 ms (StdDev 0.32 ms)。實機全程維持 0 RPM 與 0 Alarm。 | [`docs/verification/IMP-008/2026-08-18T131000_hw_m1_l2_latency.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T131000_hw_m1_l2_latency.txt) |
 | 2026-08-18T13:10:00+08:00 | `mobile_base_control::test_m1_latency_stats` | `colcon test --packages-select mobile_base_control` | PASS | 全部 5 項統計函數 GTests 通過，0 failures。 | [`docs/verification/IMP-008/2026-08-18T131000_hw_m1_l2_latency.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T131000_hw_m1_l2_latency.txt) |
@@ -1216,18 +1225,18 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | 官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環（27 項 GTest 與 6 項 ament linters 通過）；實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms, 0 逾時/失敗）；Level 3 FC17 zero-speed latency 量測工具 `m1_fc17_latency_check` 軟體架構驗證（API 層面 hard-bind 0 RPM、CLI 拒絕非零參數、dry-run 0 寫入、mock 生命週期、異常中止與清理序列）。 |
-| 尚未證明 | Multi-drive 2.0 FC17 exchange 實機通訊延遲（未測，待現場授權）、真實硬體輪端回授有效性（True wheel feedback validity）、非零速度實體運動（Level 4 exchange motion）、真實硬體上的 ros2_control lifecycle 啟用/停用（Level 3 hardware lifecycle，需操作人員現場即時授權）、實體通訊 Watchdog 參數寫入與跳脫測試。 |
+| 已證明 | 官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環（27 項 GTest 通過）；實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms）；實機 220 次 FC17 zero-speed exchange（Stage A 20 + Stage B 200, 100% 成功, 0 timeouts/alarms, Max 21.01 ms）；30 Hz 全迴圈量測工具 `m1_full_loop_timing_check` 軟體架構驗證（零速不變量、CLI 拒絕非零參數、dry-run 0 寫入、mock 生命週期、異常中止與清理序列）。 |
+| 尚未證明 | 實機環境下 full ros2_control loop (read -> DDC -> write -> FC17) 完整週期延遲分佈與排程抖動（待現場即時授權驗證）、非零速度實體運動（Level 4 exchange motion，BLOCKED）、真實硬體上的 ros2_control lifecycle 啟用/停用、實體通訊 Watchdog 參數寫入與跳脫測試。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
 - **Level 4 非零運動維持 BLOCKED**：非零速度運動指令受限於安全性與 Process Crash Hazard 考量，依 §6 規範維持 BLOCKED。
-- **實機 Level 3 Lifecycle / FC17 執行**：若要在實機 `/dev/ttyUSB0` 上執行 Level 3 zero-speed-intent lifecycle activation 或 FC17 量測，需遵循 §6 取得操作人員 execution-time authorization。
+- **實機 Level 3 Full ros2_control Loop 執行**：若要在實機 `/dev/ttyUSB0` 上執行 Level 3 zero-speed-intent lifecycle activation 或 30 Hz full loop 量測，需遵循 §6 取得操作人員 execution-time authorization。
 - **Watchdog 參數寫入**：依使用者安全邊界指示，本項目嚴禁向實機寫入任何 watchdog 或 flash configuration 暫存器。
 - **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`response_timeout_ms` 為 required parameter 且無 production default；量測結果顯示 provisional candidate 區間為 35 ms–50 ms（NEXT-TEST CONDITION ONLY），final production timeout 維持 UNFROZEN。
-- **Final Production Controller Update Rate 尚未凍結**：量測顯示 synchronous read latency 約 16 ms（Max 20.8 ms），50 Hz 週期存在 timing overrun 風險，production update rate 維持 UNFROZEN。
+- **Final Production Controller Update Rate 尚未凍結**：Candidate under validation 為 Synchronous Model A2 @ 30 Hz ($T = 33.333\text{ ms}$)；production update rate 維持 UNFROZEN。
 - **True Wheel Feedback Validity 尚未實機驗證**：真實物理輪子編碼器回授之精準度與滑差特性留待後續實車調校。
 
 ---
@@ -1238,4 +1247,4 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 |---|---|
 | Feature freeze status | `Not Frozen` |
 | Freeze condition | #8–#10 S7 Base Control 子系統整體閉環與落地驗證通過 |
-| Next dependency | Checklist #8 實機 Level 3 FC17 量測與 Lifecycle 驗收 / Checklist #9 `S7 diff_drive_controller configuration` |
+| Next dependency | Checklist #8 實機 Level 3 30 Hz Full ros2_control Loop 量測與 Lifecycle 驗收 / Checklist #9 `S7 diff_drive_controller configuration` |
