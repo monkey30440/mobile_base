@@ -145,8 +145,8 @@ Source dependencies 保留在 repository 的 `src/`，不藏入 Docker image bui
 - 每個 item 的 record 以 `## IMP-XXX <Item Short Name>` 為標題，其中 `IMP-XXX` 與 checklist 編號一致。
 - 所有欄位皆須填寫；若某欄位對該 item 不適用，填寫 `N/A` 並說明理由，不得留空。
 - Evidence 欄位只記錄**已執行且有結果的**操作；未執行的測試計畫不得填入 evidence 欄位。
-- Timestamp 欄位格式為 `YYYY-MM-DD`，只在取得對應 evidence 時填寫；無 evidence 時留 `—`。
-- 若 evidence storage path 尚未由 checklist #4 確立，於對應欄位填寫 `[pending #4]`。
+- Timestamp 欄位格式為 `YYYY-MM-DDThh:mm:ss±HH:MM`（ISO 8601，含 timezone offset），只在取得對應 evidence 時填寫；無 evidence 時留 `—`。
+- Evidence storage path 規則由 §4（Verification Evidence Storage Convention）確立；格式為 `docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt`。
 - 若 build / test command 尚未由 checklist #5 確立，於對應欄位填寫 `[pending #5]`。
 - 若 hardware preflight 尚未由 checklist #6 確立，於對應欄位填寫 `[pending #6]`。
 
@@ -244,25 +244,25 @@ _每筆 evidence 只記錄已執行且有結果的操作。未執行、計畫中
 
 #### Static / Build Evidence
 
-| Date | Command | Result | Evidence boundary | Storage path |
+| Timestamp | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| YYYY-MM-DD | `<exact command>` | PASS / FAIL | <此結果實際證明了什麼> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_<layer>_<desc>.txt` |
+| YYYY-MM-DDThh:mm:ss±HH:MM | `<exact command>` | PASS / FAIL | <此結果實際證明了什麼> | `docs/verification/IMP-XXX/<YYYY-MM-DD>T<HHmmss>_build_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`；build command 格式待 #5 確立時補填）_
 
 #### Unit / Interface Evidence
 
-| Date | Test target | Command | Result | Evidence boundary | Storage path |
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| YYYY-MM-DD | `<package::test>` | `<exact command>` | PASS / FAIL | <證明了什麼> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_<layer>_<desc>.txt` |
+| YYYY-MM-DDThh:mm:ss±HH:MM | `<package::test>` | `<exact command>` | PASS / FAIL | <證明了什麼> | `docs/verification/IMP-XXX/<YYYY-MM-DD>T<HHmmss>_unit_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`）_
 
 #### Integration Evidence
 
-| Date | Scenario | Observed result | Evidence boundary | Storage path |
+| Timestamp | Scenario | Observed result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| YYYY-MM-DD | <e.g. ROS graph + topic echo> | <observed output> | <證明了什麼；container running ≠ integration evidence> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_<layer>_<desc>.txt` |
+| YYYY-MM-DDThh:mm:ss±HH:MM | <e.g. ROS graph + topic echo> | <observed output> | <證明了什麼；container running ≠ integration evidence> | `docs/verification/IMP-XXX/<YYYY-MM-DD>T<HHmmss>_intg_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`）_
 
@@ -270,9 +270,9 @@ _（無 evidence 時整列填 `—`）_
 
 _僅適用於 06 明確要求 real-hardware validation 的 item。若本 item 不需要實機驗證，填 `N/A — <原因>`。_
 
-| Date | Target hardware | Test condition | Observed result | Evidence boundary | Storage path |
+| Timestamp | Target hardware | Test condition | Observed result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| YYYY-MM-DD | Jetson + M1 / picoScan / TDK IMU | <preflight #6 條件> | <量測結果> | <證明了什麼；模擬不可取代> | `docs/verification/IMP-XXX/<YYYY-MM-DD>_hw_<desc>.txt` |
+| YYYY-MM-DDThh:mm:ss±HH:MM | Jetson + M1 / picoScan / TDK IMU | <preflight #6 條件> | <量測結果> | <證明了什麼；模擬不可取代> | `docs/verification/IMP-XXX/<YYYY-MM-DD>T<HHmmss>_hw_<desc>.txt` |
 
 _（無 evidence 時整列填 `—`；hardware preflight 程序待 #6 確立時補填）_
 
@@ -356,7 +356,7 @@ docs/verification/
 ```text
 # IMP: IMP-NNN
 # Layer: build | unit | integration | hardware | negative
-# Date: YYYY-MM-DD
+# Timestamp: YYYY-MM-DDThh:mm:ss±HH:MM
 # Env: <container image digest or tag, or 'host'> / <ROS distro> / <OS>
 # Target: <package(s) or hardware identity>
 # Command: <exact command or procedure reference>
@@ -372,7 +372,7 @@ docs/verification/
 |---|---|---|
 | `IMP` | ✓ | 對應 checklist item，格式 `IMP-NNN` |
 | `Layer` | ✓ | 五選一：`build` / `unit` / `integration` / `hardware` / `negative` |
-| `Date` | ✓ | 執行日期，格式 `YYYY-MM-DD` |
+| `Timestamp` | ✓ | 執行的完整時間戳記，ISO 8601 含 timezone offset，例如 `2026-08-20T10:38:17+08:00`；同日多次執行可由此欄位判斷順序 |
 | `Env` | ✓ | 執行環境；container 使用 image digest 或 tag，裸機寫 `host`；附 ROS distro 與 OS |
 | `Target` | ✓ | 受測 package 名稱、node、topic、或硬體 device identity |
 | `Command` | ✓ | 可重現的完整命令；若為 hardware 手動程序，寫程序文件引用 |
@@ -388,27 +388,29 @@ docs/verification/
 Evidence artifact 檔名格式：
 
 ```text
-<YYYY-MM-DD>_<layer>_<desc>.txt
+<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt
 ```
 
 | 欄位 | 規則 |
 |---|---|
-| `YYYY-MM-DD` | 執行日期，與 metadata `Date` 欄位一致 |
+| `YYYY-MM-DD` | 執行日期，與 metadata `Timestamp` 欄位的日期部分一致 |
+| `T<HHmmss>` | 執行時間（24 小時制，無冒號），與 metadata `Timestamp` 欄位的時間部分一致，例如 `T103817` 對應 `10:38:17` |
 | `layer` | `build` / `unit` / `intg` / `hw` / `neg`（integration 縮寫 `intg`，hardware 縮寫 `hw`，negative 縮寫 `neg`） |
 | `desc` | 以底線分隔的小寫簡短描述，足以辨識測試對象，例如 `colcon_build`、`m1_read_path`、`ros_graph`、`servo_enable`；**不要**使用空格或特殊字元 |
 
-範例：
+範例（含同日多次執行的 FAIL → PASS 場景）：
 
 ```text
 docs/verification/IMP-007/
-  2026-08-20_build_colcon_all.txt
-  2026-08-20_unit_m1driver_read.txt
-  2026-08-21_hw_servo_enable.txt
-  2026-08-21_neg_modbus_timeout.txt
-  2026-08-25_build_colcon_all.txt          ← 重測，新檔保留
+  2026-08-20T093012_build_colcon_all.txt      ← 第一次 build（PASS）
+  2026-08-20T094501_unit_m1driver_read.txt    ← unit test（FAIL）
+  2026-08-20T101738_unit_m1driver_read.txt    ← 修正後重跑（PASS）；舊 FAIL 保留
+  2026-08-21T141200_hw_servo_enable.txt       ← hardware（PASS）
+  2026-08-21T141955_neg_modbus_timeout.txt    ← negative path（PASS）
+  2026-08-25T080033_build_colcon_all.txt      ← 跨日重測，新檔保留
 ```
 
-**命名規則確保：** 同一 item 的同類型多次測試不互相覆蓋（日期不同即不同檔名）；人類可直接讀懂層次與內容；不需要 database 或外部 tooling 解析。
+**命名規則確保：** 同一 item 同一天同一測試的多次執行（包括 FAIL → PASS）產生不同檔名，不互相覆蓋；執行先後順序可由 timestamp 判斷；人類可直接讀懂層次與內容；不需要 database 或外部 tooling 解析。
 
 ### 4.4 Raw Evidence vs Summary
 
@@ -434,10 +436,10 @@ docs/verification/IMP-007/
 **若 raw artifact 不適合進 Git，`07_implementation.md` item record 的 `Storage path` 欄填：**
 
 ```text
-[external: <storage-location-description>, ref: docs/verification/IMP-NNN/<YYYY-MM-DD>_<layer>_<desc>.ref.txt]
+[external: <storage-location-description>, ref: docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.ref.txt]
 ```
 
-並在 `docs/verification/IMP-NNN/<YYYY-MM-DD>_<layer>_<desc>.ref.txt` 中寫入 metadata header（§4.2）加上：
+並在 `docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.ref.txt` 中寫入 metadata header（§4.2）加上：
 
 ```text
 # ExternalRef: <storage location, e.g. shared drive path, USB label, local path on test machine>
@@ -452,7 +454,7 @@ docs/verification/IMP-007/
 
 `07_implementation.md` 中的 item record 只寫：
 
-- `Date`、`Command`（或程序描述）、`Result`
+- `Timestamp`、`Command`（或程序描述）、`Result`
 - `Evidence boundary`（對應 §4.2 的 `Proved` + `Not-proved`）
 - `Storage path`（指向 `docs/verification/IMP-NNN/` 的具體檔名）
 
@@ -462,10 +464,10 @@ docs/verification/IMP-007/
 
 | 情境 | 處理方式 |
 |---|---|
-| 同一測試重跑（PASS → PASS） | 新增新日期檔案；舊檔保留；`07_implementation.md` item record 更新 `Date` 與 `Storage path` 指向最新檔案 |
-| 修正後重跑（FAIL → PASS） | 新增新日期 PASS 檔案；舊 FAIL 檔案**保留，不得刪除或改寫**；`07_implementation.md` 記錄最新 PASS，但 Known Limits 節應說明曾有 FAIL 及修正摘要 |
-| 重複 FAIL | 每次 FAIL 均新增獨立檔案；不覆蓋；有助追蹤問題演進 |
-| Authoritative evidence | **同一 item + 同一 layer** 中，日期最新且 Result = PASS 的檔案為目前 authoritative evidence；若最新為 FAIL，authoritative 為空，不得以舊 PASS 冒充 |
+| 同一測試重跑（PASS → PASS） | 新增新 timestamp 檔案；舊檔保留；`07_implementation.md` item record 更新 `Timestamp` 與 `Storage path` 指向最新檔案 |
+| 修正後重跑（FAIL → PASS，含同日） | 新增新 timestamp PASS 檔案；舊 FAIL 檔案**保留，不得刪除或改寫**；`07_implementation.md` 記錄最新 PASS，但 Known Limits 節應說明曾有 FAIL 及修正摘要 |
+| 重複 FAIL | 每次 FAIL 均新增獨立 timestamp 檔案；不覆蓋；有助追蹤問題演進 |
+| Authoritative evidence | **同一 item + 同一 layer** 中，timestamp 最新且 Result = PASS 的檔案為目前 authoritative evidence；若最新為 FAIL，authoritative 為空，不得以舊 PASS 冒充 |
 
 **禁止：** 刪除或改寫 FAIL evidence；以較舊的 PASS 回填最新失敗。
 
@@ -491,13 +493,13 @@ Not-proved:        <what this hardware test cannot prove>
 §3.2 template 的 `Storage path` 欄位使用本節的命名格式：
 
 ```text
-docs/verification/IMP-NNN/<YYYY-MM-DD>_<layer>_<desc>.txt
+docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt
 ```
 
 其中：
 - `IMP-NNN` 與本 item 的 checklist 編號一致。
+- `YYYY-MM-DD` 與 `T<HHmmss>` 共同構成執行時間，對應 metadata `Timestamp` 欄位。
 - `layer` 對應 evidence 類型（`build` / `unit` / `intg` / `hw` / `neg`）。
-- `YYYY-MM-DD` 為執行日期。
 - `desc` 為簡短描述。
 
 `[pending #5]` 與 `[pending #6]` placeholder 仍保留在 §3.2 的說明注意事項中，表示 build/test command 格式（待 #5）與 hardware preflight（待 #6）尚未確立；storage path 本身已由本節確立，**不再使用 `[pending #4]`**。

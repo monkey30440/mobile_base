@@ -41,12 +41,23 @@ Each item directory contains `.gitkeep` until the first real evidence file is ad
 ## Evidence File Naming
 
 ```text
-<YYYY-MM-DD>_<layer>_<desc>.txt
+<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt
 ```
 
-Layer abbreviations: `build` / `unit` / `intg` / `hw` / `neg`
+- `YYYY-MM-DD`: execution date
+- `T<HHmmss>`: execution time (24 h, no colons), e.g. `T103817` = 10:38:17
+- `layer`: `build` / `unit` / `intg` / `hw` / `neg`
+- `desc`: lowercase underscore-separated description
 
-Example: `2026-08-20_build_colcon_all.txt`
+Example — same-day FAIL → PASS run:
+
+```text
+2026-08-20T094501_unit_m1driver_read.txt    ← FAIL (first run)
+2026-08-20T101738_unit_m1driver_read.txt    ← PASS (after fix); FAIL file kept
+```
+
+Timestamp uniqueness guarantees no two runs on the same day overwrite each other.
+Execution order is recoverable from the filename without any external database.
 
 ---
 
@@ -55,7 +66,7 @@ Example: `2026-08-20_build_colcon_all.txt`
 ```text
 # IMP: IMP-NNN
 # Layer: build | unit | integration | hardware | negative
-# Date: YYYY-MM-DD
+# Timestamp: YYYY-MM-DDThh:mm:ss±HH:MM
 # Env: <image digest or tag, or 'host'> / <ROS distro> / <OS>
 # Target: <package(s) or hardware identity>
 # Command: <exact command or procedure reference>
@@ -66,14 +77,17 @@ Example: `2026-08-20_build_colcon_all.txt`
 ```
 
 All fields are **required**. `Result` must be `PASS` or `FAIL` only.
+`Timestamp` uses ISO 8601 with timezone offset, e.g. `2026-08-20T10:38:17+08:00`.
 
 ---
 
 ## Re-run Policy
 
 - Old evidence files are **never deleted or overwritten**.
-- Each re-run produces a new file with the new date.
+- Each run (including same-day reruns) produces a new file with a unique timestamp.
+- A FAIL followed by a PASS on the same day produces **two distinct files**; the FAIL is retained.
 - `07_implementation.md` item record Storage path points to the **most recent** authoritative (PASS) file.
+- Authoritative = latest timestamp with `Result: PASS` for the same item + layer.
 - FAIL files are retained permanently for traceability.
 
 ---
@@ -88,6 +102,9 @@ If a raw artifact is too large for Git (>~1 MB, binary, ROS bag), keep a `.ref.t
 # Checksum: <sha256 if available>
 # Retained-by: <person/machine>
 ```
+
+Name the `.ref.txt` with the same timestamp-based convention:
+`<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.ref.txt`
 
 The `.ref.txt` enters Git; the external artifact does not.
 
