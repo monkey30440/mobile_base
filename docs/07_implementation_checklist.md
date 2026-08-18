@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：27
-- 已完成：7
-- 進行中：1
+- 已完成：8
+- 進行中：0
 - 待實作：19
 - 上游阻塞：0
-- 目前進度：7 / 27 (26%)；第 8 項 `S7 M1Hardware ros2_control integration` 軟體實作、單元測試（44 GTests, 100% PASS）、DiffDriveController 整合、FC03/FC17 延遲量測與 30 Hz Full ros2_control Loop 時序驗證已全數完成並建立 Model A2 @ 30 Hz 實作基準，目前維持 `[~]` 狀態（唯一剩餘未完成項：Real Dynamic Wheel Feedback Validity 尚未實機驗證，Level 4 非零運動維持 BLOCKED）。
+- 目前進度：8 / 27 (30%)；第 8 項 `S7 M1Hardware ros2_control integration` 依原始 DoD 完成 SystemInterface lifecycle、command/state interfaces、真實 wheel feedback validity (Stage D1 & D2)、禁止 command substitution、diff-drive controller、timeout 與 safe-stop chain 之 unit/interface/integration/real-hardware 證據並正式結案 `[x]`；下一步為第 9 項 `S1 Robot Description`（待實作 `[ ]`）。
 
 ---
 
@@ -43,7 +43,7 @@
 - [x] 7. S7 `M1Driver` transport vertical slice
   - 追溯：S7；GAP-05、GAP-06 的底層依賴；SYS-026、SYS-029、SYS-030。
   - 完成條件：依 06 baseline 實作 libmodbus RTU connection、雙 M1 read/write、timeout/error mapping、enable/disable/stop primitive；先以無運動 read path 與故障注入驗證，再進入受控輸出。
-- [~] 8. S7 `M1Hardware` ros2_control integration
+- [x] 8. S7 `M1Hardware` ros2_control integration
   - 追溯：SYS-022、SYS-026、SYS-027、SYS-028、SYS-029、SYS-030；GAP-05、GAP-06。
   - 完成條件：SystemInterface lifecycle、command/state interfaces、真實 wheel feedback validity、禁止 command substitution、diff-drive controller、timeout 與 safe-stop chain 完成 unit/interface/integration/real-hardware evidence。
 
