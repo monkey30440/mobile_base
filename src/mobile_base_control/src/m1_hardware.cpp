@@ -122,10 +122,49 @@ hardware_interface::CallbackReturn M1Hardware::parse_parameters()
     config_.baud_rate = std::stoi(params.at("baud"));
   }
 
-  if (params.find("timeout_ms") != params.end()) {
-    config_.timeout_ms = static_cast<uint32_t>(std::stoul(params.at("timeout_ms")));
-  } else if (params.find("response_timeout_ms") != params.end()) {
-    config_.timeout_ms = static_cast<uint32_t>(std::stoul(params.at("response_timeout_ms")));
+  if (params.find("response_timeout_ms") != params.end()) {
+    try {
+      const int64_t val = std::stoll(params.at("response_timeout_ms"));
+      if (val <= 0) {
+        RCLCPP_FATAL(
+          get_logger(),
+          "response_timeout_ms must be positive, got %lld",
+          static_cast<long long>(val));  // NOLINT(runtime/int)
+        return hardware_interface::CallbackReturn::ERROR;
+      }
+      config_.timeout_ms = static_cast<uint32_t>(val);
+    } catch (const std::exception & e) {
+      RCLCPP_FATAL(
+        get_logger(),
+        "Invalid response_timeout_ms parameter '%s': %s",
+        params.at("response_timeout_ms").c_str(), e.what());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  } else if (params.find("timeout_ms") != params.end()) {
+    try {
+      const int64_t val = std::stoll(params.at("timeout_ms"));
+      if (val <= 0) {
+        RCLCPP_FATAL(
+          get_logger(),
+          "timeout_ms must be positive, got %lld",
+          static_cast<long long>(val));  // NOLINT(runtime/int)
+        return hardware_interface::CallbackReturn::ERROR;
+      }
+      config_.timeout_ms = static_cast<uint32_t>(val);
+    } catch (const std::exception & e) {
+      RCLCPP_FATAL(
+        get_logger(),
+        "Invalid timeout_ms parameter '%s': %s",
+        params.at("timeout_ms").c_str(), e.what());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  } else {
+    RCLCPP_FATAL(
+      get_logger(),
+      "Missing required parameter 'response_timeout_ms' (or 'timeout_ms') in URDF/hardware "
+      "configuration. No production default is assumed (final production timeout pending "
+      "real-hardware latency measurement).");
+    return hardware_interface::CallbackReturn::ERROR;
   }
 
   if (params.find("left_driver_id") != params.end()) {

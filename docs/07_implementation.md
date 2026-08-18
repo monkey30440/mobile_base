@@ -1151,7 +1151,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 |---|---|---|---|
 | `serial_port` / `device` | URDF `<param>` | 串列埠裝置節點（預設 `/dev/ttyUSB0`） | `06 §3.3` |
 | `baud_rate` / `baud` | URDF `<param>` | 通訊 Baud rate（預設 `230400`） | `06 §3.3` |
-| `timeout_ms` / `response_timeout_ms` | URDF `<param>` | 通訊單次逾時門檻 (ms)（預設 `100`，由參數傳入，未硬編） | `docs/design_baseline/m1_driver.md §7` |
+| `response_timeout_ms` / `timeout_ms` | URDF `<param>` (REQUIRED) | 通訊單次回應逾時門檻 (ms)；**無 production default**（必須由 URDF / caller 明確傳入，未傳入或 $\le 0$ 則 `on_init` 失敗；`100 ms` 僅為目前 unit/integration test fixture 與 L2/L3 驗證條件，final production timeout 留待後續 real-hardware latency 量測後確定） | `docs/design_baseline/m1_driver.md §7` |
 | `left_driver_id` | URDF `<param>` | 左輪驅動器 ID（預設 `2`） | `06 §3.3` |
 | `right_driver_id` | URDF `<param>` | 右輪驅動器 ID（預設 `1`） | `06 §3.3` |
 | `gear_ratio` | URDF `<param>` | 減速比（預設 `20.0`） | `06 §3.3` |
@@ -1168,8 +1168,9 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 |---|---|---|---|---|
 | Invalid Input | 指令為 NaN 或 Inf | 拒絕執行寫入、目標 RPM 歸零，回傳 `return_type::ERROR` | Yes | Unit |
 | Invalid Input | 輪速超出安全上限 | 自動飽和鉗位至 `max_motor_rpm`（$\pm 3000$ RPM），不溢位 | Yes | Unit |
-| Communication Failure | FC17 通訊逾時或斷線 | `write()` 回傳 `return_type::ERROR`，觸發 controller manager 降級 | Yes | Unit |
-| Drive Alarm | 驅動器回傳非零 Alarm 碼 | `read()` 或 `write()` 立即偵測並回傳 `return_type::ERROR` | Yes | Unit |
+| Missing Timeout Param | 未提供 `response_timeout_ms` / `timeout_ms` 或 $\le 0$ | `on_init` / `parse_parameters` 立即拒絕並回傳 `CallbackReturn::ERROR` | Yes | Unit |
+| Communication Failure | FC17 通訊逾時或斷線 | `M1Hardware` 將 cycle failure 以 `return_type::ERROR` 回報 ros2_control；後續 lifecycle/controller handling 由 ros2_control framework / controller manager policy 決定 | Yes | Unit |
+| Drive Alarm | 驅動器回傳非零 Alarm 碼 | `read()` 或 `write()` 立即偵測並以 `return_type::ERROR` 回報 ros2_control | Yes | Unit |
 | Activation Timeout | `on_activate` 狀態輪詢逾時（超過 10 次） | 自動發送 `disable()` 清理，回傳 `CallbackReturn::ERROR` | Yes | Unit |
 | Deactivate / Shutdown / Error | 系統停用、關機或發生錯誤 | 依序執行 `stop(0 RPM)` $\rightarrow$ 延時 $\rightarrow$ `disable(SVOFF)` $\rightarrow$ `disconnect()` | Yes | Unit |
 
@@ -1181,13 +1182,15 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| 2026-08-18T12:50:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
+| 2026-08-18T12:55:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫（含 required `response_timeout_ms` 參數驗證與型別修訂）建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt) |
+| 2026-08-18T12:50:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）`mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫初版建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
 
 #### Unit / Interface Evidence
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T12:50:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 16 項 GTests（轉換數學、32-bit rollover 正反向累積、參數解析、State/Command 匯出、完整 Mock 生命週期、讀寫閉環、NaN/Inf 拒絕、未激活讀取拒絕、pluginlib 動態載入、URDF `ResourceManager` 整合）與 6 項 ament linters 通過，0 failures（104 tests total across workspace）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
+| 2026-08-18T12:55:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 19 項 GTests（含 missing timeout 拒絕、invalid zero/negative timeout 拒絕、explicit timeout 通過、轉換數學、32-bit rollover 正反向累積、參數解析、State/Command 匯出、完整 Mock 生命週期、讀寫閉環、NaN/Inf 拒絕、未激活讀取拒絕、pluginlib 動態載入、URDF `ResourceManager` 整合）與 6 項 ament linters 通過，0 failures（107 tests total across workspace）。 | [`docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt) |
+| 2026-08-18T12:50:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）全部 16 項 GTests 與 6 項 ament linters 通過，0 failures（104 tests total across workspace）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
 | 2026-08-18T12:50:00+08:00 | Pluginlib ClassLoader Discovery | `test_m1_hardware --gtest_filter=M1HardwareLifecycleTest.PluginLoaderDiscovery` | PASS | 驗證 `hardware_interface::SystemInterface` ClassLoader 能動態探索並實例化 `mobile_base_control/M1Hardware`。 | [`docs/verification/IMP-008/2026-08-18T125000_plugin_discovery.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_plugin_discovery.txt) |
 
 ---
@@ -1196,7 +1199,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | `M1Hardware` SystemInterface plugin 完整實作了 Model A2 讀寫時序、純軟體單位轉換、32-bit signed rollover continuous tracking、Lifecycle 狀態協調與防禦性錯誤處理；在 ROS 2 Jazzy 環境下通過 16 項 GTest 與 6 項 ament linters；通過 pluginlib 動態探索載入與 URDF `ResourceManager` 整合載入。 |
+| 已證明 | `M1Hardware` SystemInterface plugin 完整實作了 Model A2 讀寫時序、純軟體單位轉換、32-bit signed rollover continuous tracking、Lifecycle 狀態協調、required `response_timeout_ms` 參數檢驗（無預設值）與防禦性錯誤處理；在 ROS 2 Jazzy 環境下通過 19 項 GTest 與 6 項 ament linters；通過 pluginlib 動態探索載入與 URDF `ResourceManager` 整合載入。 |
 | 尚未證明 | 非零速度實體運動（Level 4 exchange motion）、真實硬體上的 ros2_control lifecycle 啟用/停用（Level 3 hardware lifecycle，需操作人員現場即時授權）、實體通訊 Watchdog 參數寫入與跳脫測試。 |
 
 ---
@@ -1206,6 +1209,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 - **Level 4 非零運動維持 BLOCKED**：非零速度運動指令受限於安全性與 Process Crash Hazard 考量，依 §6 規範維持 BLOCKED。
 - **實機 Level 3 Lifecycle 執行**：若要在實機 `/dev/ttyUSB0` 上透過 ros2_control 執行 Level 3 zero-speed-intent lifecycle activation，需遵循 §6 取得操作人員 execution-time authorization。
 - **Watchdog 參數寫入**：依使用者安全邊界指示，本項目嚴禁向實機寫入任何 watchdog 或 flash configuration 暫存器。
+- **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`response_timeout_ms` 為 required parameter 且無 production default；目前使用的 `100 ms` 僅為 test fixture 與初步驗證條件，final production timeout 留待 IMP-008 real-hardware latency 量測後確定。
 
 ---
 

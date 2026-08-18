@@ -287,6 +287,47 @@ TEST(M1HardwareLifecycleTest, InitParameterParsing)
   EXPECT_EQ(cfg.right_wheel_sign, -1);
 }
 
+TEST(M1HardwareLifecycleTest, MissingTimeoutParameterFails)
+{
+  M1Hardware hw;
+  auto params = create_test_params("mock", 230400, 100);
+  params.hardware_info.hardware_parameters.erase("timeout_ms");
+  params.hardware_info.hardware_parameters.erase("response_timeout_ms");
+  EXPECT_EQ(hw.on_init(params), CallbackReturn::ERROR);
+}
+
+TEST(M1HardwareLifecycleTest, InvalidTimeoutParameterFails)
+{
+  M1Hardware hw;
+  // Zero timeout
+  auto params_zero = create_test_params("mock", 230400, 100);
+  params_zero.hardware_info.hardware_parameters["response_timeout_ms"] = "0";
+  params_zero.hardware_info.hardware_parameters.erase("timeout_ms");
+  EXPECT_EQ(hw.on_init(params_zero), CallbackReturn::ERROR);
+
+  // Negative timeout
+  auto params_neg = create_test_params("mock", 230400, 100);
+  params_neg.hardware_info.hardware_parameters["response_timeout_ms"] = "-50";
+  params_neg.hardware_info.hardware_parameters.erase("timeout_ms");
+  EXPECT_EQ(hw.on_init(params_neg), CallbackReturn::ERROR);
+
+  // Non-numeric timeout
+  auto params_str = create_test_params("mock", 230400, 100);
+  params_str.hardware_info.hardware_parameters["response_timeout_ms"] = "invalid_timeout";
+  params_str.hardware_info.hardware_parameters.erase("timeout_ms");
+  EXPECT_EQ(hw.on_init(params_str), CallbackReturn::ERROR);
+}
+
+TEST(M1HardwareLifecycleTest, ExplicitResponseTimeoutAliasPasses)
+{
+  M1Hardware hw;
+  auto params = create_test_params("mock", 230400, 100);
+  params.hardware_info.hardware_parameters.erase("timeout_ms");
+  params.hardware_info.hardware_parameters["response_timeout_ms"] = "100";
+  EXPECT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
+  EXPECT_EQ(hw.get_config().timeout_ms, 100u);
+}
+
 TEST(M1HardwareLifecycleTest, ExportInterfaces)
 {
   M1Hardware hw;

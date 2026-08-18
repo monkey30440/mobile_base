@@ -70,7 +70,7 @@ struct M1HardwareConfig
 {
   std::string serial_port{"/dev/ttyUSB0"};
   int baud_rate{230400};
-  uint32_t timeout_ms{100};  // Parameter supplied from config (unfrozen production timeout)
+  uint32_t timeout_ms{0};  // REQUIRED parameter from URDF/caller; no production default
 
   int left_driver_id{static_cast<int>(DriveId::Left)};    // ID 2
   int right_driver_id{static_cast<int>(DriveId::Right)};  // ID 1
