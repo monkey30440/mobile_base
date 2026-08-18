@@ -13,7 +13,7 @@ services:
 
     devices:
       - /dev/ttyUSB0:/dev/ttyUSB0
-      # - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/ttyACM0:/dev/ttyACM0
 
     working_dir: /workspaces/mobile_base
 
