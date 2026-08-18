@@ -1,0 +1,55 @@
+================================================================
+IMP-008 Level 4 Stage D1 Left Wheel Dynamic Feedback Software Preparation Evidence
+Timestamp: 2026-08-18T14:17:00+08:00
+Target Package: mobile_base_control
+Harness: m1_dynamic_stage_d1_check
+Test Target: test_m1_dynamic_stage_d1_check
+================================================================
+
+[Step 1] Build & Automated Test Execution:
+  Command: colcon test --packages-select mobile_base_control
+  Test Results:
+    - test_m1_dynamic_stage_d1_check: 6/6 tests PASS
+      * DryRunCausesZeroTransportCalls: PASS (0 serial calls)
+      * ProhibitedCliParametersRejected: PASS (rejects --rpm, --right, --both, --reverse, etc.)
+      * LeftWheelVelocityBoundsValidation: PASS (rejects 0.0, negative, NaN, >1.5 rad/s)
+      * CycleCountBoundsValidation: PASS (enforces [10, 150] active cycles, <=30 warmup/cooldown)
+      * MathematicalSignAndGearConversion: PASS (0.5 rad/s -> 95 RPM, 1.0 rad/s -> 191 RPM, 0.0 rad/s -> 0 RPM)
+      * URDFStructureAndParams: PASS (correct plugin, parameters, and joints)
+    - Full package suite: 13/13 test suites PASS, 202/202 tests PASS (0 failures, 0 errors)
+    - Linters: copyright, cppcheck, cpplint, lint_cmake, uncrustify, xmllint all PASS (0 warnings)
+
+[Step 2] Dry-Run Plan Validation:
+  Command: m1_dynamic_stage_d1_check --dry-run
+  Output Summary:
+    - Target Device: /dev/ttyUSB0 @ 230400 bps
+    - Target Rate: 30.0 Hz (Period = 33.333 ms)
+    - Response Timeout: 50 ms (PROVISIONAL TEST CONDITION)
+    - Target Wheel: Left Wheel Only (Driver ID 2, Sign +1)
+    - Commanded Velocity: 0.5 rad/s (~0.04 m/s surface speed)
+    - Converted Target RPM: 95 RPM (Left motor)
+    - Right Wheel Target: 0.0 rad/s (0 RPM, strictly hard-bound)
+    - Duration: 10 warmup + 60 active (2.0 s) + 10 cooldown cycles
+    - Expected Physical Direction: Counter-Clockwise looking from left side (top moving forward)
+    - Transport Calls: 0
+
+================================================================
+EVIDENCE BOUNDARY & PROOF MATRIX
+================================================================
+PROVED:
+  1. Software-only Stage D1 harness correctly bounds Left wheel velocity (<= 1.5 rad/s) and active cycles (<= 150).
+  2. Right wheel velocity is architecturally hard-bound to 0.0 rad/s (0 RPM) in both command and target paths.
+  3. Reverse and multi-axis CLI arguments are strictly rejected by the parser.
+  4. Mathematical conversion between ROS rad/s and native M1 RPM (gear ratio 20.0, left sign +1) is verified.
+  5. Dry-run mode produces 0 physical transport calls while displaying full safety plan and preflight.
+
+NOT PROVED (Awaiting Level 4 Execution Authorization):
+  1. Physical motor rotation under non-zero velocity commands.
+  2. Actual RPM magnitude tracking accuracy on physical hardware.
+  3. Physical rotation direction matching ROS joint convention on real vehicle.
+  4. Real encoder position accumulation during physical motion.
+  5. Real dynamic wheel feedback validity (Level 4 remains BLOCKED).
+
+================================================================
+STATUS: LEVEL 4 STAGE D1 SOFTWARE PREPARATION VERIFIED (PREPARATION ONLY)
+================================================================
