@@ -1,0 +1,7 @@
+# config/robot_state_publisher.yaml
+robot_state_publisher:
+  ros__parameters:
+    publish_frequency: 30.0 # 關節動態 TF 發布頻率 (Hz, 依 06 §4 定義)
+    ignore_timestamp: false
+    use_sim_time: false
+    frame_prefix: ""

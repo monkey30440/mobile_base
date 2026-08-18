@@ -1,0 +1,242 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ======================================================================= -->
+  <!-- Mathematical and Geometric Constants (docs/06 Subsystem Baseline)       -->
+  <!-- ======================================================================= -->
+  <xacro:property name="M_PI" value="3.1415926535897931"/>
+  <xacro:property name="wheel_radius" value="0.0800"/>
+  <xacro:property name="wheel_separation" value="0.5545"/>
+  <xacro:property name="base_height" value="0.2560"/>
+
+  <!-- Drive wheel coordinates relative to base_link -->
+  <xacro:property name="wheel_x" value="0.0205"/>
+  <xacro:property name="wheel_l_y" value="0.2775"/>
+  <xacro:property name="wheel_r_y" value="-0.2770"/>
+  <xacro:property name="wheel_z" value="-0.1760"/>
+
+  <!-- Sensor coordinates relative to base_link -->
+  <xacro:property name="lidar_fl_x" value="0.28771"/>
+  <xacro:property name="lidar_fl_y" value="0.26721"/>
+  <xacro:property name="lidar_fl_z" value="-0.06011"/>
+  <xacro:property name="lidar_fl_roll" value="${M_PI}"/>
+  <xacro:property name="lidar_fl_pitch" value="0.0"/>
+  <xacro:property name="lidar_fl_yaw" value="${M_PI / 4.0}"/>
+
+  <xacro:property name="lidar_br_x" value="-0.24671"/>
+  <xacro:property name="lidar_br_y" value="-0.26721"/>
+  <xacro:property name="lidar_br_z" value="-0.06011"/>
+  <xacro:property name="lidar_br_roll" value="${M_PI}"/>
+  <xacro:property name="lidar_br_pitch" value="0.0"/>
+  <xacro:property name="lidar_br_yaw" value="${-3.0 * M_PI / 4.0}"/>
+
+  <xacro:property name="imu_x" value="0.04375"/>
+  <xacro:property name="imu_y" value="-0.00800"/>
+  <xacro:property name="imu_z" value="-0.01459"/>
+  <xacro:property name="imu_roll" value="0.0"/>
+  <xacro:property name="imu_pitch" value="0.0"/>
+  <xacro:property name="imu_yaw" value="${M_PI / 2.0}"/>
+
+  <!-- ======================================================================= -->
+  <!-- Base Geometry Macro                                                     -->
+  <!-- ======================================================================= -->
+  <xacro:macro name="mobile_base_geometry">
+
+    <!-- Canonical Root Link (REP-120) -->
+    <link name="base_footprint"/>
+
+    <!-- base_footprint -> base_link (Ground Clearance Elevation) -->
+    <joint name="base_joint" type="fixed">
+      <parent link="base_footprint"/>
+      <child link="base_link"/>
+      <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Base Link (Chassis Center) -->
+    <link name="base_link">
+      <inertial>
+        <origin xyz="0.020088 -0.00015211 -0.11461" rpy="0 0 0"/>
+        <mass value="54.0"/>
+        <inertia ixx="0.60173728" ixy="0.0093494997" ixz="0.00060931233"
+                 iyy="0.50814137" iyz="2.8622951e-06" izz="1.0391101"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_link.STL"/>
+        </geometry>
+        <material name="chassis_material">
+          <color rgba="0.75 0.75 0.75 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_link.STL"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Left Drive Wheel Joint & Link -->
+    <joint name="driving_wheel_joint_L" type="continuous">
+      <parent link="base_link"/>
+      <child link="driving_wheel_link_L"/>
+      <origin xyz="${wheel_x} ${wheel_l_y} ${wheel_z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+
+    <link name="driving_wheel_link_L">
+      <inertial>
+        <origin xyz="-1.0336e-12 0.0041643 2.0817e-16" rpy="0 0 0"/>
+        <mass value="1.27"/>
+        <inertia ixx="0.002934296" ixy="-2.863841e-19" ixz="-7.7597324e-19"
+                 iyy="0.0053520617" iyz="-1.9741091e-18" izz="0.002934296"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/driving_wheel_link_L.STL"/>
+        </geometry>
+        <material name="wheel_material">
+          <color rgba="0.2 0.2 0.2 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/driving_wheel_link_L.STL"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Right Drive Wheel Joint & Link -->
+    <joint name="driving_wheel_joint_R" type="continuous">
+      <parent link="base_link"/>
+      <child link="driving_wheel_link_R"/>
+      <origin xyz="${wheel_x} ${wheel_r_y} ${wheel_z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+
+    <link name="driving_wheel_link_R">
+      <inertial>
+        <origin xyz="-2.3082e-17 -0.0046643 -8.3267e-17" rpy="0 0 0"/>
+        <mass value="1.27"/>
+        <inertia ixx="0.002934296" ixy="4.0302405e-19" ixz="5.7228447e-19"
+                 iyy="0.0053520617" iyz="-1.7967305e-18" izz="0.002934296"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/driving_wheel_link_R.STL"/>
+        </geometry>
+        <material name="wheel_material">
+          <color rgba="0.2 0.2 0.2 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/driving_wheel_link_R.STL"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Front-Left 2D LiDAR Joint & Link (Upside-Down, Angled 45 deg) -->
+    <joint name="base_lidar_joint_FL" type="fixed">
+      <parent link="base_link"/>
+      <child link="base_lidar_link_FL"/>
+      <origin xyz="${lidar_fl_x} ${lidar_fl_y} ${lidar_fl_z}"
+              rpy="${lidar_fl_roll} ${lidar_fl_pitch} ${lidar_fl_yaw}"/>
+    </joint>
+
+    <link name="base_lidar_link_FL">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.23"/>
+        <inertia ixx="1.98e-4" ixy="0" ixz="0"
+                 iyy="1.98e-4" iyz="0" izz="1.38e-4"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_lidar_link_FL.STL"/>
+        </geometry>
+        <material name="lidar_material">
+          <color rgba="0.1 0.1 0.8 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_lidar_link_FL.STL"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Rear-Right 2D LiDAR Joint & Link (Upside-Down, Angled -135 deg) -->
+    <joint name="base_lidar_joint_BR" type="fixed">
+      <parent link="base_link"/>
+      <child link="base_lidar_link_BR"/>
+      <origin xyz="${lidar_br_x} ${lidar_br_y} ${lidar_br_z}"
+              rpy="${lidar_br_roll} ${lidar_br_pitch} ${lidar_br_yaw}"/>
+    </joint>
+
+    <link name="base_lidar_link_BR">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.23"/>
+        <inertia ixx="1.98e-4" ixy="0" ixz="0"
+                 iyy="1.98e-4" iyz="0" izz="1.38e-4"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_lidar_link_BR.STL"/>
+        </geometry>
+        <material name="lidar_material">
+          <color rgba="0.1 0.1 0.8 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_lidar_link_BR.STL"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- IMU Joint & Link (90 deg Yaw) -->
+    <joint name="base_imu_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="base_imu_link"/>
+      <origin xyz="${imu_x} ${imu_y} ${imu_z}"
+              rpy="${imu_roll} ${imu_pitch} ${imu_yaw}"/>
+    </joint>
+
+    <link name="base_imu_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.08"/>
+        <inertia ixx="6.7e-5" ixy="0" ixz="0"
+                 iyy="1.51e-4" iyz="0" izz="2.17e-4"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_imu_link.STL"/>
+        </geometry>
+        <material name="imu_material">
+          <color rgba="0.8 0.1 0.1 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://mobile_base_description/meshes/base_imu_link.STL"/>
+        </geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+
+</robot>

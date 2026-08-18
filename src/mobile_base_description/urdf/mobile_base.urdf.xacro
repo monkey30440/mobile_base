@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="mobile_base">
+
+  <!-- Arguments for ros2_control configuration -->
+  <xacro:arg name="use_mock_hardware" default="false"/>
+  <xacro:arg name="serial_port" default="/dev/ttyUSB0"/>
+  <xacro:arg name="baud_rate" default="230400"/>
+  <xacro:arg name="response_timeout_ms" default="50"/>
+
+  <!-- Include Sub-Macros -->
+  <xacro:include filename="$(find mobile_base_description)/urdf/mobile_base_geometry.xacro"/>
+  <xacro:include filename="$(find mobile_base_description)/urdf/mobile_base_ros2_control.xacro"/>
+
+  <!-- Instantiate Geometry -->
+  <xacro:mobile_base_geometry/>
+
+  <!-- Instantiate ros2_control -->
+  <xacro:if value="$(arg use_mock_hardware)">
+    <xacro:mobile_base_ros2_control
+      serial_port="mock"
+      baud_rate="$(arg baud_rate)"
+      response_timeout_ms="$(arg response_timeout_ms)"/>
+  </xacro:if>
+  <xacro:unless value="$(arg use_mock_hardware)">
+    <xacro:mobile_base_ros2_control
+      serial_port="$(arg serial_port)"
+      baud_rate="$(arg baud_rate)"
+      response_timeout_ms="$(arg response_timeout_ms)"/>
+  </xacro:unless>
+
+</robot>

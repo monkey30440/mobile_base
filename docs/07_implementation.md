@@ -1311,4 +1311,109 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 |---|---|
 | Feature freeze status | `Baseline Frozen` (Synchronous Model A2 @ 30 Hz validated implementation baseline) |
 | Freeze condition | Synchronous Model A2 @ 30 Hz 實作基準凍結；Checklist #8 依原始 DoD 正式結案 `[x]`；Level 4 實機非零運動權限回歸常態管制 |
-| Next dependency | Checklist #9 `S1 Robot Description` (待實作 `[ ] NOT STARTED`) |
+| Next dependency | Checklist #9 `S1 Robot Description` (進行中 `[~]`) |
+
+---
+
+### 3.3 IMP-009: S1 Robot Description (`mobile_base_description`)
+
+#### 3.3.1 Identity / Scope / Status
+
+| 欄位 | 內容 |
+|---|---|
+| Checklist item | #9 — S1 `Robot Description` |
+| Item scope | 依 06 baseline 與 legacy CAD URDF 協調結論，建立 `mobile_base_description` 套件，實作標準 Xacro 模型（`mobile_base.urdf.xacro`、`mobile_base_geometry.xacro`、`mobile_base_ros2_control.xacro`）、6 項核心 3D 幾何網格（`base_link.STL`、`driving_wheel_link_L/R.STL`、`base_lidar_link_FL/BR.STL`、`base_imu_link.STL`）、靜態與動態關節定義（`base_footprint` 根坐標系、`base_link` 高程 $0.2560\,\text{m}$、輪心高程 $-0.1760\,\text{m}$、雙輪關節軸 $[0, 1, 0]$、雷達與 IMU 06 標準量測坐標系）、`robot_state_publisher` 啟動檔（`robot_description.launch.py`）、`check_urdf` 與 Xacro 語法自動化測試、`/tf_static` 廣播整合測試與 ament linters。 |
+| Implementation status | `In Progress [~]` (Initial slice implemented and verified; pending physical $< 2\,\text{mm}$ measurement evidence) |
+| Evidence status | `Build Verified` + `Unit Verified (5/5 tests)` + `Launch Integration Verified (1/1 test)` + `Ament Linters Passed (5/5 suites)` + `check_urdf Verified` |
+| Feature-freeze status | `Initial Slice Complete` (Checklist #9 remains `[~]` pending physical $< 2\,\text{mm}$ verification) |
+| Last updated | 2026-08-18 |
+
+#### 3.3.2 Requirements & Architecture Traceability
+
+- **承接需求**：`SYS-023` 機器人描述、`CAP-001`、`CAP-002`、遵守 `REP-103`（Standard Units of Measure & Coordinate Conventions）與 `REP-120`（Coordinate Frames for Mobile Platforms）。
+- **架構依賴**：
+  - 上游：06 §3.1 規範之幾何坐標與外參、IMP-008 已凍結之 `M1Hardware` 控制介面名稱（`driving_wheel_joint_L`, `driving_wheel_joint_R`）。
+  - 下游：S2 Perception (`dual_laser_merger`, `rf2o`)、S3 State Estimation (`robot_localization`)、S4 Mapping (`slam_toolbox`)、S5 Localization (`amcl`)、S6 Navigation (`nav2_costmap_2d`)、S7 Base Control (`diff_drive_controller`)。
+
+#### 3.3.3 File Artifact Inventory
+
+```text
+src/mobile_base_description/
+├── CMakeLists.txt
+├── package.xml
+├── urdf/
+│   ├── mobile_base.urdf.xacro          # Top-level composition
+│   ├── mobile_base_geometry.xacro      # Canonical frames, kinematics, visual/collision
+│   └── mobile_base_ros2_control.xacro  # Parameterized <ros2_control> block
+├── meshes/
+│   ├── base_link.STL                   # Chassis mesh (11.57 MB)
+│   ├── driving_wheel_link_L.STL        # Left wheel mesh (427 KB)
+│   ├── driving_wheel_link_R.STL        # Right wheel mesh (427 KB)
+│   ├── base_lidar_link_FL.STL          # Front-Left LiDAR mesh (2.85 MB)
+│   ├── base_lidar_link_BR.STL          # Rear-Right LiDAR mesh (2.60 MB)
+│   └── base_imu_link.STL               # IMU mesh (145 KB)
+├── config/
+│   └── robot_state_publisher.yaml     # 30 Hz publish frequency configuration
+├── launch/
+│   └── robot_description.launch.py    # robot_state_publisher launch
+└── test/
+    ├── test_urdf_syntax.py             # Xacro expansion, check_urdf & frame contract tests
+    └── test_robot_description_launch.py # /robot_description and /tf_static integration test
+```
+
+#### 3.3.4 Mature Solution vs. Custom Implementation Boundary
+
+- **成熟方案引用**：採用 ROS 2 Jazzy 官方標準 `robot_state_publisher` 節點與 `xacro` 宏解析工具，完全由標準框架發布 `/robot_description` 與 `/tf_static`，絕無自行撰寫之自定義 TF 發布節點。
+- **客製化實作範圍**：僅限於標準 Xacro 幾何與外參聲明（`mobile_base_geometry.xacro`）以及與已驗證之 `mobile_base_control/M1Hardware` 介面參數綁定（`mobile_base_ros2_control.xacro`）。
+
+#### 3.3.5 Interface & Configuration
+
+##### Canonical TF 坐標系樹與轉換矩陣
+
+```text
+base_footprint (z = 0.0000, 地表投影基準點)
+└── base_link (x = 0, y = 0, z = +0.2560, rpy = [0, 0, 0]) [/tf_static]
+    ├── driving_wheel_link_L (x = +0.0205, y = +0.2775, z = -0.1760, rpy = [0, 0, 0], axis = [0, 1, 0]) [/tf via joint_states]
+    ├── driving_wheel_link_R (x = +0.0205, y = -0.2770, z = -0.1760, rpy = [0, 0, 0], axis = [0, 1, 0]) [/tf via joint_states]
+    ├── base_lidar_link_FL (x = +0.28771, y = +0.26721, z = -0.06011, rpy = [π, 0, +π/4]) [/tf_static]
+    ├── base_lidar_link_BR (x = -0.24671, y = -0.26721, z = -0.06011, rpy = [π, 0, -3π/4]) [/tf_static]
+    └── base_imu_link (x = +0.04375, y = -0.00800, z = -0.01459, rpy = [0, 0, +π/2]) [/tf_static]
+```
+
+##### 關鍵外參與幾何常數
+- `wheel_separation`: `0.5545 m`
+- `wheel_radius`: `0.0800 m`
+- `base_height`: `0.2560 m`
+- `wheel_center_z`: `-0.1760 m` ($+0.0800 - 0.2560\,\text{m}$)
+- `response_timeout_ms`: `50` (可配置參數，無隱式預設值)
+
+#### 3.3.6 Failure Detection & Safety Handling
+
+- **語法錯誤防護**：Xacro 解析失敗或 URDF 語法不完整時，`robot_state_publisher` 於啟動時立即拋出異常並終止，防止無座標系統運行。
+- **Downstream Buffer 診斷**：下游導航與定位節點（Nav2, AMCL）透過 `tf2_ros::Buffer` 檢查所需 Transform，若逾時未收到則拒絕進入 Active 狀態。
+
+#### 3.3.7 Verification Evidence
+
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-18T15:12:12+08:00 | S1 Robot Description Build & Test Suite | `colcon test --packages-select mobile_base_description` + `colcon test-result` | PASS | 全部 7 項測試套件通過（247 測試項目，0 failures, 0 errors, 30 skipped）：5 項 `test_urdf_syntax`（Xacro 展開、`check_urdf` 結構驗證、根節點 `base_footprint` 檢驗、關節與外參坐標精確比對、`ros2_control` 介面契約檢驗）、1 項 `test_robot_description_launch` 整合測試（驗證 `/robot_description` 與 `/tf_static` 廣播）、5 項 ament linters（`copyright`, `flake8`, `pep257`, `lint_cmake`, `xmllint`）。 | [`docs/verification/IMP-009/2026-08-18T151212_unit_s1_robot_description.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-009/2026-08-18T151212_unit_s1_robot_description.txt) |
+
+#### 3.3.8 Evidence Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS`) | 1. **Xacro 展開與 XML 語法有效性** (`PASS`)：`mobile_base.urdf.xacro` 展開無誤，通過 `check_urdf` 結構解析。<br/>2. **標準 ROS TF 坐標系樹** (`PASS`)：以 `base_footprint` 為根節點，各關節（`base_joint`, `driving_wheel_joint_L/R`, `base_lidar_joint_FL/BR`, `base_imu_joint`）坐標、型別與旋轉軸精確符合 06。<br/>3. **IMP-008 控制介面名稱相容性** (`PASS`)：左右輪關節名稱 `driving_wheel_joint_L` 與 `driving_wheel_joint_R` 保持一致，雙輪關節旋轉軸均為 $[0, 1, 0]$。<br/>4. **ros2_control M1Hardware 整合** (`PASS`)：正確導出 `velocity` command interface 與 `position`/`velocity` state interfaces，參數包含顯式 `response_timeout_ms`。<br/>5. **Launch 與 TF 靜態廣播** (`PASS`)：`robot_state_publisher` 正確載入並發布 `/robot_description` 與 `/tf_static`。 |
+| 尚未證明 (後續階段與驗收項) | 1. **實機物理尺寸量測驗收** (`EVIDENCE GAP`)：實車雷達、IMU 安裝距離與輪距之實體游標卡尺／雷射測距量測證據（誤差 $< 2\,\text{mm}$，待補齊量測記錄以結案 Checklist #9）。<br/>2. **著地行駛幾何與打滑特性** (`DOWNSTREAM SCOPE`)：地面行駛里程計精度與著地動態（屬 Checklist #13 State Estimation 範疇）。<br/>3. **被動萬向輪動態模擬** (`SIMULATION ONLY`)：被動萬向輪彈簧懸吊模擬（v0.1 實車控制無需此 12 軸未量測 TF 關節）。 |
+
+#### 3.3.9 Known Limits / Outstanding Obligations
+
+- **Checklist #9 結案待辦事項**：軟體模型與測試已建置完成，Checklist #9 依治理規範維持 `[~]`，待補充實體底盤雷達、IMU 安裝距離與輪距之 $< 2\,\text{mm}$ 實機物理量測驗收記錄後方可標記結案 `[x]`。
+- **被動萬向輪建模範圍**：v0.1 聚焦於二輪差速驅動與導航感知外參，萬向輪不納入動態 TF 關節，防止發布未量測之虛擬關節狀態。
+
+#### 3.3.10 Feature Freeze Status / Next Dependency
+
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Initial Slice Complete` (URDF / TF Baseline Established; Checklist #9 Remains `[~]`) |
+| Freeze condition | `mobile_base_description` 套件建置與測試通過；Checklist #9 維持 `[~]` 等待實體量測驗收證據；Checklist #10 尚未開始 `[ ]` |
+| Next dependency | Checklist #9 實體量測驗收 / Checklist #10 `S2 LiDAR acquisition and scan baseline` (`[ ] NOT STARTED`) |
