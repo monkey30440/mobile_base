@@ -268,10 +268,10 @@ void M1Driver::set_transact_override(TransactFn fn)
 Result<void> M1Driver::connect(
   const std::string & device,
   int baud,
+  uint32_t timeout_ms,
   char parity,
   int data_bits,
-  int stop_bits,
-  uint32_t timeout_ms)
+  int stop_bits)
 {
   if (!impl_) {
     return Result<void>::failure(ErrorCode::CONTEXT_CREATE_FAILED);

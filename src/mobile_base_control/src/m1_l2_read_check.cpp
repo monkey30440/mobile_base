@@ -44,7 +44,7 @@ int main(int argc, char ** argv)
 
   // 1. Connect
   std::cout << "\n[Step 1] Connecting to M1 serial bus..." << std::endl;
-  auto conn_res = driver.connect(device, baud, 'N', 8, 1, 100);
+  auto conn_res = driver.connect(device, baud, 100, 'N', 8, 1);
   if (!conn_res.ok) {
     std::cerr << "FAIL: Connection failed with error: "
               << error_code_to_string(conn_res.error) << std::endl;

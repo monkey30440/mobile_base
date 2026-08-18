@@ -384,3 +384,13 @@ TEST(M1DriverTest, NegativeHandling)
   EXPECT_FALSE(driver.read_register(250, 0x0000).ok);
   EXPECT_FALSE(driver.write_register(0, 0x0000, 0).ok);
 }
+
+TEST(M1DriverTest, ConnectFailureHandling)
+{
+  M1Driver driver;
+  // Connecting to a non-existent device path should fail cleanly
+  auto res = driver.connect("/dev/non_existent_serial_device_m1", 230400, 50);
+  EXPECT_FALSE(res.ok);
+  EXPECT_EQ(res.error, ErrorCode::CONNECT_FAILED);
+  EXPECT_FALSE(driver.is_connected());
+}

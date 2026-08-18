@@ -154,12 +154,12 @@ public:
   bool is_connected() const noexcept;
 
   Result<void> connect(
-    const std::string & device = "/dev/ttyUSB0",
-    int baud = 230400,
+    const std::string & device,
+    int baud,
+    uint32_t timeout_ms,
     char parity = 'N',
     int data_bits = 8,
-    int stop_bits = 1,
-    uint32_t timeout_ms = 50);
+    int stop_bits = 1);
 
   Result<void> disconnect();
 

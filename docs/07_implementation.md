@@ -996,11 +996,11 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 #### Key Parameters
 
-| Parameter | Default Value | 說明 | 06 ref |
+| Parameter | Configuration Rule | 說明 | 06 / Baseline ref |
 |---|---|---|---|
-| `device` | `/dev/ttyUSB0` | M1 RS-485 串列埠裝置節點 | `06 §3.3` / Compose |
-| `baud` | `230400` | M1 預設通訊 Baud rate (8N1) | `06 §3.3` |
-| `timeout_ms` | `50` | 單次交易逾時門檻 (ms) | `docs/design_baseline/m1_driver.md` |
+| `device` | Caller 明確傳入 | M1 RS-485 串列埠裝置節點（例如 `/dev/ttyUSB0`） | `06 §3.3` / Compose |
+| `baud` | Caller 明確傳入 | M1 通訊 Baud rate（例如 `230400`，8N1） | `06 §3.3` |
+| `timeout_ms` | Caller 明確傳入 | 單次交易逾時門檻 (ms)；`M1Driver` public API 不提供預設值，由 caller / `M1Hardware` 於 runtime 提供；本次 L2 實機驗證使用 100 ms，單元測試使用 50 ms，final production timeout 尚未凍結 | `docs/design_baseline/m1_driver.md §7` |
 
 ---
 
@@ -1028,14 +1028,14 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T11:46:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 8 項 GTests 與 6 項 ament linters 通過，0 failures。 | [`docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt) |
+| 2026-08-18T11:46:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 9 項 GTests 與 6 項 ament linters 通過，0 failures。 | [`docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt) |
 | 2026-08-18T11:46:03+08:00 | `M1DriverTest.NegativeHandling` | `test_m1_driver --gtest_filter=M1DriverTest.NegativeHandling` | PASS | 驗證無效驅動器 ID、逾時模擬與發送失敗之錯誤對映。 | [`docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt) |
 
 #### Hardware Evidence
 
 | Timestamp | Target hardware | Test condition | Observed result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T11:46:04+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 2 (No Motion / Read-Only), 230400 8N1 | ID1 (Right) & ID2 (Left) 成功讀取 02-14=1, 09-26=0; Multi-drive 2.0 FC03 成功讀取雙驅動器狀態 (status=6, alarm=0, bus~51.1V); slave 99 成功逾時 | 證明實機 Modbus RTU 唯讀通訊健全；未下發任何使能、速度或扭矩指令。 | [`docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt) |
+| 2026-08-18T11:46:04+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 2 (No Motion / Read-Only), 230400 8N1, timeout=100ms | ID1 (Right) & ID2 (Left) 成功讀取 02-14=1, 09-26=0; Multi-drive 2.0 FC03 成功讀取雙驅動器狀態 (status=6, alarm=0, bus~51.1V); slave 99 成功逾時 | 證明實機 Modbus RTU 唯讀通訊健全；未下發任何使能、速度或扭矩指令。 | [`docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt) |
 
 ---
 
@@ -1043,13 +1043,14 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | `m1_driver` 在 ROS 2 Jazzy 環境中成功編譯並通過所有 8 項單元測試與 linter；在實機 `/dev/ttyUSB0` (230400 8N1) 上成功讀取 ID 1 與 ID 2 之 02-14=1、09-26=0，並透過 Multi-drive 2.0 FC03 正確讀取兩驅動器之狀態（status=6, alarm=0, bus~51.1V）；故障注入驗證非存在 ID 99 正確逾時回傳 `TIMEOUT`。 |
+| 已證明 | `m1_driver` 在 ROS 2 Jazzy 環境中成功編譯並通過所有 9 項單元測試與 linter；在實機 `/dev/ttyUSB0` (230400 8N1) 上成功讀取 ID 1 與 ID 2 之 02-14=1、09-26=0，並透過 Multi-drive 2.0 FC03 正確讀取兩驅動器之狀態（status=6, alarm=0, bus~51.1V）；故障注入驗證非存在 ID 99 正確逾時回傳 `TIMEOUT`。 |
 | 尚未證明 | 實機 SERVO-ON 使能寫入、馬達實體旋轉、JG 速度控制輸出、馬達實體運動阻抗與急停煞停時間。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
+- **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`M1Driver` 不硬編預設逾時常數，精確 production response timeout 尚待後續 `M1Hardware` (IMP-008) 實機整合與時序量測後確定。
 - 實機使能與運動控制寫入依 §6 安全前置程序，受限於 Level 3/4 需操作人員在場即時授權閘門，未在本次自動執行。
 - `M1Driver` 僅提供通訊傳輸與狀態封裝，上層 `M1Hardware` (`SystemInterface` plugin) 將於 #8 實作。
 
