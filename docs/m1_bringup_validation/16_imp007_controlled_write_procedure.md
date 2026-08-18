@@ -38,26 +38,34 @@ Level 3 涉及的寫入操作（`enable`, `stop`, `disable`）統稱為 **Zero-S
 
 ## 3. M1 Communication Watchdog 規格與四層狀態審查
 
-為確保任何通訊防護宣告具備可審查之追溯性，此處將 M1 通訊 Watchdog 依四層狀態嚴格區分（**本次僅作技術架構審查與文件化，未對實機寫入任何參數**）：
+為確保任何通訊防護宣告具備精確可審查之追溯性，此處將 M1 通訊 Watchdog 依據權威手冊章節、實機觀測、實體行為驗證與安全認證四層狀態嚴格區分（**本次僅作技術架構審查與文件化，未對實機寫入任何參數**）：
 
-### 3.1 Source Traceability
-- **權威文件**：*M1 Series AC Servo Driver User Manual / Modbus Communication Protocol Specification*
-- **章節參照**：
-  - Parameter Group 05 (Communication Parameters): `05-17`, `05-18`, `05-21`
-  - Parameter Group 10 (System Parameters): `10-39` (EEPROM Save)
-  - Parameter Group 0A (Auxiliary Function / Alarm Reset): `0A-00`
+### 3.1 Authoritative Manual Sources
+1. **通訊手冊 (Communication Manual)**：
+   - **文件名稱**：*M1 驅動器通訊說明書 (Model: M1)*
+   - **文件編號**：`SS-01-S0647`（檔案標記 `UM-01-S0686`）
+   - **版本 / 發行日期**：Revision `1.1`，`3 February 2025`
+   - **發行者**：創盟電子工業股份有限公司 (DEXMART Technology Corporation)
+   - **總頁數**：45 頁
+2. **使用手冊 (User Manual)**：
+   - **文件名稱**：*M1系列直流無刷馬達驅動器使用手冊 (Model: M1)*
+   - **文件編號**：`UM-01-S0701`
+   - **發行者**：創盟電子工業股份有限公司
+   - **總頁數**：23 頁
 
 ---
 
-### 3.2 四層狀態分析表
+### 3.2 四層狀態分析表 (4-Tier Status Matrix)
 
-| 項目 | 暫存器 | A. Manual-Defined 官方定義 | B. Current-Device 實機現況 | C. Hardware-Verified 行為驗證 | D. Safety Qualification 安全認證 |
+| 項目 | 暫存器 (EEP/RAM) | A. Manual-Defined 官方定義 (附 exact section & page) | B. Current-Device 實機現況 (Observed) | C. Hardware-Verified 行為驗證 | D. Safety Qualification 安全認證 |
 |---|---|---|---|---|---|
-| 通訊逾時時間 | `05-17` (`0x0510`) | 單位 ms，範圍 0–65535，預設 0（停用）。>0 時若未收到定址至本機之有效封包即判定通訊逾時。 | `0` (DISABLED) 於 ID1 與 ID2（依 `logs/manual/config.txt` 與 L2 唯讀掃描）。 | **UNVERIFIED** (IMP-007 未執行實機 watchdog trip 驗證)。 | **NOT ESTABLISHED** (非 certified safety function)。 |
-| 通訊錯誤門檻 | `05-18` (`0x0511`) | 單位 次，連續通訊錯誤判定門檻。 | `0` 於 ID1 與 ID2。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
-| 通訊故障動作 | `05-21` (`0x0514`) | `0`: 僅警告；`1`: 減速停止不報警；`2`: 急停並觸發報警，清除 NET-IN 虛擬輸入（切斷 SVON）。 | `0` 於 ID1 與 ID2。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
-| EEPROM 儲存 | `10-39` (`0x0A27`) | 寫入 `1` 儲存參數至非揮發性記憶體。 | 未在 IMP-007 執行寫入。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
-| 警報清除暫存器 | `0A-00` (`0x0A00`) | 寫入指定代碼清除驅動器警報。 | 未在 IMP-007 執行寫入。 | **UNVERIFIED** (歷史 bringup 曾觀察到通訊中斷觸發報警後無法僅藉軟體清除，需重啟電源)。 | **NOT ESTABLISHED**。 |
+| **通訊逾時時間** | `05-17` (`0510h` / `4110h`) | **手冊定義**：單位 ms，範圍 0–65535，預設 0（無效/無監視）。當間隔時間超過設定值時啟動通訊異常保護。<br>**出處**：`SS-01-S0647` Rev 1.1 §2 (Tb1, p.2), §3.4.4 (p.19)。生效模式 C（執行 Configuration 後反映）。 | **`0` (DISABLED)** 於 ID1 與 ID2（依 `logs/manual/config.txt` 與 Level 2 實機唯讀掃描）。 | **UNVERIFIED** (IMP-007 未執行實機 watchdog trip 驗證)。 | **NOT ESTABLISHED** (非 certified safety function / STO)。 |
+| **通訊錯誤門檻** | `05-18` (`0511h` / `4111h`) | **手冊定義**：單位 次，範圍 0–10，預設 0（無效）。RS485 通訊異常超過此設定值啟動通訊異常保護。<br>**出處**：`SS-01-S0647` Rev 1.1 §3.4.4 (p.19)。生效模式 C。 | **`0`** 於 ID1 與 ID2。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
+| **通訊保護行為** | `05-21` (`0514h` / `4114h`) | **手冊定義**：預設 0。<br>`0`: 報警停機；<br>`1`: 遠端(虛擬)I/O 狀態清除；<br>`2`: 報警停機 + 遠端(虛擬)I/O 狀態清除。<br>**出處**：`SS-01-S0647` Rev 1.1 §3.4.4 (p.19)。生效模式 C。 | **`0`** 於 ID1 與 ID2。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
+| **參數重新計算與生效 (Configuration)** | `0A27h` | **手冊定義**：維修/維護命令寄存器，寫入 `1` 執行 Configuration 指令，使模式 C 參數生效。<br>**出處**：`SS-01-S0647` Rev 1.1 §3.2 (p.9)。*(註：手冊中無 10-39 暫存器，生效指令為 0A27h)*。 | 未在 IMP-007 執行寫入。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
+| **報警代碼 (通訊逾時)** | 報警位址 `0003h` | **手冊定義**：錯誤碼 `21`，保護功能名稱「通訊指令錯誤」，說明「RS232 或 RS485 通訊逾時」。<br>**出處**：`SS-01-S0647` Rev 1.1 §A1 (p.45) 與 `UM-01-S0701` §7 (p.23)。*(註：非臆測之 Er.140，官方標準錯誤碼為 21)*。 | 目前狀態正常（Alarm = 0）。 | **UNVERIFIED** (歷史測試曾觀察到 Alarm 21，但未建立 IMP-007 baseline)。 | **NOT ESTABLISHED**。 |
+| **遠端虛擬 I/O 清除 (NET-IN)** | `1400h` | **手冊定義**：Bit 7 為 `NET-X7`，功能對應 `SERVO-EN` (Function 14)。當 `05-21=1/2` 觸發時清除虛擬 I/O，使馬達失能。<br>**出處**：`SS-01-S0647` Rev 1.1 §3.1 (p.8), §3.4.5 (p.20)。 | 正常運作下為 `0x0000` (Servo-Off)。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
+| **解除報警 (Alarm Reset)** | `0A00h` | **手冊定義**：寫入 `1` 執行報警解除。手冊註明若驅動器處於可運轉狀態無法解除，且部分故障需斷電重啟。<br>**出處**：`SS-01-S0647` Rev 1.1 §3.2 (p.8), §A1 (p.44)。 | 未在 IMP-007 執行寫入。 | **UNVERIFIED** (歷史測試曾觀察到通訊逾時報警後無法僅藉軟體 0A00h 清除，需重啟電源)。 | **NOT ESTABLISHED**。 |
 
 ---
 
