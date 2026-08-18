@@ -1,0 +1,32 @@
+===============================================================================
+IMP-008: M1Hardware ros2_control Plugin Discovery & Description Verification
+Timestamp: 2026-08-18T12:50:00+08:00
+===============================================================================
+
+[PLUGIN DESCRIPTION FILE]
+Path: install/mobile_base_control/share/mobile_base_control/m1_hardware_plugins.xml
+Content:
+<library path="m1_hardware">
+  <class name="mobile_base_control/M1Hardware"
+         type="mobile_base_control::M1Hardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      ros2_control hardware interface plugin for M1 dual-motor differential drive base.
+    </description>
+  </class>
+</library>
+
+[PACKAGE EXPORT IN PACKAGE.XML]
+Path: install/mobile_base_control/share/mobile_base_control/package.xml
+Snippet:
+  <export>
+    <build_type>ament_cmake</build_type>
+    <hardware_interface plugin="${prefix}/m1_hardware_plugins.xml" />
+  </export>
+
+[PLUGINLIB DYNAMIC CLASS LOADER TEST]
+Test: M1HardwareLifecycleTest.PluginLoaderDiscovery
+Status: PASSED
+Loader: pluginlib::ClassLoader<hardware_interface::SystemInterface>("hardware_interface", "hardware_interface::SystemInterface")
+Declared class matched: mobile_base_control/M1Hardware
+Instance created: std::shared_ptr<hardware_interface::SystemInterface> != nullptr

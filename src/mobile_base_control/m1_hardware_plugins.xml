@@ -1,0 +1,9 @@
+<library path="m1_hardware">
+  <class name="mobile_base_control/M1Hardware"
+         type="mobile_base_control::M1Hardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      ros2_control hardware interface plugin for M1 dual-motor differential drive base.
+    </description>
+  </class>
+</library>

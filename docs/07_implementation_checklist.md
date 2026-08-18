@@ -16,10 +16,10 @@
 
 - 總項目：27
 - 已完成：7
-- 進行中：0
-- 待實作：20
+- 進行中：1
+- 待實作：19
 - 上游阻塞：0
-- 目前進度：7 / 27 (26%)；第 7 項已完成（`M1Driver` transport vertical slice 與 Level 1/2/3 實機驗證通過），下一項為第 8 項 `S7 M1Hardware ros2_control integration`。
+- 目前進度：7 / 27 (26%)；第 8 項 `S7 M1Hardware ros2_control integration` 軟體實作、單元測試、Plugin 載入與 URDF 整合測試已全數通過（16/16 GTests, 100% PASS），目前處於 `[~]` 狀態（等待 Level 3 實機 Lifecycle 驗證授權與紀錄封存）。
 
 ---
 
@@ -43,7 +43,7 @@
 - [x] 7. S7 `M1Driver` transport vertical slice
   - 追溯：S7；GAP-05、GAP-06 的底層依賴；SYS-026、SYS-029、SYS-030。
   - 完成條件：依 06 baseline 實作 libmodbus RTU connection、雙 M1 read/write、timeout/error mapping、enable/disable/stop primitive；先以無運動 read path 與故障注入驗證，再進入受控輸出。
-- [ ] 8. S7 `M1Hardware` ros2_control integration
+- [~] 8. S7 `M1Hardware` ros2_control integration
   - 追溯：SYS-022、SYS-026、SYS-027、SYS-028、SYS-029、SYS-030；GAP-05、GAP-06。
   - 完成條件：SystemInterface lifecycle、command/state interfaces、真實 wheel feedback validity、禁止 command substitution、diff-drive controller、timeout 與 safe-stop chain 完成 unit/interface/integration/real-hardware evidence。
 

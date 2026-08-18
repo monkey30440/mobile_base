@@ -332,6 +332,70 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
     return impl_->transact_override(request_without_crc);
   }
 
+  if (impl_->is_mock) {
+    if (request_without_crc.size() >= 2) {
+      const uint8_t fc = request_without_crc[1];
+      std::vector<uint8_t> rsp;
+      rsp.push_back(0x65);
+      rsp.push_back(fc);
+      rsp.push_back(32);  // 2 drivers * 16 bytes = 32
+
+      int16_t rpm1 = 0;
+      int16_t rpm2 = 0;
+      if (fc == FC_READ_WRITE_MULTIPLE && request_without_crc.size() >= 19) {
+        const uint16_t cmd1 = (static_cast<uint16_t>(request_without_crc[11]) << 8) |
+          static_cast<uint16_t>(request_without_crc[12]);
+        const uint16_t val1 = (static_cast<uint16_t>(request_without_crc[13]) << 8) |
+          static_cast<uint16_t>(request_without_crc[14]);
+        const uint16_t cmd2 = (static_cast<uint16_t>(request_without_crc[15]) << 8) |
+          static_cast<uint16_t>(request_without_crc[16]);
+        const uint16_t val2 = (static_cast<uint16_t>(request_without_crc[17]) << 8) |
+          static_cast<uint16_t>(request_without_crc[18]);
+        if (cmd1 == CMD_JG) {
+          rpm1 = static_cast<int16_t>(val1);
+        }
+        if (cmd2 == CMD_JG) {
+          rpm2 = static_cast<int16_t>(val2);
+        }
+      }
+
+      auto append_driver = [&](uint16_t st, uint16_t al, int16_t rpm, int32_t pos) {
+          const uint16_t pos_hi = static_cast<uint16_t>((static_cast<uint32_t>(pos) >>
+            16) & 0xFFFF);
+          const uint16_t pos_lo = static_cast<uint16_t>(static_cast<uint32_t>(pos) & 0xFFFF);
+          const uint16_t urpm = static_cast<uint16_t>(rpm);
+          // Word 0: Status
+          rsp.push_back(static_cast<uint8_t>((st >> 8) & 0xFF));
+          rsp.push_back(static_cast<uint8_t>(st & 0xFF));
+          // Word 1: Alarm
+          rsp.push_back(static_cast<uint8_t>((al >> 8) & 0xFF));
+          rsp.push_back(static_cast<uint8_t>(al & 0xFF));
+          // Word 2: RPM
+          rsp.push_back(static_cast<uint8_t>((urpm >> 8) & 0xFF));
+          rsp.push_back(static_cast<uint8_t>(urpm & 0xFF));
+          // Word 3: Bus Voltage (51.10 V = 5110)
+          rsp.push_back(0x13);
+          rsp.push_back(0xF6);
+          // Word 4: Current (0.10 A = 10)
+          rsp.push_back(0x00);
+          rsp.push_back(0x0A);
+          // Word 5: Pos Hi
+          rsp.push_back(static_cast<uint8_t>((pos_hi >> 8) & 0xFF));
+          rsp.push_back(static_cast<uint8_t>(pos_hi & 0xFF));
+          // Word 6: Pos Lo
+          rsp.push_back(static_cast<uint8_t>((pos_lo >> 8) & 0xFF));
+          rsp.push_back(static_cast<uint8_t>(pos_lo & 0xFF));
+          // Word 7: Error Check
+          rsp.push_back(0x00);
+          rsp.push_back(0x00);
+        };
+
+      append_driver(0, 0, rpm1, 0);
+      append_driver(0, 0, rpm2, 0);
+      return Result<std::vector<uint8_t>>::success(std::move(rsp));
+    }
+  }
+
   if (impl_->ctx == nullptr) {
     return Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED);
   }

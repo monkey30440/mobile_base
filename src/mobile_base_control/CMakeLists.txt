@@ -6,25 +6,46 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MODBUS REQUIRED libmodbus)
 
-add_library(m1_driver
+# m1_driver library (transport layer)
+add_library(m1_driver SHARED
   src/m1_driver.cpp
   src/m1_control_check_core.cpp
 )
-
+set_target_properties(m1_driver PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(m1_driver PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
   ${MODBUS_INCLUDE_DIRS}
 )
-
 target_link_libraries(m1_driver PUBLIC
   ${MODBUS_LIBRARIES}
 )
-
 target_compile_features(m1_driver PUBLIC cxx_std_17)
+
+# m1_hardware library (ros2_control SystemInterface plugin)
+add_library(m1_hardware SHARED
+  src/m1_hardware.cpp
+)
+target_include_directories(m1_hardware PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(m1_hardware PUBLIC
+  m1_driver
+  hardware_interface::hardware_interface
+  pluginlib::pluginlib
+  rclcpp::rclcpp
+  rclcpp_lifecycle::rclcpp_lifecycle
+)
+target_compile_features(m1_hardware PUBLIC cxx_std_17)
+pluginlib_export_plugin_description_file(hardware_interface m1_hardware_plugins.xml)
 
 # Level 2 Hardware Read-Only Verification Utility
 add_executable(m1_l2_read_check
@@ -42,7 +63,7 @@ target_compile_features(m1_control_check PUBLIC cxx_std_17)
 
 # Install rules
 install(
-  TARGETS m1_driver m1_l2_read_check m1_control_check
+  TARGETS m1_driver m1_hardware m1_l2_read_check m1_control_check
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -54,20 +75,42 @@ install(
   DESTINATION include
 )
 
+install(
+  FILES m1_hardware_plugins.xml
+  DESTINATION share/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
+  find_package(controller_manager REQUIRED)
   ament_lint_auto_find_test_dependencies()
 
-  ament_add_gtest(test_m1_driver test/test_m1_driver.cpp)
+  ament_add_gtest(test_m1_driver
+    test/test_m1_driver.cpp
+  )
   target_link_libraries(test_m1_driver m1_driver)
 
-  ament_add_gtest(test_m1_control_check test/test_m1_control_check.cpp)
+  ament_add_gtest(test_m1_control_check
+    test/test_m1_control_check.cpp
+  )
   target_link_libraries(test_m1_control_check m1_driver)
+
+  ament_add_gtest(test_m1_hardware
+    test/test_m1_hardware.cpp
+  )
+  target_link_libraries(test_m1_hardware
+    m1_hardware
+    m1_driver
+    hardware_interface::hardware_interface
+    pluginlib::pluginlib
+    rclcpp::rclcpp
+    rclcpp_lifecycle::rclcpp_lifecycle
+    controller_manager::controller_manager
+  )
 endif()
 
 ament_export_include_directories(include)
-ament_export_libraries(m1_driver)
-ament_export_targets(export_${PROJECT_NAME})
-
+ament_export_libraries(m1_driver m1_hardware)
+ament_export_dependencies(hardware_interface pluginlib rclcpp rclcpp_lifecycle)
 ament_package()

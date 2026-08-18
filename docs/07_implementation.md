@@ -1076,3 +1076,143 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | Feature freeze status | `Not Frozen` |
 | Freeze condition | #8 `M1Hardware` 整合與 Level 4/5 實機控制驗收通過 |
 | Next dependency | Checklist #8 `S7 M1Hardware ros2_control integration` |
+
+---
+
+### IMP-008 S7 M1Hardware ros2_control Integration
+
+#### 3.2.1 Identity / Scope / Status
+
+| 欄位 | 內容 |
+|---|---|
+| Checklist item | #8 — S7 `M1Hardware` ros2_control integration |
+| Item scope | 依 06 baseline 與 `docs/design_baseline/m1_hardware.md` 實作 `mobile_base_control::M1Hardware`（`hardware_interface::SystemInterface` plugin for ROS 2 Jazzy），包含 Model A2 控制迴圈（`write()` 單次 FC17 交易、`read()` 無通訊消費快取狀態）、單位轉換（$rad/s \leftrightarrow RPM$、齒比 20.0、左輪 +1、右輪 -1、3000 RPM 上限保護）、位置回授與 32-bit Rollover 累積追蹤（`PositionTracker`）、Lifecycle 狀態機（`on_init`, `on_configure`, `on_activate` 帶有有限次狀態輪詢確認、`on_deactivate` 依序執行 stop -> disable -> disconnect、`on_error`/`on_shutdown` 最佳防護清理）、防禦性指令範圍檢查、可配置參數、pluginlib export XML 與註冊、單元測試、URDF `ResourceManager` 整合測試與 Mock 執行驗證；非零速度運動（Level 4）與實機硬體生命週期執行維持在待即時授權邊界。 |
+| Implementation status | `Implemented` |
+| Evidence status | `Build Verified` + `Unit Verified` + `Plugin Discovery Verified` |
+| Feature-freeze status | `Not Frozen` |
+| Last updated | 2026-08-18 |
+
+---
+
+#### 3.2.2 Traceability
+
+| 欄位 | 內容 |
+|---|---|
+| Requirement IDs | SYS-026 (底盤故障處理), SYS-028 (加減速限制), SYS-029 (底盤狀態回授有效性 - 輪速/位置回授解析與累加), SYS-030 (底盤安全啟停 - Lifecycle enable/stop/disable 控制流) |
+| Subsystem | S7 Base Control Subsystem |
+| Custom gap IDs | GAP-05 底層資料解析與校驗、GAP-06 底層使能/停轉 primitive 封裝、ros2_control hardware plugin |
+| Upstream design refs | `06 §3.3` S7 Base Control, `docs/design_baseline/m1_hardware.md`, `docs/design_baseline/m1_driver.md` |
+
+---
+
+#### 3.2.3 Implementation Artifacts
+
+| Artifact | Path / Package | 已實作責任 | 明確不負責 |
+|---|---|---|---|
+| C++ Header | `src/mobile_base_control/include/mobile_base_control/m1_hardware.hpp` | `M1Hardware` 類別定義、`PositionTracker` 結構、`M1HardwareConfig` 設定、單位轉換純函式、測試注入介面 | controller 演算法、TF 發布、導航路徑追隨 |
+| C++ Implementation | `src/mobile_base_control/src/m1_hardware.cpp` | `SystemInterface` 生命週期回呼、State/Command interface 匯出、Model A2 `read()`/`write()` 執行、防禦性輸入檢驗、驅動器報警偵測與錯誤處理 | 閉環速度 PID（由驅動器內部與 controller 負責）、IMU 融合 |
+| Plugin Description XML | `src/mobile_base_control/m1_hardware_plugins.xml` | pluginlib 匯出描述檔，宣告 `mobile_base_control/M1Hardware` 繼承 `hardware_interface::SystemInterface` | — |
+| Package Configuration | `src/mobile_base_control/package.xml`, `CMakeLists.txt` | 宣告 `hardware_interface`、`pluginlib`、`rclcpp` 依賴與 plugin 匯出標記 | — |
+| Unit & Integration Tests | `src/mobile_base_control/test/test_m1_hardware.cpp` | 16 項 GTest（轉換數學、32-bit rollover 正反向累積、參數解析、State/Command 匯出、完整 Mock 生命週期、讀寫閉環、NaN/Inf 拒絕、未激活讀取拒絕、pluginlib 動態載入、URDF `ResourceManager` 整合） | 實機物理旋轉 |
+
+---
+
+#### 3.2.4 Mature Component / Custom Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| Mature component(s) used | `hardware_interface::SystemInterface` (ROS 2 Jazzy), `pluginlib`, `rclcpp_lifecycle`, `controller_manager::ResourceManager` |
+| Custom implementation | `M1Hardware` ros2_control plugin、`PositionTracker` 2's complement int32 delta accumulation、Model A2 execution timing、純軟體單位與座標系轉換（Left ID2 sign +1, Right ID1 sign -1, gear ratio 20.0, 10000 steps/rev）、防禦性指令飽和與異常拒絕 |
+| Boundary rule | `ros2_control` 標準框架負責 Controller 與硬體介面間之 LoanedCommand/LoanedState 借用與 Controller Manager 生命週期管理；`M1Hardware` 封裝底層 M1 驅動器通訊細節與馬達座標系轉換，對 Controller 暴露標準 `velocity` command interface 與 `position`/`velocity` state interfaces。 |
+
+---
+
+#### 3.2.5 Authoritative Interfaces and Configuration
+
+#### Exported State Interfaces
+
+| Joint Name | Interface Type | Data Type | Units | Source | 06 ref |
+|---|---|---|---|---|---|
+| `driving_wheel_joint_L` | `position` | `double` | rad | Continuous accumulated motor steps $\times \frac{2\pi}{200000}$ | `06 §3.3` |
+| `driving_wheel_joint_L` | `velocity` | `double` | rad/s | Motor actual RPM $\times \frac{2\pi}{60 \times 20.0} \times (+1)$ | `06 §3.3` |
+| `driving_wheel_joint_R` | `position` | `double` | rad | Continuous accumulated motor steps $\times \frac{2\pi}{200000} \times (-1)$ | `06 §3.3` |
+| `driving_wheel_joint_R` | `velocity` | `double` | rad/s | Motor actual RPM $\times \frac{2\pi}{60 \times 20.0} \times (-1)$ | `06 §3.3` |
+
+#### Exported Command Interfaces
+
+| Joint Name | Interface Type | Data Type | Units | Target | 06 ref |
+|---|---|---|---|---|---|
+| `driving_wheel_joint_L` | `velocity` | `double` | rad/s | Motor Target RPM = $\text{round}\left(\text{cmd} \times 20.0 \times \frac{60}{2\pi} \times (+1)\right)$, clamped to $\pm 3000$ | `06 §3.3` |
+| `driving_wheel_joint_R` | `velocity` | `double` | rad/s | Motor Target RPM = $\text{round}\left(\text{cmd} \times 20.0 \times \frac{60}{2\pi} \times (-1)\right)$, clamped to $\pm 3000$ | `06 §3.3` |
+
+#### Key Parameters
+
+| Parameter | Configuration Rule | 說明 | 06 / Baseline ref |
+|---|---|---|---|
+| `serial_port` / `device` | URDF `<param>` | 串列埠裝置節點（預設 `/dev/ttyUSB0`） | `06 §3.3` |
+| `baud_rate` / `baud` | URDF `<param>` | 通訊 Baud rate（預設 `230400`） | `06 §3.3` |
+| `timeout_ms` / `response_timeout_ms` | URDF `<param>` | 通訊單次逾時門檻 (ms)（預設 `100`，由參數傳入，未硬編） | `docs/design_baseline/m1_driver.md §7` |
+| `left_driver_id` | URDF `<param>` | 左輪驅動器 ID（預設 `2`） | `06 §3.3` |
+| `right_driver_id` | URDF `<param>` | 右輪驅動器 ID（預設 `1`） | `06 §3.3` |
+| `gear_ratio` | URDF `<param>` | 減速比（預設 `20.0`） | `06 §3.3` |
+| `left_wheel_sign` | URDF `<param>` | 左輪原生方向符號（預設 `+1`） | `06 §3.3` |
+| `right_wheel_sign` | URDF `<param>` | 右輪原生方向符號（預設 `-1`） | `06 §3.3` |
+| `motor_steps_per_rev` | URDF `<param>` | 馬達每轉編碼器 Steps（預設 `10000.0`） | `06 §3.3` |
+| `max_motor_rpm` | URDF `<param>` | 操作馬達轉速上限（預設 `3000.0` RPM） | `06 §3.3` |
+
+---
+
+#### 3.2.6 Failure / Timeout / Cancel / Invalid-input Handling
+
+| 情境 | 觸發條件 | 期望行為（來自 06） | 已驗證 | 驗證層級 |
+|---|---|---|---|---|
+| Invalid Input | 指令為 NaN 或 Inf | 拒絕執行寫入、目標 RPM 歸零，回傳 `return_type::ERROR` | Yes | Unit |
+| Invalid Input | 輪速超出安全上限 | 自動飽和鉗位至 `max_motor_rpm`（$\pm 3000$ RPM），不溢位 | Yes | Unit |
+| Communication Failure | FC17 通訊逾時或斷線 | `write()` 回傳 `return_type::ERROR`，觸發 controller manager 降級 | Yes | Unit |
+| Drive Alarm | 驅動器回傳非零 Alarm 碼 | `read()` 或 `write()` 立即偵測並回傳 `return_type::ERROR` | Yes | Unit |
+| Activation Timeout | `on_activate` 狀態輪詢逾時（超過 10 次） | 自動發送 `disable()` 清理，回傳 `CallbackReturn::ERROR` | Yes | Unit |
+| Deactivate / Shutdown / Error | 系統停用、關機或發生錯誤 | 依序執行 `stop(0 RPM)` $\rightarrow$ 延時 $\rightarrow$ `disable(SVOFF)` $\rightarrow$ `disconnect()` | Yes | Unit |
+
+---
+
+#### 3.2.7 Verification Evidence
+
+#### Static / Build Evidence
+
+| Timestamp | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|
+| 2026-08-18T12:50:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
+
+#### Unit / Interface Evidence
+
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-18T12:50:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 16 項 GTests（轉換數學、32-bit rollover 正反向累積、參數解析、State/Command 匯出、完整 Mock 生命週期、讀寫閉環、NaN/Inf 拒絕、未激活讀取拒絕、pluginlib 動態載入、URDF `ResourceManager` 整合）與 6 項 ament linters 通過，0 failures（104 tests total across workspace）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
+| 2026-08-18T12:50:00+08:00 | Pluginlib ClassLoader Discovery | `test_m1_hardware --gtest_filter=M1HardwareLifecycleTest.PluginLoaderDiscovery` | PASS | 驗證 `hardware_interface::SystemInterface` ClassLoader 能動態探索並實例化 `mobile_base_control/M1Hardware`。 | [`docs/verification/IMP-008/2026-08-18T125000_plugin_discovery.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_plugin_discovery.txt) |
+
+---
+
+#### 3.2.8 Evidence Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| 已證明 | `M1Hardware` SystemInterface plugin 完整實作了 Model A2 讀寫時序、純軟體單位轉換、32-bit signed rollover continuous tracking、Lifecycle 狀態協調與防禦性錯誤處理；在 ROS 2 Jazzy 環境下通過 16 項 GTest 與 6 項 ament linters；通過 pluginlib 動態探索載入與 URDF `ResourceManager` 整合載入。 |
+| 尚未證明 | 非零速度實體運動（Level 4 exchange motion）、真實硬體上的 ros2_control lifecycle 啟用/停用（Level 3 hardware lifecycle，需操作人員現場即時授權）、實體通訊 Watchdog 參數寫入與跳脫測試。 |
+
+---
+
+#### 3.2.9 Known Limits / Unresolved Dependencies
+
+- **Level 4 非零運動維持 BLOCKED**：非零速度運動指令受限於安全性與 Process Crash Hazard 考量，依 §6 規範維持 BLOCKED。
+- **實機 Level 3 Lifecycle 執行**：若要在實機 `/dev/ttyUSB0` 上透過 ros2_control 執行 Level 3 zero-speed-intent lifecycle activation，需遵循 §6 取得操作人員 execution-time authorization。
+- **Watchdog 參數寫入**：依使用者安全邊界指示，本項目嚴禁向實機寫入任何 watchdog 或 flash configuration 暫存器。
+
+---
+
+#### 3.2.10 Feature Freeze Status / Next Dependency
+
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Not Frozen` |
+| Freeze condition | #8–#10 S7 Base Control 子系統整體閉環與落地驗證通過 |
+| Next dependency | Checklist #9 `S7 diff_drive_controller configuration` |
