@@ -1,0 +1,15 @@
+# IMP: IMP-007
+# Layer: build
+# Timestamp: 2026-08-18T11:59:01+08:00
+# Env: mobile_base:latest / jazzy / Ubuntu 24.04 (Noble)
+# Target: mobile_base_control (m1_driver, m1_l2_read_check)
+# Command: colcon build --symlink-install --packages-select mobile_base_control
+# Version: b2ac065
+# Result: PASS
+# Proved: Package mobile_base_control with explicit timeout_ms connect API builds cleanly with 0 errors.
+# Not-proved: Runtime ros2_control integration or actuator motion.
+
+Starting >>> mobile_base_control
+Finished <<< mobile_base_control [0.15s]
+
+Summary: 1 package finished [0.28s]

@@ -1022,13 +1022,15 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| 2026-08-18T11:46:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 函式庫與 `m1_l2_read_check` 建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt) |
+| 2026-08-18T11:59:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 函式庫與 `m1_l2_read_check`（含 explicit timeout_ms 簽章）建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt) |
+| 2026-08-18T11:46:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）初版 `mobile_base_control` 套件建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt) |
 
 #### Unit / Interface Evidence
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T11:46:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 9 項 GTests 與 6 項 ament linters 通過，0 failures。 | [`docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt) |
+| 2026-08-18T11:59:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 9 項 GTests（含 ConnectFailureHandling）與 6 項 ament linters 通過，0 failures（46 tests total）。 | [`docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt) |
+| 2026-08-18T11:46:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）初版 8 項 GTests 與 6 項 ament linters 通過（45 tests total）。 | [`docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt) |
 | 2026-08-18T11:46:03+08:00 | `M1DriverTest.NegativeHandling` | `test_m1_driver --gtest_filter=M1DriverTest.NegativeHandling` | PASS | 驗證無效驅動器 ID、逾時模擬與發送失敗之錯誤對映。 | [`docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt) |
 
 #### Hardware Evidence
