@@ -61,9 +61,16 @@ add_executable(m1_control_check
 target_link_libraries(m1_control_check m1_driver)
 target_compile_features(m1_control_check PUBLIC cxx_std_17)
 
+# Level 2 Read-Only Latency Measurement Tool
+add_executable(m1_latency_check
+  src/m1_latency_check_main.cpp
+)
+target_link_libraries(m1_latency_check m1_driver)
+target_compile_features(m1_latency_check PUBLIC cxx_std_17)
+
 # Install rules
 install(
-  TARGETS m1_driver m1_hardware m1_l2_read_check m1_control_check
+  TARGETS m1_driver m1_hardware m1_l2_read_check m1_control_check m1_latency_check
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -97,6 +104,11 @@ if(BUILD_TESTING)
     test/test_m1_control_check.cpp
   )
   target_link_libraries(test_m1_control_check m1_driver)
+
+  ament_add_gtest(test_m1_latency_stats
+    test/test_m1_latency_stats.cpp
+  )
+  target_link_libraries(test_m1_latency_stats m1_driver)
 
   ament_add_gtest(test_m1_hardware
     test/test_m1_hardware.cpp
