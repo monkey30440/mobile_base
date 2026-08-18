@@ -122,4 +122,13 @@ New evidence from IMP-007 onward goes into the corresponding `IMP-NNN/` director
 
 ---
 
-> See [`07_implementation.md §4`](../07_implementation.md) for the full normative specification.
+## Canonical Build & Test Commands
+
+Build and test commands to generate evidence artifacts are defined in [`docs/07_implementation.md §5`](../07_implementation.md) (Build and Test Command Baseline).
+- Full build: `docker compose exec mobile_base bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install"`
+- Selective build: `docker compose exec mobile_base bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-select <pkg>"`
+- Package test: `docker compose exec mobile_base bash -c "source /opt/ros/jazzy/setup.bash && colcon test --packages-select <pkg> --event-handlers console_direct+ && colcon test-result --all --verbose"`
+
+---
+
+> See [`07_implementation.md §4`](../07_implementation.md) for evidence storage rules and [`07_implementation.md §5`](../07_implementation.md) for canonical build/test commands.

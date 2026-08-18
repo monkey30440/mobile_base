@@ -15,12 +15,12 @@
 ## Progress
 
 - 總項目：27
-- 已完成：4
+- 已完成：5
 - 進行中：0
-- 待實作：23
+- 待實作：22
 - 上游阻塞：0
-- 目前進度：4 / 27 (15%)
-- 建議下一項：第 5 項 Build and test command baseline；第 3–6 項完成後才進入 S7 `M1Driver`。
+- 目前進度：5 / 27 (19%)
+- 建議下一項：第 6 項 Runtime and hardware safety preflight；第 3–6 項完成後才進入 S7 `M1Driver`。
 
 ---
 
@@ -34,7 +34,7 @@
   - 完成條件：後續每項固定記錄 requirement/subsystem trace、artifacts、mature/custom boundary、interfaces/config、failure handling、build/test/hardware evidence、known limits 與 freeze status。
 - [x] 4. Verification evidence storage convention
   - 完成條件：確立 command、target、timestamp、版本、原始輸出／log path、PASS/FAIL 與 evidence boundary 的保存規則；禁止只寫口頭「已測過」。
-- [ ] 5. Build and test command baseline
+- [x] 5. Build and test command baseline
   - 完成條件：固定 container 內 rosdep、colcon build、package test、result inspection 與 selective rebuild 流程，並確認不依賴未記錄的 running-container 手動修改。
 - [ ] 6. Runtime and hardware safety preflight
   - 完成條件：在任何輪端輸出前確認 target device identity、M1 設定、E-stop/STO/架車條件、速度／時間上限、watchdog、停止命令及故障後人工復歸流程。

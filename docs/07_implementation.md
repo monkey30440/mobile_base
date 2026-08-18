@@ -147,7 +147,7 @@ Source dependencies 保留在 repository 的 `src/`，不藏入 Docker image bui
 - Evidence 欄位只記錄**已執行且有結果的**操作；未執行的測試計畫不得填入 evidence 欄位。
 - Timestamp 欄位格式為 `YYYY-MM-DDThh:mm:ss±HH:MM`（ISO 8601，含 timezone offset），只在取得對應 evidence 時填寫；無 evidence 時留 `—`。
 - Evidence storage path 規則由 §4（Verification Evidence Storage Convention）確立；格式為 `docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt`。
-- 若 build / test command 尚未由 checklist #5 確立，於對應欄位填寫 `[pending #5]`。
+- Build 與 test command 規範由 §5（Build and Test Command Baseline）確立；Command 欄位記錄實際執行的精確命令。
 - 若 hardware preflight 尚未由 checklist #6 確立，於對應欄位填寫 `[pending #6]`。
 
 ---
@@ -248,7 +248,7 @@ _每筆 evidence 只記錄已執行且有結果的操作。未執行、計畫中
 |---|---|---|---|---|
 | YYYY-MM-DDThh:mm:ss±HH:MM | `<exact command>` | PASS / FAIL | <此結果實際證明了什麼> | `docs/verification/IMP-XXX/<YYYY-MM-DD>T<HHmmss>_build_<desc>.txt` |
 
-_（無 evidence 時整列填 `—`；build command 格式待 #5 確立時補填）_
+_（無 evidence 時整列填 `—`；build command 依 §5 規範填寫）_
 
 #### Unit / Interface Evidence
 
@@ -502,13 +502,244 @@ docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt
 - `layer` 對應 evidence 類型（`build` / `unit` / `intg` / `hw` / `neg`）。
 - `desc` 為簡短描述。
 
-`[pending #5]` 與 `[pending #6]` placeholder 仍保留在 §3.2 的說明注意事項中，表示 build/test command 格式（待 #5）與 hardware preflight（待 #6）尚未確立；storage path 本身已由本節確立，**不再使用 `[pending #4]`**。
+Storage path 由 §4 確立，build/test command 規範由 §5 確立，**不再使用 `[pending #4]` 與 `[pending #5]`**；`[pending #6]` placeholder 仍保留在 §3.2 與 §4.6 中，表示 hardware preflight 程序（待 #6）尚未確立。
 
 ### 4.8 Known Limits and Next Boundary
 
 - 本 convention 不依賴外部 artifact server、CI 系統或 database；所有 in-repo evidence 均為純文字，適合 `git log` 追蹤。
 - `.gitignore` 中已存在 `*.log` 排除規則；`docs/verification/` 下的 `.txt` 與 `.ref.txt` 不受此規則影響，可正常 commit。
 - Large artifact（ROS bag 等）的外部保存位置尚未統一；`[external: ...]` + `.ref.txt` 機制為目前最低限度 reference，具體外部位置由各 item 執行時決定。
-- Build 與 test 的完整 command workflow 由 checklist #5 確立；本節只定義 evidence 保存，不預先決定命令格式。
+- Build 與 test 的完整 command workflow 由 §5（Build and Test Command Baseline）確立。
 - Hardware safety preflight 由 checklist #6 確立；本節只定義 hardware evidence 的保存格式。
-- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 5 項 Build and test command baseline。
+- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 5 項已完成，第 6 項為 Runtime and hardware safety preflight。
+
+---
+
+## 5. Build and Test Command Baseline
+
+本節定義 checklist #7–#27 在開發與驗證過程中，執行 dependency closure、build、test、result inspection、static checks 與 evidence capture 的 canonical command baseline。
+
+本節是**唯一關於 build/test commands 的 normative source**；`07_implementation.md` §3 template 的 `Command` 欄位均以本節為準。
+
+### 5.1 Execution Environment & Workflow Overview
+
+#### Host vs Container 責任劃分
+
+| 環境 | 責任範圍 | 典型操作 |
+|---|---|---|
+| **Host** | 容器生命週期、裝置權限、Git 與檔案系統管理 | `docker compose up -d`、`docker compose ps`、`git` 操作、`/dev/tty*` 檢查 |
+| **`mobile_base` Container** | 所有 ROS 2 與建置相關操作 | `rosdep`、`colcon build`、`colcon test`、`colcon test-result`、`ros2` CLI |
+
+#### 容器執行方式
+
+- **互動式開發終端（推薦）**：
+  ```bash
+  docker compose exec mobile_base bash
+  ```
+- **Host 單次非互動執行（用於腳本或自動化）**：
+  ```bash
+  docker compose exec -T mobile_base bash -c "<commands>"
+  ```
+- **工作目錄**：容器內 `/workspaces/mobile_base`，對應 host repository 根目錄（透過 bind mount 雙向同步）。
+
+#### 環境載入（Sourcing Hierarchy）
+
+容器內 non-login subshell 不會自動載入 ROS 環境，每個命令序列或終端連線必須明確執行 sourcing：
+
+1. **底層 ROS 2 Jazzy 環境（必要）**：
+   ```bash
+   source /opt/ros/jazzy/setup.bash
+   ```
+2. **Workspace Overlay 環境（在 build 產出 `install/` 後，執行 test、ros2 pkg/node/topic 時必要）**：
+   ```bash
+   source install/setup.bash
+   ```
+
+### 5.2 Dependency Closure Workflow (`rosdep`)
+
+在新增 package、修改 `package.xml` 或進行環境確認時，執行下列 canonical 指令確認依賴閉包：
+
+```bash
+# 1. 更新 rosdep 來源索引快取（有新增 package 或外部 rosdep 時執行）
+rosdep update
+
+# 2. 檢查並安裝 workspace 所有 source packages 宣告的依賴項
+rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
+```
+
+**依賴閉包邊界說明：**
+- Docker image（`Dockerfile`）已預先安裝所有系統級與 ROS 2 binary 依賴（如 `libmodbus-dev`、`python3-serial`、`ros-jazzy-*`）。
+- `src/` 目錄保留自研與外部 source packages（如 `rf2o_laser_odometry`、`tdk_ros2_imu`）。
+- `rosdep install` 成功（輸出 `#All required rosdeps installed successfully`，exit 0）僅證明所有 `package.xml` 所需之 binary/system packages 已在環境中滿足，不代表 source code 已成功編譯或執行。
+
+### 5.3 Build Commands: Full, Incremental, and Clean
+
+所有建置指令均在容器內 `/workspaces/mobile_base` 執行，並預先 `source /opt/ros/jazzy/setup.bash`。
+
+#### Canonical Full Workspace Build
+```bash
+source /opt/ros/jazzy/setup.bash && colcon build --symlink-install
+```
+
+#### Incremental Build
+不刪除 `build/` 與 `install/`，直接執行 `colcon build --symlink-install`。適用於單一套件內的程式碼修訂與快速驗證。
+
+#### Clean Build
+在下列情況下，**必須執行 Clean Build** 以排除快取干擾：
+1. 變更 package 名稱、刪除套件、修改 CMakeLists.txt 的 target/install 結構或 ROS interface 定義（msg/srv/action）。
+2. 套件間 API/ABI 邊界變更，或升級底層函式庫。
+3. 進行驗收審計（IMP-026 Clean Environment Audit）或宣布 Feature Frozen 之前。
+
+**Clean Build 指令：**
+```bash
+rm -rf build/ install/ log/ && source /opt/ros/jazzy/setup.bash && colcon build --symlink-install
+```
+
+#### `--symlink-install` 規則
+全面使用 `--symlink-install`：
+- Python 腳本、launch 檔與 YAML 設定檔在修改後可立即生效，無需反覆重建。
+- C++ 程式庫與執行檔依標準 CMake 規則編譯至 `build/` 並鏈結/複製至 `install/`。
+
+### 5.4 Selective Package Build
+
+後續實作項目（IMP-007 起）通常針對特定 package 進行開發，使用以下規範指令：
+
+#### 單一套件獨立建置（`--packages-select`）
+```bash
+source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-select <package_name>
+```
+- **語意**：僅編譯 `<package_name>`。
+- **前提**：該套件在 workspace 內的所有上游依賴套件已經事先編譯並存在於 `install/` overlay。
+- **證據邊界**：僅證明 `<package_name>` 自身編譯通過；無法證明其他依賴它的套件未受破壞。
+
+#### 套件及其上游依賴建置（`--packages-up-to`）
+```bash
+source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-up-to <package_name>
+```
+- **語意**：編譯 `<package_name>` 以及 workspace 中所有被其依賴的上游套件（依拓撲順序）。
+- **使用時機**：當上游基礎套件（如 interface 或共用 utility）有變更時。
+
+### 5.5 Test Execution & Result Inspection Baseline
+
+#### 套件單元與介面測試
+```bash
+source /opt/ros/jazzy/setup.bash && colcon test --packages-select <package_name> --event-handlers console_direct+
+```
+
+#### 全 Workspace 測試
+```bash
+source /opt/ros/jazzy/setup.bash && colcon test --event-handlers console_direct+
+```
+
+#### 測試結果審查（Result Inspection）
+測試執行後，必須透過 `colcon test-result` 審查結果，此指令在有任何失敗時會回傳非零 exit code：
+```bash
+colcon test-result --all --verbose
+```
+
+#### 四層驗證語意區分（嚴格禁止混淆）
+
+```text
+Build Success (編譯與鏈結通過，exit 0)
+    ≠ Test Success (單元測試、介面測試與 linter 全部 PASS，exit 0)
+    ≠ Integration Success (ROS 2 Graph 上 Node 通訊、TF 樹解析、Topic 串接正常)
+    ≠ Hardware Success (實體 Jetson + M1 / LiDAR / IMU 於實機物理運轉並量測通過)
+```
+
+### 5.6 Static Checks Baseline
+
+在提交程式碼前，至少執行以下靜態檢查：
+
+1. **格式與空白檢查**（Host 或 Container）：
+   ```bash
+   git diff --check
+   ```
+2. **套件探索性檢查（Package Discoverability）**（Container 內）：
+   ```bash
+   source /opt/ros/jazzy/setup.bash && source install/setup.bash && ros2 pkg list | grep <package_name>
+   ```
+3. **套件內建 Linter 檢查**：
+   透過 `colcon test --packages-select <package_name>` 執行套件配置的 ament linter（如 `ament_flake8`, `ament_pep257`, `ament_copyright`, `ament_cmake_lint` 等）。
+4. **編譯器警告審查**：
+   檢查 `colcon build` 輸出，確保無意外的編譯器警告（Compiler Warnings）。
+
+### 5.7 Evidence Capture Integration with §4 Convention
+
+依據 §4 Convention，每次建置與測試的原始輸出必須保存於 `docs/verification/IMP-NNN/<YYYY-MM-DD>T<HHmmss>_<layer>_<desc>.txt`。
+
+#### 標準 Evidence Capture 指令範式
+
+為避免管線（pipeline）遮蔽真實指令的 exit code（例如 `cmd | tee` 可能導致失敗時 exit code 仍為 0），採用下列標準捕捉範式：
+
+```bash
+# === 1. 設定變數 ===
+IMP_ID="IMP-007"
+LAYER="build"
+DESC="colcon_m1_driver"
+TS=$(date +"%Y-%m-%dT%H%M%S")
+EVID_DIR="docs/verification/${IMP_ID}"
+EVID_FILE="${EVID_DIR}/${TS}_${LAYER}_${DESC}.txt"
+mkdir -p "${EVID_DIR}"
+
+# === 2. 執行指令並捕捉 stdout/stderr 與真實 exit code ===
+TMP_LOG=$(mktemp)
+# 範例建置指令（可依測試替換）
+CMD_STR="colcon build --symlink-install --packages-select <package_name>"
+
+docker compose exec -T mobile_base bash -c "source /opt/ros/jazzy/setup.bash && ${CMD_STR}" > "${TMP_LOG}" 2>&1
+CMD_EXIT=$?
+
+if [ ${CMD_EXIT} -eq 0 ]; then
+  RESULT="PASS"
+else
+  RESULT="FAIL"
+fi
+
+# === 3. 寫入符合 §4.2 Metadata Header 與 Raw Log ===
+cat << EOF > "${EVID_FILE}"
+# IMP: ${IMP_ID}
+# Layer: ${LAYER}
+# Timestamp: $(date -Iseconds)
+# Env: mobile_base:latest / jazzy / Ubuntu 24.04 (Noble)
+# Target: <package_name>
+# Command: ${CMD_STR}
+# Version: $(git rev-parse --short HEAD)
+# Result: ${RESULT}
+# Proved: Package <package_name> compiles successfully in container baseline.
+# Not-proved: Runtime execution, node integration, or real hardware operation.
+
+EOF
+
+cat "${TMP_LOG}" >> "${EVID_FILE}"
+rm -f "${TMP_LOG}"
+
+echo "Evidence saved to ${EVID_FILE} [Result: ${RESULT}]"
+```
+
+### 5.8 Failure Behavior & Re-run Rules
+
+若 `rosdep`、`colcon build`、`colcon test` 或 `colcon test-result` 任一步驟失敗（exit code ≠ 0）：
+
+1. **完整保存失敗證據**：產生 `# Result: FAIL` 的 evidence 檔案並 commit。
+2. **禁止宣稱 PASS**：`07_implementation.md` 對應欄位不得標記 PASS，狀態不得推進至 `Build Verified`。
+3. **禁止覆蓋或刪除**：修正問題後重新執行，必須產生**全新 timestamp** 的 evidence 檔案；舊的 FAIL 檔案永久保留在 repository 內。
+4. **Authoritative Evidence 認定**：同一 item + 同一 layer 中，最新且 `Result: PASS` 的檔案為當前權威依據。
+
+### 5.9 Definition of Build Verified (Definition of Done)
+
+ checklist #7–#27 的任一 implementation item 欲宣告達到 `Build Verified` 狀態，**必須同時滿足以下 6 項條件**：
+
+| # | 驗收條件 | 驗證指令 / 判斷標準 |
+|---|---|---|
+| 1 | **Dependency Closure** | `rosdep install --from-paths src --ignore-src -y --rosdistro jazzy` 執行成功（exit 0）。 |
+| 2 | **Build Closure** | `colcon build --symlink-install --packages-select <pkg>`（或 `--packages-up-to`）編譯完成，0 errors, 0 failed。 |
+| 3 | **Test Closure** | `colcon test --packages-select <pkg>` 且 `colcon test-result --all --verbose` 顯示 0 errors, 0 failures。 |
+| 4 | **Discoverability** | `source install/setup.bash && ros2 pkg list` 能正確列出該 package。 |
+| 5 | **Clean Repo State** | 建置結果完全由 git-tracked 程式碼重現，無任何未記錄的 container 內部手動修改。 |
+| 6 | **Evidence Logged** | 原始 raw log 已依 §4/§5 保存至 `docs/verification/IMP-NNN/`，且 `07_implementation.md` 紀錄已更新。 |
+
+### 5.10 Known Limits and Next Boundary
+
+- 本 command baseline 僅涵蓋建置、靜態檢查與套件單元測試，**不涵蓋** ROS 2 runtime 整合、多節點資料流與實機硬體驅動驗證。
+- 硬體安全操作前置流程（E-stop、STO、架車、速度限制、watchdog、人工復歸）屬於 checklist #6 的責任。
+- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 6 項 Runtime and hardware safety preflight。
