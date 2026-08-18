@@ -763,7 +763,7 @@ Level 1 — Hardware presence / read-only（裝置存在／OS唯讀）
         ↓
 Level 2 — Hardware communication / no motion（通訊唯讀／零扭矩）
         ↓
-Level 3 — Safety primitive validation（安全防護與 Watchdog 驗證）
+Level 3 — Safety primitive validation（安全防護與通訊驗證／零運動）
         ↓
 Level 4 — Controlled actuator motion（架車／受約束致動器運動）
         ↓
@@ -772,14 +772,14 @@ Level 5 — Integrated base motion（落地／受控場域整車運動）
 
 #### 各級別詳細規則矩陣
 
-| Level | 級別名稱 | 允許操作 (Allowed) | 禁止操作 (Prohibited) | 前置條件 (Prerequisites) | 人工授權要求 | 中止與失敗條件 (Exit / Abort) |
-|---|---|---|---|---|---|---|
-| **L0** | **Software-only** | 單元測試、Mock 介面、`colcon build`、`colcon test`、運動學純計算 | 開啟任何實體 `/dev/tty*` 裝置檔進行寫入、發布實體驅動訊號 | 無（標準開發環境） | 自動化可執行 | 編譯錯誤、測試未通過 |
-| **L1** | **Hardware presence** | `ls /dev/tty*`、檢查裝置權限、讀取 udev 資訊、LiDAR 網路 ping 偵測 | 開啟裝置進行寫入、致動器供電、任何通訊寫入 | 實體線路已連接 | 自動化可執行（唯讀） | 裝置節點不存在、權限不足、網路不通 |
-| **L2** | **Hardware communication** | 開啟 Serial/Modbus/Ethernet 連線、讀取驅動器暫存器（參數、警報碼、靜態編碼器數值） | 寫入控制暫存器（`SERVO-ON`、速度 JG 暫存器、目標 RPM）、修改 Flash 參數 | L1 PASS、Baud/Port 確認 | 操作人員知悉 | 通訊 CRC 錯誤、封包逾時、ID 不匹配、存在硬體警報 |
-| **L3** | **Safety primitives** | 測試通訊逾時 Watchdog（`05-17`）、命令逾時歸零（$0.5\,\text{s}$ timeout）、Lifecycle 狀態切換、靜態故障注入 | 命令非零速度、未架車直接動作、無人值守 | L2 PASS、車輪架空或靜止 | **強制當下即時授權** | Watchdog 未觸發、逾時未煞停、警報未上報 |
-| **L4** | **Controlled actuator** | **雙輪架空（架車）**狀態下以極低速（$\le 80\,\text{RPM}$）、短脈衝（$\le 1.0\,\text{s}$）測試轉向、齒比、編碼器增量 | 車輪著地、連續長時間運轉（$> 1.0\,\text{s}$）、無約束高速運轉（$> 80\,\text{RPM}$） | L3 PASS、架車確認、實體急停手邊待命、§6.3 前置清單 100% 通過 | **強制當下即時授權** | 轉向與預期相反、飛車、驅動器報警、異常震動、操作員中止 |
-| **L5** | **Integrated base** | 平整地面、淨空隔離區域（$\ge 2\,\text{m}$）內進行手動低速點動（$\le 0.2\,\text{m/s}$）、原地旋轉、低速導航追隨 | 高速脫機運行、在有人員穿梭或未淨空區域自主導航 | L4 PASS、YAML 運作極限生效、隨車安全人員手持實體急停 | **強制當下即時授權** | 偏離路徑、障礙物侵入、通訊抖動、急停被觸發 |
+| Level | 級別名稱 | 運動允許 | 允許操作 (Allowed) | 禁止操作 (Prohibited) | 前置條件 (Prerequisites) | 人工授權要求 | 中止與失敗條件 (Exit / Abort) |
+|---|---|:---:|---|---|---|---|---|
+| **L0** | **Software-only** | 嚴禁 | 單元測試、Mock 介面、`colcon build`、`colcon test`、運動學純計算 | 開啟任何實體 `/dev/tty*` 裝置檔進行寫入、發布實體驅動訊號 | 無（標準開發環境） | 自動化可執行 | 編譯錯誤、測試未通過 |
+| **L1** | **Hardware presence** | 嚴禁 | `ls /dev/tty*`、檢查裝置權限、讀取 udev 資訊、LiDAR 網路 ping 偵測 | 開啟裝置進行寫入、致動器供電、任何通訊寫入 | 實體線路已連接 | 自動化可執行（唯讀） | 裝置節點不存在、權限不足、網路不通 |
+| **L2** | **Hardware communication** | 嚴禁 | 開啟 Serial/Modbus/Ethernet 連線、讀取驅動器暫存器（參數、警報碼、靜態編碼器數值） | 寫入控制暫存器（`SERVO-ON`、速度 JG 暫存器、目標 RPM）、修改 Flash 參數 | L1 PASS、Baud/Port 確認 | 操作人員知悉 | 通訊 CRC 錯誤、封包逾時、ID 不匹配、存在硬體警報 |
+| **L3** | **Safety primitives** | 嚴禁（零運動） | 靜態安全防護機制驗證（如：軟體層命令逾時歸零邏輯 `<validated command-timeout limit>`、Lifecycle 狀態切換測試、唯讀狀態下模擬通訊中斷之靜態故障注入、安全參數設定審查）。若涉及寫入驅動器安全相關設定，必須在零速度、無運動命令下進行 | 任何非零速度輸出、任何產生馬達扭矩或輪端轉動之指令、無人值守 | L2 PASS、車輛靜止（建議架車） | **強制當下即時授權** | 逾時防護未觸發、狀態未正確轉換、產生非預期馬達使能或動作 |
+| **L4** | **Controlled actuator** | 受約束動態（架車） | **雙輪懸空架車（`<operator-approved wheel-clearance condition>`）**狀態下以受控低速（`<validated low-speed bound>`）、短脈衝持續時間（`<validated short-duration bound>`）測試轉向、齒比、編碼器增量 | 車輪著地、超出核可持續時間、無約束或超出核可速度之運轉 | L3 PASS、架車確認、實體急停／斷電處於可操作狀態、§6.3 前置清單 100% 通過 | **強制當下即時授權** | 轉向與預期相反、飛車、驅動器報警、異常震動、操作員中止 |
+| **L5** | **Integrated base** | 受約束動態（落地） | 平整地面、符合測試需求之受控淨空安全區域（`<controlled-area clearance appropriate to the test>`）內進行手動受控低速點動（`<validated initial base velocity bound>`）、原地旋轉、低速導航追隨 | 高速脫機運行、在未受控或有人員穿梭區域自主導航 | L4 PASS、YAML 運作極限生效、隨車安全人員在場監控 | **強制當下即時授權** | 偏離路徑、障礙物侵入、通訊抖動、急停被觸發 |
 
 ### 6.2 Automation vs Human Authorization Boundary
 
@@ -806,17 +806,17 @@ Level 5 — Integrated base motion（落地／受控場域整車運動）
 在操作人員授權並執行任何 Level 4（架車動態）或 Level 5（地面動態）測試之前，必須逐項確認下列條件：
 
 ```text
-[ ] 1. 實體環境淨空：AMR 周圍半徑 >= 2.0 m 範圍內無雜物、鬆脫電線、非測試人員。
+[ ] 1. 實體環境淨空：AMR 周圍具備符合當前測試等級之受控淨空安全區域（<controlled-area clearance appropriate to the test>），無雜物、鬆脫電線或非測試人員。
 [ ] 2. 輪端物理狀態（依等級確認）：
-       - Level 4：AMR 穩固架於支撐架上，驅動輪離地 >= 20 mm，徒手撥動確認無干涉。
-       - Level 5：AMR 置於平整、乾燥、無油漬與階梯之地面。
-[ ] 3. 實體急停機制（Emergency Stop）：
-       - 操作人員全程在場，手部隨時置於實體急停按鈕或主電源切斷開關旁（距離 < 0.5 m）。
-       - 測試人員完全清楚實體斷電程序。
+       - Level 4：AMR 穩固支撐於架台，雙驅動輪完全懸空離地（<operator-approved wheel-clearance condition>），徒手撥動確認車輪旋轉無干涉、無拖曳電線。
+       - Level 5：AMR 置於平整、乾燥、無雜物、無階梯且邊界受控之地面。
+[ ] 3. 實體斷電與急停機制（Power Isolation / Emergency Stop）：
+       - 操作人員全程在場監控，實體電源切斷或急停開關處於即時可操作位置。
+       - 操作人員明確知悉實體斷電程序與隔離路徑（作為 operator precondition；具體硬體能力在取得權威硬體證據前標記為 UNVERIFIED）。
 [ ] 4. 運動參數嚴格約束（Command Bounding）：
-       - 首次測試速度約束：輪速 <= 80 RPM（車速 <= 0.2 m/s）。
-       - 首次測試時間約束：單次命令脈衝 <= 1.0 s。
-       - 加速度約束：符合 SYS-028 限制。
+       - 速度約束：限制於測試計畫核可之初始受控低速上限（<validated low-speed bound>）。
+       - 時間約束：限制於單次短脈衝持續時間（<validated short-duration bound>）。
+       - 加速度約束：符合 06 §3.3（SYS-028）定義之加減速限制。
 [ ] 5. 預期方向確認：操作人員已知期望轉動方向（例如：下發正轉 -> 右輪向前順時針）。
 [ ] 6. 裝置識別性確認：確認 /dev/ttyUSB0 確實為 M1 RS-485 匯流排，/dev/ttyACM0 確實為 IMU。
 [ ] 7. 軟體版本確認：記錄當前乾淨的 Git Commit SHA。
@@ -828,7 +828,9 @@ Level 5 — Integrated base motion（落地／受控場域整車運動）
 |---|---|---|
 | **STO (Safe Torque Off)** | **`UNVERIFIED`** | 目前硬體基線無經過功能安全認證之硬體 STO 迴路證據；**嚴禁假設 STO 存在**。 |
 | **Certified Safety PLC / Relay** | **`UNVERIFIED`** | 本系統目前為直接通訊架構，無外部認證安全控制器介入。 |
-| **Software Stop (`cmd_vel=0` / ROS 2 Disable)** | **Non-Certified Software Mechanism** | 軟體停機依賴 ROS 2、作業系統核心與 RS-485 通訊鏈路；**絕不可等同於安全急停（Certified Safety E-stop）**。實體安全唯一依賴人員手動物理斷電。 |
+| **Software Stop (`cmd_vel=0` / ROS 2 Disable)** | **Non-Certified Software Mechanism** | 軟體停機依賴 ROS 2、作業系統核心與 RS-485 通訊鏈路；**絕不可等同於安全急停（Certified Safety E-stop）**。 |
+| **Physical Power Isolation / Emergency Stop** | **Operator Precondition / `UNVERIFIED` Hardware Capability** | 實體電源切斷／急停開關為測試前置操作人員條件；其具體電氣隔離與斷電能力在取得權威硬體圖紙與實體證據前維持 `UNVERIFIED`，不可未經驗證即宣稱為絕對安全保障。 |
+| **M1 Internal Watchdog Guarantee** | **`UNVERIFIED` / Deployment Policy Pending** | M1 驅動器通訊逾時保護行為與回復機制待實機時序與故障注入驗證確立，不可預先假設其為保證安全機制。 |
 
 ### 6.4 Read-Only-First Rule（唯讀先於控制原則）
 
@@ -855,11 +857,11 @@ Phase 4: 經授權之受約束運動寫入（Authorized Controlled Motion Write�
 3. **單位轉換通過純軟體測試**：$rad/s \leftrightarrow RPM$ 與 $step \leftrightarrow rad$ 轉換已由 Level 0 單元測試驗證通過。
 4. **驅動器 ID 與輪別映射固定**：確認 ID 1 為右輪（RIGHT），ID 2 為左輪（LEFT）。
 5. **轉向定義明確**：正轉命令定義為車體前進方向，正向旋轉定義編碼器數值正向遞增。
-6. **指令幅度約束**：目標轉速限制 $\le 80\,\text{RPM}$。
-7. **指令時間約束**：單次命令持續時間 $\le 1.0\,\text{s}$。
-8. **逾時防護有效**：Controller 內建 $0.5\,\text{s}$ 命令逾時歸零；M1 驅動器啟用通訊逾時保護（`05-17 > 0`）。
+6. **指令幅度約束**：目標轉速限制於初始受控低速上限（`<validated low-speed bound>`，由測試計畫明確指定）。
+7. **指令時間約束**：單次命令持續時間限制於短脈衝區間（`<validated short-duration bound>`）。
+8. **逾時防護有效**：Controller 內建命令逾時歸零機制（06 §3.3 規範之 `cmd_vel_timeout`）；若啟用 M1 驅動器通訊逾時保護，其暫存器參數須來自已記錄之通訊時序與故障注入驗證，非隨意填寫。
 9. **明確停止路徑已測試**：零速 FC17 指令與 SERVO-OFF 停用路徑已就緒。
-10. **操作人員手持實體急停就位**：車輛已架空，人員在場監控。
+10. **操作人員手持實體急停／斷電開關就位**：車輛已架空，人員在場監控。
 
 ### 6.6 Failure & Abort Rules（異常中止與安全降級）
 
@@ -882,10 +884,10 @@ Phase 4: 經授權之受約束運動寫入（Authorized Controlled Motion Write�
 
 | 停止等級 | 名稱 | 觸發方式 | 系統依賴 | 安全等級與宣告 |
 |---|---|---|---|---|
-| **Stop Level A** | **Software Zero Speed** | 發布 `/cmd_vel = 0` 或 Modbus FC17 寫入 Speed = 0 | ROS 2、`diff_drive_controller`、RS-485 匯流排、M1 速度閉迴路 | **軟體控制行為**（非 Certified Safety，依賴通訊正常） |
-| **Stop Level B** | **Lifecycle Disable** | 調用 `/base/enable: false`，M1HardwareInterface 清除 SERVO-ON | ROS 2 Lifecycle 框架、M1Driver NET-IN 暫存器寫入 | **軟體狀態切換**（非 Certified Safety，馬達自由滑行停轉） |
-| **Stop Level C** | **Driver Loss Watchdog** | RS-485 斷線超過 `05-17` 設定值，M1 觸發 Alarm 21 煞停 | M1 驅動器內部硬體計時器與韌體保護邏輯 | **驅動器韌體保護**（依賴硬體參數正確設定） |
-| **Stop Level D** | **Physical E-stop / Power Cut** | 操作人員手動按下實體急停開關或斷開主電池電源 | 實體機械／電氣開關，完全獨立於軟體與處理器 | **物理電源隔離**（本系統目前唯一絕對安全保障） |
+| **Stop Level A** | **Software Zero Speed** | 發布 `/cmd_vel = 0` 或 Modbus FC17 寫入 Speed = 0 | ROS 2、`diff_drive_controller`、RS-485 匯流排、M1 速度閉迴路 | **軟體控制行為**（非 Certified Safety，依賴通訊正常與軟體堆疊健全） |
+| **Stop Level B** | **Lifecycle Disable** | 調用 `/base/enable: false`，M1HardwareInterface 清除 SERVO-ON | ROS 2 Lifecycle 框架、M1Driver NET-IN 暫存器寫入 | **軟體狀態切換**（非 Certified Safety，馬達依驅動器設定自由滑行或煞停） |
+| **Stop Level C** | **Driver Loss Watchdog** | RS-485 斷線超過驅動器 watchdog 設定值，M1 觸發保護動作 | M1 驅動器內部硬體計時器與韌體保護邏輯 | **驅動器內部保護**（`UNVERIFIED` / 依賴驅動器參數正確配置與已驗證之 fault-injection 證據；目前 deployment watchdog 策略仍為待驗證項目） |
+| **Stop Level D** | **Physical E-stop / Power Isolation** | 操作人員手動按下實體急停開關或斷開主電池電源 | 實體機械／電氣開關，完全獨立於軟體與處理器 | **實體操作介入**（作為 operator precondition；其具體硬體切斷能力維持 `UNVERIFIED`，直至硬體電氣架構驗證確立） |
 
 ### 6.8 Device Identity & Port Disambiguation Rules
 
@@ -919,7 +921,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
   Target hardware:   M1 Dual-Driver Base
   Device identity:   ID 1 (Right), ID 2 (Left) on /dev/ttyUSB0
   Software version:  <git commit SHA>
-  Test condition:    Level 4 (Wheels Lifted, Preflight §6.3 PASSED, max 80 RPM, 1.0s burst)
+  Test condition:    Level 4 (Wheels Lifted, Preflight §6.3 PASSED, <validated low-speed bound>, <validated short-duration bound>)
   Observed result:   <exact output, measurement, or operator observation>
   PASS / FAIL:       PASS | FAIL
   Proved:            <what this test actually proved>
@@ -928,6 +930,6 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 ### 6.10 Known Limits and Next Boundary
 
-- **未驗證安全硬體**：STO 與硬體安全控制器目前標記為 `UNVERIFIED`；實體安全完全依賴操作人員在場監督與實體電源切斷。
+- **未驗證安全硬體能力**：STO、硬體安全控制器、實體斷電切斷能力與 M1 驅動器內部 watchdog 保證目前均標記為 `UNVERIFIED`；任何運動測試必須依賴操作人員在場監督、物理架車與預先確認之電源隔離路徑。
 - **治理階段全數就緒**：Checklist #1–#6 治理前置項（Docker 基線、外部依賴、紀錄 Template、Evidence 儲存規範、建置測試基準、硬體安全前置）已全數建立完畢。
 - 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 7 項 S7 `M1Driver` transport vertical slice（可正式進入第一項程式碼實作）。
