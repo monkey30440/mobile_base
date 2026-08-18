@@ -9,6 +9,7 @@
 
 - For feature or behavior-changing work, use the Superpowers `brainstorming` skill when it is available.
 - Otherwise, inspect the relevant repository context, clarify the intended outcome when needed, present the intended change or design, and obtain explicit user approval before implementation.
+- For new product behavior, follow the authority chain defined by the repository docs: clarify and obtain approval for the affected Use Case, Capability, and System Requirements before making architecture or implementation decisions. Keep Reuse Assessment limited to mature-solution coverage, constraints, evidence, and minimum gaps; make architecture decisions only after the upstream requirement baseline is approved.
 
 ## GitNexus
 
