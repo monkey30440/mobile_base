@@ -19,12 +19,16 @@
 #include <string>
 #include <vector>
 
+#include "controller_interface/controller_interface_base.hpp"
+#include "diff_drive_controller/diff_drive_controller.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/resource_manager.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "pluginlib/class_loader.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
 #include "mobile_base_control/m1_driver.hpp"
@@ -559,4 +563,412 @@ TEST(M1HardwareIntegrationTest, ResourceManagerURDFLoading)
     EXPECT_TRUE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
     EXPECT_TRUE(rm.command_interface_is_available("driving_wheel_joint_R/velocity"));
   });
+}
+
+// =========================================================================
+// 4. DiffDriveController + M1Hardware Integration Tests (IMP-008 Baseline)
+// =========================================================================
+
+class DiffDriveIntegrationTest : public ::testing::Test
+{
+protected:
+  static void SetUpTestSuite()
+  {
+    if (!rclcpp::ok()) {
+      rclcpp::init(0, nullptr);
+    }
+  }
+
+  static const char * get_test_urdf()
+  {
+    return
+      R"xml(<?xml version="1.0"?>
+<robot name="mobile_base_test">
+  <link name="base_link"/>
+  <link name="left_wheel"/>
+  <link name="right_wheel"/>
+  <joint name="driving_wheel_joint_L" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel"/>
+  </joint>
+  <joint name="driving_wheel_joint_R" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_wheel"/>
+  </joint>
+  <ros2_control name="M1Hardware" type="system">
+    <hardware>
+      <plugin>mobile_base_control/M1Hardware</plugin>
+      <param name="serial_port">mock</param>
+      <param name="baud_rate">230400</param>
+      <param name="response_timeout_ms">100</param>
+      <param name="left_driver_id">2</param>
+      <param name="right_driver_id">1</param>
+      <param name="gear_ratio">20.0</param>
+      <param name="left_wheel_sign">1</param>
+      <param name="right_wheel_sign">-1</param>
+      <param name="motor_steps_per_rev">10000.0</param>
+      <param name="max_motor_rpm">3000.0</param>
+    </hardware>
+    <joint name="driving_wheel_joint_L">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="driving_wheel_joint_R">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+</robot>)xml";
+  }
+
+  std::shared_ptr<diff_drive_controller::DiffDriveController> create_and_configure_controller(
+    double wheel_separation = 0.555, double wheel_radius = 0.08)
+  {
+    auto controller = std::make_shared<diff_drive_controller::DiffDriveController>();
+    rclcpp::NodeOptions node_options;
+    node_options.parameter_overrides({
+      {"left_wheel_names", std::vector<std::string>{"driving_wheel_joint_L"}},
+      {"right_wheel_names", std::vector<std::string>{"driving_wheel_joint_R"}},
+      {"wheel_separation", wheel_separation},
+      {"wheel_radius", wheel_radius},
+      {"use_stamped_vel", false},
+      {"open_loop", false},
+      {"publish_rate", 50.0},
+    });
+
+    const auto init_ret = controller->init("diff_drive_controller", "", 50, "", node_options);
+    if (init_ret != controller_interface::return_type::OK) {
+      return nullptr;
+    }
+    const auto & state = controller->configure();
+    if (state.id() != lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) {
+      return nullptr;
+    }
+    return controller;
+  }
+};
+
+TEST_F(DiffDriveIntegrationTest, ControllerPluginDiscovery)
+{
+  pluginlib::ClassLoader<controller_interface::ChainableControllerInterface> loader(
+    "controller_interface", "controller_interface::ChainableControllerInterface");
+
+  std::vector<std::string> classes = loader.getDeclaredClasses();
+  bool found = false;
+  for (const auto & cls : classes) {
+    if (cls == "diff_drive_controller/DiffDriveController") {
+      found = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found) <<
+    "diff_drive_controller/DiffDriveController was not found in declared classes";
+}
+
+TEST_F(DiffDriveIntegrationTest, FullIntegrationLifecycle)
+{
+  auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+  auto logger = rclcpp::get_logger("diff_drive_test");
+
+  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
+  ASSERT_TRUE(rm.are_components_initialized());
+
+  auto controller = create_and_configure_controller();
+  ASSERT_NE(controller, nullptr);
+
+  std::vector<hardware_interface::LoanedCommandInterface> loaned_commands;
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_L/velocity"));
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_R/velocity"));
+
+  std::vector<hardware_interface::LoanedStateInterface> loaned_states;
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/velocity"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/velocity"));
+
+  controller->assign_interfaces(std::move(loaned_commands), std::move(loaned_states));
+
+  const auto & active_state = controller->get_node()->activate();
+  EXPECT_EQ(active_state.id(), lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+
+  const auto & inactive_state = controller->get_node()->deactivate();
+  EXPECT_EQ(inactive_state.id(), lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE);
+}
+
+TEST_F(DiffDriveIntegrationTest, LinearForwardCommandPath)
+{
+  auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+  auto logger = rclcpp::get_logger("diff_drive_test");
+
+  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
+  ASSERT_TRUE(rm.are_components_initialized());
+
+  auto controller = create_and_configure_controller(0.555, 0.08);
+  ASSERT_NE(controller, nullptr);
+
+  std::vector<hardware_interface::LoanedCommandInterface> loaned_commands;
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_L/velocity"));
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_R/velocity"));
+
+  std::vector<hardware_interface::LoanedStateInterface> loaned_states;
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/velocity"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/velocity"));
+
+  controller->assign_interfaces(std::move(loaned_commands), std::move(loaned_states));
+  ASSERT_EQ(controller->get_node()->activate().id(),
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+
+  // Claim reference interfaces: [0] = linear velocity, [1] = angular velocity
+  auto ref_ifaces = controller->export_reference_interfaces();
+  ASSERT_EQ(ref_ifaces.size(), 2u);
+
+  // Request v = 0.4 m/s forward, omega = 0.0 rad/s
+  EXPECT_TRUE(ref_ifaces[0]->set_value(0.4));
+  EXPECT_TRUE(ref_ifaces[1]->set_value(0.0));
+
+  rclcpp::Time now(1, 0, RCL_ROS_TIME);
+  rclcpp::Duration dt(0, 20000000);  // 20 ms cycle (50 Hz)
+
+  EXPECT_EQ(
+    controller->update_and_write_commands(now, dt),
+    controller_interface::return_type::OK);
+
+  // Write through hardware interface to verify motor conversion and FC17 transaction
+  EXPECT_EQ(rm.write(now, dt).result, return_type::OK);
+
+  // Verify feedback is non-null and correctly read on next cycle:
+  // Expected wheel velocity: omega = v / r = 0.4 / 0.08 = 5.0 rad/s
+  EXPECT_EQ(rm.read(now, dt).result, return_type::OK);
+  auto left_vel_state = rm.claim_state_interface("driving_wheel_joint_L/velocity");
+  auto right_vel_state = rm.claim_state_interface("driving_wheel_joint_R/velocity");
+  EXPECT_NEAR(left_vel_state.get_optional<double>().value_or(0.0), 5.0, 0.01);
+  EXPECT_NEAR(right_vel_state.get_optional<double>().value_or(0.0), 5.0, 0.01);
+}
+
+TEST_F(DiffDriveIntegrationTest, AngularRotationCommandPath)
+{
+  auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+  auto logger = rclcpp::get_logger("diff_drive_test");
+
+  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
+  ASSERT_TRUE(rm.are_components_initialized());
+
+  auto controller = create_and_configure_controller(0.555, 0.08);
+  ASSERT_NE(controller, nullptr);
+
+  std::vector<hardware_interface::LoanedCommandInterface> loaned_commands;
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_L/velocity"));
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_R/velocity"));
+
+  std::vector<hardware_interface::LoanedStateInterface> loaned_states;
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/velocity"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/velocity"));
+
+  controller->assign_interfaces(std::move(loaned_commands), std::move(loaned_states));
+  ASSERT_EQ(controller->get_node()->activate().id(),
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+
+  auto ref_ifaces = controller->export_reference_interfaces();
+  ASSERT_EQ(ref_ifaces.size(), 2u);
+
+  // Request pure yaw rotation: v = 0.0 m/s, omega = +1.0 rad/s (counter-clockwise)
+  EXPECT_TRUE(ref_ifaces[0]->set_value(0.0));
+  EXPECT_TRUE(ref_ifaces[1]->set_value(1.0));
+
+  rclcpp::Time now(1, 0, RCL_ROS_TIME);
+  rclcpp::Duration dt(0, 20000000);  // 20 ms
+
+  EXPECT_EQ(
+    controller->update_and_write_commands(now, dt),
+    controller_interface::return_type::OK);
+
+  // Kinematics:
+  // v_L = -omega * (d / 2) = -1.0 * 0.2775 = -0.2775 m/s -> omega_L = -3.46875 rad/s
+  // v_R = +omega * (d / 2) = +1.0 * 0.2775 = +0.2775 m/s -> omega_R = +3.46875 rad/s
+  // Motor target RPMs:
+  // Left Motor (sign +1): -3.46875 * 20 * 60 / (2*pi) = -662 RPM
+  // Right Motor (sign -1): -(+3.46875) * 20 * 60 / (2*pi) = -662 RPM
+  // Both motors spin in negative direction for physical base CCW rotation!
+  EXPECT_EQ(rm.write(now, dt).result, return_type::OK);
+  EXPECT_EQ(rm.read(now, dt).result, return_type::OK);
+
+  auto left_vel_state = rm.claim_state_interface("driving_wheel_joint_L/velocity");
+  auto right_vel_state = rm.claim_state_interface("driving_wheel_joint_R/velocity");
+  EXPECT_NEAR(left_vel_state.get_optional<double>().value_or(0.0), -3.46875, 0.01);
+  EXPECT_NEAR(right_vel_state.get_optional<double>().value_or(0.0), +3.46875, 0.01);
+}
+
+TEST_F(DiffDriveIntegrationTest, ZeroCommandPath)
+{
+  auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+  auto logger = rclcpp::get_logger("diff_drive_test");
+
+  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
+  ASSERT_TRUE(rm.are_components_initialized());
+
+  auto controller = create_and_configure_controller(0.555, 0.08);
+  ASSERT_NE(controller, nullptr);
+
+  std::vector<hardware_interface::LoanedCommandInterface> loaned_commands;
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_L/velocity"));
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_R/velocity"));
+
+  std::vector<hardware_interface::LoanedStateInterface> loaned_states;
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/velocity"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/velocity"));
+
+  controller->assign_interfaces(std::move(loaned_commands), std::move(loaned_states));
+  ASSERT_EQ(controller->get_node()->activate().id(),
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+
+  auto ref_ifaces = controller->export_reference_interfaces();
+  ASSERT_EQ(ref_ifaces.size(), 2u);
+
+  // Request zero velocity: v = 0.0, omega = 0.0
+  EXPECT_TRUE(ref_ifaces[0]->set_value(0.0));
+  EXPECT_TRUE(ref_ifaces[1]->set_value(0.0));
+
+  rclcpp::Time now(1, 0, RCL_ROS_TIME);
+  rclcpp::Duration dt(0, 20000000);
+
+  EXPECT_EQ(
+    controller->update_and_write_commands(now, dt),
+    controller_interface::return_type::OK);
+
+  EXPECT_EQ(rm.write(now, dt).result, return_type::OK);
+  EXPECT_EQ(rm.read(now, dt).result, return_type::OK);
+
+  auto left_vel_state = rm.claim_state_interface("driving_wheel_joint_L/velocity");
+  auto right_vel_state = rm.claim_state_interface("driving_wheel_joint_R/velocity");
+  EXPECT_DOUBLE_EQ(left_vel_state.get_optional<double>().value_or(1.0), 0.0);
+  EXPECT_DOUBLE_EQ(right_vel_state.get_optional<double>().value_or(1.0), 0.0);
+}
+
+TEST_F(DiffDriveIntegrationTest, FeedbackPathPositionProgression)
+{
+  auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+  auto logger = rclcpp::get_logger("diff_drive_test");
+
+  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
+  ASSERT_TRUE(rm.are_components_initialized());
+
+  auto controller = create_and_configure_controller(0.555, 0.08);
+  ASSERT_NE(controller, nullptr);
+
+  std::vector<hardware_interface::LoanedCommandInterface> loaned_commands;
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_L/velocity"));
+  loaned_commands.emplace_back(rm.claim_command_interface("driving_wheel_joint_R/velocity"));
+
+  std::vector<hardware_interface::LoanedStateInterface> loaned_states;
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_L/velocity"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/position"));
+  loaned_states.emplace_back(rm.claim_state_interface("driving_wheel_joint_R/velocity"));
+
+  controller->assign_interfaces(std::move(loaned_commands), std::move(loaned_states));
+  ASSERT_EQ(controller->get_node()->activate().id(),
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+
+  auto ref_ifaces = controller->export_reference_interfaces();
+  EXPECT_TRUE(ref_ifaces[0]->set_value(0.4));
+  EXPECT_TRUE(ref_ifaces[1]->set_value(0.0));
+
+  rclcpp::Time now(1, 0, RCL_ROS_TIME);
+  rclcpp::Duration dt(0, 20000000);  // 20 ms
+
+  // Execute 5 consecutive control cycles and verify smooth position tracking without NaN
+  double prev_left_pos = 0.0;
+  double prev_right_pos = 0.0;
+  for (int step = 0; step < 5; ++step) {
+    now = now + dt;
+    EXPECT_EQ(
+      controller->update_and_write_commands(now, dt),
+      controller_interface::return_type::OK);
+    EXPECT_EQ(rm.write(now, dt).result, return_type::OK);
+    EXPECT_EQ(rm.read(now, dt).result, return_type::OK);
+
+    auto left_pos = rm.claim_state_interface("driving_wheel_joint_L/position");
+    auto right_pos = rm.claim_state_interface("driving_wheel_joint_R/position");
+    const double curr_left = left_pos.get_optional<double>().value_or(0.0);
+    const double curr_right = right_pos.get_optional<double>().value_or(0.0);
+
+    EXPECT_FALSE(std::isnan(curr_left));
+    EXPECT_FALSE(std::isnan(curr_right));
+    EXPECT_GE(curr_left, prev_left_pos);
+    EXPECT_GE(curr_right, prev_right_pos);
+    prev_left_pos = curr_left;
+    prev_right_pos = curr_right;
+  }
+}
+
+TEST_F(DiffDriveIntegrationTest, CommandSubstitutionProhibitionPolicy)
+{
+  M1Hardware hw;
+  auto params = create_test_params("mock", 230400, 100);
+  ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
+
+  rclcpp_lifecycle::State unconfigured(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED, "unconfigured");
+  rclcpp_lifecycle::State inactive(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
+  ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
+  ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
+
+  auto cmd_ifaces = hw.export_command_interfaces();
+
+  // Test 1: NaN command must be rejected with return_type::ERROR, never substituted with motion
+  EXPECT_TRUE(cmd_ifaces[0].set_value(std::numeric_limits<double>::quiet_NaN()));
+  EXPECT_TRUE(cmd_ifaces[1].set_value(0.5));
+  rclcpp::Time now(1, 0, RCL_ROS_TIME);
+  rclcpp::Duration dt(0, 20000000);
+  EXPECT_EQ(hw.write(now, dt), return_type::ERROR);
+
+  // Test 2: Inf command must be rejected with return_type::ERROR, never substituted with motion
+  EXPECT_TRUE(cmd_ifaces[0].set_value(std::numeric_limits<double>::infinity()));
+  EXPECT_TRUE(cmd_ifaces[1].set_value(0.5));
+  EXPECT_EQ(hw.write(now, dt), return_type::ERROR);
+
+  // Clean shutdown
+  rclcpp_lifecycle::State active(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE, "active");
+  EXPECT_EQ(hw.on_deactivate(active), CallbackReturn::SUCCESS);
+}
+
+TEST_F(DiffDriveIntegrationTest, SafeStopChainOnDeactivate)
+{
+  M1Hardware hw;
+  auto params = create_test_params("mock", 230400, 100);
+  ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
+
+  rclcpp_lifecycle::State unconfigured(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_UNCONFIGURED, "unconfigured");
+  rclcpp_lifecycle::State inactive(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
+  ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
+  ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
+
+  // Verify hardware is active and commands can be written
+  auto cmd_ifaces = hw.export_command_interfaces();
+  EXPECT_TRUE(cmd_ifaces[0].set_value(1.0));
+  EXPECT_TRUE(cmd_ifaces[1].set_value(1.0));
+  rclcpp::Time now(1, 0, RCL_ROS_TIME);
+  rclcpp::Duration dt(0, 20000000);
+  EXPECT_EQ(hw.write(now, dt), return_type::OK);
+
+  // Trigger deactivation sequence (stop -> disable -> disconnect)
+  rclcpp_lifecycle::State active(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE, "active");
+  EXPECT_EQ(hw.on_deactivate(active), CallbackReturn::SUCCESS);
+
+  // After deactivation, read/write should fail without activation
+  EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
+  EXPECT_EQ(hw.write(now, dt), return_type::ERROR);
 }

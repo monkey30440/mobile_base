@@ -84,6 +84,8 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
   find_package(controller_manager REQUIRED)
+  find_package(diff_drive_controller REQUIRED)
+  find_package(geometry_msgs REQUIRED)
   ament_lint_auto_find_test_dependencies()
 
   ament_add_gtest(test_m1_driver
@@ -107,6 +109,8 @@ if(BUILD_TESTING)
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
     controller_manager::controller_manager
+    diff_drive_controller::diff_drive_controller
+    geometry_msgs::geometry_msgs__rosidl_generator_cpp
   )
 endif()
 

@@ -477,6 +477,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
 
   latest_motor_state_ = active_state;
   has_valid_state_ = true;
+  is_active_ = true;
 
   RCLCPP_INFO(get_logger(), "M1Hardware activated successfully.");
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -489,6 +490,7 @@ hardware_interface::CallbackReturn M1Hardware::on_deactivate(
 
   hw_commands_[0] = 0.0;
   hw_commands_[1] = 0.0;
+  is_active_ = false;
 
   if (driver_ && driver_->is_connected()) {
     // 1. Stop primitive (JG 0)
@@ -522,6 +524,8 @@ hardware_interface::CallbackReturn M1Hardware::on_cleanup(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(get_logger(), "Cleaning up M1Hardware...");
+  is_active_ = false;
+  has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
     driver_->disconnect();
   }
@@ -532,12 +536,13 @@ hardware_interface::CallbackReturn M1Hardware::on_shutdown(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(get_logger(), "Shutting down M1Hardware...");
+  is_active_ = false;
+  has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
     driver_->stop(config_.right_driver_id, config_.left_driver_id);
     driver_->disable(config_.right_driver_id, config_.left_driver_id);
     driver_->disconnect();
   }
-  has_valid_state_ = false;
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -547,12 +552,13 @@ hardware_interface::CallbackReturn M1Hardware::on_error(
   RCLCPP_ERROR(
     get_logger(),
     "M1Hardware entered ERROR state, executing best-effort safety cleanup");
+  is_active_ = false;
+  has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
     driver_->stop(config_.right_driver_id, config_.left_driver_id);
     driver_->disable(config_.right_driver_id, config_.left_driver_id);
     driver_->disconnect();
   }
-  has_valid_state_ = false;
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -560,8 +566,10 @@ hardware_interface::return_type M1Hardware::read(
   const rclcpp::Time & /*time*/,
   const rclcpp::Duration & /*period*/)
 {
-  if (!has_valid_state_) {
-    RCLCPP_ERROR(get_logger(), "read() called without valid cached motor state");
+  if (!is_active_ || !has_valid_state_) {
+    RCLCPP_ERROR(
+      get_logger(),
+      "read() called without valid cached motor state or while component is inactive");
     return hardware_interface::return_type::ERROR;
   }
 
@@ -578,25 +586,29 @@ hardware_interface::return_type M1Hardware::read(
     return hardware_interface::return_type::ERROR;
   }
 
-  // Left wheel state [0]
+  // Update position accumulators with raw steps
   left_position_tracker_.update(st_left.position_steps);
+  right_position_tracker_.update(st_right.position_steps);
+
+  // Convert accumulated steps -> Continuous wheel position [rad]
   hw_positions_[0] = motor_steps_to_wheel_rad(
     left_position_tracker_.accumulated_steps,
     config_.motor_steps_per_rev,
     config_.gear_ratio,
     config_.left_wheel_sign);
-  hw_velocities_[0] = motor_rpm_to_wheel_rad_s(
-    st_left.actual_rpm,
-    config_.gear_ratio,
-    config_.left_wheel_sign);
 
-  // Right wheel state [1]
-  right_position_tracker_.update(st_right.position_steps);
   hw_positions_[1] = motor_steps_to_wheel_rad(
     right_position_tracker_.accumulated_steps,
     config_.motor_steps_per_rev,
     config_.gear_ratio,
     config_.right_wheel_sign);
+
+  // Convert actual RPM -> Wheel angular velocity [rad/s]
+  hw_velocities_[0] = motor_rpm_to_wheel_rad_s(
+    st_left.actual_rpm,
+    config_.gear_ratio,
+    config_.left_wheel_sign);
+
   hw_velocities_[1] = motor_rpm_to_wheel_rad_s(
     st_right.actual_rpm,
     config_.gear_ratio,
@@ -609,6 +621,11 @@ hardware_interface::return_type M1Hardware::write(
   const rclcpp::Time & /*time*/,
   const rclcpp::Duration & /*period*/)
 {
+  if (!is_active_) {
+    RCLCPP_ERROR(get_logger(), "write() called on inactive hardware component");
+    return hardware_interface::return_type::ERROR;
+  }
+
   // 1. Defensive command validation
   if (std::isnan(hw_commands_[0]) || std::isinf(hw_commands_[0]) ||
     std::isnan(hw_commands_[1]) || std::isinf(hw_commands_[1]))

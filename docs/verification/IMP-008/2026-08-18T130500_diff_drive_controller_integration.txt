@@ -1,0 +1,77 @@
+===============================================================================
+IMP-008: DiffDriveController + M1Hardware Integration Verification
+Timestamp: 2026-08-18T13:05:00+08:00
+Environment: Docker Ubuntu 24.04 / ROS 2 Jazzy / aarch64
+===============================================================================
+
+[BUILD]
+Command: colcon build --symlink-install --packages-select mobile_base_control
+Result: SUCCESS (0 warnings, 0 errors)
+
+[TEST SUMMARY]
+Command: colcon test --packages-select mobile_base_control && colcon test-result --all --verbose
+Result: 100% tests passed (0 errors, 0 failures, 11 skipped)
+
+[TEST SUITE: test_m1_hardware (27/27 PASSED)]
+[ RUN      ] M1HardwareConversionTest.WheelRadSToMotorRpm
+[       OK ] M1HardwareConversionTest.WheelRadSToMotorRpm (0 ms)
+[ RUN      ] M1HardwareConversionTest.MotorRpmToWheelRadS
+[       OK ] M1HardwareConversionTest.MotorRpmToWheelRadS (0 ms)
+[ RUN      ] M1HardwareConversionTest.MotorStepsToWheelRad
+[       OK ] M1HardwareConversionTest.MotorStepsToWheelRad (0 ms)
+[ RUN      ] PositionTrackerTest.InitialSampleSetsOrigin
+[       OK ] PositionTrackerTest.InitialSampleSetsOrigin (0 ms)
+[ RUN      ] PositionTrackerTest.PositiveAndNegativeDeltas
+[       OK ] PositionTrackerTest.PositiveAndNegativeDeltas (0 ms)
+[ RUN      ] PositionTrackerTest.Signed32BitPositiveRollover
+[       OK ] PositionTrackerTest.Signed32BitPositiveRollover (0 ms)
+[ RUN      ] PositionTrackerTest.Signed32BitNegativeRollover
+[       OK ] PositionTrackerTest.Signed32BitNegativeRollover (0 ms)
+[ RUN      ] PositionTrackerTest.ResetClearsOrigin
+[       OK ] PositionTrackerTest.ResetClearsOrigin (0 ms)
+[ RUN      ] M1HardwareLifecycleTest.InitParameterParsing
+[       OK ] M1HardwareLifecycleTest.InitParameterParsing (0 ms)
+[ RUN      ] M1HardwareLifecycleTest.MissingTimeoutParameterFails
+[       OK ] M1HardwareLifecycleTest.MissingTimeoutParameterFails (0 ms)
+[ RUN      ] M1HardwareLifecycleTest.InvalidTimeoutParameterFails
+[       OK ] M1HardwareLifecycleTest.InvalidTimeoutParameterFails (0 ms)
+[ RUN      ] M1HardwareLifecycleTest.ExplicitResponseTimeoutAliasPasses
+[       OK ] M1HardwareLifecycleTest.ExplicitResponseTimeoutAliasPasses (0 ms)
+[ RUN      ] M1HardwareLifecycleTest.ExportInterfaces
+[       OK ] M1HardwareLifecycleTest.ExportInterfaces (0 ms)
+[ RUN      ] M1HardwareLifecycleTest.FullLifecycleMockSuccess
+[       OK ] M1HardwareLifecycleTest.FullLifecycleMockSuccess (41 ms)
+[ RUN      ] M1HardwareLifecycleTest.WriteAndReadFeedbackLoop
+[       OK ] M1HardwareLifecycleTest.WriteAndReadFeedbackLoop (40 ms)
+[ RUN      ] M1HardwareLifecycleTest.InvalidCommandRejection
+[       OK ] M1HardwareLifecycleTest.InvalidCommandRejection (40 ms)
+[ RUN      ] M1HardwareLifecycleTest.ReadWithoutValidStateFails
+[       OK ] M1HardwareLifecycleTest.ReadWithoutValidStateFails (0 ms)
+[ RUN      ] M1HardwareLifecycleTest.PluginLoaderDiscovery
+[       OK ] M1HardwareLifecycleTest.PluginLoaderDiscovery (0 ms)
+[ RUN      ] M1HardwareIntegrationTest.ResourceManagerURDFLoading
+[       OK ] M1HardwareIntegrationTest.ResourceManagerURDFLoading (22 ms)
+[ RUN      ] DiffDriveIntegrationTest.ControllerPluginDiscovery
+[       OK ] DiffDriveIntegrationTest.ControllerPluginDiscovery (0 ms)
+[ RUN      ] DiffDriveIntegrationTest.FullIntegrationLifecycle
+[       OK ] DiffDriveIntegrationTest.FullIntegrationLifecycle (22 ms)
+[ RUN      ] DiffDriveIntegrationTest.LinearForwardCommandPath
+[       OK ] DiffDriveIntegrationTest.LinearForwardCommandPath (22 ms)
+[ RUN      ] DiffDriveIntegrationTest.AngularRotationCommandPath
+[       OK ] DiffDriveIntegrationTest.AngularRotationCommandPath (22 ms)
+[ RUN      ] DiffDriveIntegrationTest.ZeroCommandPath
+[       OK ] DiffDriveIntegrationTest.ZeroCommandPath (22 ms)
+[ RUN      ] DiffDriveIntegrationTest.FeedbackPathPositionProgression
+[       OK ] DiffDriveIntegrationTest.FeedbackPathPositionProgression (22 ms)
+[ RUN      ] DiffDriveIntegrationTest.CommandSubstitutionProhibitionPolicy
+[       OK ] DiffDriveIntegrationTest.CommandSubstitutionProhibitionPolicy (40 ms)
+[ RUN      ] DiffDriveIntegrationTest.SafeStopChainOnDeactivate
+[       OK ] DiffDriveIntegrationTest.SafeStopChainOnDeactivate (42 ms)
+
+[LINTER RESULTS]
+- copyright: PASSED
+- cppcheck: PASSED
+- cpplint: PASSED
+- lint_cmake: PASSED
+- uncrustify: PASSED
+- xmllint: PASSED

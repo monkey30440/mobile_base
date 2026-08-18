@@ -179,6 +179,7 @@ private:
   // Cached latest motor states (Model A2)
   ExchangeResult latest_motor_state_{};
   bool has_valid_state_{false};
+  bool is_active_{false};
 };
 
 }  // namespace mobile_base_control

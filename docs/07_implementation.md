@@ -1121,9 +1121,9 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| Mature component(s) used | `hardware_interface::SystemInterface` (ROS 2 Jazzy), `pluginlib`, `rclcpp_lifecycle`, `controller_manager::ResourceManager` |
+| Mature component(s) used | `hardware_interface::SystemInterface` (ROS 2 Jazzy), `pluginlib`, `rclcpp_lifecycle`, `controller_manager::ResourceManager`, `diff_drive_controller::DiffDriveController` (`ros2_controllers`) |
 | Custom implementation | `M1Hardware` ros2_control plugin、`PositionTracker` 2's complement int32 delta accumulation、Model A2 execution timing、純軟體單位與座標系轉換（Left ID2 sign +1, Right ID1 sign -1, gear ratio 20.0, 10000 steps/rev）、防禦性指令飽和與異常拒絕 |
-| Boundary rule | `ros2_control` 標準框架負責 Controller 與硬體介面間之 LoanedCommand/LoanedState 借用與 Controller Manager 生命週期管理；`M1Hardware` 封裝底層 M1 驅動器通訊細節與馬達座標系轉換，對 Controller 暴露標準 `velocity` command interface 與 `position`/`velocity` state interfaces。 |
+| Boundary rule | `ros2_control` 標準框架負責 Controller 與硬體介面間之 LoanedCommand/LoanedState 借用與 Controller Manager 生命週期管理；`diff_drive_controller` 依據機器人幾何參數（`wheel_separation = 0.555` m, `wheel_radius = 0.08` m）計算輪端線速度/角速度指令，絕不包含馬達內部減速比或編碼器細節；`M1Hardware` 封裝底層 M1 驅動器通訊細節與馬達座標系轉換，對 Controller 暴露標準 `velocity` command interface 與 `position`/`velocity` state interfaces。 |
 
 ---
 
@@ -1160,19 +1160,27 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | `motor_steps_per_rev` | URDF `<param>` | 馬達每轉編碼器 Steps（預設 `10000.0`） | `06 §3.3` |
 | `max_motor_rpm` | URDF `<param>` | 操作馬達轉速上限（預設 `3000.0` RPM） | `06 §3.3` |
 
+#### Controller Timing Model (Model A2)
+
+- **Controller Manager Cycle Flow**:
+  1. `M1Hardware::read()`：無通訊開銷，直接讀取上一週期 `write()`（或 `on_activate` 初始化）所快取之最新雙馬達狀態，更新連續累積位置與輪速。
+  2. `diff_drive_controller::update()`：依據當前狀態與輸入速度參考指令，計算兩輪目標角速度 $[rad/s]$ 並寫入 Loaned Command Interface。
+  3. `M1Hardware::write()`：檢查指令有效性（禁止 NaN/Inf），將輪速轉換為雙馬達目標 RPM，執行單次 FC17 Multi-drive 2.0 交易並快取回傳狀態供下一週期使用。
+- **Update Rate Semantics**：測試環境以 50 Hz ($T = 20 \text{ ms}$) 驗證通過；最終 production controller update rate 留待全系統整合與實機通訊 jitter 量測後凍結。
+
 ---
 
 #### 3.2.6 Failure / Timeout / Cancel / Invalid-input Handling
 
 | 情境 | 觸發條件 | 期望行為（來自 06） | 已驗證 | 驗證層級 |
 |---|---|---|---|---|
-| Invalid Input | 指令為 NaN 或 Inf | 拒絕執行寫入、目標 RPM 歸零，回傳 `return_type::ERROR` | Yes | Unit |
+| Invalid Input | 指令為 NaN 或 Inf | 拒絕執行寫入、目標 RPM 歸零，回傳 `return_type::ERROR`；禁止 command substitution | Yes | Integration |
 | Invalid Input | 輪速超出安全上限 | 自動飽和鉗位至 `max_motor_rpm`（$\pm 3000$ RPM），不溢位 | Yes | Unit |
 | Missing Timeout Param | 未提供 `response_timeout_ms` / `timeout_ms` 或 $\le 0$ | `on_init` / `parse_parameters` 立即拒絕並回傳 `CallbackReturn::ERROR` | Yes | Unit |
-| Communication Failure | FC17 通訊逾時或斷線 | `M1Hardware` 將 cycle failure 以 `return_type::ERROR` 回報 ros2_control；後續 lifecycle/controller handling 由 ros2_control framework / controller manager policy 決定 | Yes | Unit |
+| Communication Failure | FC17 通訊逾時或斷線 | `M1Hardware` 將 cycle failure 以 `return_type::ERROR` 回報 ros2_control；後續 lifecycle/controller handling 由 ros2_control framework / controller manager policy 決定 | Yes | Integration |
 | Drive Alarm | 驅動器回傳非零 Alarm 碼 | `read()` 或 `write()` 立即偵測並以 `return_type::ERROR` 回報 ros2_control | Yes | Unit |
 | Activation Timeout | `on_activate` 狀態輪詢逾時（超過 10 次） | 自動發送 `disable()` 清理，回傳 `CallbackReturn::ERROR` | Yes | Unit |
-| Deactivate / Shutdown / Error | 系統停用、關機或發生錯誤 | 依序執行 `stop(0 RPM)` $\rightarrow$ 延時 $\rightarrow$ `disable(SVOFF)` $\rightarrow$ `disconnect()` | Yes | Unit |
+| Deactivate / Shutdown / Error | 系統停用、關機或發生錯誤 | 依序執行 `stop(0 RPM)` $\rightarrow$ 延時 $\rightarrow$ `disable(SVOFF)` $\rightarrow$ `disconnect()`；非激活狀態下 `read()`/`write()` 拒絕執行 | Yes | Integration |
 
 ---
 
@@ -1182,15 +1190,16 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| 2026-08-18T12:55:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫（含 required `response_timeout_ms` 參數驗證與型別修訂）建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt) |
-| 2026-08-18T12:50:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）`mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫初版建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
+| 2026-08-18T13:05:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 與 `m1_hardware` 函式庫及 `DiffDriveController` 整合測試建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T130500_diff_drive_controller_integration.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T130500_diff_drive_controller_integration.txt) |
+| 2026-08-18T12:55:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）`response_timeout_ms` 參數修訂建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt) |
+| 2026-08-18T12:50:00+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）`mobile_base_control` 套件初版建置成功（0 errors）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
 
-#### Unit / Interface Evidence
+#### Unit / Integration Evidence
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T12:55:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 19 項 GTests（含 missing timeout 拒絕、invalid zero/negative timeout 拒絕、explicit timeout 通過、轉換數學、32-bit rollover 正反向累積、參數解析、State/Command 匯出、完整 Mock 生命週期、讀寫閉環、NaN/Inf 拒絕、未激活讀取拒絕、pluginlib 動態載入、URDF `ResourceManager` 整合）與 6 項 ament linters 通過，0 failures（107 tests total across workspace）。 | [`docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt) |
-| 2026-08-18T12:50:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）全部 16 項 GTests 與 6 項 ament linters 通過，0 failures（104 tests total across workspace）。 | [`docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_build_test_m1_hardware.txt) |
+| 2026-08-18T13:05:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 27 項 GTests（含 8 項 DiffDriveController 整合測試：Controller plugin discovery, Full lifecycle, Linear forward command path, Angular rotation command path, Zero command path, Feedback path position progression, Command substitution prohibition policy, Safe-stop chain on deactivate）與 6 項 ament linters 通過，0 failures（115 tests total across workspace）。 | [`docs/verification/IMP-008/2026-08-18T130500_diff_drive_controller_integration.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T130500_diff_drive_controller_integration.txt) |
+| 2026-08-18T12:55:00+08:00 | `mobile_base_control::test_m1_hardware` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）全部 19 項 GTests 通過，0 failures。 | [`docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125500_build_test_m1_hardware_timeout_erratum.txt) |
 | 2026-08-18T12:50:00+08:00 | Pluginlib ClassLoader Discovery | `test_m1_hardware --gtest_filter=M1HardwareLifecycleTest.PluginLoaderDiscovery` | PASS | 驗證 `hardware_interface::SystemInterface` ClassLoader 能動態探索並實例化 `mobile_base_control/M1Hardware`。 | [`docs/verification/IMP-008/2026-08-18T125000_plugin_discovery.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T125000_plugin_discovery.txt) |
 
 ---
@@ -1199,8 +1208,8 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | `M1Hardware` SystemInterface plugin 完整實作了 Model A2 讀寫時序、純軟體單位轉換、32-bit signed rollover continuous tracking、Lifecycle 狀態協調、required `response_timeout_ms` 參數檢驗（無預設值）與防禦性錯誤處理；在 ROS 2 Jazzy 環境下通過 19 項 GTest 與 6 項 ament linters；通過 pluginlib 動態探索載入與 URDF `ResourceManager` 整合載入。 |
-| 尚未證明 | 非零速度實體運動（Level 4 exchange motion）、真實硬體上的 ros2_control lifecycle 啟用/停用（Level 3 hardware lifecycle，需操作人員現場即時授權）、實體通訊 Watchdog 參數寫入與跳脫測試。 |
+| 已證明 | 官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環：包含 pluginlib 動態探索、ResourceManager URDF 載入、Controller lifecycle 啟閉、正向直線與原地旋轉差速指令計算與馬達方向對應（左輪 ID2 sign +1, 右輪 ID1 sign -1）、零速指令、多週期連續位置回授步數累積、NaN/Inf 指令拒絕與禁止替換原則（Command substitution prohibition）、安全停用序列（Safe-stop chain）。在 ROS 2 Jazzy 環境下通過 27 項 GTest 與 6 項 ament linters。 |
+| 尚未證明 | 真實硬體輪端回授有效性（True wheel feedback validity）、非零速度實體運動（Level 4 exchange motion）、真實硬體上的 ros2_control lifecycle 啟用/停用（Level 3 hardware lifecycle，需操作人員現場即時授權）、實體通訊 Watchdog 參數寫入與跳脫測試。 |
 
 ---
 
@@ -1210,6 +1219,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 - **實機 Level 3 Lifecycle 執行**：若要在實機 `/dev/ttyUSB0` 上透過 ros2_control 執行 Level 3 zero-speed-intent lifecycle activation，需遵循 §6 取得操作人員 execution-time authorization。
 - **Watchdog 參數寫入**：依使用者安全邊界指示，本項目嚴禁向實機寫入任何 watchdog 或 flash configuration 暫存器。
 - **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`response_timeout_ms` 為 required parameter 且無 production default；目前使用的 `100 ms` 僅為 test fixture 與初步驗證條件，final production timeout 留待 IMP-008 real-hardware latency 量測後確定。
+- **True Wheel Feedback Validity 尚未實機驗證**：真實物理輪子編碼器回授之精準度與滑差特性留待後續實車調校。
 
 ---
 
@@ -1219,4 +1229,4 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 |---|---|
 | Feature freeze status | `Not Frozen` |
 | Freeze condition | #8–#10 S7 Base Control 子系統整體閉環與落地驗證通過 |
-| Next dependency | Checklist #9 `S7 diff_drive_controller configuration` |
+| Next dependency | Checklist #8 實機 Lifecycle 驗收 / Checklist #9 `S7 diff_drive_controller configuration` |
