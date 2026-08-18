@@ -13,6 +13,7 @@ RUN apt-get update \
         ros-jazzy-ros2-controllers \
         ros-jazzy-dual-laser-merger \
         ros-jazzy-sick-scan-xd \
+        python3-serial \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspaces/mobile_base
