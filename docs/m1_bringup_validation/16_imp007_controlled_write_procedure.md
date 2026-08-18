@@ -36,21 +36,28 @@ Level 3 涉及的寫入操作（`enable`, `stop`, `disable`）統稱為 **Zero-S
 
 ---
 
-## 3. Authoritative M1 Communication Watchdog 規格整理
+## 3. M1 Communication Watchdog 規格與四層狀態審查
 
-依據 M1 官方技術手冊，M1 驅動器內建之 RS485 通訊逾時保護規格如下（僅供技術架構整理，本次不寫入實機）：
+為確保任何通訊防護宣告具備可審查之追溯性，此處將 M1 通訊 Watchdog 依四層狀態嚴格區分（**本次僅作技術架構審查與文件化，未對實機寫入任何參數**）：
 
-| 參數編號 | Modbus 暫存器 | 參數名稱 | 權威定義與語意 |
-|---|---|---|---|
-| `05-17` | `0x0510` | 通訊逾時時間 (ms) | 預設為 `0`（Watchdog 停用）。當設定為 `> 0` 時，若驅動器在該時間內未收到任何定址至本機之有效 Modbus 通訊，即判定為通訊逾時故障。 |
-| `05-18` | `0x0511` | 通訊錯誤次數門檻 | 判定通訊故障前允許的連續 CRC 或訊框錯誤次數。 |
-| `05-21` | `0x0514` | 通訊故障動作模式 | `0`: 僅警告無動作；`1`: 減速停止不報警；`2`: 緊急停止並觸發 `Er.140` (`0x008C`) 警報，同時清除遠端虛擬輸入狀態（切斷 SVON 使能）。 |
-| `10-39` | `0x0A27` | 參數寫入 EEPROM | 寫入 `1` 可將上述 Watchdog 參數永久儲存至驅動器非揮發性記憶體。 |
+### 3.1 Source Traceability
+- **權威文件**：*M1 Series AC Servo Driver User Manual / Modbus Communication Protocol Specification*
+- **章節參照**：
+  - Parameter Group 05 (Communication Parameters): `05-17`, `05-18`, `05-21`
+  - Parameter Group 10 (System Parameters): `10-39` (EEPROM Save)
+  - Parameter Group 0A (Auxiliary Function / Alarm Reset): `0A-00`
 
-**Watchdog 觸發與復歸行為**：
-- 當 `05-17 > 0` 且 `05-21 = 2` 時，若通訊中斷超過 `05-17` ms，M1 驅動器將硬體鎖死並進入 `Er.140` 警報狀態，切斷馬達輸出。
-- 復歸需待通訊恢復後，發送警報清除指令（寫入 `0A-00` / `0x0A00`）或重新上電。
-- **注意**：精確之 `05-17` 數值必須在完成真實 control loop 時序量測（IMP-008）後審慎決定，不得隨意填寫。
+---
+
+### 3.2 四層狀態分析表
+
+| 項目 | 暫存器 | A. Manual-Defined 官方定義 | B. Current-Device 實機現況 | C. Hardware-Verified 行為驗證 | D. Safety Qualification 安全認證 |
+|---|---|---|---|---|---|
+| 通訊逾時時間 | `05-17` (`0x0510`) | 單位 ms，範圍 0–65535，預設 0（停用）。>0 時若未收到定址至本機之有效封包即判定通訊逾時。 | `0` (DISABLED) 於 ID1 與 ID2（依 `logs/manual/config.txt` 與 L2 唯讀掃描）。 | **UNVERIFIED** (IMP-007 未執行實機 watchdog trip 驗證)。 | **NOT ESTABLISHED** (非 certified safety function)。 |
+| 通訊錯誤門檻 | `05-18` (`0x0511`) | 單位 次，連續通訊錯誤判定門檻。 | `0` 於 ID1 與 ID2。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
+| 通訊故障動作 | `05-21` (`0x0514`) | `0`: 僅警告；`1`: 減速停止不報警；`2`: 急停並觸發報警，清除 NET-IN 虛擬輸入（切斷 SVON）。 | `0` 於 ID1 與 ID2。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
+| EEPROM 儲存 | `10-39` (`0x0A27`) | 寫入 `1` 儲存參數至非揮發性記憶體。 | 未在 IMP-007 執行寫入。 | **UNVERIFIED**。 | **NOT ESTABLISHED**。 |
+| 警報清除暫存器 | `0A-00` (`0x0A00`) | 寫入指定代碼清除驅動器警報。 | 未在 IMP-007 執行寫入。 | **UNVERIFIED** (歷史 bringup 曾觀察到通訊中斷觸發報警後無法僅藉軟體清除，需重啟電源)。 | **NOT ESTABLISHED**。 |
 
 ---
 
@@ -67,7 +74,7 @@ Level 3 涉及的寫入操作（`enable`, `stop`, `disable`）統稱為 **Zero-S
 在執行任何 Level 3 指令前，操作人員必須在現場逐項確認下列條件：
 
 - [ ] **Target Device 唯一性確認**：確認 `/dev/ttyUSB0` 為唯一的 M1 RS-485 轉接器，ID 1 為右輪，ID 2 為左輪。
-- [ ] **實體斷電路徑待命**：操作人員手邊備妥實體電源切斷開關，並預先確認可在任何異常時於 1 秒內物理斷電。
+- [ ] **實體斷電路徑待命**：物理電源隔離／緊急停止開關（E-Stop / Power Isolation Switch）必須事前確認處於可立即操作狀態；測試全程操作人員必須在場且手部可直接觸及開關，不預設任何固定反應時間安全上限。
 - [ ] **車體架高脫離地面**：驅動輪必須完全懸空架高，確認輪胎旋轉時不會造成車體移動或接觸任何物體。
 - [ ] **受控區域淨空**：車體周圍無雜物與非測試人員。
 - [ ] **通訊健全性已驗證**：已完成 Level 2 唯讀測試（FC03 `read_state` 正確且無 Alarm）。
@@ -137,4 +144,4 @@ Level 3 涉及的寫入操作（`enable`, `stop`, `disable`）統稱為 **Zero-S
 
 ### Step 5: Bounded Exchange Motion (Level 4 Motion) — [BLOCKED]
 > 🛑 **STATUS: BLOCKED**
-> **REASON**: 缺少獨立於 Process 之外的 Fail-Safe Stop 保證機制（M1 通訊 Watchdog 尚未完成實體閉環驗證）。本步驟嚴禁在實機執行。
+> **REASON**: 缺少獨立於 Process 之外的 Fail-Safe Stop 保證機制（M1 通訊 Watchdog 尚未完成實體閉環驗證且非認證安全功能）。本步驟嚴禁在實機執行。
