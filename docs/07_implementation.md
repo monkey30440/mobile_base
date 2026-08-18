@@ -1511,20 +1511,21 @@ src/mobile_base_perception/
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`mobile_base_perception` 於 ROS 2 Jazzy 環境下正確建置與安裝。<br/>2. **雙 picoScan 獨立配置語意** (`PASS`)：FL (`192.168.0.1`, UDP `2115`, `base_lidar_link_FL`, `/scan_front`) 與 BR (`192.168.0.2`, UDP `2116`, `base_lidar_link_BR`, `/scan_rear`) 參數完全隔離且符合 06 與 picoScan150 原生規範。<br/>3. **TF 唯一性防護** (`PASS`)：雙節點均設定 `tf_publish_rate: 0.0`，杜絕與 S1 `robot_state_publisher` 衝突；S1 靜態 TF 發布正常。<br/>4. **Launch 組合生成與無非授權元件** (`PASS`)：LaunchDescription 僅生成雙 `sick_generic_caller` 節點，無 `dual_laser_merger` 或自製 TF workaround。<br/>5. **實機網路連通與 SOPAS 交握 (Stage L1)** (`PASS`)：實機 `192.168.0.1:2111` 與 `192.168.0.2:2111` 之 TCP 連通正常。<br/>6. **實機雙串流接收與訊息有效性 (Stage L2)** (`PASS`)：`/scan_front`（24.999 Hz）與 `/scan_rear`（25.005 Hz）之實體點雲有效，非零單調遞增 timestamp，有限距離點雲分佈正常（90% 有效障礙物距離）。 |
-| 尚未證明 (後續驗證項) | 1. **來源隔離與故障安全 (Stage L3)**：單一感測器遮蔽獨立性與斷線行為。<br/>2. **雙雷達點雲融合 (Checklist #12)**：`dual_laser_merger` 融合輸出（屬 #12 範疇）。 |
+| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`mobile_base_perception` 於 ROS 2 Jazzy 環境下正確建置與安裝。<br/>2. **雙 picoScan 獨立配置語意** (`PASS`)：FL (`192.168.0.1`, UDP `2115`, `base_lidar_link_FL`, `/scan_front`) 與 BR (`192.168.0.2`, UDP `2116`, `base_lidar_link_BR`, `/scan_rear`) 參數完全隔離且符合 06 與 picoScan150 原生規範。<br/>3. **TF 唯一性與 Layer-1 連通性** (`PASS`)：雙節點均設定 `tf_publish_rate: 0.0`，杜絕與 S1 `robot_state_publisher` 衝突；S1 靜態 TF 正確發布 `base_lidar_link_FL_1` 與 `base_lidar_link_BR_1`。<br/>4. **Launch 組合生成與無非授權元件** (`PASS`)：LaunchDescription 僅生成雙 `sick_generic_caller` 節點，無 `dual_laser_merger` 混入或自製 TF workaround。<br/>5. **實機網路連通與 SOPAS 交握 (Stage L1)** (`PASS`)：實機 `192.168.0.1:2111` 與 `192.168.0.2:2111` 之 TCP 連通正常。<br/>6. **實機雙串流接收與訊息有效性 (Stage L2)** (`PASS`)：`/scan_front`（24.999 Hz）與 `/scan_rear`（25.005 Hz）之實體 1200-bin 點雲有效，非零單調遞增 timestamp，有限距離點雲分佈正常（90% 有效障礙物距離）。 |
+| 尚未證明 (後續驗證項) | 1. **雙雷達點雲融合 (Checklist #12)**：`dual_laser_merger` 融合輸出（屬 #12 範疇）。<br/>2. **範疇界定說明**：Stage L3 感測器中斷/故障注入非屬 Checklist #10 原生完成條件，不在本項結案範圍內。 |
 
 #### 3.4.9 Known Limits / Outstanding Obligations
 
 - **驗證深度治理原則**：觀察到之實機發布頻率（如 $\approx 25\,\text{Hz}$）、封包延遲與點雲距離均為實測經驗證據（Empirical Observations），非未經授權硬編碼之剛性門檻。
 - **持久化配置保護**：SOPAS 啟動指令僅設定運作階段之 ScanDataDestination，嚴禁執行任何對 LiDAR 內部非揮發性記憶體（EEPROM/Flash）之永久寫入或網路 IP 修改命令。
 - **QoS 相容性與邊界約定**：實測觀察到 `sick_scan_xd` 發布者使用之 `RELIABLE / TRANSIENT_LOCAL` QoS 與下游訂閱者配置（如 `BEST_EFFORT / VOLATILE`）在 DDS 規範下完全相容。此相容性判定不構成在任意系統負載或極端網路條件下「零掉包」之絕對保證。
+- **Stage L3 範疇劃分**：Stage L3 感測器中斷/故障注入非屬 Checklist #10 原生完成條件，不在本項結案範圍內。
 - **dual_laser_merger 範疇劃分**：雙雷達融合屬於 Checklist #12（Perception & Odometry Integration）範疇，不作為 Checklist #10 之結案阻塞項。
 
 #### 3.4.10 Feature Freeze Status / Next Dependency
 
 | 欄位 | 內容 |
 |---|---|
-| Feature freeze status | `Initial Slice Complete` (S2 Perception picoScan150 Baseline Established; Checklist #10 Remains `[~]`) |
-| Freeze condition | `mobile_base_perception` 套件建置與單元/語法測試全部通過；Checklist #10 維持 `[~]` 等待實機數據驗收證據；Checklist #11 尚未開始 `[ ]` |
-| Next dependency | Checklist #10 實機量測擷取驗證 (Stage L1/L2/L3) / Checklist #11 `S2 TDK IMU runtime integration` (`[ ] NOT STARTED`) |
+| Feature freeze status | `Feature Freeze / Baseline Closed` (S2 Perception picoScan150 Baseline Established; Checklist #10 Closed `[x]`) |
+| Freeze condition | `mobile_base_perception` 套件建置與單元/語法測試全部通過；雙路實體 picoScan150 實機量測數據與 TF static 連通性驗證完畢；Checklist #10 正式結案 `[x]`；Checklist #11 尚未開始 `[ ]` |
+| Next dependency | Checklist #11 `S2 TDK IMU runtime integration` (`[ ] NOT STARTED`) |
