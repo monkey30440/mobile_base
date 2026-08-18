@@ -151,6 +151,13 @@ int run_control_check(
   if (opts.op == ControlOp::EXCHANGE) {
     out << "Target RPM      : " << opts.rpm.value() << " RPM\n";
     out << "Duration        : " << opts.duration_ms.value() << " ms\n";
+    out << "[SAFETY HAZARD WARNING]\n";
+    out << "  * Non-zero motion command will be issued to motor drivers.\n";
+    out <<
+      "  * Software duration timer inside this process is NOT an independent safety mechanism.\n";
+    out << "  * Process crash, SIGKILL, segfault, or hang will prevent software automatic stop.\n";
+    out <<
+      "  * Physical emergency stop / power cut switch MUST be manned and accessible by operator.\n";
   }
 
   if (opts.dry_run) {
@@ -161,22 +168,25 @@ int run_control_check(
     switch (opts.op) {
       case ControlOp::READ_STATE:
         out << "  1. Multi-drive 2.0 FC03 read_state(" << opts.driver_a << ", "
-            << opts.driver_b << ")\n";
+            << opts.driver_b << ") [read-only]\n";
         out << "  2. Parse and print 16-word status feedback\n";
         break;
       case ControlOp::ENABLE:
         out << "  1. Multi-drive 2.0 FC17 enable(" << opts.driver_a << ", "
-            << opts.driver_b << ") [SVON 0x0006]\n";
+            << opts.driver_b << ") [SVON 0x0006] "
+            << "(zero-speed-intent control write, alters holding state)\n";
         out << "  2. Verify servo active status (status & 0x0001 != 0)\n";
         break;
       case ControlOp::STOP:
         out << "  1. Multi-drive 2.0 FC17 stop(" << opts.driver_a << ", "
-            << opts.driver_b << ") [JG 0x0001 with 0 RPM]\n";
+            << opts.driver_b << ") [JG 0x0001 with 0 RPM] "
+            << "(zero-speed-intent control write, not a certified safety stop)\n";
         out << "  2. Read and verify zero velocity feedback\n";
         break;
       case ControlOp::DISABLE:
         out << "  1. Multi-drive 2.0 FC17 disable(" << opts.driver_a << ", "
-            << opts.driver_b << ") [SVOFF 0x0007]\n";
+            << opts.driver_b << ") [SVOFF 0x0007] "
+            << "(zero-speed-intent control write, releases holding torque)\n";
         out << "  2. Verify servo disabled status\n";
         break;
       case ControlOp::EXCHANGE: {
@@ -187,7 +197,8 @@ int run_control_check(
           out << "     - Exchange command: Driver " << opts.driver_a << " -> +"
               << opts.rpm.value() << " RPM, Driver " << opts.driver_b << " -> -"
               << opts.rpm.value() << " RPM\n";
-          out << "     - On any communication failure: abort immediately without retry\n";
+          out << "     - On any communication failure: abort immediately "
+              << "with best-effort stop without retry\n";
           out << "  2. Post-motion: send stop(" << opts.driver_a << ", "
               << opts.driver_b << ") [JG 0 RPM]\n";
           out << "  3. Post-motion: read_state(" << opts.driver_a << ", "
@@ -241,7 +252,7 @@ int run_control_check(
       }
 
     case ControlOp::ENABLE: {
-        out << "[Step 2] Sending Multi-drive 2.0 SVON (enable)...\n";
+        out << "[Step 2] Sending Multi-drive 2.0 SVON (zero-speed-intent control write)...\n";
         auto res = driver.enable(opts.driver_a, opts.driver_b);
         if (!res.ok) {
           err << "FAIL: enable failed: " << error_code_to_string(res.error) << "\n";
@@ -254,7 +265,7 @@ int run_control_check(
       }
 
     case ControlOp::STOP: {
-        out << "[Step 2] Sending Multi-drive 2.0 JG 0 (stop)...\n";
+        out << "[Step 2] Sending Multi-drive 2.0 JG 0 (zero-speed-intent control write)...\n";
         auto res = driver.stop(opts.driver_a, opts.driver_b);
         if (!res.ok) {
           err << "FAIL: stop failed: " << error_code_to_string(res.error) << "\n";
@@ -267,7 +278,7 @@ int run_control_check(
       }
 
     case ControlOp::DISABLE: {
-        out << "[Step 2] Sending Multi-drive 2.0 SVOFF (disable)...\n";
+        out << "[Step 2] Sending Multi-drive 2.0 SVOFF (zero-speed-intent control write)...\n";
         auto res = driver.disable(opts.driver_a, opts.driver_b);
         if (!res.ok) {
           err << "FAIL: disable failed: " << error_code_to_string(res.error) << "\n";
@@ -304,8 +315,21 @@ int run_control_check(
           if (!ex_res.ok) {
             err << "FAIL: exchange failed during cycle " << cycle_count
                 << ": " << error_code_to_string(ex_res.error) << "\n";
-            err << "EMERGENCY: Sending stop primitive...\n";
-            driver.stop(opts.driver_a, opts.driver_b);
+            err << "[BEST-EFFORT CLEANUP] Attempting best-effort software stop and disable...\n";
+            auto stop_res = driver.stop(opts.driver_a, opts.driver_b);
+            auto dis_res = driver.disable(opts.driver_a, opts.driver_b);
+            if (!stop_res.ok || !dis_res.ok) {
+              err << "FAIL: Best-effort cleanup also failed: stop="
+                  << error_code_to_string(stop_res.error)
+                  << ", disable=" << error_code_to_string(dis_res.error) << "\n";
+              err << "CRITICAL: Motor state cannot be guaranteed safe by software. "
+                  << "Operator must invoke physical power cut!\n";
+            } else {
+              err << "WARNING: Best-effort stop/disable sent, "
+                  << "but primary exchange operation FAILED.\n";
+              err << "NOTE: Best-effort cleanup does not guarantee motor safety; "
+                  << "physical verification required.\n";
+            }
             driver.disconnect();
             return 4;
           }
@@ -317,16 +341,31 @@ int run_control_check(
         out << "PASS: Motion duration completed (" << cycle_count << " cycles).\n";
 
         out << "[Step 3] Post-motion: stopping...\n";
-        driver.stop(opts.driver_a, opts.driver_b);
+        auto stop_res = driver.stop(opts.driver_a, opts.driver_b);
+        if (!stop_res.ok) {
+          err << "FAIL: Post-motion stop failed: " << error_code_to_string(stop_res.error) << "\n";
+          driver.disable(opts.driver_a, opts.driver_b);
+          driver.disconnect();
+          return 5;
+        }
 
         out << "[Step 4] Post-motion: reading final state...\n";
         auto st_res = driver.read_state(opts.driver_a, opts.driver_b);
         if (st_res.ok) {
           print_states(st_res.value);
+        } else {
+          err << "WARNING: Post-motion read_state failed: " << error_code_to_string(st_res.error) <<
+            "\n";
         }
 
         out << "[Step 5] Post-motion: disabling servo...\n";
-        driver.disable(opts.driver_a, opts.driver_b);
+        auto dis_res = driver.disable(opts.driver_a, opts.driver_b);
+        if (!dis_res.ok) {
+          err << "FAIL: Post-motion disable failed: " << error_code_to_string(dis_res.error) <<
+            "\n";
+          driver.disconnect();
+          return 6;
+        }
         break;
       }
 

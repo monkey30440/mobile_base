@@ -1025,7 +1025,8 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|
-| 2026-08-18T12:03:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 函式庫、`m1_l2_read_check` 工具與 `m1_control_check` 驗證 Harness 建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T120241_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120241_build_m1_driver.txt) |
+| 2026-08-18T12:06:51+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 函式庫、`m1_l2_read_check` 工具與 `m1_control_check` 驗證 Harness（含 mock 支援與安全警告）建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T120638_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120638_build_m1_driver.txt) |
+| 2026-08-18T12:03:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）`mobile_base_control` 套件與 `m1_control_check` 初版建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T120241_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120241_build_m1_driver.txt) |
 | 2026-08-18T11:59:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）`mobile_base_control` 套件含 explicit timeout_ms 簽章建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115855_build_m1_driver.txt) |
 | 2026-08-18T11:46:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | （歷史基準）初版 `mobile_base_control` 套件建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt) |
 
@@ -1033,7 +1034,8 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T12:03:02+08:00 | `mobile_base_control` (All tests) | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 17 項 GTests（`test_m1_driver` 9 項 + `test_m1_control_check` 8 項）與 6 項 ament linters 通過，0 failures（71 tests total）。 | [`docs/verification/IMP-007/2026-08-18T120243_unit_m1_control_check.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120243_unit_m1_control_check.txt) |
+| 2026-08-18T12:06:52+08:00 | `mobile_base_control` (All tests) | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 20 項 GTests（`test_m1_driver` 9 項 + `test_m1_control_check` 11 項，含 safety hazard warning、zero-speed-intent 術語、best-effort cleanup 語意與 mock 執行）與 6 項 ament linters 通過，0 failures（74 tests total）。 | [`docs/verification/IMP-007/2026-08-18T120640_unit_m1_control_check.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120640_unit_m1_control_check.txt) |
+| 2026-08-18T12:03:02+08:00 | `mobile_base_control` (All tests) | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）全部 17 項 GTests 與 6 項 ament linters 通過（71 tests total）。 | [`docs/verification/IMP-007/2026-08-18T120243_unit_m1_control_check.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T120243_unit_m1_control_check.txt) |
 | 2026-08-18T11:59:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）9 項 GTests 與 6 項 ament linters 通過（46 tests total）。 | [`docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T115857_unit_m1_driver.txt) |
 | 2026-08-18T11:46:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | （歷史基準）初版 8 項 GTests 與 6 項 ament linters 通過（45 tests total）。 | [`docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt) |
 | 2026-08-18T11:46:03+08:00 | `M1DriverTest.NegativeHandling` | `test_m1_driver --gtest_filter=M1DriverTest.NegativeHandling` | PASS | 驗證無效驅動器 ID、逾時模擬與發送失敗之錯誤對映。 | [`docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt) |
@@ -1050,15 +1052,16 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | `m1_driver` 與 `m1_control_check` 驗證 Harness 在 ROS 2 Jazzy 環境中成功編譯並通過所有 17 項單元測試與 linter（71 tests total）；在實機 `/dev/ttyUSB0` (230400 8N1) 上完成 Level 2 唯讀測試；`m1_control_check` 完成 dry-run 預覽驗證與參數邊界防護；Level 3/4 實機受控寫入驗證程序已建立於 `docs/m1_bringup_validation/16_imp007_controlled_write_procedure.md`。 |
+| 已證明 | `m1_driver` 與 `m1_control_check` 驗證 Harness 在 ROS 2 Jazzy 環境中成功編譯並通過所有 20 項單元測試與 linter（74 tests total）；在實機 `/dev/ttyUSB0` (230400 8N1) 上完成 Level 2 唯讀測試；`m1_control_check` 完成 dry-run 預覽驗證、參數邊界防護、Process-Crash 安全警告、Best-Effort cleanup 語意與 mock 執行測試；Level 3 零速意圖控制寫入程序與 Level 4 BLOCKED 宣告已建立於 `docs/m1_bringup_validation/16_imp007_controlled_write_procedure.md`。 |
 | 尚未證明 | 實機 SERVO-ON 使能寫入、馬達實體旋轉、JG 速度控制輸出、馬達實體運動阻抗與急停煞停時間（須待操作人員現場即時授權後執行）。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
+- **Process-Crash Hazard 與 Level 4 BLOCKED**：`m1_control_check` 之軟體運動計時器與自動停機流程並非獨立於 Process 的安全機制；若 Host Process 在非零 JG 下發後 Crash / SIGKILL，自動 stop() 將不保證執行。因目前尚無經完整實測證明的硬體通訊 Watchdog 或認證安全控制器，**Level 4 實機運動控制驗證目前嚴格標記為 `BLOCKED`**。
 - **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`M1Driver` 不硬編預設逾時常數，精確 production response timeout 尚待後續 `M1Hardware` (IMP-008) 實機整合與時序量測後確定。
-- **實機受控寫入（Level 3/4）待操作人員即時授權**：依 §6 安全前置程序，所有會向馬達發送 SVON / JG / SVOFF 的寫入操作均須操作人員在場授權並確認架車與斷電路徑，未在本次自動執行。
+- **Level 3 實機寫入待操作人員即時授權**：依 §6 安全前置程序，所有會向馬達發送 SVON / JG 0 / SVOFF 的零速意圖控制寫入均須操作人員在場授權並確認架車與斷電路徑，未在本次自動執行。
 - `M1Driver` 僅提供通訊傳輸與狀態封裝，上層 `M1Hardware` (`SystemInterface` plugin) 將於 #8 實作。
 
 ---

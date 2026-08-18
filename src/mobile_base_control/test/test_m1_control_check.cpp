@@ -187,7 +187,7 @@ TEST(M1ControlCheckTest, CommandLineParsing)
   EXPECT_FALSE(opts.execute);
 }
 
-TEST(M1ControlCheckTest, DryRunNeverCallsDriver)
+TEST(M1ControlCheckTest, DryRunNeverCallsDriverAndShowsHazardWarnings)
 {
   ControlCheckOptions opts;
   opts.op = ControlOp::EXCHANGE;
@@ -215,6 +215,15 @@ TEST(M1ControlCheckTest, DryRunNeverCallsDriver)
   EXPECT_NE(out_str.find("DRY RUN (NO HARDWARE WRITES EXECUTED)"), std::string::npos);
   EXPECT_NE(out_str.find("Target RPM      : 50 RPM"), std::string::npos);
   EXPECT_NE(out_str.find("Duration        : 1000 ms"), std::string::npos);
+  EXPECT_NE(out_str.find("[SAFETY HAZARD WARNING]"), std::string::npos);
+  EXPECT_NE(
+    out_str.find(
+      "Software duration timer inside this process is NOT an independent safety mechanism"),
+    std::string::npos);
+  EXPECT_NE(
+    out_str.find(
+      "Process crash, SIGKILL, segfault, or hang will prevent software automatic stop"),
+    std::string::npos);
   EXPECT_NE(out_str.find("PASS: Dry-run preview generated successfully."), std::string::npos);
 }
 
@@ -222,7 +231,7 @@ TEST(M1ControlCheckTest, PreviewContentForOperations)
 {
   M1Driver driver;
 
-  // Test Enable Preview
+  // Test Enable Preview (zero-speed-intent control write)
   {
     ControlCheckOptions opts;
     opts.op = ControlOp::ENABLE;
@@ -232,9 +241,10 @@ TEST(M1ControlCheckTest, PreviewContentForOperations)
     int ret = run_control_check(opts, driver, out, err);
     EXPECT_EQ(ret, 0);
     EXPECT_NE(out.str().find("SVON 0x0006"), std::string::npos);
+    EXPECT_NE(out.str().find("zero-speed-intent control write"), std::string::npos);
   }
 
-  // Test Stop Preview
+  // Test Stop Preview (zero-speed-intent control write, not certified safety stop)
   {
     ControlCheckOptions opts;
     opts.op = ControlOp::STOP;
@@ -244,6 +254,7 @@ TEST(M1ControlCheckTest, PreviewContentForOperations)
     int ret = run_control_check(opts, driver, out, err);
     EXPECT_EQ(ret, 0);
     EXPECT_NE(out.str().find("JG 0x0001 with 0 RPM"), std::string::npos);
+    EXPECT_NE(out.str().find("not a certified safety stop"), std::string::npos);
   }
 
   // Test Disable Preview
@@ -256,6 +267,7 @@ TEST(M1ControlCheckTest, PreviewContentForOperations)
     int ret = run_control_check(opts, driver, out, err);
     EXPECT_EQ(ret, 0);
     EXPECT_NE(out.str().find("SVOFF 0x0007"), std::string::npos);
+    EXPECT_NE(out.str().find("releases holding torque"), std::string::npos);
   }
 }
 
@@ -267,20 +279,111 @@ TEST(M1ControlCheckTest, MockExecutionFailureImmediatelyAborts)
   opts.execute = true;
 
   M1Driver driver;
-  // Inject connection override via transact failure
-  driver.set_transact_override(
-    [](const std::vector<uint8_t> &) -> Result<std::vector<uint8_t>> {
-      return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
-    });
-
-  // Note: driver.connect to a real port won't be called if we mock driver transact
-  // But driver.connect will fail on non-existent port unless we test mock run
+  // Non-existent device will cause connect failure (error code 2)
   opts.device = "/dev/non_existent_serial_port";
   std::stringstream out;
   std::stringstream err;
   int ret = run_control_check(opts, driver, out, err);
 
-  // Connection failure returns code 2
   EXPECT_EQ(ret, 2);
   EXPECT_NE(err.str().find("FAIL: Connection failed"), std::string::npos);
+}
+
+TEST(M1ControlCheckTest, BestEffortCleanupFailureReportedAsFail)
+{
+  ControlCheckOptions opts;
+  opts.device = "mock";
+  opts.op = ControlOp::EXCHANGE;
+  opts.rpm = 50;
+  opts.duration_ms = 100;
+  opts.dry_run = false;
+  opts.execute = true;
+
+  M1Driver driver;
+  // Mock transact: exchange fails, and subsequent cleanup stop/disable also fails
+  driver.set_transact_override(
+    [](const std::vector<uint8_t> &) -> Result<std::vector<uint8_t>> {
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+    });
+
+  std::stringstream out;
+  std::stringstream err;
+  int ret = run_control_check(opts, driver, out, err);
+
+  // Return code must be non-zero (4)
+  EXPECT_EQ(ret, 4);
+  const std::string err_str = err.str();
+  EXPECT_NE(err_str.find("[BEST-EFFORT CLEANUP]"), std::string::npos);
+  EXPECT_NE(err_str.find("FAIL: Best-effort cleanup also failed"), std::string::npos);
+  EXPECT_NE(
+    err_str.find("CRITICAL: Motor state cannot be guaranteed safe by software"),
+    std::string::npos);
+
+  // Output must NOT report PASS
+  EXPECT_EQ(out.str().find("PASS: Validation step completed successfully"), std::string::npos);
+}
+
+TEST(M1ControlCheckTest, BestEffortCleanupSuccessStillReportsFail)
+{
+  ControlCheckOptions opts;
+  opts.device = "mock";
+  opts.op = ControlOp::EXCHANGE;
+  opts.rpm = 50;
+  opts.duration_ms = 100;
+  opts.dry_run = false;
+  opts.execute = true;
+
+  M1Driver driver;
+  int call_count = 0;
+  driver.set_transact_override(
+    [&call_count](const std::vector<uint8_t> & req) -> Result<std::vector<uint8_t>> {
+      call_count++;
+      if (call_count == 1) {
+        // First call is exchange: simulate timeout failure
+        return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+      }
+      // Subsequent cleanup calls (stop, disable) succeed
+      return Result<std::vector<uint8_t>>::success(
+        create_dummy_md2_response(req[1], 0, 0, 0, 0, 0, 0, 0, 0));
+    });
+
+  std::stringstream out;
+  std::stringstream err;
+  int ret = run_control_check(opts, driver, out, err);
+
+  // Return code must be non-zero (4)
+  EXPECT_EQ(ret, 4);
+  const std::string err_str = err.str();
+  EXPECT_NE(err_str.find("[BEST-EFFORT CLEANUP]"), std::string::npos);
+  EXPECT_NE(
+    err_str.find("WARNING: Best-effort stop/disable sent, but primary exchange operation FAILED"),
+    std::string::npos);
+
+  // Output must NOT report PASS
+  EXPECT_EQ(out.str().find("PASS: Validation step completed successfully"), std::string::npos);
+}
+
+TEST(M1ControlCheckTest, MockExecutionExchangeSuccess)
+{
+  ControlCheckOptions opts;
+  opts.device = "mock";
+  opts.op = ControlOp::EXCHANGE;
+  opts.rpm = 50;
+  opts.duration_ms = 60;  // 1-2 cycles
+  opts.dry_run = false;
+  opts.execute = true;
+
+  M1Driver driver;
+  driver.set_transact_override(
+    [](const std::vector<uint8_t> & req) -> Result<std::vector<uint8_t>> {
+      return Result<std::vector<uint8_t>>::success(
+        create_dummy_md2_response(req[1], 0, 0, 50, 100, 0, 0, -50, -100));
+    });
+
+  std::stringstream out;
+  std::stringstream err;
+  int ret = run_control_check(opts, driver, out, err);
+
+  EXPECT_EQ(ret, 0);
+  EXPECT_NE(out.str().find("PASS: Validation step completed successfully."), std::string::npos);
 }

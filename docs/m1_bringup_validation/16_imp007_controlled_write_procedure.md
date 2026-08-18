@@ -1,6 +1,6 @@
 # IMP-007 Controlled Write Validation Procedure
 
-本文件定義關閉 `docs/07_implementation_checklist.md` 第 7 項 S7 `M1Driver` transport vertical slice 所需執行的 Level 3（使能與停機）與 Level 4（受控短時運動）實機驗證程序。
+本文件定義 `docs/07_implementation_checklist.md` 第 7 項 S7 `M1Driver` transport vertical slice 的 Level 3（零速意圖控制寫入）與 Level 4（受控短時運動）驗證規範、安全限制與程序。
 
 > [!CAUTION]
 > **SAFETY GATE: ALL REAL-HARDWARE WRITE/CONTROL OPERATIONS REQUIRE EXECUTION-TIME OPERATOR AUTHORIZATION**
@@ -8,9 +8,63 @@
 
 ---
 
-## 1. Physical Preflight Checklist (依 §6.3 規範)
+## 1. Process-Crash Hazard 與 Level 4 BLOCKED 宣告
 
-在執行任何 Level 3 / Level 4 指令前，操作人員必須在現場逐項確認下列條件：
+### 1.1 Process-Crash Hazard 分析
+- `m1_control_check` 內的運動持續時間計時器（Duration timer）與運動結束後的自動停機流程（`stop()` → `read_state()` → `disable()`）**完全運行於 Host Process 空間，並非獨立於 Process 的硬體安全保證**。
+- **危險情境**：若 `m1_control_check` 在發出非零 `JG` 速度命令後發生 Process Crash、`SIGKILL`、Segmentation Fault、Host 斷網或 Hang，**後續的軟體 `stop()` 與 `disable()` 流程將完全無法執行**，M1 驅動器將持續以最後接收之速度命令運轉，直到外力介入。
+- **目前基線現狀**：目前 repository 尚未完成並核准任何獨立於 Host Process 運動命令迴圈之硬體 Fail-safe 機制（例如經完整時序量測與觸發驗證之 M1 通訊 Watchdog 或認證安全控制器）。
+
+### 1.2 Level 4 狀態宣告：BLOCKED
+基於上述 Process-Crash Hazard，**Level 4 Bounded Exchange Motion 實機驗證目前標記為 `BLOCKED`**，直到至少有一個獨立於 motion loop 的 fail-safe 停機機制獲得權威證據與實測證明為止。
+
+---
+
+## 2. Level 3 術語定義與語意邊界
+
+Level 3 涉及的寫入操作（`enable`, `stop`, `disable`）統稱為 **Zero-Speed-Intent Control Write（零速意圖控制寫入）**，不得稱為「保證無運動寫入（no-motion write）」：
+
+- **`enable()` (SVON `0x0006`)**：
+  - **語意**：向驅動器發送使能命令，將驅動器狀態轉入 Servo-On。
+  - **物理影響**：馬達將產生保持阻抗（Holding Torque），雖未下發旋轉速度，但已改變驅動器動力輸出狀態。
+- **`stop()` (JG `0x0001` with 0 RPM)**：
+  - **語意**：向驅動器下發 0 RPM 速度命令。
+  - **語意邊界**：僅表達「零速命令意圖」，**絕非經認證之安全停機（Certified Safety Stop）**；若通訊中斷或驅動器異常，不保證物理煞停。
+- **`disable()` (SVOFF `0x0007`)**：
+  - **語意**：向驅動器發送釋放使能命令。
+  - **物理影響**：驅動器釋放激磁，馬達進入自由滑行（Coasting）狀態，其物理阻尼與慣性需在實機驗證。
+
+---
+
+## 3. Authoritative M1 Communication Watchdog 規格整理
+
+依據 M1 官方技術手冊，M1 驅動器內建之 RS485 通訊逾時保護規格如下（僅供技術架構整理，本次不寫入實機）：
+
+| 參數編號 | Modbus 暫存器 | 參數名稱 | 權威定義與語意 |
+|---|---|---|---|
+| `05-17` | `0x0510` | 通訊逾時時間 (ms) | 預設為 `0`（Watchdog 停用）。當設定為 `> 0` 時，若驅動器在該時間內未收到任何定址至本機之有效 Modbus 通訊，即判定為通訊逾時故障。 |
+| `05-18` | `0x0511` | 通訊錯誤次數門檻 | 判定通訊故障前允許的連續 CRC 或訊框錯誤次數。 |
+| `05-21` | `0x0514` | 通訊故障動作模式 | `0`: 僅警告無動作；`1`: 減速停止不報警；`2`: 緊急停止並觸發 `Er.140` (`0x008C`) 警報，同時清除遠端虛擬輸入狀態（切斷 SVON 使能）。 |
+| `10-39` | `0x0A27` | 參數寫入 EEPROM | 寫入 `1` 可將上述 Watchdog 參數永久儲存至驅動器非揮發性記憶體。 |
+
+**Watchdog 觸發與復歸行為**：
+- 當 `05-17 > 0` 且 `05-21 = 2` 時，若通訊中斷超過 `05-17` ms，M1 驅動器將硬體鎖死並進入 `Er.140` 警報狀態，切斷馬達輸出。
+- 復歸需待通訊恢復後，發送警報清除指令（寫入 `0A-00` / `0x0A00`）或重新上電。
+- **注意**：精確之 `05-17` 數值必須在完成真實 control loop 時序量測（IMP-008）後審慎決定，不得隨意填寫。
+
+---
+
+## 4. Best-Effort Cleanup 語意邊界
+
+- 在 `m1_control_check` 執行過程中（包括 `--op exchange`），若任一週期發生通訊逾時或錯誤，Harness 將嘗試發送 `stop()` 與 `disable()`。
+- **語意邊界**：此清理程序屬於 **Best-Effort（盡力而為）**。
+- **嚴格宣告**：若發生通訊中斷，軟體清理指令本身可能無法成功送達驅動器。**Best-Effort Cleanup 絕對不能保證馬達已處於安全狀態**；當清理失敗時，Harness 將輸出嚴重警告，操作人員必須立即採取實體斷電處置。
+
+---
+
+## 5. Physical Preflight Checklist (依 §6.3 規範)
+
+在執行任何 Level 3 指令前，操作人員必須在現場逐項確認下列條件：
 
 - [ ] **Target Device 唯一性確認**：確認 `/dev/ttyUSB0` 為唯一的 M1 RS-485 轉接器，ID 1 為右輪，ID 2 為左輪。
 - [ ] **實體斷電路徑待命**：操作人員手邊備妥實體電源切斷開關，並預先確認可在任何異常時於 1 秒內物理斷電。
@@ -20,36 +74,18 @@
 
 ---
 
-## 2. Validation Executable Interface
-
-- **執行檔路徑**：`./install/mobile_base_control/lib/mobile_base_control/m1_control_check`
-- **參數說明**：
-  - `--op <read|enable|stop|disable|exchange>`：指定驗證操作（必填，無預設值）。
-  - `--device <path>`：串列埠裝置（預設 `/dev/ttyUSB0`）。
-  - `--baud <int>`：通訊速率（預設 `230400`）。
-  - `--timeout-ms <int>`：單次交易逾時（預設 `100` ms）。
-  - `--driver-a <id>`：驅動器 A ID（預設 `1`，右輪）。
-  - `--driver-b <id>`：驅動器 B ID（預設 `2`，左輪）。
-  - `--rpm <int>`：目標轉速（`--op exchange` 必填，由 operator 提供）。
-  - `--duration-ms <int>`：運動持續時間（`--op exchange` 必填，由 operator 提供）。
-  - `--dry-run`：預覽指令序列，不開啟 serial port、不執行任何硬體寫入。
-  - `--execute`：安全確認標籤；真實硬體執行時必填。
-
----
-
-## 3. Step-by-step Controlled Execution Sequence
+## 6. Step-by-step Execution Sequence
 
 ### Step 0: Command Preview (Dry-Run)
-在執行真實寫入前，先使用 `--dry-run` 確認參數與指令序列無誤：
 ```bash
 ./install/mobile_base_control/lib/mobile_base_control/m1_control_check --dry-run --op enable
-./install/mobile_base_control/lib/mobile_base_control/m1_control_check --dry-run --op exchange --rpm <VALIDATED_RPM> --duration-ms <VALIDATED_MS>
+./install/mobile_base_control/lib/mobile_base_control/m1_control_check --dry-run --op stop
+./install/mobile_base_control/lib/mobile_base_control/m1_control_check --dry-run --op disable
 ```
 
 ---
 
 ### Step 1: Pre-operation State Read (Level 2 Baseline)
-確認馬達處於 Servo-Off 狀態且無 Alarm：
 ```bash
 ./install/mobile_base_control/lib/mobile_base_control/m1_control_check --execute --op read
 ```
@@ -58,7 +94,7 @@
 
 ---
 
-### Step 2: Servo Enable Primitive (Level 3 No-Motion Write)
+### Step 2: Servo Enable (Level 3 Zero-Speed-Intent Control Write)
 > **REQUIRES EXECUTION-TIME OPERATOR AUTHORIZATION**
 ```bash
 ./install/mobile_base_control/lib/mobile_base_control/m1_control_check --execute --op enable
@@ -66,14 +102,14 @@
 - **Expected State Before**：Status = 6, Alarm = 0.
 - **Expected Observation**：
   - 驅動器接收 Multi-drive 2.0 FC17 (SVON `0x0006`)。
-  - 馬達鎖定（產生保持阻抗），但**無旋轉運動**，回授 RPM = 0。
+  - 馬達鎖定（產生保持阻抗），但無旋轉運動，回授 RPM = 0。
   - Status 轉為使能狀態（Status & 0x0001 != 0），Alarm = 0。
 - **Abort Condition**：馬達產生非預期旋轉、發出異音、Alarm != 0 或通訊失敗。
-- **Emergency Stop Path**：立即手動切斷電源或執行 Step 3 / 4。
+- **Emergency Stop Path**：立即手動切斷實體電源。
 
 ---
 
-### Step 3: Stop Primitive Verification (Level 3 No-Motion Write)
+### Step 3: Stop Primitive (Level 3 Zero-Speed-Intent Control Write)
 > **REQUIRES EXECUTION-TIME OPERATOR AUTHORIZATION**
 ```bash
 ./install/mobile_base_control/lib/mobile_base_control/m1_control_check --execute --op stop
@@ -86,7 +122,7 @@
 
 ---
 
-### Step 4: Servo Disable Primitive (Level 3 No-Motion Write)
+### Step 4: Servo Disable (Level 3 Zero-Speed-Intent Control Write)
 > **REQUIRES EXECUTION-TIME OPERATOR AUTHORIZATION**
 ```bash
 ./install/mobile_base_control/lib/mobile_base_control/m1_control_check --execute --op disable
@@ -99,28 +135,6 @@
 
 ---
 
-### Step 5: Bounded Exchange Motion Verification (Level 4 Short-Duration Motion)
-> **REQUIRES EXECUTION-TIME OPERATOR AUTHORIZATION**
-> **PRECONDITION: Operator must explicitly define `<VALIDATED_LOW_SPEED_RPM>` and `<VALIDATED_SHORT_DURATION_MS>`**
-```bash
-./install/mobile_base_control/lib/mobile_base_control/m1_control_check --execute --op exchange --rpm <VALIDATED_LOW_SPEED_RPM> --duration-ms <VALIDATED_SHORT_DURATION_MS>
-```
-- **Execution Flow**：
-  1. 依 20 Hz 週期下發 FC17 (ID1: `+rpm`, ID2: `-rpm`)，持續 `<duration_ms>`。
-  2. 時間到達後自動調用 `stop()` 下發 0 RPM。
-  3. 自動調用 `read_state()` 讀取停止後最終狀態與 position steps。
-  4. 自動調用 `disable()` 釋放馬達。
-- **Expected Observation**：
-  - 架空輪胎以指定低速平穩旋轉，方向一致（ID1 與 ID2 反向對應前進方向）。
-  - 到達指定時間後精確停止並釋放使能。
-  - 無超速、無抖動、無通訊丟包、Alarm = 0。
-- **Abort Condition**：任何單一週期通訊失敗、Alarm != 0 或輪胎旋轉方向異常 -> 程式立即中斷並發送 stop primitive。
-- **Emergency Stop Path**：實體電源開關物理切斷。
-
----
-
-## 4. Verification Evidence Capture
-
-執行通過後，輸出必須依 §4 / §5 規範擷取為 raw evidence 檔案：
-- **路徑**：`docs/verification/IMP-007/<YYYY-MM-DD>T<HHmmss>_hw_m1_controlled_write.txt`
-- **Metadata**：包含 IMP-007、Layer `hardware`、Timestamp、Version SHA、測試條件（架高、RPM、持續時間）、觀察結果、已證明與尚未證明邊界。
+### Step 5: Bounded Exchange Motion (Level 4 Motion) — [BLOCKED]
+> 🛑 **STATUS: BLOCKED**
+> **REASON**: 缺少獨立於 Process 之外的 Fail-Safe Stop 保證機制（M1 通訊 Watchdog 尚未完成實體閉環驗證）。本步驟嚴禁在實機執行。

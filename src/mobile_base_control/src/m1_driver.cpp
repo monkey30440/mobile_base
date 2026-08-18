@@ -237,6 +237,7 @@ Result<ExchangeResult> parse_multidrive_response(
 struct M1Driver::Impl
 {
   modbus_t * ctx{nullptr};
+  bool is_mock{false};
   TransactFn transact_override;
 };
 
@@ -255,7 +256,7 @@ M1Driver & M1Driver::operator=(M1Driver && other) noexcept = default;
 
 bool M1Driver::is_connected() const noexcept
 {
-  return impl_ != nullptr && impl_->ctx != nullptr;
+  return impl_ != nullptr && (impl_->ctx != nullptr || impl_->is_mock);
 }
 
 void M1Driver::set_transact_override(TransactFn fn)
@@ -277,8 +278,13 @@ Result<void> M1Driver::connect(
     return Result<void>::failure(ErrorCode::CONTEXT_CREATE_FAILED);
   }
 
-  if (impl_->ctx != nullptr) {
+  if (impl_->ctx != nullptr || impl_->is_mock) {
     return Result<void>::failure(ErrorCode::ALREADY_CONNECTED);
+  }
+
+  if (device == "mock") {
+    impl_->is_mock = true;
+    return Result<void>::success();
   }
 
   modbus_t * ctx = modbus_new_rtu(
@@ -305,10 +311,13 @@ Result<void> M1Driver::connect(
 
 Result<void> M1Driver::disconnect()
 {
-  if (impl_ && impl_->ctx != nullptr) {
-    modbus_close(impl_->ctx);
-    modbus_free(impl_->ctx);
-    impl_->ctx = nullptr;
+  if (impl_) {
+    if (impl_->ctx != nullptr) {
+      modbus_close(impl_->ctx);
+      modbus_free(impl_->ctx);
+      impl_->ctx = nullptr;
+    }
+    impl_->is_mock = false;
   }
   return Result<void>::success();
 }

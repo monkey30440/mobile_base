@@ -1,0 +1,15 @@
+# IMP: IMP-007
+# Layer: build
+# Timestamp: 2026-08-18T12:06:51+08:00
+# Env: mobile_base:latest / jazzy / Ubuntu 24.04 (Noble)
+# Target: mobile_base_control (m1_driver, m1_l2_read_check, m1_control_check)
+# Command: colcon build --symlink-install --packages-select mobile_base_control
+# Version: ea5c049
+# Result: PASS
+# Proved: Package mobile_base_control builds cleanly with updated safety hazard warnings and best-effort cleanup semantics.
+# Not-proved: Runtime ros2_control integration or real actuator motion.
+
+Starting >>> mobile_base_control
+Finished <<< mobile_base_control [0.15s]
+
+Summary: 1 package finished [0.28s]
