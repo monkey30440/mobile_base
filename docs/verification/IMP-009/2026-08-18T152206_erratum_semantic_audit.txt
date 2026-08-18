@@ -1,0 +1,96 @@
+================================================================================
+IMP-009 S1 ROBOT DESCRIPTION SEMANTIC ERRATUM VERIFICATION EVIDENCE
+================================================================================
+Timestamp: 2026-08-18T15:22:06+08:00
+Target: S1 Robot Description Semantic Erratum Implementation
+Environment: ROS 2 Jazzy, Linux x86_64, Docker Container
+Package: src/mobile_base_description
+
+1. RESPONSE_TIMEOUT_MS OWNERSHIP & DEFAULT REMOVAL
+--------------------------------------------------------------------------------
+- mobile_base.urdf.xacro: Removed default="50" from <xacro:arg name="response_timeout_ms" default=""/>
+- mobile_base_ros2_control.xacro: Macro parameter response_timeout_ms:='' with conditional emission:
+    <xacro:if value="${response_timeout_ms != ''}">
+      <param name="response_timeout_ms">${response_timeout_ms}</param>
+    </xacro:if>
+- robot_description.launch.py: Removed default_value='50' from DeclareLaunchArgument('response_timeout_ms')
+- M1Hardware C++ Plugin: Unchanged; strictly requires parameter, fails on omission.
+- Test Evidence (test_timeout_omission_produces_no_param): PASSED (Omitting parameter results in no param tag, preventing silent 50 ms assumption).
+- Explicit 50 ms Fixture: PASSED (Explicitly passing response_timeout_ms=50 correctly injects parameter into ros2_control).
+
+2. SENSOR MESH VISUAL/COLLISION COMPENSATION MATHEMATICAL PROOF
+--------------------------------------------------------------------------------
+URDF/ROS Convention: R = Rz(yaw) * Ry(pitch) * Rx(roll)
+Target: R_comp = inv(R_joint) such that R_joint * R_comp = Identity
+
+1. Front-Left LiDAR (base_lidar_link_FL):
+   Joint Origin RPY: [pi, 0, pi/4] ([+3.141593, 0.000000, +0.785398] rad)
+   R_joint:
+     [[ 0.707107,  0.707107,  0.000000],
+      [ 0.707107, -0.707107, -0.000000],
+      [ 0.000000,  0.000000, -1.000000]]
+   R_comp (= inv(R_joint)):
+     [[ 0.707107,  0.707107, -0.000000],
+      [ 0.707107, -0.707107,  0.000000],
+      [ 0.000000, -0.000000, -1.000000]]
+   Compensation RPY: [pi, 0, pi/4] (identical to joint RPY due to symmetric orthogonality)
+   Residual Error Norm ||R_joint * R_comp - I||: 5.27e-17
+   Max Vertex Difference to CAD in base_link: 2.78e-17 m (Exact)
+
+2. Rear-Right LiDAR (base_lidar_link_BR):
+   Joint Origin RPY: [pi, 0, -3pi/4] ([+3.141593, 0.000000, -2.356194] rad)
+   R_joint:
+     [[-0.707107, -0.707107, -0.000000],
+      [-0.707107,  0.707107,  0.000000],
+      [ 0.000000,  0.000000, -1.000000]]
+   R_comp (= inv(R_joint)):
+     [[-0.707107, -0.707107,  0.000000],
+      [-0.707107,  0.707107,  0.000000],
+      [-0.000000,  0.000000, -1.000000]]
+   Compensation RPY: [pi, 0, -3pi/4]
+   Residual Error Norm ||R_joint * R_comp - I||: 5.27e-17
+   Max Vertex Difference to CAD in base_link: 5.55e-17 m (Exact)
+
+3. IMU (base_imu_link):
+   Joint Origin RPY: [0, 0, pi/2] ([0.000000, 0.000000, +1.570796] rad)
+   R_joint:
+     [[ 0.000000, -1.000000,  0.000000],
+      [ 1.000000,  0.000000,  0.000000],
+      [ 0.000000,  0.000000,  1.000000]]
+   R_comp (= inv(R_joint)):
+     [[ 0.000000,  1.000000,  0.000000],
+      [-1.000000,  0.000000,  0.000000],
+      [ 0.000000,  0.000000,  1.000000]]
+   Compensation RPY: [0, 0, -pi/2] ([0.000000, 0.000000, -1.570796] rad)
+   Residual Error Norm ||R_joint * R_comp - I||: 0.00e+00
+   Max Vertex Difference to CAD in base_link: 0.00e+00 m (Exact)
+
+3. AUTOMATED TEST SUITE EXECUTION (colcon test)
+--------------------------------------------------------------------------------
+- test_urdf_syntax: PASSED (7 unit tests)
+    * test_timeout_omission_produces_no_param: PASSED
+    * test_xacro_expansion: PASSED
+    * test_check_urdf_cli: PASSED
+    * test_canonical_links_and_root: PASSED
+    * test_canonical_joints_and_transforms: PASSED
+    * test_sensor_mesh_alignment_and_compensation: PASSED
+    * test_lidar_mesh_bounding_boxes: PASSED
+    * test_ros2_control_structure: PASSED
+- test_robot_description_launch: PASSED (Launch integration test)
+    * /robot_description publication verified
+    * /tf_static static transform broadcast verified
+- ament linters (5 suites): PASSED (0 problems)
+
+Summary: 7/7 test suites passed, 0 failures, 0 errors. Full workspace test passed (4 packages).
+
+4. EVIDENCE BOUNDARY & OUTSTANDING OBLIGATIONS
+--------------------------------------------------------------------------------
+PROVEN (PASS):
+- Strict timeout ownership with no implicit production fallback
+- Sensor measurement frames adhere to ROS REP-103 standards on /tf_static
+- Rendered visual and collision meshes sit mathematically flush in chassis CAD mounting pockets
+- robot_state_publisher and xacro expansion syntax and execution
+
+OUTSTANDING OBLIGATION (Checklist #9 Remains [~]):
+- Physical < 2 mm dimensional measurement records of the physical chassis
+================================================================================

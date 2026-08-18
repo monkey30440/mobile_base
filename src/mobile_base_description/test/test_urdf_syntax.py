@@ -16,32 +16,89 @@
 import math
 import os
 import shutil
+import struct
 import subprocess
 import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import get_package_share_directory
+import numpy as np
 import pytest
 import xacro
 
 
+def rpy_to_matrix(roll, pitch, yaw):
+    """Compute 3x3 rotation matrix using URDF / REP-103 convention: R = Rz*Ry*Rx."""
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    rx = np.array([[1.0, 0.0, 0.0],
+                   [0.0, cr, -sr],
+                   [0.0, sr, cr]])
+    ry = np.array([[cp, 0.0, sp],
+                   [0.0, 1.0, 0.0],
+                   [-sp, 0.0, cp]])
+    rz = np.array([[cy, -sy, 0.0],
+                   [sy, cy, 0.0],
+                   [0.0, 0.0, 1.0]])
+    return rz @ ry @ rx
+
+
+def read_stl_vertices(filename):
+    """Read all 3D vertices from a binary STL file."""
+    with open(filename, 'rb') as f:
+        f.read(80)
+        num_triangles = struct.unpack('<I', f.read(4))[0]
+        verts = []
+        for _ in range(num_triangles):
+            data = f.read(50)
+            v1 = struct.unpack('<3f', data[12:24])
+            v2 = struct.unpack('<3f', data[24:36])
+            v3 = struct.unpack('<3f', data[36:48])
+            verts.extend([v1, v2, v3])
+        return np.array(verts)
+
+
 @pytest.fixture(scope='module')
-def urdf_xml_string():
-    """Generate the URDF XML string by expanding mobile_base.urdf.xacro."""
+def xacro_path():
+    """Locate the mobile_base.urdf.xacro file."""
     try:
         pkg_dir = get_package_share_directory('mobile_base_description')
     except Exception:
         pkg_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), '..')
         )
-    xacro_file = os.path.join(pkg_dir, 'urdf', 'mobile_base.urdf.xacro')
+    return os.path.join(pkg_dir, 'urdf', 'mobile_base.urdf.xacro')
+
+
+@pytest.fixture(scope='module')
+def urdf_xml_string(xacro_path):
+    """Generate the URDF XML string by expanding mobile_base.urdf.xacro with explicit timeout."""
     doc = xacro.process_file(
-        xacro_file,
+        xacro_path,
         mappings={
             'use_mock_hardware': 'true',
             'response_timeout_ms': '50',
         },
     )
     return doc.toxml()
+
+
+def test_timeout_omission_produces_no_param(xacro_path):
+    """Verify that expanding Xacro without response_timeout_ms produces no timeout param."""
+    doc = xacro.process_file(
+        xacro_path,
+        mappings={
+            'use_mock_hardware': 'true',
+        },
+    )
+    xml_str = doc.toxml()
+    root = ET.fromstring(xml_str)
+    hw = root.find('ros2_control/hardware')
+    assert hw is not None
+    params = {p.attrib.get('name'): p.text for p in hw.findall('param')}
+    assert 'response_timeout_ms' not in params, (
+        'response_timeout_ms must NOT be present when omitted by caller'
+    )
 
 
 def test_xacro_expansion(urdf_xml_string):
@@ -169,6 +226,66 @@ def test_canonical_joints_and_transforms(urdf_xml_string):
     assert pytest.approx(rpy_imu, abs=1e-4) == [0.0, 0.0, math.pi / 2.0]
 
 
+def test_sensor_mesh_alignment_and_compensation(urdf_xml_string):
+    """Verify that visual/collision compensation transforms satisfy R_joint * R_comp ~= I."""
+    root = ET.fromstring(urdf_xml_string)
+    joints = {j.attrib.get('name'): j for j in root.findall('joint')}
+    links_map = {link_elem.attrib.get('name'): link_elem for link_elem in root.findall('link')}
+
+    sensor_checks = [
+        ('base_lidar_joint_FL', 'base_lidar_link_FL'),
+        ('base_lidar_joint_BR', 'base_lidar_link_BR'),
+        ('base_imu_joint', 'base_imu_link'),
+    ]
+
+    for j_name, l_name in sensor_checks:
+        j_elem = joints[j_name]
+        l_elem = links_map[l_name]
+
+        j_rpy = [float(v) for v in j_elem.find('origin').attrib.get('rpy').split()]
+        R_joint = rpy_to_matrix(*j_rpy)
+
+        v_elem = l_elem.find('visual/origin')
+        assert v_elem is not None, f'{l_name} missing visual origin'
+        v_rpy = [float(v) for v in v_elem.attrib.get('rpy').split()]
+        R_visual = rpy_to_matrix(*v_rpy)
+
+        c_elem = l_elem.find('collision/origin')
+        assert c_elem is not None, f'{l_name} missing collision origin'
+        c_rpy = [float(v) for v in c_elem.attrib.get('rpy').split()]
+
+        # Collision RPY must match visual RPY
+        assert pytest.approx(c_rpy, abs=1e-6) == v_rpy
+
+        # R_joint * R_visual must be Identity within floating-point tolerance
+        prod = R_joint @ R_visual
+        err = np.linalg.norm(prod - np.eye(3))
+        assert err < 1e-12, f'{l_name} R_joint * R_visual residual error {err} exceeds tolerance'
+
+
+def test_lidar_mesh_bounding_boxes(urdf_xml_string):
+    """Verify that compensated LiDAR meshes occupy their exact CAD mounting recesses."""
+    try:
+        pkg_dir = get_package_share_directory('mobile_base_description')
+    except Exception:
+        pkg_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '..')
+        )
+
+    fl_stl = os.path.join(pkg_dir, 'meshes', 'base_lidar_link_FL.STL')
+    verts_fl = read_stl_vertices(fl_stl)
+
+    # Transform FL vertices into base_link coordinate system
+    R_joint_fl = rpy_to_matrix(math.pi, 0.0, math.pi / 4.0)
+    R_vis_fl = rpy_to_matrix(math.pi, 0.0, math.pi / 4.0)
+    p_fl = np.array([0.28771, 0.26721, -0.06011])
+    v_base_fl = (R_joint_fl @ (R_vis_fl @ verts_fl.T)).T + p_fl
+
+    # Verify FL front-left corner bounding box matches CAD flush recess
+    assert pytest.approx(v_base_fl[:, 0].max(), abs=1e-3) == 0.3271
+    assert pytest.approx(v_base_fl[:, 1].max(), abs=1e-3) == 0.3066
+
+
 def test_ros2_control_structure(urdf_xml_string):
     """Verify ros2_control hardware interface block and parameter contracts."""
     root = ET.fromstring(urdf_xml_string)
@@ -185,7 +302,7 @@ def test_ros2_control_structure(urdf_xml_string):
     assert 'serial_port' in params
     assert 'baud_rate' in params
     assert 'response_timeout_ms' in params
-    assert int(params['response_timeout_ms']) > 0
+    assert params['response_timeout_ms'] == '50'
     assert params['left_driver_id'] == '2'
     assert params['right_driver_id'] == '1'
     assert float(params['gear_ratio']) == 20.0

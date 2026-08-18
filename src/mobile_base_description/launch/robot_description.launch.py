@@ -13,27 +13,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    pkg_share = FindPackageShare('mobile_base_description')
-    default_model_path = PathJoinSubstitution([pkg_share, 'urdf', 'mobile_base.urdf.xacro'])
+    pkg_description = get_package_share_directory('mobile_base_description')
+    default_model_path = os.path.join(pkg_description, 'urdf', 'mobile_base.urdf.xacro')
 
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
-        description='Use simulation clock if true',
+        description='Use simulation (Gazebo) clock if true',
     )
 
     use_mock_hardware_arg = DeclareLaunchArgument(
         'use_mock_hardware',
         default_value='false',
-        description='Use mock hardware plugin for testing if true',
+        description='Use mock hardware plugin instead of real M1 hardware',
     )
 
     serial_port_arg = DeclareLaunchArgument(
@@ -50,8 +53,7 @@ def generate_launch_description():
 
     response_timeout_ms_arg = DeclareLaunchArgument(
         'response_timeout_ms',
-        default_value='50',
-        description='Response timeout in milliseconds (required parameter)',
+        description='Response timeout in milliseconds (required parameter, no implicit default)',
     )
 
     publish_frequency_arg = DeclareLaunchArgument(
@@ -80,6 +82,8 @@ def generate_launch_description():
         ]
     )
 
+    robot_description = ParameterValue(robot_description_content, value_type=str)
+
     robot_state_publisher_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -87,7 +91,7 @@ def generate_launch_description():
         output='both',
         parameters=[
             {
-                'robot_description': robot_description_content,
+                'robot_description': robot_description,
                 'use_sim_time': LaunchConfiguration('use_sim_time'),
                 'publish_frequency': LaunchConfiguration('publish_frequency'),
             }

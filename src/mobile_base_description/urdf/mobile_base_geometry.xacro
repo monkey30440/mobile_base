@@ -157,7 +157,8 @@
                  iyy="1.98e-4" iyz="0" izz="1.38e-4"/>
       </inertial>
       <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <!-- Compensation RPY for CAD-oriented mesh: R_comp = inv(R_joint) -->
+        <origin xyz="0 0 0" rpy="${lidar_fl_roll} ${lidar_fl_pitch} ${lidar_fl_yaw}"/>
         <geometry>
           <mesh filename="package://mobile_base_description/meshes/base_lidar_link_FL.STL"/>
         </geometry>
@@ -166,7 +167,7 @@
         </material>
       </visual>
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="${lidar_fl_roll} ${lidar_fl_pitch} ${lidar_fl_yaw}"/>
         <geometry>
           <mesh filename="package://mobile_base_description/meshes/base_lidar_link_FL.STL"/>
         </geometry>
@@ -189,7 +190,8 @@
                  iyy="1.98e-4" iyz="0" izz="1.38e-4"/>
       </inertial>
       <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <!-- Compensation RPY for CAD-oriented mesh: R_comp = inv(R_joint) -->
+        <origin xyz="0 0 0" rpy="${lidar_br_roll} ${lidar_br_pitch} ${lidar_br_yaw}"/>
         <geometry>
           <mesh filename="package://mobile_base_description/meshes/base_lidar_link_BR.STL"/>
         </geometry>
@@ -198,7 +200,7 @@
         </material>
       </visual>
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="${lidar_br_roll} ${lidar_br_pitch} ${lidar_br_yaw}"/>
         <geometry>
           <mesh filename="package://mobile_base_description/meshes/base_lidar_link_BR.STL"/>
         </geometry>
@@ -221,7 +223,8 @@
                  iyy="1.51e-4" iyz="0" izz="2.17e-4"/>
       </inertial>
       <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <!-- Compensation RPY for CAD-oriented mesh: R_comp = inv(R_joint) -->
+        <origin xyz="0 0 0" rpy="0 0 ${-imu_yaw}"/>
         <geometry>
           <mesh filename="package://mobile_base_description/meshes/base_imu_link.STL"/>
         </geometry>
@@ -230,7 +233,7 @@
         </material>
       </visual>
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 ${-imu_yaw}"/>
         <geometry>
           <mesh filename="package://mobile_base_description/meshes/base_imu_link.STL"/>
         </geometry>

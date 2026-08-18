@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="mobile_base">
 
-  <!-- Arguments for ros2_control configuration -->
+  <!-- Arguments for ros2_control configuration (no implicit default for timeout) -->
   <xacro:arg name="use_mock_hardware" default="false"/>
   <xacro:arg name="serial_port" default="/dev/ttyUSB0"/>
   <xacro:arg name="baud_rate" default="230400"/>
-  <xacro:arg name="response_timeout_ms" default="50"/>
+  <xacro:arg name="response_timeout_ms" default=""/>
 
   <!-- Include Sub-Macros -->
   <xacro:include filename="$(find mobile_base_description)/urdf/mobile_base_geometry.xacro"/>

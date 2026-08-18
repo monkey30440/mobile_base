@@ -5,7 +5,7 @@
     name:=M1Hardware
     serial_port:=/dev/ttyUSB0
     baud_rate:=230400
-    response_timeout_ms:=50
+    response_timeout_ms:=''
     left_driver_id:=2
     right_driver_id:=1
     gear_ratio:=20.0
@@ -19,7 +19,9 @@
         <plugin>mobile_base_control/M1Hardware</plugin>
         <param name="serial_port">${serial_port}</param>
         <param name="baud_rate">${baud_rate}</param>
-        <param name="response_timeout_ms">${response_timeout_ms}</param>
+        <xacro:if value="${response_timeout_ms != ''}">
+          <param name="response_timeout_ms">${response_timeout_ms}</param>
+        </xacro:if>
         <param name="left_driver_id">${left_driver_id}</param>
         <param name="right_driver_id">${right_driver_id}</param>
         <param name="gear_ratio">${gear_ratio}</param>
