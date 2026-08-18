@@ -15,12 +15,12 @@
 ## Progress
 
 - 總項目：27
-- 已完成：2
+- 已完成：3
 - 進行中：0
-- 待實作：25
+- 待實作：24
 - 上游阻塞：0
-- 目前進度：2 / 27 (7%)
-- 建議下一項：第 3 項 Per-item implementation record template；第 3–6 項完成後才進入 S7 `M1Driver`。
+- 目前進度：3 / 27 (11%)
+- 建議下一項：第 4 項 Verification evidence storage convention；第 3–6 項完成後才進入 S7 `M1Driver`。
 
 ---
 
@@ -30,7 +30,7 @@
   - 完成條件：`Dockerfile` 與 `compose.yaml` 的責任、binary dependencies、workspace mount、host network、NVIDIA runtime、serial passthrough、明確排除項與既有驗證證據已寫入 07。
 - [x] 2. External source dependency build closure
   - 完成條件：`rf2o_laser_odometry` 與 `tdk_ros2_imu` 可在目前 container baseline 完成 rosdep、colcon build 並被 ROS 2 找到；相容性修正與證據邊界已記錄。
-- [ ] 3. Per-item implementation record template
+- [x] 3. Per-item implementation record template
   - 完成條件：後續每項固定記錄 requirement/subsystem trace、artifacts、mature/custom boundary、interfaces/config、failure handling、build/test/hardware evidence、known limits 與 freeze status。
 - [ ] 4. Verification evidence storage convention
   - 完成條件：確立 command、target、timestamp、版本、原始輸出／log path、PASS/FAIL 與 evidence boundary 的保存規則；禁止只寫口頭「已測過」。

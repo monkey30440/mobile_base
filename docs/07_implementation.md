@@ -133,3 +133,192 @@ Source dependencies 保留在 repository 的 `src/`，不藏入 Docker image bui
 - `network_mode: host` 只提供 Ethernet 存取路徑，不證明兩具 LiDAR 已連線或資料有效。
 - 尚未建立 production entrypoint、restart policy、healthcheck 或自動 ROS bringup；在完整流程穩定前不提前加入。
 - 下一個項目是先完成 [`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 3 項的 per-item implementation record template；第 3–6 項治理、可重現 build/test 與硬體安全前置關閉後，再進入 S7 `M1Driver` vertical slice。
+
+---
+
+## 3. Per-item Implementation Record Template
+
+本節定義 checklist #7–#27 每個 implementation item 必須使用的標準紀錄結構。同一 item 可同時具有多層 evidence status；未取得的層級不得以預設值或假設填寫。
+
+### 3.1 使用規則
+
+- 每個 item 的 record 以 `## IMP-XXX <Item Short Name>` 為標題，其中 `IMP-XXX` 與 checklist 編號一致。
+- 所有欄位皆須填寫；若某欄位對該 item 不適用，填寫 `N/A` 並說明理由，不得留空。
+- Evidence 欄位只記錄**已執行且有結果的**操作；未執行的測試計畫不得填入 evidence 欄位。
+- Timestamp 欄位格式為 `YYYY-MM-DD`，只在取得對應 evidence 時填寫；無 evidence 時留 `—`。
+- 若 evidence storage path 尚未由 checklist #4 確立，於對應欄位填寫 `[pending #4]`。
+- 若 build / test command 尚未由 checklist #5 確立，於對應欄位填寫 `[pending #5]`。
+- 若 hardware preflight 尚未由 checklist #6 確立，於對應欄位填寫 `[pending #6]`。
+
+---
+
+### 3.2 Template
+
+````markdown
+## IMP-XXX <Item Short Name>
+
+### 3.2.1 Identity / Scope / Status
+
+| 欄位 | 內容 |
+|---|---|
+| Checklist item | #N — <item title from checklist> |
+| Item scope | <一句話描述本 item 的實作邊界：實作什麼、不實作什麼> |
+| Implementation status | `Planned` / `Implemented` / `Build Verified` / `Integration Verified` / `Hardware Verified` / `Feature Frozen` |
+| Evidence status | <各層 evidence 的目前達成狀態，可多層並存，例如 `Build Verified`；未達成層級不填> |
+| Feature-freeze status | `Not Frozen` / `Feature Frozen` |
+| Last updated | YYYY-MM-DD |
+
+---
+
+### 3.2.2 Traceability
+
+| 欄位 | 內容 |
+|---|---|
+| Requirement IDs | <與本 item 直接相關的 SYS-xxx 清單，來自 03；無獨立 SYS 歸屬時填 `Cross-cutting`> |
+| Subsystem | <本 item 所屬 subsystem，來自 05／06；跨 subsystem 時列全部> |
+| Custom gap IDs | <若本 item 實作 GAP-01–GAP-06 中的缺口，列出對應 ID；否則填 `None`> |
+| Upstream design refs | <06 section 或 interface 定義的直接引用，格式 `06 §X.Y.Z`；無則填 `None`> |
+
+---
+
+### 3.2.3 Implementation Artifacts
+
+| Artifact | Path / Package | 已實作責任 | 明確不負責 |
+|---|---|---|---|
+| <artifact type, e.g. source file / config / launch> | <相對 repo 路徑或 package 名稱> | <此 artifact 覆蓋的 06 設計責任> | <明確排除的責任，若無則填 `—`> |
+
+_（可新增多列）_
+
+---
+
+### 3.2.4 Mature Component / Custom Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| Mature component(s) used | <exact package name + version，來自 IMP-000 baseline 或另行記錄；無則填 `None`> |
+| Custom implementation | <本 item 自行實作的最小行為，對應 06 的 custom gap 責任；無則填 `None`> |
+| Boundary rule | <用一兩句話說明哪裡是成熟元件的責任止境、哪裡開始是 custom code，引用 06 的 custom gap 描述> |
+
+---
+
+### 3.2.5 Authoritative Interfaces and Configuration
+
+_僅記錄本 item 已實作且可觀察的 interface 與 config；尚未實作的設計意圖不填入此欄。_
+
+#### Published / Subscribed Interfaces
+
+| 方向 | Interface name | Message type | Frame / QoS | Producer / Consumer | 06 ref |
+|---|---|---|---|---|---|
+| Pub / Sub / Action | `/topic_name` | `pkg/msg/Type` | `frame_id` / `<qos profile>` | `<node name>` | `06 §X.Y.Z` |
+
+_（可新增多列；無已實作 interface 時填 `None`）_
+
+#### Key Parameters
+
+| Parameter | YAML path | Value / Default | 06 ref |
+|---|---|---|---|
+| `param_name` | `node/param_name` | `<value>` | `06 §X.Y.Z` |
+
+_（可新增多列；無已決定 parameter 時填 `None`）_
+
+---
+
+### 3.2.6 Failure / Timeout / Cancel / Invalid-input Handling
+
+_僅填寫 06 要求且本 item 已實作或已驗證的負向路徑；不適用時於每欄填 `N/A — <原因>`。_
+
+| 情境 | 觸發條件 | 期望行為（來自 06） | 已驗證 | 驗證層級 |
+|---|---|---|---|---|
+| Failure | <e.g. Modbus read error> | <e.g. ERROR state; controller停用> | Yes / No | Unit / Integration / Hardware / — |
+| Timeout | <e.g. cmd_vel gap > threshold> | <e.g. 歸零輸出> | Yes / No | Unit / Integration / Hardware / — |
+| Cancel | <e.g. nav action cancel request> | <e.g. 終止任務並發布零速> | Yes / No | Unit / Integration / Hardware / — |
+| Invalid input | <e.g. malformed PoseStamped> | <e.g. 拒絕並回報原因> | Yes / No | Unit / Integration / Hardware / — |
+
+_（依 item 適用性增減列數；若整個欄位不適用，填 `N/A — <原因>` 並保留表頭）_
+
+---
+
+### 3.2.7 Verification Evidence
+
+_每筆 evidence 只記錄已執行且有結果的操作。未執行、計畫中、模擬或口頭「已測過」不得填入。_
+
+#### Static / Build Evidence
+
+| Date | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|
+| YYYY-MM-DD | `<exact command>` | PASS / FAIL | <此結果實際證明了什麼> | `<path or [pending #4]>` |
+
+_（無 evidence 時整列填 `—`；build command 格式待 #5 確立時補填）_
+
+#### Unit / Interface Evidence
+
+| Date | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| YYYY-MM-DD | `<package::test>` | `<exact command>` | PASS / FAIL | <證明了什麼> | `<path or [pending #4]>` |
+
+_（無 evidence 時整列填 `—`）_
+
+#### Integration Evidence
+
+| Date | Scenario | Observed result | Evidence boundary | Storage path |
+|---|---|---|---|---|
+| YYYY-MM-DD | <e.g. ROS graph + topic echo> | <observed output> | <證明了什麼；container running ≠ integration evidence> | `<path or [pending #4]>` |
+
+_（無 evidence 時整列填 `—`）_
+
+#### Hardware Evidence
+
+_僅適用於 06 明確要求 real-hardware validation 的 item。若本 item 不需要實機驗證，填 `N/A — <原因>`。_
+
+| Date | Target hardware | Test condition | Observed result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| YYYY-MM-DD | Jetson + M1 / picoScan / TDK IMU | <preflight #6 條件> | <量測結果> | <證明了什麼；模擬不可取代> | `<path or [pending #4]>` |
+
+_（無 evidence 時整列填 `—`；hardware preflight 程序待 #6 確立時補填）_
+
+---
+
+### 3.2.8 Evidence Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| 已證明 | <明確列出目前 evidence 實際證明的最小事實集合> |
+| 尚未證明 | <明確列出目前 evidence **無法**推論的內容，例如：端到端整合、硬體 failsafe、實機精度> |
+
+---
+
+### 3.2.9 Known Limits / Unresolved Dependencies
+
+- <已知限制或尚未解決的外部 dependency，每條一行；無則填 `None`>
+
+---
+
+### 3.2.10 Feature Freeze Status / Next Dependency
+
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Not Frozen` / `Feature Frozen` |
+| Freeze condition | <達到 Feature Frozen 所需的最後 evidence 或核准條件；已 frozen 則填 `All conditions met`> |
+| Next dependency | <本 item 解鎖後，直接依賴本 item 的下一個 checklist item 或 cross-subsystem integration step> |
+````
+
+---
+
+### 3.3 填寫範圍說明
+
+下表說明各 checklist section 對 template 各節的適用性：
+
+| Template 節 | Governance (#7–#8) | Subsystem Impl (#9–#17) | Cross-subsystem (#18–#22) | Use-case Verification (#23–#27) |
+|---|---|---|---|---|
+| 3.2.1 Identity / Scope / Status | ✓ | ✓ | ✓ | ✓ |
+| 3.2.2 Traceability | ✓ (Cross-cutting) | ✓ | ✓ | ✓ |
+| 3.2.3 Implementation Artifacts | ✓ | ✓ | ✓ | ✓ |
+| 3.2.4 Mature / Custom Boundary | ✓ | ✓ | ✓ (N/A 若無 custom) | N/A 通常 |
+| 3.2.5 Interfaces / Config | ✓ | ✓ | ✓ | N/A 通常 |
+| 3.2.6 Failure Handling | 依適用性 | ✓ | ✓ | N/A 通常 |
+| 3.2.7 Verification Evidence | ✓ | ✓ | ✓ | ✓ |
+| 3.2.8 Evidence Boundary | ✓ | ✓ | ✓ | ✓ |
+| 3.2.9 Known Limits | ✓ | ✓ | ✓ | ✓ |
+| 3.2.10 Feature Freeze / Next | ✓ | ✓ | ✓ | ✓ |
+
+「✓」表示必填；「N/A 通常」表示多數 item 在此節填 `N/A` 並說明理由。
