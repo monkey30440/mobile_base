@@ -12,6 +12,7 @@ rear_lidar_node:
     hostname: "192.168.0.2"
     udp_receiver_ip: "192.168.0.100"
     udp_port: 2116
+    check_udp_receiver_ip: false
     imu_udp_port: 7504
     sopas_tcp_port: "2111"
     nodename: "rear_lidar_node"

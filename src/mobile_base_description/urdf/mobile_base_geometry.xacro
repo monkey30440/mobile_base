@@ -174,6 +174,15 @@
       </collision>
     </link>
 
+    <!-- Front-Left 2D LiDAR Layer 1 Optical/Scan Link (Coincident with base_lidar_link_FL for SICK picoScan150) -->
+    <joint name="base_lidar_joint_FL_1" type="fixed">
+      <parent link="base_lidar_link_FL"/>
+      <child link="base_lidar_link_FL_1"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="base_lidar_link_FL_1"/>
+
     <!-- Rear-Right 2D LiDAR Joint & Link (Upside-Down, Angled -135 deg) -->
     <joint name="base_lidar_joint_BR" type="fixed">
       <parent link="base_link"/>
@@ -206,6 +215,15 @@
         </geometry>
       </collision>
     </link>
+
+    <!-- Rear-Right 2D LiDAR Layer 1 Optical/Scan Link (Coincident with base_lidar_link_BR for SICK picoScan150) -->
+    <joint name="base_lidar_joint_BR_1" type="fixed">
+      <parent link="base_lidar_link_BR"/>
+      <child link="base_lidar_link_BR_1"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="base_lidar_link_BR_1"/>
 
     <!-- IMU Joint & Link (90 deg Yaw) -->
     <joint name="base_imu_joint" type="fixed">

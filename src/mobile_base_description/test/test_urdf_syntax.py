@@ -141,7 +141,9 @@ def test_canonical_links_and_root(urdf_xml_string):
         'driving_wheel_link_L',
         'driving_wheel_link_R',
         'base_lidar_link_FL',
+        'base_lidar_link_FL_1',
         'base_lidar_link_BR',
+        'base_lidar_link_BR_1',
         'base_imu_link',
     ]
     for req_link in required_links:
@@ -167,8 +169,10 @@ def test_canonical_joints_and_transforms(urdf_xml_string):
     assert base_j.attrib.get('type') == 'fixed'
     assert base_j.find('parent').attrib.get('link') == 'base_footprint'
     assert base_j.find('child').attrib.get('link') == 'base_link'
-    xyz = [float(v) for v in base_j.find('origin').attrib.get('xyz').split()]
-    assert pytest.approx(xyz, abs=1e-4) == [0.0, 0.0, 0.2560]
+    xyz_b = [float(v) for v in base_j.find('origin').attrib.get('xyz').split()]
+    rpy_b = [float(v) for v in base_j.find('origin').attrib.get('rpy').split()]
+    assert pytest.approx(xyz_b, abs=1e-4) == [0.0, 0.0, 0.2560]
+    assert pytest.approx(rpy_b, abs=1e-4) == [0.0, 0.0, 0.0]
 
     # 2. Left Wheel Joint (driving_wheel_joint_L)
     assert 'driving_wheel_joint_L' in joints
@@ -203,6 +207,17 @@ def test_canonical_joints_and_transforms(urdf_xml_string):
     assert pytest.approx(xyz_fl, abs=1e-4) == [0.28771, 0.26721, -0.06011]
     assert pytest.approx(rpy_fl, abs=1e-4) == [math.pi, 0.0, math.pi / 4.0]
 
+    # 4b. Front-Left LiDAR Layer 1 (base_lidar_joint_FL_1)
+    assert 'base_lidar_joint_FL_1' in joints
+    lidar_fl_1 = joints['base_lidar_joint_FL_1']
+    assert lidar_fl_1.attrib.get('type') == 'fixed'
+    assert lidar_fl_1.find('parent').attrib.get('link') == 'base_lidar_link_FL'
+    assert lidar_fl_1.find('child').attrib.get('link') == 'base_lidar_link_FL_1'
+    xyz_fl_1 = [float(v) for v in lidar_fl_1.find('origin').attrib.get('xyz').split()]
+    rpy_fl_1 = [float(v) for v in lidar_fl_1.find('origin').attrib.get('rpy').split()]
+    assert pytest.approx(xyz_fl_1, abs=1e-4) == [0.0, 0.0, 0.0]
+    assert pytest.approx(rpy_fl_1, abs=1e-4) == [0.0, 0.0, 0.0]
+
     # 5. Rear-Right LiDAR (base_lidar_joint_BR)
     assert 'base_lidar_joint_BR' in joints
     lidar_br = joints['base_lidar_joint_BR']
@@ -213,6 +228,17 @@ def test_canonical_joints_and_transforms(urdf_xml_string):
     rpy_br = [float(v) for v in lidar_br.find('origin').attrib.get('rpy').split()]
     assert pytest.approx(xyz_br, abs=1e-4) == [-0.24671, -0.26721, -0.06011]
     assert pytest.approx(rpy_br, abs=1e-4) == [math.pi, 0.0, -3.0 * math.pi / 4.0]
+
+    # 5b. Rear-Right LiDAR Layer 1 (base_lidar_joint_BR_1)
+    assert 'base_lidar_joint_BR_1' in joints
+    lidar_br_1 = joints['base_lidar_joint_BR_1']
+    assert lidar_br_1.attrib.get('type') == 'fixed'
+    assert lidar_br_1.find('parent').attrib.get('link') == 'base_lidar_link_BR'
+    assert lidar_br_1.find('child').attrib.get('link') == 'base_lidar_link_BR_1'
+    xyz_br_1 = [float(v) for v in lidar_br_1.find('origin').attrib.get('xyz').split()]
+    rpy_br_1 = [float(v) for v in lidar_br_1.find('origin').attrib.get('rpy').split()]
+    assert pytest.approx(xyz_br_1, abs=1e-4) == [0.0, 0.0, 0.0]
+    assert pytest.approx(rpy_br_1, abs=1e-4) == [0.0, 0.0, 0.0]
 
     # 6. IMU Joint (base_imu_joint)
     assert 'base_imu_joint' in joints

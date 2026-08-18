@@ -12,6 +12,7 @@ front_lidar_node:
     hostname: "192.168.0.1"
     udp_receiver_ip: "192.168.0.100"
     udp_port: 2115
+    check_udp_receiver_ip: false
     imu_udp_port: 7503
     sopas_tcp_port: "2111"
     nodename: "front_lidar_node"

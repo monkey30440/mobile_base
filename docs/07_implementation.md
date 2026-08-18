@@ -1475,8 +1475,8 @@ src/mobile_base_perception/
 
 | 主題名稱 | 訊息型別 | `header.frame_id` (來自 S1) | 目標硬體 IP | UDP 接收埠 | 職責 |
 |---|---|---|---|---|---|
-| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | **`base_lidar_link_FL`** | `192.168.0.1` | `2115` | 前左 SICK picoScan150 全幅原始掃描 |
-| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | **`base_lidar_link_BR`** | `192.168.0.2` | `2116` | 後右 SICK picoScan150 全幅原始掃描 |
+| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | **`base_lidar_link_FL_1`** | `192.168.0.1` | `2115` | 前左 SICK picoScan150 全幅原始掃描（Layer 1） |
+| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | **`base_lidar_link_BR_1`** | `192.168.0.2` | `2116` | 後右 SICK picoScan150 全幅原始掃描（Layer 1） |
 
 *嚴格原則*：`/scan_front` 與 `/scan_rear` 為全系統唯一之權威原始雷達量測介面，未來的融合雷達主題 `/scan` 絕不得取代或覆寫此二原始資料來源。
 
@@ -1504,18 +1504,21 @@ src/mobile_base_perception/
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
 | 2026-08-18T17:23:33+08:00 | S2 picoScan150 Launch & Configuration Syntax Test Suite | `colcon test --packages-select mobile_base_perception` + `colcon test-result` | PASS | 全部 5 項測試套件通過（13 測試項目，0 failures, 0 errors）：驗證 picoScan150 YAML 參數解析、FL/BR 獨立 IP（192.168.0.1 / 192.168.0.2）、UDP 接收埠隔離（2115 / 2116）、Frame（base_lidar_link_FL/BR）、全幅主題（/scan_front, /scan_rear）、`tf_publish_rate: 0.0`、LaunchDescription 生成且無 `dual_laser_merger` 混入；全工作區 5 套件 263 項回歸測試通過。 | [`docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt) |
+| 2026-08-18T17:26:49+08:00 | Stage L1: Passive Network / SOPAS TCP Reachability Probing | `nc -zv -w 2 192.168.0.1 2111` & `nc -zv -w 2 192.168.0.2 2111` | PASS | 雙實機 picoScan150 於 TCP 2111 均即時成功連線（exit code 0）。 | Log in transcript & Section 3.4 |
+| 2026-08-18T17:34:00+08:00 | Stage L2: Dual picoScan150 Real-Hardware LaserScan Acquisition | `ros2 launch mobile_base_description robot_description.launch.py` & `ros2 launch mobile_base_perception sick_dual_lidar.launch.py` | PASS | 雙路實體雷達同時穩定發布：<br/>• `/scan_front`：24.999 Hz，1200 點（90.1% 有限實測值，均距 1.425 m），時間戳嚴格單調遞增（1787045620.3627538），Frame `base_lidar_link_FL_1`。<br/>• `/scan_rear`：25.005 Hz，1200 點（90.2% 有限實測值，均距 2.648 m），時間戳嚴格單調遞增（1787045619.9995918），Frame `base_lidar_link_BR_1`。<br/>• S1 TF 權威存在：`base_link -> base_lidar_link_FL`（[0.288, 0.267, -0.060], RPY [180°, 0°, 45°]）與 `base_link -> base_lidar_link_BR`（[-0.247, -0.267, -0.060], RPY [180°, 0°, -135°]）正確無競爭；零封包遺失（0% lost）。 | [`docs/verification/IMP-010/2026-08-18T173400_hw_s2_lidar_dual_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-010/2026-08-18T173400_hw_s2_lidar_dual_acquisition.txt) |
 
 #### 3.4.8 Evidence Boundary
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`mobile_base_perception` 於 ROS 2 Jazzy 環境下正確建置與安裝。<br/>2. **雙 picoScan 獨立配置語意** (`PASS`)：FL (`192.168.0.1`, UDP `2115`, `base_lidar_link_FL`, `/scan_front`) 與 BR (`192.168.0.2`, UDP `2116`, `base_lidar_link_BR`, `/scan_rear`) 參數完全隔離且符合 06 與 picoScan150 原生規範。<br/>3. **TF 唯一性防護** (`PASS`)：雙節點均設定 `tf_publish_rate: 0.0`，杜絕與 S1 `robot_state_publisher` 衝突。<br/>4. **Launch 組合生成與無非授權元件** (`PASS`)：LaunchDescription 僅生成雙 `sick_generic_caller` 節點，無 `dual_laser_merger` 或自製 TF workaround。 |
-| 尚未證明 (待實機驗收項) | 1. **實機網路連通與 SOPAS 交握 (Stage L1)**：實機 `192.168.0.1:2111` 與 `192.168.0.2:2111` 之 TCP 連通與 UDP 埠號配置。<br/>2. **實機雙串流接收與訊息有效性 (Stage L2)**：`/scan_front` 與 `/scan_rear` 之實體點雲有效性、非零推進 timestamp、實際發布頻率與有限距離點雲分佈。<br/>3. **來源隔離與故障安全 (Stage L3)**：單一感測器遮蔽獨立性與斷線行為。 |
+| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`mobile_base_perception` 於 ROS 2 Jazzy 環境下正確建置與安裝。<br/>2. **雙 picoScan 獨立配置語意** (`PASS`)：FL (`192.168.0.1`, UDP `2115`, `base_lidar_link_FL`, `/scan_front`) 與 BR (`192.168.0.2`, UDP `2116`, `base_lidar_link_BR`, `/scan_rear`) 參數完全隔離且符合 06 與 picoScan150 原生規範。<br/>3. **TF 唯一性防護** (`PASS`)：雙節點均設定 `tf_publish_rate: 0.0`，杜絕與 S1 `robot_state_publisher` 衝突；S1 靜態 TF 發布正常。<br/>4. **Launch 組合生成與無非授權元件** (`PASS`)：LaunchDescription 僅生成雙 `sick_generic_caller` 節點，無 `dual_laser_merger` 或自製 TF workaround。<br/>5. **實機網路連通與 SOPAS 交握 (Stage L1)** (`PASS`)：實機 `192.168.0.1:2111` 與 `192.168.0.2:2111` 之 TCP 連通正常。<br/>6. **實機雙串流接收與訊息有效性 (Stage L2)** (`PASS`)：`/scan_front`（24.999 Hz）與 `/scan_rear`（25.005 Hz）之實體點雲有效，非零單調遞增 timestamp，有限距離點雲分佈正常（90% 有效障礙物距離）。 |
+| 尚未證明 (後續驗證項) | 1. **來源隔離與故障安全 (Stage L3)**：單一感測器遮蔽獨立性與斷線行為。<br/>2. **雙雷達點雲融合 (Checklist #12)**：`dual_laser_merger` 融合輸出（屬 #12 範疇）。 |
 
 #### 3.4.9 Known Limits / Outstanding Obligations
 
-- **驗證深度治理原則**：觀察到之實機發布頻率（如 $\approx 15\text{--}20\,\text{Hz}$）、封包延遲與點雲距離均為實測經驗證據（Empirical Observations），非未經授權硬編碼之剛性門檻。
+- **驗證深度治理原則**：觀察到之實機發布頻率（如 $\approx 25\,\text{Hz}$）、封包延遲與點雲距離均為實測經驗證據（Empirical Observations），非未經授權硬編碼之剛性門檻。
 - **持久化配置保護**：SOPAS 啟動指令僅設定運作階段之 ScanDataDestination，嚴禁執行任何對 LiDAR 內部非揮發性記憶體（EEPROM/Flash）之永久寫入或網路 IP 修改命令。
+- **QoS 相容性與邊界約定**：實測觀察到 `sick_scan_xd` 發布者使用之 `RELIABLE / TRANSIENT_LOCAL` QoS 與下游訂閱者配置（如 `BEST_EFFORT / VOLATILE`）在 DDS 規範下完全相容。此相容性判定不構成在任意系統負載或極端網路條件下「零掉包」之絕對保證。
 - **dual_laser_merger 範疇劃分**：雙雷達融合屬於 Checklist #12（Perception & Odometry Integration）範疇，不作為 Checklist #10 之結案阻塞項。
 
 #### 3.4.10 Feature Freeze Status / Next Dependency

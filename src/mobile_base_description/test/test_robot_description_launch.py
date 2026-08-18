@@ -106,10 +106,19 @@ class TestRobotDescriptionPublication(unittest.TestCase):
         )
 
         # Spin node for up to 5 seconds waiting for publications
+        required_frames = {
+            'base_link',
+            'base_lidar_link_FL',
+            'base_lidar_link_FL_1',
+            'base_lidar_link_BR',
+            'base_lidar_link_BR_1',
+            'base_imu_link',
+        }
         start_time = time.time()
         while time.time() - start_time < 5.0:
             rclpy.spin_once(self.node, timeout_sec=0.1)
-            if received_description and len(received_tf_static) >= 3:
+            received_child_frames = {child for _, child in received_tf_static}
+            if received_description and required_frames.issubset(received_child_frames):
                 break
 
         # Verify /robot_description content
@@ -125,6 +134,12 @@ class TestRobotDescriptionPublication(unittest.TestCase):
             'base_lidar_link_FL', child_frames, 'Missing base_lidar_link_FL in /tf_static'
         )
         self.assertIn(
+            'base_lidar_link_FL_1', child_frames, 'Missing base_lidar_link_FL_1 in /tf_static'
+        )
+        self.assertIn(
             'base_lidar_link_BR', child_frames, 'Missing base_lidar_link_BR in /tf_static'
+        )
+        self.assertIn(
+            'base_lidar_link_BR_1', child_frames, 'Missing base_lidar_link_BR_1 in /tf_static'
         )
         self.assertIn('base_imu_link', child_frames, 'Missing base_imu_link in /tf_static')

@@ -1,0 +1,116 @@
+================================================================================
+IMP-010 S2 DUAL PICOSCAN150 REAL-HARDWARE ACQUISITION EVIDENCE (STAGE L2)
+================================================================================
+Timestamp: 2026-08-18T17:34:00+08:00
+Execution Commit: cd5502283e5c94294b281f62c686d1ff8f2923da
+Environment: ROS 2 Jazzy Container on Jetson AGX Orin (ARM64, Ubuntu 24.04)
+Host Interface: enP2p1s0 (192.168.0.100/24)
+
+1. PRE-EXECUTION HEALTH CHECK
+--------------------------------------------------------------------------------
+- Stale driver processes: NONE
+- UDP ports 2115, 2116 status: FREE
+- FL TCP reachability (192.168.0.1:2111): PASS (Succeeded in <2s)
+- BR TCP reachability (192.168.0.2:2111): PASS (Succeeded in <2s)
+
+2. DUAL-LIDAR LAUNCH & STARTUP LOGS
+--------------------------------------------------------------------------------
+Command 1: ros2 launch mobile_base_description robot_description.launch.py
+Result: Robot initialized, robot_state_publisher active (PID 1922)
+
+Command 2: ros2 launch mobile_base_perception sick_dual_lidar.launch.py
+Result:
+- front_lidar_node (PID 3349): Target 192.168.0.1:2111 (SOPAS), UDP port 2115, topic /scan_front
+- rear_lidar_node (PID 3350): Target 192.168.0.2:2111 (SOPAS), UDP port 2116, topic /scan_rear
+- Both nodes successfully negotiated SOPAS session and received UDP compact scandata at ~250-350 Hz exporter rate with 0% packet loss.
+
+3. FRONT-LEFT LIDAR REAL ACQUISITION EVIDENCE (/scan_front)
+--------------------------------------------------------------------------------
+Topic: /scan_front
+Message Type: sensor_msgs/msg/LaserScan
+Publisher Node: /front_lidar_node
+Header Frame ID: base_lidar_link_FL_1
+Header Stamp (sample): 1787045620.3627538 sec (strictly monotonic, non-zero, advancing)
+Observed Publication Rate: 24.999 Hz (min: 0.038s, max: 0.042s, std dev: 0.00069s, window: 78)
+Publisher QoS:
+  Reliability: RELIABLE
+  Durability: TRANSIENT_LOCAL
+  History: KEEP_LAST (Depth UNKNOWN/SystemDefault)
+LaserScan Metadata:
+  angle_min: -2.408629 rad (-138.00 deg)
+  angle_max: 2.823010 rad (161.75 deg)
+  angle_increment: 0.004363 rad (0.2500 deg)
+  scan_time: 0.040304 s
+  time_increment: 0.000027966 s
+  range_min: 0.050 m
+  range_max: 5.866 m
+Ranges Array Integrity:
+  Total ranges count: 1200
+  Finite non-zero range points: 1081 / 1200 (90.1%)
+  Min observed range: 0.068 m
+  Max observed range: 5.865 m
+  Mean observed range: 1.425 m
+  Representative values (m): [0.092, 0.092, 0.092, 0.094, 0.095, 0.097, 0.105, 0.105, 0.966, 0.941]
+
+4. REAR-RIGHT LIDAR REAL ACQUISITION EVIDENCE (/scan_rear)
+--------------------------------------------------------------------------------
+Topic: /scan_rear
+Message Type: sensor_msgs/msg/LaserScan
+Publisher Node: /rear_lidar_node
+Header Frame ID: base_lidar_link_BR_1
+Header Stamp (sample): 1787045619.999591827 sec (strictly monotonic, non-zero, advancing)
+Observed Publication Rate: 25.005 Hz (min: 0.037s, max: 0.043s, std dev: 0.00079s, window: 77)
+Publisher QoS:
+  Reliability: RELIABLE
+  Durability: TRANSIENT_LOCAL
+  History: KEEP_LAST (Depth UNKNOWN/SystemDefault)
+LaserScan Metadata:
+  angle_min: -2.408629 rad (-138.00 deg)
+  angle_max: 2.823010 rad (161.75 deg)
+  angle_increment: 0.004363 rad (0.2500 deg)
+  scan_time: 0.039296 s
+  time_increment: 0.000027266 s
+  range_min: 0.050 m
+  range_max: 5.728 m
+Ranges Array Integrity:
+  Total ranges count: 1200
+  Finite non-zero range points: 1083 / 1200 (90.2%)
+  Min observed range: 0.065 m
+  Max observed range: 5.727 m
+  Mean observed range: 2.648 m
+  Representative values (m): [3.716, 3.713, 3.708, 3.705, 3.703, 3.702, 3.705, 0.101, 3.688, 3.676]
+
+5. TF MOUNTING TRANSFORM VERIFICATION (S1 robot_state_publisher)
+--------------------------------------------------------------------------------
+- Transform base_link -> base_lidar_link_FL:
+  Translation: [0.288, 0.267, -0.060] m
+  Rotation (RPY deg): [180.000, 0.000, 45.000] deg
+  Status: HEALTHY / ACCURATE (S1 sole authority)
+
+- Transform base_link -> base_lidar_link_BR:
+  Translation: [-0.247, -0.267, -0.060] m
+  Rotation (RPY deg): [180.000, 0.000, -135.000] deg
+  Status: HEALTHY / ACCURATE (S1 sole authority)
+
+6. DUAL-SOURCE INDEPENDENCE VERIFICATION
+--------------------------------------------------------------------------------
+- Network Isolation: FL = 192.168.0.1 (UDP 2115); BR = 192.168.0.2 (UDP 2116)
+- Process Isolation: front_lidar_node vs rear_lidar_node (independent PIDs)
+- Data Independence:
+  FL mean range = 1.425 m (front chassis obstacle signature)
+  BR mean range = 2.648 m (rear room obstacle signature)
+  Zero crosstalk or source substitution observed.
+
+7. ANOMALIES & SAFE SHUTDOWN
+--------------------------------------------------------------------------------
+- Warnings observed: Parameter syntax deprecation warning from rclcpp (harmless).
+- Port conflict prevention: check_udp_receiver_ip set to 0 to prevent test port collision on port 2116.
+- QoS Compatibility: The observed sick_scan_xd RELIABLE / TRANSIENT_LOCAL publisher QoS is DDS QoS-compatible with the identified downstream subscriber profiles. This compatibility result does not constitute a general guarantee of zero message loss under all runtime/resource conditions.
+- Shutdown: All processes cleanly terminated after test completion.
+- Persistent writes: ZERO persistent flash / EEPROM configuration writes performed.
+- Stage L3 (failure injection): NOT EXECUTED.
+
+8. STAGE L2 VERDICT
+--------------------------------------------------------------------------------
+STAGE L2 RESULT: PASS (Dual real LaserScan streams acquired and verified)
+================================================================================

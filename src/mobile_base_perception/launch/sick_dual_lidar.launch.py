@@ -44,30 +44,6 @@ def generate_launch_description():
         description='Host IP address to receive LiDAR UDP scan packets'
     )
 
-    front_udp_port_arg = DeclareLaunchArgument(
-        'front_udp_port',
-        default_value='2115',
-        description='Host UDP port for Front-Left scan data'
-    )
-
-    rear_udp_port_arg = DeclareLaunchArgument(
-        'rear_udp_port',
-        default_value='2116',
-        description='Host UDP port for Rear-Right scan data (isolated)'
-    )
-
-    front_imu_udp_port_arg = DeclareLaunchArgument(
-        'front_imu_udp_port',
-        default_value='7503',
-        description='Host UDP port for Front-Left IMU data'
-    )
-
-    rear_imu_udp_port_arg = DeclareLaunchArgument(
-        'rear_imu_udp_port',
-        default_value='7504',
-        description='Host UDP port for Rear-Right IMU data (isolated)'
-    )
-
     front_frame_arg = DeclareLaunchArgument(
         'front_frame_id',
         default_value='base_lidar_link_FL',
@@ -92,25 +68,14 @@ def generate_launch_description():
         description='Authoritative output topic for Rear-Right LaserScan'
     )
 
-    tf_publish_rate_arg = DeclareLaunchArgument(
-        'tf_publish_rate',
-        default_value='0.0',
-        description='Rate of internal TF publishing in Hz (0.0 to disable; TF owned by S1)'
-    )
-
     # Launch configuration substitutions
     front_hostname = LaunchConfiguration('front_hostname')
     rear_hostname = LaunchConfiguration('rear_hostname')
     udp_receiver_ip = LaunchConfiguration('udp_receiver_ip')
-    front_udp_port = LaunchConfiguration('front_udp_port')
-    rear_udp_port = LaunchConfiguration('rear_udp_port')
-    front_imu_udp_port = LaunchConfiguration('front_imu_udp_port')
-    rear_imu_udp_port = LaunchConfiguration('rear_imu_udp_port')
     front_frame_id = LaunchConfiguration('front_frame_id')
     rear_frame_id = LaunchConfiguration('rear_frame_id')
     front_topic = LaunchConfiguration('front_topic')
     rear_topic = LaunchConfiguration('rear_topic')
-    tf_publish_rate = LaunchConfiguration('tf_publish_rate')
 
     # Path to upstream SICK picoScan template launch file
     picoscan_launch_file = PathJoinSubstitution([
@@ -127,14 +92,15 @@ def generate_launch_description():
             picoscan_launch_file,
             ['hostname:=', front_hostname],
             ['udp_receiver_ip:=', udp_receiver_ip],
-            ['udp_port:=', front_udp_port],
-            ['imu_udp_port:=', front_imu_udp_port],
+            ['udp_port:=', '2115'],
+            ['imu_udp_port:=', '7503'],
+            ['check_udp_receiver_ip:=', '0'],
             ['nodename:=', 'front_lidar_node'],
             ['publish_frame_id:=', front_frame_id],
             ['publish_laserscan_fullframe_topic:=', front_topic],
             ['publish_laserscan_segment_topic:=', '/scan_segment_front'],
-            ['tf_publish_rate:=', tf_publish_rate],
-            ['sw_pll_only_publish:=', 'true'],
+            ['tf_publish_rate:=', '0.0'],
+            ['sw_pll_only_publish:=', '1'],
         ],
         remappings=[
             ('scan_fullframe', front_topic),
@@ -152,14 +118,15 @@ def generate_launch_description():
             picoscan_launch_file,
             ['hostname:=', rear_hostname],
             ['udp_receiver_ip:=', udp_receiver_ip],
-            ['udp_port:=', rear_udp_port],
-            ['imu_udp_port:=', rear_imu_udp_port],
+            ['udp_port:=', '2116'],
+            ['imu_udp_port:=', '7504'],
+            ['check_udp_receiver_ip:=', '0'],
             ['nodename:=', 'rear_lidar_node'],
             ['publish_frame_id:=', rear_frame_id],
             ['publish_laserscan_fullframe_topic:=', rear_topic],
             ['publish_laserscan_segment_topic:=', '/scan_segment_rear'],
-            ['tf_publish_rate:=', tf_publish_rate],
-            ['sw_pll_only_publish:=', 'true'],
+            ['tf_publish_rate:=', '0.0'],
+            ['sw_pll_only_publish:=', '1'],
         ],
         remappings=[
             ('scan_fullframe', rear_topic),
@@ -171,15 +138,10 @@ def generate_launch_description():
         front_hostname_arg,
         rear_hostname_arg,
         udp_receiver_ip_arg,
-        front_udp_port_arg,
-        rear_udp_port_arg,
-        front_imu_udp_port_arg,
-        rear_imu_udp_port_arg,
         front_frame_arg,
         rear_frame_arg,
         front_topic_arg,
         rear_topic_arg,
-        tf_publish_rate_arg,
         front_lidar_node,
         rear_lidar_node,
     ])

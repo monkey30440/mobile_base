@@ -161,9 +161,9 @@ graph LR
 #### 3.1 發布介面 (Published Interfaces)
 | 介面名稱 | 訊息型別 | `frame_id` (來自 S1) | QoS Profile | 典型頻率 | 說明與消費者 |
 |---|---|---|---|---|---|
-| **`/scan`** | `sensor_msgs/msg/LaserScan` | `base_link` | `SensorData` | $15 \sim 20\,\text{Hz}$ | **360° 融合雷達資料**。<br/>供 **S3 RF2O**、**S4 slam_toolbox**、**S5 AMCL** 訂閱。 |
-| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_FL` | `SensorData` | $15 \sim 20\,\text{Hz}$ | 前左原始掃描。<br/>供 S6 Nav2 Costmap 避障使用。 |
-| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_BR` | `SensorData` | $15 \sim 20\,\text{Hz}$ | 後右原始掃描。<br/>供 S6 Nav2 Costmap 避障使用。 |
+| **`/scan`** | `sensor_msgs/msg/LaserScan` | `base_link` | `SensorData` / `SystemDefaults` | $15 \sim 25\,\text{Hz}$ | **360° 融合雷達資料**。<br/>供 **S3 RF2O**、**S4 slam_toolbox**、**S5 AMCL** 訂閱。 |
+| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_FL_1` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 前左原始掃描（Layer 1 光學掃描面）。<br/>供 S6 Nav2 Costmap 避障及 `dual_laser_merger` 融合使用。 |
+| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_BR_1` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 後右原始掃描（Layer 1 光學掃描面）。<br/>供 S6 Nav2 Costmap 避障及 `dual_laser_merger` 融合使用。 |
 | **`/imu/data_raw`** | `sensor_msgs/msg/Imu` | `base_imu_link` | `SensorData` | $50 \sim 100\,\text{Hz}$ | 原始 3 軸角速度與線性加速度。<br/>供 **S3 robot_localization EKF** 訂閱。 |
 
 ### 4. Parameters & Configurations
