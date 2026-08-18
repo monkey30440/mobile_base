@@ -1242,15 +1242,15 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | 1. **純軟體轉換與閉環邏輯** (`PASS`)：官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環、正反向符號轉換、齒比運算、32-bit Rollover 累積追蹤與 NaN/飽和保護（44 項 GTest 與 6 項 ament linters 通過）。<br/>2. **實機唯讀延遲特性** (`PASS`)：實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms）。<br/>3. **實機零速通訊交易** (`PASS`)：實機 220 次 FC17 zero-speed exchange（Stage A 20 + Stage B 200, 100% 成功, 0 timeouts/alarms, Max 21.01 ms）。<br/>4. **實機 30 Hz 全迴圈時序** (`PASS`)：實機 1000 週期 Full ros2_control Loop @ 30 Hz zero-speed 實機時序驗證（1000/1000 成功, 0 deadline misses, 0 timeouts, 0 alarms, Max full cycle 25.91 ms，最小觀測剩餘時序預算 +7.419 ms / 22.3%）。<br/>5. **實機零速回授與生命週期路徑** (`PASS`)：實機真實 M1 狀態回授路徑（`actual_rpm=0`、`accumulated_steps`、`status=6/0`、`alarm=0`）與生命週期啟停序列（enable SVON -> 零速閉環運作 -> 停用 stop JG 0 -> disable SVOFF -> 斷線）。 |
-| 尚未證明 (唯一剩餘未完成項) | 1. **真實動態輪端回授有效性 (Real Dynamic Wheel Feedback Validity)** (`UNVERIFIED`)：<br/>   - 非零輪速數值量值（Non-zero wheel velocity magnitude）<br/>   - 實體運動下左右輪物理方向正確性（Left/right physical direction correctness）<br/>   - 運動中編碼器連續累積位置遞增/遞減（Encoder position progression during motion）<br/>   - 命令運動與實體輪端回授一致性（Commanded motion $\leftrightarrow$ observed real wheel feedback consistency）<br/>   *(受限於安全規範，Level 4 非零運動目前維持獨立 BLOCKED)*。<br/>2. **硬體通訊 Watchdog** (`UNVERIFIED`)：M1 硬體通訊 Watchdog 逾時跳脫與復歸閉環行為（硬體層面仍為 UNVERIFIED，安全等級 NOT ESTABLISHED）。<br/>3. **硬即時保證** (`NOT ESTABLISHED`)：任意 CPU 負載極限下的硬即時（Hard Real-Time）時序保證。 |
+| 已證明 | 1. **純軟體轉換與閉環邏輯** (`PASS`)：官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環、正反向符號轉換、齒比運算、32-bit Rollover 累積追蹤與 NaN/飽和保護（44 項 GTest 與 6 項 ament linters 通過）。<br/>2. **實機唯讀延遲特性** (`PASS`)：實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms）。<br/>3. **實機零速通訊交易** (`PASS`)：實機 220 次 FC17 zero-speed exchange（Stage A 20 + Stage B 200, 100% 成功, 0 timeouts/alarms, Max 21.01 ms）。<br/>4. **實機 30 Hz 全迴圈時序** (`PASS`)：實機 1000 週期 Full ros2_control Loop @ 30 Hz zero-speed 實機時序驗證（1000/1000 成功, 0 deadline misses, 0 timeouts, 0 alarms, Max full cycle 25.91 ms，最小觀測剩餘時序預算 +7.419 ms / 22.3%）。<br/>5. **實機零速回授與生命週期路徑** (`PASS`)：實機真實 M1 狀態回授路徑（`actual_rpm=0`、`accumulated_steps`、`status=6/0`、`alarm=0`）與生命週期啟停序列（enable SVON -> 零速閉環運作 -> 停用 stop JG 0 -> disable SVOFF -> 斷線）。<br/>6. **實機 Stage D1 左輪動態回授與方向有效性** (`PASS`)：<br/>   - ROS 左輪 $+0.5\text{ rad/s}$ 指令正確映射至驅動器 2（Left）之 $+95\text{ RPM}$ 目標值。<br/>   - 實體左輪依預期正向旋轉（自機器人左側觀察為逆時針 CCW，輪頂向前旋轉，操作人員現場確認）。<br/>   - 實機左輪實際轉速回授為正向且與 $\sim 95\text{ RPM}$ 目標動態一致（穩態 $0.4765 \sim 0.5184\text{ rad/s}$）。<br/>   - 實機左輪編碼器位置隨運動連續遞增（自 $0.0000\text{ rad}$ 累積至 $+0.9895\text{ rad}$ / $+56.69^\circ$）。<br/>   - ROS 左輪 velocity 與 position state interfaces 正確反映真實回授。<br/>   - 右輪 command 保持嚴格為零，右輪實際 RPM 保持 0，右輪編碼器位移為 0，操作人員現場確認右輪全程保持靜止（完全隔離）。<br/>   - 全程 0 alarm, 0 timeout, 0 transport/lifecycle error, 0 非預期運動。<br/>   - 受控 cooldown 平順減速至 0 RPM，驗證完成後安全復歸 Servo-Off（Status=6, Alarm=0, RPM=0）。 |
+| 尚未證明 (後續階段未完成項) | 1. **右輪動態運動與回授有效性 (Stage D2)** (`UNVERIFIED`)：右輪單獨非零運動下的實際轉速、物理旋轉方向與編碼器累積位移。<br/>2. **雙輪同步動態運動有效性 (Stage D3)** (`UNVERIFIED`)：雙輪同時非零正向運動下的動態回授與速度協調。<br/>3. **反向運動有效性** (`UNVERIFIED`)：負向速度指令（後退）之動態回授與方向正確性。<br/>4. **精密標定與一般定量速度追隨公差** (`UNVERIFIED`)：精密輪速標定（Precision speed calibration）與一般定量速度追隨公差。<br/>5. **整車動態與地面行駛行為** (`UNVERIFIED`)：煞車距離性能（Braking-distance performance）、里程計精度（Odometry accuracy）、著地行駛行為（Floor-driving behavior）與完整 diff_drive_controller 動態閉環。<br/>6. **硬體通訊 Watchdog** (`UNVERIFIED`)：M1 硬體通訊 Watchdog 逾時跳脫與復歸閉環行為（硬體層面仍為 UNVERIFIED，安全等級 NOT ESTABLISHED）。<br/>7. **硬即時保證** (`NOT ESTABLISHED`)：任意 CPU 負載極限下的硬即時（Hard Real-Time）時序保證。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
-- **Checklist #8 單一剩餘阻塞**：**Real dynamic wheel feedback validity is NOT YET VERIFIED**。由於 Level 4 非零運動目前受限於硬體安全規範維持 BLOCKED，實體輪子在非零轉速下的動態回授（方向、轉速量值、編碼器累積位移）尚未於實車上驗證，因此 Checklist #8 依治理規範嚴格維持 `[~]`，不進行追溯性完成條件縮小（Retroactive DoD Narrowing）。
-- **Level 4 非零運動維持 BLOCKED**：非零速度運動指令受限於安全性與 Process Crash Hazard 考量，依 §6 規範維持 BLOCKED。
+- **Checklist #8 狀態與剩餘範圍**：Stage D1（左輪動態回授與方向）已於實機完成驗證 (`PASS`)。右輪動態 (Stage D2) 與雙輪同步動態 (Stage D3) 仍待後續階段驗證，因此 Checklist #8 依治理規範嚴格維持 `[~]`，不進行追溯性完成條件縮小（Retroactive DoD Narrowing）。
+- **Level 4 後續非零運動維持 BLOCKED**：非零速度運動指令受限於安全性考量，Stage D2 / Stage D3 動態運動依 §6 規範維持 BLOCKED，需由操作人員另行獨立即時授權。
 - **Safe-Stop 鏈屬軟體 Best-Effort**：現行 `stop()` $\rightarrow$ `disable()` 依賴軟體行程正常運作；若行程崩潰（Process Crash / SIGKILL），軟體無法執行清理，此時實體 E-Stop 與電源切斷為最高安全權威。
 - **M1 硬體通訊 Watchdog 尚未閉環驗證**：目前驅動器 Watchdog 保持出廠設定（未啟用），其硬體跳脫特性尚未進行閉環驗證，安全等級為 `NOT ESTABLISHED`。
 - **Response Timeout 政策**：`response_timeout_ms` 屬 REQUIRED runtime parameter，API 無隱式預設值；`50 ms` 經實機量測驗證為當前推薦部署參數（Validated Deployment Candidate），但非硬即時常數。
@@ -1263,5 +1263,5 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | 欄位 | 內容 |
 |---|---|
 | Feature freeze status | `Baseline Frozen` (Synchronous Model A2 @ 30 Hz validated implementation baseline) |
-| Freeze condition | Synchronous Model A2 @ 30 Hz 實作基準凍結；Checklist #8 維持 `[~]` 等待後續 Real dynamic wheel feedback 實車動態驗證；Level 4 非零運動維持獨立 BLOCKED |
-| Next dependency | Checklist #8 Real dynamic wheel feedback 實機驗證（Level 4，目前 BLOCKED） / Checklist #9 `S1 Robot Description` |
+| Freeze condition | Synchronous Model A2 @ 30 Hz 實作基準凍結；Stage D1 完成驗證；Checklist #8 維持 `[~]` 等待後續 Stage D2/D3 實機驗證；Level 4 後續非零運動維持獨立 BLOCKED |
+| Next dependency | Checklist #8 Level 4 Stage D2 (右輪動態驗證，目前 BLOCKED) / Checklist #9 `S1 Robot Description` |
