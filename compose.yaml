@@ -1,0 +1,23 @@
+services:
+  mobile_base:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: mobile_base
+    runtime: nvidia
+    network_mode: host
+
+    volumes:
+      - .:/workspaces/mobile_base
+
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+      # - /dev/ttyACM0:/dev/ttyACM0
+
+    working_dir: /workspaces/mobile_base
+
+    stdin_open: true
+    tty: true
+
+    command: sleep infinity
