@@ -1086,10 +1086,10 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | 欄位 | 內容 |
 |---|---|
 | Checklist item | #8 — S7 `M1Hardware` ros2_control integration |
-| Item scope | 依 06 baseline 與 `docs/design_baseline/m1_hardware.md` 實作 `mobile_base_control::M1Hardware`（`hardware_interface::SystemInterface` plugin for ROS 2 Jazzy），包含 Model A2 控制迴圈（`write()` 單次 FC17 交易、`read()` 無通訊消費快取狀態）、單位轉換（$rad/s \leftrightarrow RPM$、齒比 20.0、左輪 +1、右輪 -1、3000 RPM 上限保護）、位置回授與 32-bit Rollover 累積追蹤（`PositionTracker`）、Lifecycle 狀態機（`on_init`, `on_configure`, `on_activate` 帶有有限次狀態輪詢確認、`on_deactivate` 依序執行 stop -> disable -> disconnect、`on_error`/`on_shutdown` 最佳防護清理）、防禦性指令範圍檢查、可配置參數、pluginlib export XML 與註冊、單元測試、URDF `ResourceManager` 整合測試與 Mock 執行驗證；Level 3 實機全迴圈時序量測完成；非零速度運動（Level 4）維持獨立 BLOCKED。 |
-| Implementation status | `Completed` |
-| Evidence status | `Build Verified` + `Unit Verified` + `Plugin Discovery Verified` + `Integration Verified` + `Real-Hardware Timing & Lifecycle Verified (Level 2 & Level 3)` |
-| Feature-freeze status | `Baseline Frozen` (Synchronous Model A2 @ 30 Hz validated implementation baseline; Level 4 non-zero motion remains BLOCKED) |
+| Item scope | 依 06 baseline 與 `docs/design_baseline/m1_hardware.md` 實作 `mobile_base_control::M1Hardware`（`hardware_interface::SystemInterface` plugin for ROS 2 Jazzy），包含 Model A2 控制迴圈（`write()` 單次 FC17 交易、`read()` 無通訊消費快取狀態）、單位轉換（$rad/s \leftrightarrow RPM$、齒比 20.0、左輪 +1、右輪 -1、3000 RPM 上限保護）、位置回授與 32-bit Rollover 累積追蹤（`PositionTracker`）、Lifecycle 狀態機（`on_init`, `on_configure`, `on_activate` 帶有有限次狀態輪詢確認、`on_deactivate` 依序執行 stop -> disable -> disconnect、`on_error`/`on_shutdown` 最佳防護清理）、防禦性指令範圍檢查、可配置參數、pluginlib export XML 與註冊、單元測試、URDF `ResourceManager` 整合測試與 Mock 執行驗證；Level 3 實機全迴圈時序量測完成；非零速度運動（Level 4）維持獨立 BLOCKED；Checklist #8 維持 `[~]`（等待 Real Dynamic Wheel Feedback 實機驗證）。 |
+| Implementation status | `Implemented (In Progress [~])` |
+| Evidence status | `Build Verified` + `Unit Verified` + `Plugin Discovery Verified` + `Integration Verified` + `Real-Hardware Timing & Lifecycle Level 3 Verified` |
+| Feature-freeze status | `Baseline Frozen` (Synchronous Model A2 @ 30 Hz validated implementation baseline; Checklist #8 remains `[~]` pending real dynamic wheel feedback verification) |
 | Last updated | 2026-08-18 |
 
 ---
@@ -1123,7 +1123,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 |---|---|
 | Mature component(s) used | `hardware_interface::SystemInterface` (ROS 2 Jazzy), `pluginlib`, `rclcpp_lifecycle`, `controller_manager::ResourceManager`, `diff_drive_controller::DiffDriveController` (`ros2_controllers`) |
 | Custom implementation | `M1Hardware` ros2_control plugin、`PositionTracker` 2's complement int32 delta accumulation、Model A2 execution timing、純軟體單位與座標系轉換（Left ID2 sign +1, Right ID1 sign -1, gear ratio 20.0, 10000 steps/rev）、防禦性指令飽和與異常拒絕 |
-| Boundary rule | `ros2_control` 標準框架負責 Controller 與硬體介面間之 LoanedCommand/LoanedState 借用與 Controller Manager 生命週期管理；`diff_drive_controller` 依據機器人幾何參數（`wheel_separation = 0.555` m, `wheel_radius = 0.08` m）計算輪端線速度/角速度指令，絕不包含馬達內部減速比或編碼器細節；`M1Hardware` 封裝底層 M1 驅動器通訊細節與馬達座標系轉換，對 Controller 暴露標準 `velocity` command interface 與 `position`/`velocity` state interfaces。 |
+| Boundary rule | `ros2_control` 標準框架負責 Controller 與硬體介面間之 LoanedCommand/LoanedState 借用與 Controller Manager 生命週期管理；`diff_drive_controller` 依據機器人幾何參數（`wheel_separation = 0.5545` m, `wheel_radius = 0.08` m）計算輪端線速度/角速度指令，絕不包含馬達內部減速比或編碼器細節；`M1Hardware` 封裝底層 M1 驅動器通訊細節與馬達座標系轉換，對 Controller 暴露標準 `velocity` command interface 與 `position`/`velocity` state interfaces。 |
 
 ---
 
@@ -1240,18 +1240,19 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | 1. 官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環（44 項 GTest 與 6 項 ament linters 通過）。<br/>2. 實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms）。<br/>3. 實機 220 次 FC17 zero-speed exchange（Stage A 20 + Stage B 200, 100% 成功, 0 timeouts/alarms, Max 21.01 ms）。<br/>4. 實機 1000 週期 Full ros2_control Loop @ 30 Hz zero-speed 實機時序驗證（1000/1000 成功, 0 deadline misses, 0 timeouts, 0 alarms, Max full cycle 25.91 ms，最小觀測剩餘時序預算 +7.419 ms / 22.3%）。<br/>5. 實機生命週期完整啟停序列（enable SVON -> 零速閉環運作 -> 停用 stop JG 0 -> disable SVOFF -> 斷線）。 |
-| 尚未證明 | 1. 非零速度實體運動（Level 4 exchange motion，受限於安全邊界目前維持獨立 BLOCKED）。<br/>2. 非零輪速動態旋轉下之物理編碼器回授精準度與地面滑差特性（留待後續實車調校）。<br/>3. M1 硬體通訊 Watchdog 逾時跳脫與復歸閉環行為（硬體層面仍為 UNVERIFIED，安全等級 NOT ESTABLISHED）。<br/>4. 任意 CPU 負載極限下的硬即時（Hard Real-Time）時序保證。 |
+| 已證明 | 1. **純軟體轉換與閉環邏輯** (`PASS`)：官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環、正反向符號轉換、齒比運算、32-bit Rollover 累積追蹤與 NaN/飽和保護（44 項 GTest 與 6 項 ament linters 通過）。<br/>2. **實機唯讀延遲特性** (`PASS`)：實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms）。<br/>3. **實機零速通訊交易** (`PASS`)：實機 220 次 FC17 zero-speed exchange（Stage A 20 + Stage B 200, 100% 成功, 0 timeouts/alarms, Max 21.01 ms）。<br/>4. **實機 30 Hz 全迴圈時序** (`PASS`)：實機 1000 週期 Full ros2_control Loop @ 30 Hz zero-speed 實機時序驗證（1000/1000 成功, 0 deadline misses, 0 timeouts, 0 alarms, Max full cycle 25.91 ms，最小觀測剩餘時序預算 +7.419 ms / 22.3%）。<br/>5. **實機零速回授與生命週期路徑** (`PASS`)：實機真實 M1 狀態回授路徑（`actual_rpm=0`、`accumulated_steps`、`status=6/0`、`alarm=0`）與生命週期啟停序列（enable SVON -> 零速閉環運作 -> 停用 stop JG 0 -> disable SVOFF -> 斷線）。 |
+| 尚未證明 (唯一剩餘未完成項) | 1. **真實動態輪端回授有效性 (Real Dynamic Wheel Feedback Validity)** (`UNVERIFIED`)：<br/>   - 非零輪速數值量值（Non-zero wheel velocity magnitude）<br/>   - 實體運動下左右輪物理方向正確性（Left/right physical direction correctness）<br/>   - 運動中編碼器連續累積位置遞增/遞減（Encoder position progression during motion）<br/>   - 命令運動與實體輪端回授一致性（Commanded motion $\leftrightarrow$ observed real wheel feedback consistency）<br/>   *(受限於安全規範，Level 4 非零運動目前維持獨立 BLOCKED)*。<br/>2. **硬體通訊 Watchdog** (`UNVERIFIED`)：M1 硬體通訊 Watchdog 逾時跳脫與復歸閉環行為（硬體層面仍為 UNVERIFIED，安全等級 NOT ESTABLISHED）。<br/>3. **硬即時保證** (`NOT ESTABLISHED`)：任意 CPU 負載極限下的硬即時（Hard Real-Time）時序保證。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
+- **Checklist #8 單一剩餘阻塞**：**Real dynamic wheel feedback validity is NOT YET VERIFIED**。由於 Level 4 非零運動目前受限於硬體安全規範維持 BLOCKED，實體輪子在非零轉速下的動態回授（方向、轉速量值、編碼器累積位移）尚未於實車上驗證，因此 Checklist #8 依治理規範嚴格維持 `[~]`，不進行追溯性完成條件縮小（Retroactive DoD Narrowing）。
 - **Level 4 非零運動維持 BLOCKED**：非零速度運動指令受限於安全性與 Process Crash Hazard 考量，依 §6 規範維持 BLOCKED。
 - **Safe-Stop 鏈屬軟體 Best-Effort**：現行 `stop()` $\rightarrow$ `disable()` 依賴軟體行程正常運作；若行程崩潰（Process Crash / SIGKILL），軟體無法執行清理，此時實體 E-Stop 與電源切斷為最高安全權威。
 - **M1 硬體通訊 Watchdog 尚未閉環驗證**：目前驅動器 Watchdog 保持出廠設定（未啟用），其硬體跳脫特性尚未進行閉環驗證，安全等級為 `NOT ESTABLISHED`。
 - **Response Timeout 政策**：`response_timeout_ms` 屬 REQUIRED runtime parameter，API 無隱式預設值；`50 ms` 經實機量測驗證為當前推薦部署參數（Validated Deployment Candidate），但非硬即時常數。
-- **Controller Update Rate 重啟條件**：Synchronous Model A2 @ 30 Hz 已凍結為當前實作基準，若 Baud rate、串列硬體、M1 韌體、主機平台或上層需求變更時，需依定義之觸發條件重新評估。
+- **Controller Update Rate 基準與重啟條件**：Synchronous Model A2 @ 30 Hz 已凍結為當前實作基準（Architecture Baseline Frozen），若 Baud rate、串列硬體、M1 韌體、主機平台或上層需求變更時，需依定義之觸發條件重新評估。
 
 ---
 
@@ -1259,6 +1260,6 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| Feature freeze status | `Baseline Frozen` |
-| Freeze condition | #8 S7 M1Hardware ros2_control 整合收斂完成（Synchronous Model A2 @ 30 Hz 實作基準凍結；Level 4 非零運動維持獨立 BLOCKED） |
-| Next dependency | Checklist #9 `S1 Robot Description` |
+| Feature freeze status | `Baseline Frozen` (Synchronous Model A2 @ 30 Hz validated implementation baseline) |
+| Freeze condition | Synchronous Model A2 @ 30 Hz 實作基準凍結；Checklist #8 維持 `[~]` 等待後續 Real dynamic wheel feedback 實車動態驗證；Level 4 非零運動維持獨立 BLOCKED |
+| Next dependency | Checklist #8 Real dynamic wheel feedback 實機驗證（Level 4，目前 BLOCKED） / Checklist #9 `S1 Robot Description` |
