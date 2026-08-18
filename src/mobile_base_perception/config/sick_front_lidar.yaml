@@ -1,0 +1,24 @@
+# S2 Perception Subsystem: Front-Left SICK 2D LiDAR Configuration
+# Device: SICK LiDAR at 192.168.0.1 (Front-Left Mounting Pocket)
+# Target Frame: base_lidar_link_FL
+# Output Topic: /scan_front (sensor_msgs/msg/LaserScan)
+
+front_lidar_node:
+  ros__parameters:
+    hostname: "192.168.0.1"
+    port: 2112
+    nodename: "front_lidar_node"
+    frame_id: "base_lidar_link_FL"
+    laserscan_topic: "/scan_front"
+    cloud_topic: "/cloud_front"
+    ros_qos: 4  # 4 = rclcpp::SensorDataQoS()
+    tf_publish_rate: 0.0  # TF authority owned by S1 robot_state_publisher
+    min_ang: -2.35619449  # -135 deg
+    max_ang: 2.35619449   # +135 deg
+    use_binary_protocol: true
+    sw_pll_only_publish: true
+    start_services: true
+    message_monitoring_enabled: true
+    read_timeout_millisec_default: 5000
+    read_timeout_millisec_startup: 120000
+    read_timeout_millisec_kill_node: 150000

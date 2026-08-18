@@ -16,10 +16,10 @@
 
 - 總項目：27
 - 已完成：9
-- 進行中：0
-- 待實作：18
+- 進行中：1
+- 待實作：17
 - 上游阻塞：0
-- 目前進度：9 / 27 (33%)；第 9 項 `S1 Robot Description` 依原始 DoD 完成 Xacro/URDF、joint/frame naming、robot_state_publisher、模型語法、TF tree 與實體幾何量測證據並正式結案 `[x]`；下一步為第 10 項 `S2 LiDAR acquisition and scan baseline`（待實作 `[ ]`）。
+- 目前進度：9 / 27 (33%)；第 10 項 `S2 LiDAR acquisition and scan baseline` 進行中 `[~]`（`mobile_base_perception` 套件、雙路 SICK 配置與 launch 語法/單元測試已完成，待實機 Stage L1/L2/L3 數據驗證證據）；第 11 項 `S2 TDK IMU runtime integration` 尚未開始 `[ ]`。
 
 ---
 
@@ -52,7 +52,7 @@
 - [x] 9. S1 Robot Description
   - 追溯：SYS-023。
   - 完成條件：Xacro/URDF、joint/frame naming、robot_state_publisher、模型語法、TF tree 與實體幾何量測證據符合 06。
-- [ ] 10. S2 LiDAR acquisition and scan baseline
+- [~] 10. S2 LiDAR acquisition and scan baseline
   - 追溯：SYS-003。
   - 完成條件：兩具 `sick_scan_xd` source 各自取得有效 LaserScan、frame/QoS/timestamp 可驗證；只有 06 核准的 downstream dependency 才使用 `dual_laser_merger`，不得以 merged output 取代兩個 authoritative raw sources。
 - [ ] 11. S2 TDK IMU runtime integration

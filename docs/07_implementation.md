@@ -1427,4 +1427,94 @@ base_footprint (z = 0.0000, 地表投影基準點)
 |---|---|
 | Feature freeze status | `Baseline Frozen` (S1 Robot Description Completed and Verified; Checklist #9 Closed `[x]`) |
 | Freeze condition | `mobile_base_description` 套件建置、測試與實機幾何合理性驗證全部通過；Checklist #9 正式結案 `[x]` |
-| Next dependency | Checklist #10 `S2 LiDAR acquisition and scan baseline` (`[ ] NOT STARTED`) |
+| Next dependency | Checklist #10 `S2 LiDAR acquisition and scan baseline` (`[~] IN PROGRESS`) |
+
+### 3.4 IMP-010: S2 LiDAR Acquisition & Scan Baseline (Checklist Item #10)
+
+#### 3.4.1 Identity / Scope / Status
+
+| 欄位 | 內容 |
+|---|---|
+| Checklist item | #10 — S2 `LiDAR acquisition and scan baseline` |
+| Item scope | 依 06 §3.2 baseline 規範，建立 `mobile_base_perception` 套件，整合成熟 `sick_scan_xd` 3.9.0 驅動元件，建立前左（FL，IP `192.168.0.1`，Frame `base_lidar_link_FL`，主題 `/scan_front`）與後右（BR，IP `192.168.0.2`，Frame `base_lidar_link_BR`，主題 `/scan_rear`）雙路獨立 2D LiDAR 擷取配置（`sick_front_lidar.yaml`、`sick_rear_lidar.yaml`）與啟動架構（`sick_dual_lidar.launch.py`）；停用驅動器內部 TF 廣播（`tf_publish_rate: 0.0`），確保 S1 `robot_state_publisher` 之唯一 TF 權威；設定 `SensorDataQoS`（`ros_qos: 4`）；實作 launch 與 YAML 語法自動化測試；準備硬體驗證方案。 |
+| Implementation status | `In Progress [~]` (Software baseline and launch/config tests complete and verified; real-hardware verification prepared) |
+| Evidence status | `Build Verified` + `Unit Verified (3/3 tests)` + `Ament Linters Passed (5/5 suites)` + `Workspace Regression Verified (263/263 tests)` |
+| Feature-freeze status | `Initial Software Slice Complete` (Checklist #10 remains `[~]` pending real-hardware acquisition evidence) |
+| Last updated | 2026-08-18 |
+
+#### 3.4.2 Requirements & Architecture Traceability
+
+- **承接需求**：`SYS-003` LiDAR 感知（提供掃描資料供建圖、定位與導航使用）、`CAP-001`、`CAP-002`。
+- **架構依賴**：
+  - 上游：S1 `mobile_base_description`（提供權威 TF 坐標系 `base_lidar_link_FL` 與 `base_lidar_link_BR`）。
+  - 下游：S2 `dual_laser_merger`（Checklist #12）、S2/S3 `rf2o_laser_odometry`（Checklist #12）、S4 `slam_toolbox`（Checklist #15）、S5 `amcl`（Checklist #16）、S6 `nav2_costmap_2d`（Checklist #17）。
+
+#### 3.4.3 File Artifact Inventory
+
+```text
+src/mobile_base_perception/
+├── CMakeLists.txt
+├── package.xml
+├── config/
+│   ├── sick_front_lidar.yaml          # FL LiDAR config (192.168.0.1, base_lidar_link_FL, /scan_front)
+│   └── sick_rear_lidar.yaml           # BR LiDAR config (192.168.0.2, base_lidar_link_BR, /scan_rear)
+├── launch/
+│   └── sick_dual_lidar.launch.py      # Dual SICK generic caller launch composition
+└── test/
+    └── test_lidar_launch_syntax.py    # Launch description & YAML parameter contract tests
+```
+
+#### 3.4.4 Mature Solution vs. Custom Implementation Boundary
+
+- **成熟方案引用**：採用 SICK 官方 ROS 2 Jazzy 二進位套件 `ros-jazzy-sick-scan-xd` 3.9.0 提供之標準 `sick_generic_caller` 節點進行 Ethernet 通訊、SOPAS 協議握手與 `sensor_msgs/msg/LaserScan` 資料發布，絕無自定義之底層網路驅動代碼。
+- **客製化實作範圍**：僅限於 ROS 2 標準 launch 啟動組合與 YAML 參數配置檔（`mobile_base_perception`），確保雙光達獨立運行並綁定至 06 規範之 Topic 與 Frame ID。
+
+#### 3.4.5 Interface & Configuration
+
+##### 權威原始資料發布介面 (Authoritative Raw Interfaces)
+
+| 主題名稱 | 訊息型別 | `header.frame_id` (來自 S1) | 目標硬體 IP | QoS Profile | 職責 |
+|---|---|---|---|---|---|
+| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | **`base_lidar_link_FL`** | `192.168.0.1` | `SensorData` (`ros_qos: 4`) | 前左 SICK 2D LiDAR 原始掃描 |
+| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | **`base_lidar_link_BR`** | `192.168.0.2` | `SensorData` (`ros_qos: 4`) | 後右 SICK 2D LiDAR 原始掃描 |
+
+*嚴格原則*：`/scan_front` 與 `/scan_rear` 為全系統唯一之權威原始雷達量測介面，未來的融合雷達主題 `/scan` 絕不得取代或覆寫此二原始資料來源。
+
+##### 關鍵驅動參數配置
+- `hostname`: 前左 `192.168.0.1` / 後右 `192.168.0.2`
+- `port`: `2112` (TCP CoLa 通訊埠)
+- `tf_publish_rate`: `0.0`（強制停用驅動程式內部 TF 發布，杜絕雙重靜態 TF 衝突）
+- `ros_qos`: `4`（指定使用 `rclcpp::SensorDataQoS`）
+- `sw_pll_only_publish`: `true`（確保 timestamp 與 ROS 系統時鐘同步）
+
+#### 3.4.6 Failure Detection & Safety Handling
+
+- **通訊中斷診斷**：驅動程式啟用 `message_monitoring_enabled: true`，當連續 $5000\,\text{ms}$ 未收到量測封包時觸發重連與警告。
+- **故障隔離原則**：單一雷達斷線或失效時，其主題停止發布，絕不進行主題替代（No source substitution）；另一雷達維持獨立串流。
+
+#### 3.4.7 Verification Evidence
+
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-18T17:03:42+08:00 | S2 LiDAR Launch & Configuration Syntax Test Suite | `colcon test --packages-select mobile_base_perception` + `colcon test-result` | PASS | 全部 5 項測試套件通過（13 測試項目，0 failures, 0 errors）：驗證 YAML 參數解析、FL/BR 獨立 IP、Frame、Topic 綁定、`tf_publish_rate: 0.0`、QoS、LaunchDescription 生成且無 `dual_laser_merger` 混入；全工作區 5 套件 263 項回歸測試通過。 | [`docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt) |
+
+#### 3.4.8 Evidence Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`mobile_base_perception` 於 ROS 2 Jazzy 環境下正確建置與安裝。<br/>2. **雙雷達獨立配置語意** (`PASS`)：FL (`192.168.0.1`, `base_lidar_link_FL`, `/scan_front`) 與 BR (`192.168.0.2`, `base_lidar_link_BR`, `/scan_rear`) 參數完全隔離且符合 06 規範。<br/>3. **TF 唯一性防護** (`PASS`)：雙節點均設定 `tf_publish_rate: 0.0`，杜絕與 S1 `robot_state_publisher` 衝突。<br/>4. **Launch 組合生成與無非授權元件** (`PASS`)：LaunchDescription 僅生成雙 `sick_generic_caller` 節點，無 `dual_laser_merger` 或自製 TF workaround。 |
+| 尚未證明 (待實機驗收項) | 1. **實機網路連通與感測器握手 (Stage L1)**：實機 `192.168.0.1` 與 `192.168.0.2` 之通訊握手。<br/>2. **實機雙串流接收與訊息有效性 (Stage L2)**：`/scan_front` 與 `/scan_rear` 之實體點雲有效性、非零推進 timestamp、實際發布頻率與有限距離點雲分佈。<br/>3. **來源隔離與故障安全 (Stage L3)**：單一感測器遮蔽獨立性與斷線行為。 |
+
+#### 3.4.9 Known Limits / Outstanding Obligations
+
+- **驗證深度治理原則**：觀察到之實機發布頻率（如 $\approx 15\,\text{Hz}$）、封包延遲與點雲距離均為實測經驗證據（Empirical Observations），非未經授權硬編碼之剛性門檻。
+- **持久化配置保護**：嚴禁執行任何對 LiDAR 內部非揮發性記憶體（EEPROM/Flash）之永久寫入或網路 IP 修改命令。
+- **dual_laser_merger 範疇劃分**：雙雷達融合屬於 Checklist #12（Perception & Odometry Integration）範疇，不作為 Checklist #10 之結案阻塞項。
+
+#### 3.4.10 Feature Freeze Status / Next Dependency
+
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Initial Slice Complete` (S2 Perception Configuration Baseline Established; Checklist #10 Remains `[~]`) |
+| Freeze condition | `mobile_base_perception` 套件建置與單元/語法測試全部通過；Checklist #10 維持 `[~]` 等待實機數據驗收證據；Checklist #11 尚未開始 `[ ]` |
+| Next dependency | Checklist #10 實機量測擷取驗證 (Stage L1/L2/L3) / Checklist #11 `S2 TDK IMU runtime integration` (`[ ] NOT STARTED`) |
