@@ -175,6 +175,10 @@ public:
     const MotorCommand & command_a,
     const MotorCommand & command_b);
 
+  Result<ExchangeResult> exchange_zero(
+    int driver_a = static_cast<int>(DriveId::Right),
+    int driver_b = static_cast<int>(DriveId::Left));
+
   Result<ExchangeResult> stop(
     int driver_a = static_cast<int>(DriveId::Right),
     int driver_b = static_cast<int>(DriveId::Left));

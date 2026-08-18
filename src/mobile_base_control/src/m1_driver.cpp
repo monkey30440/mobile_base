@@ -524,6 +524,11 @@ Result<ExchangeResult> M1Driver::exchange(
     FC_READ_WRITE_MULTIPLE, ids, tx_res.value.data(), tx_res.value.size());
 }
 
+Result<ExchangeResult> M1Driver::exchange_zero(int driver_a, int driver_b)
+{
+  return exchange(MotorCommand{driver_a, 0}, MotorCommand{driver_b, 0});
+}
+
 Result<ExchangeResult> M1Driver::stop(int driver_a, int driver_b)
 {
   if (driver_a == driver_b || driver_a < 1 || driver_a > 8 || driver_b < 1 || driver_b > 8) {
