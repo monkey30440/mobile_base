@@ -51,7 +51,7 @@
 - [x] 10. S5 Localization Subsystem Design
   - 完成條件：定義 `nav2_amcl` 節點（訂閱已載入地圖、S2 LaserScan、S3 Odom）、Navigation Mode 下 `map → odom` 唯一發布權限、接收 RViz Initial Pose 初始化（承接 SYS-010）。
 - [x] 11. S6 Navigation Subsystem Design
-  - 完成條件：定義 Target Admission 模組（GAP-01 目標識別、GAP-02 正規化、GAP-03 Station 查表解析、GAP-04 合法性驗證）、Nav2 Route Server、BT Navigator（三階段編排 First/On/Last Mile、Step 19A 重選路與 Fallback 終止）、Planner/Controller/Costmap2D/StoppedGoalChecker 與最終結果收斂（承接 SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033）。
+  - 完成條件：定義 Target Admission 模組（GAP-01→SYS-008 目標識別、GAP-02→SYS-009 Goal Pose 正規化、GAP-03→SYS-032 Station 解析、GAP-04→SYS-033 Canonical Goal 驗證）、Nav2 Route Server、BT Navigator（三階段編排 SYS-018 First Mile／SYS-019 On Route／SYS-020 Last Mile、SYS-013 route-preferred 重選路與 SYS-021 Fallback 終止）、Planner（SYS-011）、Costmap（SYS-014）、Controller（SYS-015）、StoppedGoalChecker（SYS-016）、原生結果收斂（SYS-017）與導航取消（SYS-025）。
 
 ---
 

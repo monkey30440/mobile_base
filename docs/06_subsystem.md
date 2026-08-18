@@ -731,21 +731,21 @@ amcl:
 ### 1. Purpose & Architectural Boundary
 * **目的**：在導航定位模式（Navigation Mode, UC-002）下，作為 AMR 自主移動決策中樞。負責接收導航目標（座標點或站點名稱）、解析站點清單、校驗目標合法性、編排三階段任務（First Mile 自由規劃 $\rightarrow$ On Route 拓撲路網導航 $\rightarrow$ Last Mile 最終進站）、維護全域與局部障礙物代價地圖（Costmap）、追蹤路徑並下發速度命令至 S7，落實停止確認機制（StoppedGoalChecker）與 Step 19A 簡化版路徑重選及降級安全停止。
 * **承接需求（共 15 項系統需求）**：
-  * **SYS-008 局部障礙物避障**：基於 2D Costmap（障礙物清除與膨脹層）即時避障。
-  * **SYS-009 導航目標接收**：支援接收座標目標與站點名稱目標。
-  * **SYS-011 站點清單解析**：查表解析站點名稱為標準目標位姿（GAP-03）。
-  * **SYS-013 路徑重選**：遇到阻擋時觸發拓撲重選路（Step 19A MVP）。
-  * **SYS-014 拓撲路網導航**：沿 Route Graph 邊界與節點導航（Nav2 Route Server）。
-  * **SYS-015 偏航回正**：偏離拓撲邊時自動回正至路網。
-  * **SYS-016 自由路徑規劃**：First Mile / Last Mile 無衝突幾何路徑規劃（Planner Server）。
-  * **SYS-017 移動控制**：路徑追隨與速度輸出至 S7（Controller Server）。
-  * **SYS-018 導航取消與中斷**：支援任務搶占與中斷，取消時立即煞停。
-  * **SYS-019 停止確認機制**：到達目標後確認物理停轉方回傳成功（StoppedGoalChecker）。
-  * **SYS-020 導航狀態反饋**：即時回報導航執行進度與狀態。
-  * **SYS-021 降級安全停止**：規劃失敗或恢復耗盡時原地安全煞停並回傳失敗。
-  * **SYS-025 導航目標合法性**：目標點邊界、自由空間與朝向合法性校驗（GAP-04）。
-  * **SYS-032 拓撲路網結構**：定義有向邊、節點與邊速度限制規格。
-  * **SYS-033 站點命名空間與版本**：定義站點命名與版本管理格式。
+  * **SYS-008 Navigation Target**：識別使用者提交的 Station 或 Goal Pose 目標（GAP-01）。
+  * **SYS-009 Goal Pose Normalization**：將終端提交的 `x`、`y`、`yaw-deg` 正規化為 canonical `PoseStamped`（GAP-02）。
+  * **SYS-011 路徑規劃**：依目前位姿與 active stage 目標，透過 Navigation2 產生有效且非空的路徑。
+  * **SYS-013 Route-preferred Navigation Strategy**：存在有效且安全的 route-assisted solution 時，優先使用 Route Graph 範圍。
+  * **SYS-014 障礙物避讓**：使用有效環境障礙物資訊，避免規劃或執行穿越占用區域的運動。
+  * **SYS-015 路徑追蹤**：透過 Navigation2 `FollowPath` 追蹤目前 active stage 的有效路徑。
+  * **SYS-016 到站判定**：僅在位置、朝向與底盤停止條件皆滿足時判定導航成功。
+  * **SYS-017 導航結果**：透過 Navigation2 原生結果回報 Success、Failure 或 Canceled。
+  * **SYS-018 First Mile**：必要時由 Current Pose 安全連接至選定的 Route Entry；零長度時合法略過。
+  * **SYS-019 On Route Navigation**：沿選定 Route Graph route，由 Route Entry 移動至 Route Exit。
+  * **SYS-020 Last Mile**：必要時由 Route Exit 安全連接至 Canonical Goal Pose；零長度時合法略過。
+  * **SYS-021 Reserved Free-space Fallback Boundary**：v0.1 路網方案用盡時不執行 Free-space Fallback，終止導航、嘗試停止並回報 unavailable。
+  * **SYS-025 導航取消**：接受進行中導航任務的取消要求、終止任務並回報取消結果。
+  * **SYS-032 Station Target Resolution**：使用目前場域 Station Catalog 將 Station ID 解析為 canonical `PoseStamped`（GAP-03）。
+  * **SYS-033 Canonical Goal Pose Validation**：在導航開始前檢查 canonical pose 的有限值、frame 與 quaternion（GAP-04）。
 * **邊界與排除**：
   * **In-Scope**：Target Admission 模組（GAP-01~04）、Nav2 BT Navigator、Route Server、Planner Server、Controller Server、Costmap 2D、StoppedGoalChecker、Action 介面。
   * **Out-of-Scope**：底層馬達物理加速度與極限控制（由 S7 負責）、動態 TF 生成（由 S1/S3/S5 負責）。
@@ -756,9 +756,9 @@ graph TD
     subgraph S6: Navigation
         subgraph TargetAdmission [Target Admission 輕量薄層模組]
             GAP01[GAP-01: Target Discriminator<br/>目標型態識別 (Pose vs Station)]
-            GAP02[GAP-02: Goal Pose Normalizer<br/>四元數與角度正規化]
+            GAP02[GAP-02: Goal Pose Normalizer<br/>x / y / yaw-deg → PoseStamped]
             GAP03[GAP-03: Station Catalog Resolver<br/>station_catalog.yaml 查表解析]
-            GAP04[GAP-04: Canonical Goal Validator<br/>地圖範圍/非致命障礙/合法性檢查]
+            GAP04[GAP-04: Canonical Goal Validator<br/>有限值 / Frame / Quaternion 檢查]
         end
         
         subgraph Nav2Stack [Nav2 Jazzy 導航核心]
@@ -788,10 +788,10 @@ graph TD
 ```
 
 ### 2.1 Target Admission 輕量薄層模組（GAP-01 ~ GAP-04）
-1. **`GAP-01: Target Discriminator`**：識別導航目標為原始座標位姿（`PoseStamped`）或站點名稱字串（`station_name`）。
-2. **`GAP-02: Goal Pose Normalizer`**：校正四元數向量長度為 1，將偏航角正規化至 $[-\pi, \pi]$，並確保目標 Frame 為 `map`。
-3. **`GAP-03: Station Catalog Resolver`**：載入 `station_catalog.yaml`（符合 SYS-033 命名空間與版本），依名稱查表提取精確座標 $(x, y, \text{yaw})$。
-4. **`GAP-04: Canonical Goal Validator`**：依據靜態地圖與全域代價地圖，檢驗目標是否在地圖邊界內且代價非致命障礙（Cost $< 254$）。若不合法立即拒絕並回傳具體原因（SYS-025）。
+1. **`GAP-01: Target Discriminator`**：識別使用者提交的 Navigation Target 為 Station 或 Goal Pose（SYS-008）。
+2. **`GAP-02: Goal Pose Normalizer`**：將終端提交且以公尺表示的 `x`、`y` 與以度表示的 `yaw-deg` 轉換為目前導航全域座標框架中的 canonical `PoseStamped`，包含 yaw-to-quaternion、frame 與 timestamp 設定（SYS-009）。
+3. **`GAP-03: Station Catalog Resolver`**：載入目前場域的 `station_catalog.yaml`，依 Station ID 查表解析為 canonical `PoseStamped`；空值、查無站點或資料無法解析時拒絕並回報原因（SYS-032）。
+4. **`GAP-04: Canonical Goal Validator`**：檢驗 canonical `PoseStamped` 的位置與方向數值為有限值、Frame 非空且可轉換至導航全域座標框架、Quaternion 有效；不合法時立即拒絕並回傳具體原因（SYS-033）。障礙物占用與路徑安全性由 Nav2 Costmap／Planner 承接 SYS-014，不重複納入此 Gap。
 
 ### 2.2 Nav2 導航核心元件
 1. **`bt_navigator` (行為樹導航編排器)**：
@@ -800,17 +800,17 @@ graph TD
      * **On Route**：呼叫 `route_server` 產出拓撲路徑，由 `controller_server` 沿拓撲邊追隨行駛。
      * **Last Mile**：到達目標站點之拓撲出口節點後，呼叫 `planner_server` 精確規劃對齊至最終目標位姿。
    * **Step 19A 簡化版路徑重選與安全降級**：
-     * 當拓撲邊受阻，向 `route_server` 請求替代拓撲路徑（SYS-013）。
+     * 當拓撲邊受阻，使用最新 Current Pose 重新執行既有 route-assisted 選路；仍存在有效且安全方案時繼續優先使用 Route Graph（SYS-013）。
      * 若無替代路徑或恢復重試耗盡，直接下發零速安全停止，回傳 Action 失敗（SYS-021），嚴禁無限自旋重試。
 2. **`route_server` (Nav2 拓撲路網伺服器)**：
-   * 載入 `route_graph.yaml`（符合 SYS-032 有向邊、節點座標與速度限制），計算節點間之拓撲最優路徑。
+   * 載入 `route_graph.yaml`，依 connectivity、direction 與 availability constraints 計算 Route Entry 至 Route Exit 的 route-assisted 路徑（SYS-013、SYS-019）。
 3. **`planner_server` (Nav2 自由幾何規劃器)**：
-   * 使用 `nav2_navfn_planner` 或 `SmacPlanner2D` 計算 2D 無碰撞路徑（SYS-016）。
+   * 使用 `nav2_navfn_planner` 或 `SmacPlanner2D`，依目前位姿與 active stage 目標計算有效且非空的 2D 路徑（SYS-011）。
 4. **`controller_server` & `stopped_goal_checker` (Nav2 控制器與停轉檢測)**：
-   * 使用 `DWBLocalPlanner` 或 `RegulatedPurePursuitController` 追隨路徑並輸出 `/cmd_vel` 至 S7（SYS-017）。
-   * 抵達目標容差半徑後，由 `stopped_goal_checker` 檢驗實際線速度 $< 0.01\,\text{m/s}$ 且角速度 $< 0.02\,\text{rad/s}$，確認完全停穩後方回傳成功（SYS-019）。
+   * 使用 `DWBLocalPlanner` 或 `RegulatedPurePursuitController`，透過 Navigation2 `FollowPath` 追蹤 active stage 路徑並輸出 `/cmd_vel` 至 S7（SYS-015）。
+   * 抵達目標容差半徑後，由 `stopped_goal_checker` 檢驗實際線速度 $< 0.01\,\text{m/s}$ 且角速度 $< 0.02\,\text{rad/s}$，確認位置、朝向與底盤停止皆滿足後方判定成功（SYS-016）；最終結果透過 Navigation2 原生結果回報（SYS-017）。
 5. **`nav2_costmap_2d` (全域與局部代價地圖)**：
-   * 訂閱 S2 的 `/scan_front` 與 `/scan_rear`（或融合 `/scan`），進行光線投射（Ray-tracing）、障礙物標記、膨脹層計算（SYS-008）。
+   * 訂閱 S2 的 `/scan_front` 與 `/scan_rear`（或融合 `/scan`），進行光線投射（Ray-tracing）、障礙物標記與膨脹層計算，避免規劃或執行穿越占用區域（SYS-014）。
 
 ---
 
@@ -845,7 +845,7 @@ graph TD
 
 ## 4. 參數與配置結構 (Parameters & Configuration)
 
-### 4.1 資源檔案 Schema（符合 SYS-032 與 SYS-033）
+### 4.1 資源檔案 Schema（Station Catalog 承接 SYS-032；Route Graph 支援 SYS-013 與 SYS-019）
 
 * **站點清單 (`maps/station_catalog.yaml`)**：
   ```yaml
@@ -909,7 +909,7 @@ controller_server:
 
     stopped_goal_checker:
       plugin: "nav2_controller::StoppedGoalChecker"
-      xy_goal_tolerance: 0.05 # 抵達半徑 5cm (SYS-019)
+      xy_goal_tolerance: 0.05 # 抵達半徑 5cm (SYS-016)
       yaw_goal_tolerance: 0.05 # 抵達角度 0.05 rad
       trans_stopped_velocity: 0.01 # 線速度停轉門檻 (10mm/s)
       rot_stopped_velocity: 0.02 # 角速度停轉門檻 (0.02rad/s)
@@ -960,21 +960,21 @@ local_costmap:
 
 ## 5. 異常處理與診斷 (Failure Detection & Diagnostics)
 
-1. **目標不合法即時拒絕 (GAP-04 / SYS-025)**：
-   * 若目標座標位於地圖邊界外或為已知障礙物佔據區域，Action Server 立即回傳 `REJECTED` 與錯誤字串，AMR 保持靜止。
+1. **Canonical Goal 不合法即時拒絕 (GAP-04 / SYS-033)**：
+   * 若 canonical `PoseStamped` 包含非有限值、空白或不可轉換之 Frame、或無效 Quaternion，Target Admission 立即拒絕並回報具體原因，AMR 保持靜止。地圖占用與路徑安全性由 Nav2 Costmap／Planner 依 SYS-014 處理。
 2. **路徑受阻與 Step 19A 重選路 (SYS-013 / SYS-021)**：
    * 當前方拓撲邊被障礙物阻擋無法通行時，BT 觸發重選路；若無可行拓撲路徑，系統直接發布零速煞停，Action 回傳 `FAILED`，終止任務以維護安全。
-3. **任務取消防滑行 (SYS-018)**：
-   * 接收到客戶端 `/cancel_goal` 時，`controller_server` 立即將 `/cmd_vel` 歸零，並監控停轉後方回傳 `CANCELED`。
-4. **停轉確認逾時防護 (SYS-019)**：
-   * 到達目標點後，若因外力或坡道導致在 $2.0\,\text{秒}$ 內無法達到停轉門檻，輸出警告日誌並回報完成狀態。
+3. **任務取消防滑行 (SYS-025)**：
+   * 接收到客戶端 `/cancel_goal` 時，終止進行中的導航任務、要求停止運動，並透過 Navigation2 原生結果回報 `CANCELED`。
+4. **停轉確認逾時防護 (SYS-016)**：
+   * 到達目標點後，若因外力或坡道導致在 $2.0\,\text{秒}$ 內無法達到停轉門檻，輸出警告日誌且不得回報導航成功；透過 Navigation2 原生失敗結果終止。
 
 ---
 
 ## 6. 驗證規格 (Verification Obligations)
 
 1. **Target Admission 單元測試 (Unit Test)**：
-   * 測試無效站點名稱（回傳 `STATION_NOT_FOUND`）、測試障礙物目標點（回傳 `GOAL_IN_COLLISION`）、測試四元數未正規化輸入（驗證自動正規化）。
+   * 測試無效 Station ID（拒絕並回報原因）、測試缺失或無法解析的 Goal Pose 欄位、測試非有限座標、空白／不可轉換 Frame 與無效 Quaternion；只有通過驗證的 canonical `PoseStamped` 可進入導航流程。
 2. **三階段導航整合測試 (Integration Test)**：
    * 在模擬環境中下發導航至 `STATION_B`，追蹤記錄並驗證狀態依序流經「First Mile $\rightarrow$ On Route $\rightarrow$ Last Mile $\rightarrow$ StoppedGoalChecker」。
 3. **Step 19A 重選路與安全停止測試 (Fault Injection Test)**：
@@ -1010,10 +1010,10 @@ local_costmap:
 
 | Gap 編號 | Gap 名稱 | 所屬子系統 | 實施元件與檔案位置 | 承接需求 |
 |---|---|---|---|---|
-| **GAP-01** | Target Discriminator | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-009 |
-| **GAP-02** | Goal Pose Normalizer | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-025 |
-| **GAP-03** | Station Catalog Resolver | S6 Navigation | `mobile_base_navigation::StationResolver` | SYS-011, SYS-033 |
-| **GAP-04** | Canonical Goal Validator | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-025 |
+| **GAP-01** | Target Discriminator | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-008 |
+| **GAP-02** | Goal Pose Normalizer | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-009 |
+| **GAP-03** | Station Catalog Resolver | S6 Navigation | `mobile_base_navigation::StationResolver` | SYS-032 |
+| **GAP-04** | Canonical Goal Validator | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-033 |
 | **GAP-05** | Base Feedback Validity Checker | S7 Base Control | `M1HardwareInterface::read()` | SYS-029 |
 | **GAP-06** | Base Safe Enable / Stop Logic | S7 Base Control | `M1HardwareInterface::perform_safe_stop()` | SYS-030 |
 
@@ -1030,27 +1030,27 @@ local_costmap:
 | **SYS-005** | 系統里程 | S3 State Estimation | `ekf_filter_node` (`/odometry/filtered`, TF) | 3.4 |
 | **SYS-006** | SLAM / 定位模式互斥 | S4 Mapping / S5 Loc | Launch Manager / Mutex lifecycle | 3.5, 3.6, 4.1 |
 | **SYS-007** | 地圖生命週期管理 | S4 Mapping | `nav2_map_server` Lifecycle | 3.5 |
-| **SYS-008** | 局部障礙物避障 | S6 Navigation | `nav2_costmap_2d` (Obstacle & Inflation) | 3.7 |
-| **SYS-009** | 導航目標接收 | S6 Navigation | GAP-01 (`/navigate_to_pose`, Station) | 3.7 |
+| **SYS-008** | Navigation Target | S6 Navigation | GAP-01：識別 Station 或 Goal Pose | 3.7 |
+| **SYS-009** | Goal Pose Normalization | S6 Navigation | GAP-02：終端 `x`, `y`, `yaw-deg` → canonical `PoseStamped` | 3.7 |
 | **SYS-010** | 初始位姿估測 | S5 Localization | `nav2_amcl` (`/initialpose`) | 3.6 |
-| **SYS-011** | 站點清單解析 | S6 Navigation | GAP-03 (`station_catalog.yaml`) | 3.7 |
-| **SYS-013** | 路徑重選 | S6 Navigation | BT Navigator (Step 19A MVP Reselection) | 3.7 |
-| **SYS-014** | 拓撲路網導航 | S6 Navigation | `route_server` (`route_graph.yaml`) | 3.7 |
-| **SYS-015** | 偏航回正 | S6 Navigation | BT Navigator Route Alignment | 3.7 |
-| **SYS-016** | 自由路徑規劃 | S6 Navigation | `planner_server` (`NavfnPlanner`) | 3.7 |
-| **SYS-017** | 移動控制 | S6 Navigation | `controller_server` (`DWBLocalPlanner`) | 3.7 |
-| **SYS-018** | 導航取消與中斷 | S6 Navigation | Action Preemption / Zero-vel cancel | 3.7 |
-| **SYS-019** | 停止確認機制 | S6 Navigation | `nav2_controller::StoppedGoalChecker` | 3.7 |
-| **SYS-020** | 導航狀態反饋 | S6 Navigation | Nav2 Action Feedback / Progress | 3.7 |
-| **SYS-021** | 降級安全停止 | S6 Navigation | BT Safe Stop Action on Exhaustion | 3.7 |
+| **SYS-011** | 路徑規劃 | S6 Navigation | `planner_server`：目前位姿與 active stage 目標 → 有效非空路徑 | 3.7 |
+| **SYS-013** | Route-preferred Navigation Strategy | S6 Navigation | `route_server` + BT：優先執行有效 route-assisted solution | 3.7 |
+| **SYS-014** | 障礙物避讓 | S6 Navigation | `nav2_costmap_2d` (Obstacle & Inflation) | 3.7 |
+| **SYS-015** | 路徑追蹤 | S6 Navigation | Navigation2 `FollowPath` + Controller / Progress Checker | 3.7 |
+| **SYS-016** | 到站判定 | S6 Navigation | Goal acceptance + `StoppedGoalChecker` | 3.7 |
+| **SYS-017** | 導航結果 | S6 Navigation | Navigation2 原生 Success / Failure / Canceled 結果 | 3.7 |
+| **SYS-018** | First Mile | S6 Navigation | Current Pose → Route Entry；零長度時略過 | 3.7 |
+| **SYS-019** | On Route Navigation | S6 Navigation | Route Entry → Route Exit，遵守 Route Graph constraints | 3.7 |
+| **SYS-020** | Last Mile | S6 Navigation | Route Exit → Canonical Goal Pose；零長度時略過 | 3.7 |
+| **SYS-021** | Reserved Free-space Fallback Boundary | S6 Navigation | v0.1 路網方案用盡時終止、停止並回報 unavailable | 3.7 |
 | **SYS-022** | 底盤運動控制 | S7 Base Control | `diff_drive_controller` | 3.3 |
 | **SYS-023** | 機器人描述 | S1 Robot Description | `robot_state_publisher`, `mobile_base.urdf.xacro` | 3.1 |
 | **SYS-024** | 地圖管理 | S4 Mapping | `nav2_map_server` Read-back Validation | 3.5 |
-| **SYS-025** | 導航目標合法性 | S6 Navigation | GAP-02 & GAP-04 Validation | 3.7 |
+| **SYS-025** | 導航取消 | S6 Navigation | Navigation2 Action cancel：終止任務並回報 Canceled | 3.7 |
 | **SYS-026** | 底盤故障處理 | S7 Base Control | `M1HardwareInterface::read()` -> ERROR | 3.3 |
 | **SYS-027** | 運動命令逾時 | S7 Base Control | `diff_drive_controller::cmd_vel_timeout` | 3.3 |
 | **SYS-028** | 底盤運動限制 | S7 Base Control | `diff_drive_controller` linear/angular limits | 3.3 |
 | **SYS-029** | 底盤狀態回授 | S7 Base Control | GAP-05 Feedback Validity Checker | 3.3 |
 | **SYS-030** | 底盤安全啟停 | S7 Base Control | GAP-06 Safe Enable / Stop Logic | 3.3 |
-| **SYS-032** | 拓撲路網結構 | S6 Navigation | `maps/route_graph.yaml` Schema | 3.7 |
-| **SYS-033** | 站點命名空間與版本 | S6 Navigation | `maps/station_catalog.yaml` Schema | 3.7 |
+| **SYS-032** | Station Target Resolution | S6 Navigation | GAP-03：Station Catalog → canonical `PoseStamped` | 3.7 |
+| **SYS-033** | Canonical Goal Pose Validation | S6 Navigation | GAP-04：有限值、Frame 與 Quaternion 驗證 | 3.7 |
