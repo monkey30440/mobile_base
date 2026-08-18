@@ -1,0 +1,23 @@
+# IMP: IMP-007
+# Layer: negative
+# Timestamp: 2026-08-18T11:46:03+08:00
+# Env: mobile_base:latest / jazzy / Ubuntu 24.04 (Noble)
+# Target: M1Driver negative timeout & parameter bounds handling
+# Command: colcon test --packages-select mobile_base_control --ctest-args -R M1DriverTest.NegativeHandling
+# Version: 3bfbf02
+# Result: PASS
+# Proved: M1Driver correctly rejects invalid driver IDs (0, 9, duplicates), maps simulated serial timeout to ErrorCode::TIMEOUT, and maps send failures to ErrorCode::SEND_FAILED.
+# Not-proved: Real physical wire disconnection during active motor rotation.
+
+Running main() from /opt/ros/jazzy/src/gtest_vendor/src/gtest_main.cc
+Note: Google Test filter = M1DriverTest.NegativeHandling
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from M1DriverTest
+[ RUN      ] M1DriverTest.NegativeHandling
+[       OK ] M1DriverTest.NegativeHandling (0 ms)
+[----------] 1 test from M1DriverTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.

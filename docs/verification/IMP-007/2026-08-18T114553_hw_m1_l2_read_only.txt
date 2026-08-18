@@ -1,0 +1,53 @@
+# IMP: IMP-007
+# Layer: hardware
+# Timestamp: 2026-08-18T11:46:04+08:00
+# Env: mobile_base:latest / jazzy / Ubuntu 24.04 (Noble)
+# Target: M1 Dual Driver (/dev/ttyUSB0, ID 1 Right, ID 2 Left)
+# Command: ./install/mobile_base_control/lib/mobile_base_control/m1_l2_read_check /dev/ttyUSB0 230400
+# Version: 3bfbf02
+# Result: PASS
+# Proved: Physical Modbus RTU communication at 230400 8N1 is operational; verified register 02-14=1 and 09-26=0 on ID 1 and ID 2; verified dual-driver FC03 state read (ID1 status=6 alarm=0, ID2 status=6 alarm=0, bus~51.1V); verified non-existent slave timeout handling.
+# Not-proved: Level 3-5 actuator enable, torque generation, or physical wheel rotation.
+
+========================================
+M1Driver Level 2 Read-Only Hardware Check
+Target Device: /dev/ttyUSB0 @ 230400 bps (8N1)
+Safety Level: Level 2 (Hardware communication / no motion)
+========================================
+
+[Step 1] Connecting to M1 serial bus...
+PASS: Connected to /dev/ttyUSB0
+
+[Step 2] Reading static configuration registers via Standard Modbus FC03...
+ID 1 (Right): Reg 02-14 (Position Format) = 1
+ID 2 (Left) : Reg 02-14 (Position Format) = 1
+ID 1 (Right): Reg 09-26 (MD2 Mapping)     = 0
+ID 2 (Left) : Reg 09-26 (MD2 Mapping)     = 0
+
+[Step 3] Executing Multi-drive 2.0 FC03 dual-driver read_state(1, 2)...
+Driver ID 1:
+  Status        : 6
+  Alarm         : 0
+  Actual RPM    : 0 RPM
+  Bus Voltage   : 51.13 V
+  Current       : 0.06 A
+  Position Steps: 0 steps
+  Error Check   : 0x0682
+Driver ID 2:
+  Status        : 6
+  Alarm         : 0
+  Actual RPM    : 0 RPM
+  Bus Voltage   : 51.08 V
+  Current       : 0.15 A
+  Position Steps: 0 steps
+  Error Check   : 0x114e
+
+[Step 4] Negative fault-injection test: read non-existent slave ID 99...
+PASS: Correctly timed out with error TIMEOUT
+
+[Step 5] Disconnecting cleanly...
+PASS: Disconnected. Driver is_connected = false
+
+========================================
+ALL LEVEL 2 READ-ONLY CHECKS PASSED (NO MOTION COMMANDS ISSUED)
+========================================

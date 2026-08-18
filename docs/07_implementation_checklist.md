@@ -16,11 +16,10 @@
 
 - 總項目：27
 - 已完成：6
-- 進行中：0
-- 待實作：21
+- 進行中：1
+- 待實作：20
 - 上游阻塞：0
-- 目前進度：6 / 27 (22%)
-- 建議下一項：第 7 項 S7 `M1Driver` transport vertical slice；治理前置項 #1–#6 已全部完成，可正式進入 subsystem 實作。
+- 目前進度：6 / 27 (22%)；第 7 項進行中（已完成程式實作、建置測試與 L1/L2 唯讀實機驗證，待 Level 3/4 實機受控輸出即時授權）。
 
 ---
 
@@ -41,7 +40,7 @@
 
 ## B. Critical Hardware Vertical Slice
 
-- [ ] 7. S7 `M1Driver` transport vertical slice
+- [~] 7. S7 `M1Driver` transport vertical slice
   - 追溯：S7；GAP-05、GAP-06 的底層依賴；SYS-026、SYS-029、SYS-030。
   - 完成條件：依 06 baseline 實作 libmodbus RTU connection、雙 M1 read/write、timeout/error mapping、enable/disable/stop primitive；先以無運動 read path 與故障注入驗證，再進入受控輸出。
 - [ ] 8. S7 `M1Hardware` ros2_control integration

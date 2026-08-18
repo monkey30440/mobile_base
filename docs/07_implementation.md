@@ -932,4 +932,133 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 - **未驗證安全硬體能力**：STO、硬體安全控制器、實體斷電切斷能力與 M1 驅動器內部 watchdog 保證目前均標記為 `UNVERIFIED`；任何運動測試必須依賴操作人員在場監督、物理架車與預先確認之電源隔離路徑。
 - **治理階段全數就緒**：Checklist #1–#6 治理前置項（Docker 基線、外部依賴、紀錄 Template、Evidence 儲存規範、建置測試基準、硬體安全前置）已全數建立完畢。
-- 下一個項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 7 項 S7 `M1Driver` transport vertical slice（可正式進入第一項程式碼實作）。
+- 當前項目：[`07_implementation_checklist.md`](./07_implementation_checklist.md) 第 7 項 S7 `M1Driver` transport vertical slice。
+
+---
+
+## 7. Implementation Records
+
+### IMP-007 S7 M1Driver Transport Vertical Slice
+
+#### 3.2.1 Identity / Scope / Status
+
+| 欄位 | 內容 |
+|---|---|
+| Checklist item | #7 — S7 `M1Driver` transport vertical slice |
+| Item scope | 依 06 baseline 實作 `M1Driver` C++ 私有通訊與協定封裝層（libmodbus RTU connection、雙 M1 FC03 / FC17 廣播協定、單暫存器讀寫、error/timeout mapping、enable/disable/stop primitive API、純軟體單元測試與 L1/L2 唯讀實機檢驗）；不實作 `ros2_control` hardware_interface、diff_drive_controller、運動學轉換或輪徑輪距參數。 |
+| Implementation status | `Implemented` |
+| Evidence status | `Build Verified` + `Unit Verified` + `Hardware L1/L2 Verified` |
+| Feature-freeze status | `Not Frozen` |
+| Last updated | 2026-08-18 |
+
+---
+
+#### 3.2.2 Traceability
+
+| 欄位 | 內容 |
+|---|---|
+| Requirement IDs | SYS-026 (底盤故障處理), SYS-029 (底盤狀態回授有效性 - 底層回授解析), SYS-030 (底盤安全啟停 - 底層使能/停機 primitive) |
+| Subsystem | S7 Base Control Subsystem |
+| Custom gap IDs | GAP-05 底層資料解析與校驗、GAP-06 底層使能/停轉 primitive 封裝 |
+| Upstream design refs | `06 §3.3` S7 Base Control, `docs/design_baseline/m1_driver.md` |
+
+---
+
+#### 3.2.3 Implementation Artifacts
+
+| Artifact | Path / Package | 已實作責任 | 明確不負責 |
+|---|---|---|---|
+| C++ Header | `src/mobile_base_control/include/mobile_base_control/m1_driver.hpp` | `M1Driver` 類別定義、`Result<T>`/`ErrorCode` 型別、`MotorCommand`/`MotorState` 結構、協定打包與解析輔助函式 | ros2_control SystemInterface、kinematics、wheel dimensions |
+| C++ Implementation | `src/mobile_base_control/src/m1_driver.cpp` | libmodbus RTU 生命週期管理、Multi-drive 2.0 FC03/FC17 封包建構與回應解析、Standard Modbus FC03/FC06 單暫存器讀寫、錯誤與逾時對映 | TF 發布、里程計累積、ROS node |
+| L2 Read Check Tool | `src/mobile_base_control/src/m1_l2_read_check.cpp` | 實機 Level 2 唯讀驗證獨立工具（唯讀 02-14、09-26、FC03 state、slave 99 timeout 注入） | 馬達輸出、使能寫入、運動指令 |
+| Unit Tests | `src/mobile_base_control/test/test_m1_driver.cpp` | 8 項 GTest（ID/bitmask、signed 16/32-bit、FC03/FC17 request、response parsing、mock transact、negative fault injection） | 實機物理旋轉 |
+| Build & Metadata | `src/mobile_base_control/CMakeLists.txt`, `package.xml` | ROS 2 Jazzy ament_cmake 套件建置與依賴定義 | — |
+
+---
+
+#### 3.2.4 Mature Component / Custom Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| Mature component(s) used | `libmodbus` (v3.1.10-1ubuntu1, system library) |
+| Custom implementation | M1 Multi-drive 2.0 廣播協定打包/解包、驅動器 ID 位元遮罩計算、signed 32-bit 位置轉換、MotorState 解析、自訂 Result<T>/ErrorCode 錯誤模型 |
+| Boundary rule | `libmodbus` 私有負責底層 Serial RTU context、CRC16 產生與驗證、逾時設定與收發；`M1Driver` 負責 M1 專屬協定語意與馬達狀態結構封裝，不對上層洩漏 libmodbus 型別或 raw Modbus 細節。 |
+
+---
+
+#### 3.2.5 Authoritative Interfaces and Configuration
+
+#### Published / Subscribed Interfaces
+
+| 方向 | Interface name | Message type | Frame / QoS | Producer / Consumer | 06 ref |
+|---|---|---|---|---|---|
+| N/A | None | None | None | `M1Driver` 為 C++ transport library，無獨立 ROS 2 Node 或 Topic | `06 §3.3` |
+
+#### Key Parameters
+
+| Parameter | Default Value | 說明 | 06 ref |
+|---|---|---|---|
+| `device` | `/dev/ttyUSB0` | M1 RS-485 串列埠裝置節點 | `06 §3.3` / Compose |
+| `baud` | `230400` | M1 預設通訊 Baud rate (8N1) | `06 §3.3` |
+| `timeout_ms` | `50` | 單次交易逾時門檻 (ms) | `docs/design_baseline/m1_driver.md` |
+
+---
+
+#### 3.2.6 Failure / Timeout / Cancel / Invalid-input Handling
+
+| 情境 | 觸發條件 | 期望行為（來自 06） | 已驗證 | 驗證層級 |
+|---|---|---|---|---|
+| Failure | Modbus 異常回應 (`0x83` / `0x97`) | 回傳 `ErrorCode::MODBUS_EXCEPTION` | Yes | Unit |
+| Failure | 串列通訊斷線或 CRC 損壞 | 回傳 `ErrorCode::RECEIVE_FAILED` / `ErrorCode::SEND_FAILED` | Yes | Unit |
+| Timeout | 串列回應超過指定 timeout_ms | 回傳 `ErrorCode::TIMEOUT` | Yes | Unit + Hardware L2 |
+| Invalid input | 傳入無效 Driver ID (<1 或 >8 或重複) | 回傳 `ErrorCode::INVALID_ARGUMENT`，拒絕發送 | Yes | Unit |
+| Invalid input | 回應長度不足或 Function Code 不匹配 | 回傳 `ErrorCode::BAD_LENGTH` / `ErrorCode::BAD_FUNCTION` | Yes | Unit |
+
+---
+
+#### 3.2.7 Verification Evidence
+
+#### Static / Build Evidence
+
+| Timestamp | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|
+| 2026-08-18T11:46:01+08:00 | `colcon build --symlink-install --packages-select mobile_base_control` | PASS | `mobile_base_control` 套件、`m1_driver` 函式庫與 `m1_l2_read_check` 建置成功（0 errors）。 | [`docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114546_build_m1_driver.txt) |
+
+#### Unit / Interface Evidence
+
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-18T11:46:02+08:00 | `mobile_base_control::test_m1_driver` | `colcon test --packages-select mobile_base_control` + `colcon test-result` | PASS | 全部 8 項 GTests 與 6 項 ament linters 通過，0 failures。 | [`docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114548_unit_m1_driver.txt) |
+| 2026-08-18T11:46:03+08:00 | `M1DriverTest.NegativeHandling` | `test_m1_driver --gtest_filter=M1DriverTest.NegativeHandling` | PASS | 驗證無效驅動器 ID、逾時模擬與發送失敗之錯誤對映。 | [`docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114551_neg_m1_driver_timeout.txt) |
+
+#### Hardware Evidence
+
+| Timestamp | Target hardware | Test condition | Observed result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-18T11:46:04+08:00 | Jetson + M1 Dual-Driver Base (`/dev/ttyUSB0`) | Level 2 (No Motion / Read-Only), 230400 8N1 | ID1 (Right) & ID2 (Left) 成功讀取 02-14=1, 09-26=0; Multi-drive 2.0 FC03 成功讀取雙驅動器狀態 (status=6, alarm=0, bus~51.1V); slave 99 成功逾時 | 證明實機 Modbus RTU 唯讀通訊健全；未下發任何使能、速度或扭矩指令。 | [`docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-007/2026-08-18T114553_hw_m1_l2_read_only.txt) |
+
+---
+
+#### 3.2.8 Evidence Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| 已證明 | `m1_driver` 在 ROS 2 Jazzy 環境中成功編譯並通過所有 8 項單元測試與 linter；在實機 `/dev/ttyUSB0` (230400 8N1) 上成功讀取 ID 1 與 ID 2 之 02-14=1、09-26=0，並透過 Multi-drive 2.0 FC03 正確讀取兩驅動器之狀態（status=6, alarm=0, bus~51.1V）；故障注入驗證非存在 ID 99 正確逾時回傳 `TIMEOUT`。 |
+| 尚未證明 | 實機 SERVO-ON 使能寫入、馬達實體旋轉、JG 速度控制輸出、馬達實體運動阻抗與急停煞停時間。 |
+
+---
+
+#### 3.2.9 Known Limits / Unresolved Dependencies
+
+- 實機使能與運動控制寫入依 §6 安全前置程序，受限於 Level 3/4 需操作人員在場即時授權閘門，未在本次自動執行。
+- `M1Driver` 僅提供通訊傳輸與狀態封裝，上層 `M1Hardware` (`SystemInterface` plugin) 將於 #8 實作。
+
+---
+
+#### 3.2.10 Feature Freeze Status / Next Dependency
+
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Not Frozen` |
+| Freeze condition | #8 `M1Hardware` 整合與 Level 4/5 實機控制驗收通過 |
+| Next dependency | Checklist #8 `S7 M1Hardware ros2_control integration` |
