@@ -741,17 +741,21 @@ Therefore:
 
 is not accepted as the current baseline.
 
-Still open:
+Now validated and frozen as implementation baseline (IMP-008):
 
 ```text
-controller_manager update_rate
-M1Driver/libmodbus response timeout
-M1 watchdog configuration
+controller_manager update_rate = 30 Hz (Synchronous Model A2 baseline)
+response_timeout_ms = REQUIRED parameter (50 ms validated deployment candidate)
+```
+
+Still open / unverified:
+
+```text
+M1 watchdog hardware trip qualification (currently UNVERIFIED)
+Level 4 non-zero physical motion (currently BLOCKED)
 SVON/SVOFF poll delay/count
 stop confirmation threshold/count
 ```
-
-These are system timing decisions, not M1Hardware architecture decisions.
 
 ---
 

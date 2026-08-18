@@ -1,0 +1,80 @@
+================================================================
+IMP-008 Full ros2_control Loop 30 Hz Zero-Speed Timing Validation
+Timestamp: 2026-08-18T13:52:14+08:00
+Target Device: /dev/ttyUSB0 @ 230400 bps (8N1)
+Driver IDs: Driver 1 (Right), Driver 2 (Left)
+Target Rate: 30.000 Hz (Nominal Period = 33.333 ms)
+Timeout Condition: 50 ms [PROVISIONAL LEVEL-3 TEST CONDITION; NOT PRODUCTION DEFAULT]
+Warmup Cycles: 20
+Measured Cycles: 1000
+Total Completed Cycles: 1000 / 1000 (100.0% success rate)
+================================================================
+
+[Step 1] Pre-flight Read-Only Baseline Check:
+  Driver 1 (Right): Status=6, Alarm=0, RPM=0, Bus=51.10 V
+  Driver 2 (Left) : Status=6, Alarm=0, RPM=0, Bus=51.08 V
+  Result: PASS
+
+[Step 2] ResourceManager & M1Hardware Plugin Initialization:
+  Loaded plugin 'mobile_base_control/M1Hardware' via pluginlib.
+  Parameters: left_id=2 (sign +1), right_id=1 (sign -1), gear_ratio=20.0, port='/dev/ttyUSB0'@230400, timeout=50 ms.
+  Result: PASS
+
+[Step 3] M1Hardware & DiffDriveController Lifecycle Activation:
+  Issued enable(SVON), polled status until Status=0 (Servo-On).
+  Configured DiffDriveController (wheel_separation=0.5545 m, wheel_radius=0.08 m, publish_rate=30.0 Hz).
+  Activated DiffDriveController in PRIMARY_STATE_ACTIVE with zero cmd_vel reference.
+  Result: PASS
+
+[Step 4] Warm-up Loop:
+  Executed 20 full ros2_control cycles @ 30.000 Hz.
+  Result: PASS
+
+[Step 5] Measured Loop (1000 cycles with in-memory timestamp recording):
+  Recorded: read_duration_us, controller_duration_us, write_duration_us, cycle_duration_us, period_interval_us.
+  Deadline misses (> 33.333 ms): 0 / 1000 (0.00%)
+  Cycles with Alarm != 0: 0 / 1000
+  Cycles with Actual RPM != 0: 0 / 1000
+  Cycles with Commanded Velocity != 0.0: 0 / 1000
+  Transport / Lifecycle errors: 0 / 1000
+  Result: PASS
+
+[Step 6] Safe Shutdown & Deactivation:
+  DiffDriveController deactivated: PRIMARY_STATE_INACTIVE
+  M1Hardware deactivated: issued stop(0 RPM) -> disable(SVOFF) -> disconnect.
+  Result: PASS
+
+[Step 7] Post-flight Read-Only Confirmation:
+  Driver 1 (Right): Status=6, Alarm=0, RPM=0, Bus=51.13 V
+  Driver 2 (Left) : Status=6, Alarm=0, RPM=0, Bus=51.08 V
+  Result: PASS
+
+================================================================
+PRIMARY TIMING METRICS SUMMARY (1000 SAMPLES)
+================================================================
+Metric                     Full Cycle (ms)  FC17 Write (ms)  Period Interval (ms)
+----------------------------------------------------------------
+Min                      :            8.23             8.22               32.12
+Mean                     :           16.40            16.38               33.33
+Median (p50)             :           16.44            16.42               33.33
+p90                      :           22.77            22.76               33.34
+p95                      :           23.56            23.55               33.34
+p99                      :           24.20            24.19               33.37
+Max                      :           25.91            25.90               34.57
+StdDev                   :            4.63             4.63                0.07
+
+Non-Serial Phase Durations:
+  M1Hardware::read()       : Mean = 5.85 us, p50 = 3.38 us, p99 = 25.32 us, Max = 120.83 us
+  DiffDriveController::upd : Mean = 11.16 us, p50 = 8.45 us, p99 = 47.45 us, Max = 129.39 us
+
+Timing Margin Analysis:
+  Nominal Period Deadline  : 33.333333 ms (30 Hz)
+  Max Observed Cycle Time  : 25.913940 ms
+  Min Observed Residual    : +7.419393 ms (22.26% of cycle period) under tested conditions
+  Deadline Overrun Count   : 0 / 1000 (0.00%)
+
+Evidence Storage:
+  Raw CSV Path: docs/verification/IMP-008/2026-08-18T135214_m1_full_loop_30hz_raw.csv
+================================================================
+STATUS: LEVEL 3 FULL ROS2_CONTROL LOOP 30 HZ ZERO-SPEED TIMING VALIDATION PASS
+================================================================

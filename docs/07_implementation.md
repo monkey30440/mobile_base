@@ -1086,10 +1086,10 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | 欄位 | 內容 |
 |---|---|
 | Checklist item | #8 — S7 `M1Hardware` ros2_control integration |
-| Item scope | 依 06 baseline 與 `docs/design_baseline/m1_hardware.md` 實作 `mobile_base_control::M1Hardware`（`hardware_interface::SystemInterface` plugin for ROS 2 Jazzy），包含 Model A2 控制迴圈（`write()` 單次 FC17 交易、`read()` 無通訊消費快取狀態）、單位轉換（$rad/s \leftrightarrow RPM$、齒比 20.0、左輪 +1、右輪 -1、3000 RPM 上限保護）、位置回授與 32-bit Rollover 累積追蹤（`PositionTracker`）、Lifecycle 狀態機（`on_init`, `on_configure`, `on_activate` 帶有有限次狀態輪詢確認、`on_deactivate` 依序執行 stop -> disable -> disconnect、`on_error`/`on_shutdown` 最佳防護清理）、防禦性指令範圍檢查、可配置參數、pluginlib export XML 與註冊、單元測試、URDF `ResourceManager` 整合測試與 Mock 執行驗證；非零速度運動（Level 4）與實機硬體生命週期執行維持在待即時授權邊界。 |
-| Implementation status | `Implemented` |
-| Evidence status | `Build Verified` + `Unit Verified` + `Plugin Discovery Verified` |
-| Feature-freeze status | `Not Frozen` |
+| Item scope | 依 06 baseline 與 `docs/design_baseline/m1_hardware.md` 實作 `mobile_base_control::M1Hardware`（`hardware_interface::SystemInterface` plugin for ROS 2 Jazzy），包含 Model A2 控制迴圈（`write()` 單次 FC17 交易、`read()` 無通訊消費快取狀態）、單位轉換（$rad/s \leftrightarrow RPM$、齒比 20.0、左輪 +1、右輪 -1、3000 RPM 上限保護）、位置回授與 32-bit Rollover 累積追蹤（`PositionTracker`）、Lifecycle 狀態機（`on_init`, `on_configure`, `on_activate` 帶有有限次狀態輪詢確認、`on_deactivate` 依序執行 stop -> disable -> disconnect、`on_error`/`on_shutdown` 最佳防護清理）、防禦性指令範圍檢查、可配置參數、pluginlib export XML 與註冊、單元測試、URDF `ResourceManager` 整合測試與 Mock 執行驗證；Level 3 實機全迴圈時序量測完成；非零速度運動（Level 4）維持獨立 BLOCKED。 |
+| Implementation status | `Completed` |
+| Evidence status | `Build Verified` + `Unit Verified` + `Plugin Discovery Verified` + `Integration Verified` + `Real-Hardware Timing & Lifecycle Verified (Level 2 & Level 3)` |
+| Feature-freeze status | `Baseline Frozen` (Synchronous Model A2 @ 30 Hz validated implementation baseline; Level 4 non-zero motion remains BLOCKED) |
 | Last updated | 2026-08-18 |
 
 ---
@@ -1160,21 +1160,35 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 | `motor_steps_per_rev` | URDF `<param>` | 馬達每轉編碼器 Steps（預設 `10000.0`） | `06 §3.3` |
 | `max_motor_rpm` | URDF `<param>` | 操作馬達轉速上限（預設 `3000.0` RPM） | `06 §3.3` |
 
-#### Controller Timing Model (Candidate under validation: Synchronous Model A2 @ 30 Hz)
+#### Controller Timing Model (Synchronous Model A2 @ 30 Hz Implementation Baseline)
 
-- **Controller Manager Cycle Flow**:
-  1. `M1Hardware::read()`：無通訊開銷，直接讀取上一週期 `write()`（或 `on_activate` 初始化）所快取之最新雙馬達狀態，更新連續累積位置與輪速。
-  2. `diff_drive_controller::update()`：依據當前狀態與輸入速度參考指令，計算兩輪目標角速度 $[rad/s]$ 並寫入 Loaned Command Interface。
-  3. `M1Hardware::write()`：檢查指令有效性（禁止 NaN/Inf），將輪速轉換為雙馬達目標 RPM，執行單次 FC17 Multi-drive 2.0 交易並快取回傳狀態供下一週期使用。
-- **Update Rate Semantics & Timing Evidence**:
-  * 實機 Level 2 唯讀通訊延遲量測（1000 samples @ 230400 bps）：Min 11.2 ms, Mean 16.0 ms, Median (p50) 16.0 ms, p99 16.2 ms, Max 20.8 ms (StdDev 0.32 ms)。
-  * 實機 Level 3 FC17 Zero-Speed Stage A 量測（20 samples @ 230400 bps）：Min 15.85 ms, Mean 15.99 ms, Median (p50) 15.99 ms, p99 16.15 ms, Max 16.15 ms (StdDev 0.07 ms)。
-  * 實機 Level 3 FC17 Zero-Speed Stage B 量測（200 samples @ 230400 bps）：Min 10.99 ms, Mean 16.00 ms, Median (p50) 16.00 ms, p99 16.20 ms, Max 21.01 ms (StdDev 0.51 ms)。
-  * **Timing Architecture Analysis**:
-    - 50 Hz ($T = 20.0\text{ ms}$): Max observed serial transaction (21.013 ms) exceeds 20.0 ms budget, causing cycle deadline overruns on tail events.
-    - 40 Hz ($T = 25.0\text{ ms}$): Residual budget after max observed serial transaction is $+3.987\text{ ms}$.
-    - 30 Hz ($T = 33.333\text{ ms}$): Residual budget after max observed serial transaction is $+12.320\text{ ms}$ ($63.0\%$ consumption). This provides substantial observed timing headroom under Linux non-real-time scheduling without requiring multithreaded concurrency. Note: this is observed timing headroom, not a hard real-time bound or deterministic guarantee. Full ros2_control loop remains to be measured.
-  * **Candidate under validation**: Synchronous Model A2 @ 30 Hz ($T = 33.333\text{ ms}$). Production update rate and production `response_timeout_ms` remain **UNFROZEN**.
+- **Architecture Decision & Status**:
+  * **Selected Architecture**: Synchronous Model A2.
+  * **Controller Update Rate**: 30 Hz (nominal period $T = 33.333\text{ ms}$).
+  * **Status**: **FROZEN AS CURRENT IMPLEMENTATION BASELINE** (validated on physical hardware with 1000 full ros2_control cycles).
+  * **Timing Boundary Semantics**: 30 Hz is the validated current implementation baseline under the measured host / serial / Level-3 zero-speed conditions. The observed minimum residual timing budget of $7.419\text{ ms}$ ($22.3\%$ of the cycle period) is an **empirically observed margin under tested conditions**, not a functional-safety certified hard real-time bound or deterministic worst-case guarantee under arbitrary host load.
+- **Controller Manager Cycle Flow (Model A2)**:
+  1. `M1Hardware::read()`: Non-blocking ($\approx 3.4\ \mu\text{s}$ median), consumes cached motor state returned by the previous cycle's `write()` (or `on_activate()` initial handshake), updating joint positions and velocities.
+  2. `diff_drive_controller::update()`: Kinematic conversion, velocity limits, and odometry integration ($\approx 8.5\ \mu\text{s}$ median).
+  3. `M1Hardware::write()`: Validates finite commands, maps wheel velocity to integer motor RPM, executes single blocking Multi-drive 2.0 FC17 exchange ($\approx 16.4\text{ ms}$ median, max $25.9\text{ ms}$), and caches returned state for next cycle's `read()`.
+- **Asynchronous Model B Status**:
+  * **Status**: **Not Selected / Deferred Alternative**.
+  * **Rationale**: Synchronous Model A2 @ 30 Hz successfully completed 1000/1000 full control cycles with 0 deadline misses under tested conditions; synchronous semantics preserve direct cycle-accurate hardware transaction acknowledgment in `write()`; Model B introduces background thread concurrency, deferred error propagation, and complex shutdown/stale-command synchronization without any current system requirement demanding $> 30\text{ Hz}$ base control.
+- **Response Timeout Policy (`response_timeout_ms`)**:
+  * **Semantics**: **REQUIRED explicit runtime configuration parameter**; no implicit production default exists in `M1Hardware` source code (must be supplied via URDF / parameters).
+  * **Current Validated Deployment Candidate**: `50 ms` (successfully exercised across FC17 Stage A, Stage B, and 1000-cycle full ros2_control loop without timeouts or false triggers).
+- **Update Rate Revalidation / Reopen Triggers**:
+  The 30 Hz timing decision must be revalidated if any of the following occur:
+  1. RS-485 Baud rate change (different from 230400 bps).
+  2. USB-to-serial adapter or serial driver/hardware change.
+  3. M1 drive firmware update or Modbus protocol timing change.
+  4. Host computing platform or kernel upgrade.
+  5. Significant CPU workload increase on the `controller_manager` execution thread.
+  6. Additional blocking hardware interfaces added to the same real-time control loop.
+  7. Requested update rate increase (e.g. $> 30\text{ Hz}$).
+  8. Observed runtime deadline overruns or latency regressions during operational testing.
+  9. Level 4 physical motion reveals materially different FC17 transaction duration under motor load.
+  10. Upstream navigation or perception requirements introduce a higher minimum base control update rate.
 
 ---
 
@@ -1209,6 +1223,7 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
+| 2026-08-18T13:52:14+08:00 | Real Hardware Level 3 Full ros2_control Loop @ 30 Hz Zero-Speed Validation | `m1_full_loop_timing_check --execute --device /dev/ttyUSB0 --baud 230400 --timeout-ms 50 --driver-a 1 --driver-b 2 --rate 30 --warmup 20 --cycles 1000 --raw-output docs/verification/IMP-008/2026-08-18T135214_m1_full_loop_30hz_raw.csv` | PASS | 1000 筆實機完整 ros2_control 控制迴圈（`read` -> `diff_drive_controller` -> `write` FC17）量測完成，成功率 100.0%（0 failures, 0 timeouts, 0 deadline misses）；Full cycle mean 16.40 ms, p50 16.44 ms, p99 24.20 ms, Max 25.91 ms (StdDev 4.63 ms)；最小觀測剩餘時序預算 +7.419 ms (22.26%)；實機全程 0 RPM、0 Alarm、0 非零指令；安全停用與降級斷電正常。 | [`docs/verification/IMP-008/2026-08-18T135214_hw_m1_full_loop_30hz.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T135214_hw_m1_full_loop_30hz.txt)<br/>[`docs/verification/IMP-008/2026-08-18T135214_m1_full_loop_30hz_raw.csv`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T135214_m1_full_loop_30hz_raw.csv) |
 | 2026-08-18T13:47:00+08:00 | Full ros2_control Loop 30 Hz Timing Check Software Preparation | `test_m1_full_loop_timing_check` + Dry-Run CLI test | PASS | 全部 5 項 GTests（Dry-Run 0 transport calls、CLI 拒絕非零運動參數、邊界選項檢驗、零速不變量 Zero-Command Invariant 數學證明、URDF 生成結構）與 dry-run 輸出驗證通過，0 failures。 | [`src/mobile_base_control/test/test_m1_full_loop_timing_check.cpp`](file:///home/zzz/mobile_base/src/mobile_base_control/test/test_m1_full_loop_timing_check.cpp) |
 | 2026-08-18T13:30:00+08:00 | Real Hardware L3 FC17 Zero-Speed Latency Stage B | `m1_fc17_latency_check --execute --device /dev/ttyUSB0 --baud 230400 --timeout-ms 50 --driver-a 1 --driver-b 2 --warmup 20 --samples 200 --raw-output docs/verification/IMP-008/2026-08-18T133000_m1_fc17_stage_b_raw.csv` | PASS | 200 筆實機 FC17 zero-speed exchange 量測完成，成功率 100.0%（0 failures, 0 timeouts）；Min 10.99 ms, Mean 16.00 ms, p50 16.00 ms, p99 16.20 ms, Max 21.01 ms (StdDev 0.51 ms)。實機全程維持 0 RPM 與 0 Alarm。 | [`docs/verification/IMP-008/2026-08-18T133000_m1_fc17_stage_b_raw.csv`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T133000_m1_fc17_stage_b_raw.csv) |
 | 2026-08-18T13:24:20+08:00 | Real Hardware L3 FC17 Zero-Speed Latency Stage A | `m1_fc17_latency_check --execute --device /dev/ttyUSB0 --baud 230400 --timeout-ms 50 --driver-a 1 --driver-b 2 --warmup 5 --samples 20 --raw-output docs/verification/IMP-008/2026-08-18T132420_m1_fc17_stage_a_raw.csv` | PASS | 20 筆實機 FC17 zero-speed exchange 量測完成，成功率 100.0%（0 failures, 0 timeouts）；Min 15.85 ms, Mean 15.99 ms, p50 15.99 ms, p99 16.15 ms, Max 16.15 ms (StdDev 0.07 ms)。實機全程維持 0 RPM 與 0 Alarm。 | [`docs/verification/IMP-008/2026-08-18T132420_m1_fc17_stage_a_raw.csv`](file:///home/zzz/mobile_base/docs/verification/IMP-008/2026-08-18T132420_m1_fc17_stage_a_raw.csv) |
@@ -1225,19 +1240,18 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| 已證明 | 官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環（27 項 GTest 通過）；實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms）；實機 220 次 FC17 zero-speed exchange（Stage A 20 + Stage B 200, 100% 成功, 0 timeouts/alarms, Max 21.01 ms）；30 Hz 全迴圈量測工具 `m1_full_loop_timing_check` 軟體架構驗證（零速不變量、CLI 拒絕非零參數、dry-run 0 寫入、mock 生命週期、異常中止與清理序列）。 |
-| 尚未證明 | 實機環境下 full ros2_control loop (read -> DDC -> write -> FC17) 完整週期延遲分佈與排程抖動（待現場即時授權驗證）、非零速度實體運動（Level 4 exchange motion，BLOCKED）、真實硬體上的 ros2_control lifecycle 啟用/停用、實體通訊 Watchdog 參數寫入與跳脫測試。 |
+| 已證明 | 1. 官方 `diff_drive_controller::DiffDriveController` 與 `M1Hardware` SystemInterface plugin 在純軟體/Mock 環境下之完整整合閉環（44 項 GTest 與 6 項 ament linters 通過）。<br/>2. 實機 `/dev/ttyUSB0` 上 1000 次連續雙驅動器 `read_state(1, 2)` 通訊延遲分佈特性（Mean 16.0 ms, p99 16.2 ms, Max 20.8 ms）。<br/>3. 實機 220 次 FC17 zero-speed exchange（Stage A 20 + Stage B 200, 100% 成功, 0 timeouts/alarms, Max 21.01 ms）。<br/>4. 實機 1000 週期 Full ros2_control Loop @ 30 Hz zero-speed 實機時序驗證（1000/1000 成功, 0 deadline misses, 0 timeouts, 0 alarms, Max full cycle 25.91 ms，最小觀測剩餘時序預算 +7.419 ms / 22.3%）。<br/>5. 實機生命週期完整啟停序列（enable SVON -> 零速閉環運作 -> 停用 stop JG 0 -> disable SVOFF -> 斷線）。 |
+| 尚未證明 | 1. 非零速度實體運動（Level 4 exchange motion，受限於安全邊界目前維持獨立 BLOCKED）。<br/>2. 非零輪速動態旋轉下之物理編碼器回授精準度與地面滑差特性（留待後續實車調校）。<br/>3. M1 硬體通訊 Watchdog 逾時跳脫與復歸閉環行為（硬體層面仍為 UNVERIFIED，安全等級 NOT ESTABLISHED）。<br/>4. 任意 CPU 負載極限下的硬即時（Hard Real-Time）時序保證。 |
 
 ---
 
 #### 3.2.9 Known Limits / Unresolved Dependencies
 
 - **Level 4 非零運動維持 BLOCKED**：非零速度運動指令受限於安全性與 Process Crash Hazard 考量，依 §6 規範維持 BLOCKED。
-- **實機 Level 3 Full ros2_control Loop 執行**：若要在實機 `/dev/ttyUSB0` 上執行 Level 3 zero-speed-intent lifecycle activation 或 30 Hz full loop 量測，需遵循 §6 取得操作人員 execution-time authorization。
-- **Watchdog 參數寫入**：依使用者安全邊界指示，本項目嚴禁向實機寫入任何 watchdog 或 flash configuration 暫存器。
-- **Final Production Response Timeout 尚未凍結**：依據 `docs/design_baseline/m1_driver.md §7`，`response_timeout_ms` 為 required parameter 且無 production default；量測結果顯示 provisional candidate 區間為 35 ms–50 ms（NEXT-TEST CONDITION ONLY），final production timeout 維持 UNFROZEN。
-- **Final Production Controller Update Rate 尚未凍結**：Candidate under validation 為 Synchronous Model A2 @ 30 Hz ($T = 33.333\text{ ms}$)；production update rate 維持 UNFROZEN。
-- **True Wheel Feedback Validity 尚未實機驗證**：真實物理輪子編碼器回授之精準度與滑差特性留待後續實車調校。
+- **Safe-Stop 鏈屬軟體 Best-Effort**：現行 `stop()` $\rightarrow$ `disable()` 依賴軟體行程正常運作；若行程崩潰（Process Crash / SIGKILL），軟體無法執行清理，此時實體 E-Stop 與電源切斷為最高安全權威。
+- **M1 硬體通訊 Watchdog 尚未閉環驗證**：目前驅動器 Watchdog 保持出廠設定（未啟用），其硬體跳脫特性尚未進行閉環驗證，安全等級為 `NOT ESTABLISHED`。
+- **Response Timeout 政策**：`response_timeout_ms` 屬 REQUIRED runtime parameter，API 無隱式預設值；`50 ms` 經實機量測驗證為當前推薦部署參數（Validated Deployment Candidate），但非硬即時常數。
+- **Controller Update Rate 重啟條件**：Synchronous Model A2 @ 30 Hz 已凍結為當前實作基準，若 Baud rate、串列硬體、M1 韌體、主機平台或上層需求變更時，需依定義之觸發條件重新評估。
 
 ---
 
@@ -1245,6 +1259,6 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 
 | 欄位 | 內容 |
 |---|---|
-| Feature freeze status | `Not Frozen` |
-| Freeze condition | #8–#10 S7 Base Control 子系統整體閉環與落地驗證通過 |
-| Next dependency | Checklist #8 實機 Level 3 30 Hz Full ros2_control Loop 量測與 Lifecycle 驗收 / Checklist #9 `S7 diff_drive_controller configuration` |
+| Feature freeze status | `Baseline Frozen` |
+| Freeze condition | #8 S7 M1Hardware ros2_control 整合收斂完成（Synchronous Model A2 @ 30 Hz 實作基準凍結；Level 4 非零運動維持獨立 BLOCKED） |
+| Next dependency | Checklist #9 `S1 Robot Description` |
