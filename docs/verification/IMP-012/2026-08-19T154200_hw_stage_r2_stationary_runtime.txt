@@ -1,0 +1,77 @@
+# IMP-012 Stage R2 Real-Hardware Passive/Stationary Runtime Verification Evidence
+# Date: 2026-08-19T15:42:00+08:00
+# Target: Checklist #12 — S2 RF2O and selected scan integration
+# Platform: ROS 2 Jazzy, Ubuntu 24.04, Docker Container on Jetson AMR Target
+# Hardware Devices: SICK picoScan150 FL (192.168.0.1:2111), SICK picoScan150 BR (192.168.0.2:2111)
+
+=== 1. RUNTIME LAUNCH COMMANDS ===
+- S1 Robot Description: ros2 launch mobile_base_description robot_description.launch.py
+- S2 Dual SICK LiDAR:    ros2 launch mobile_base_perception sick_dual_lidar.launch.py
+- S2 Dual Laser Merger:  ros2 launch mobile_base_perception dual_laser_merger.launch.py
+- S2/S3 RF2O Laser Odom: ros2 launch rf2o_laser_odometry rf2o_laser_odometry.launch.py
+
+=== 2. UPSTREAM RAW SCANS VERIFICATION ===
+[1] /scan_front (Front-Left SICK picoScan150):
+  - Message Type: sensor_msgs/msg/LaserScan
+  - header.frame_id: base_lidar_link_FL_1
+  - Observed Rate: 25.01 Hz (min: 22.80, max: 27.20)
+  - Sample Stamp: (1787125339 sec, 752480030 nsec)
+  - Angle Span: [-2.4086, +2.8230] rad (300.0 deg), increment: 0.004363 rad, bins: 1200
+  - Valid Finite Points: 1085 / 1200 (90.4%), mean distance: 1.492 m
+  - Result: PASS
+
+[2] /scan_rear (Rear-Right SICK picoScan150):
+  - Message Type: sensor_msgs/msg/LaserScan
+  - header.frame_id: base_lidar_link_BR_1
+  - Observed Rate: 25.00 Hz (min: 22.92, max: 26.91)
+  - Sample Stamp: (1787125339 sec, 762062311 nsec)
+  - Angle Span: [-2.4086, +2.8230] rad (300.0 deg), increment: 0.004363 rad, bins: 1200
+  - Valid Finite Points: 1071 / 1200 (89.2%), mean distance: 2.415 m
+  - Result: PASS
+
+=== 3. APPROVED MERGED / SELECTED SCAN VERIFICATION ===
+[3] /scan (Dual Laser Merger 0.3.1 Output):
+  - Message Type: sensor_msgs/msg/LaserScan
+  - header.frame_id: base_link
+  - Observed Rate: 27.05 Hz (min: 15.60, max: 53.70)
+  - Sample Stamp: (1787125339 sec, 722916000 nsec)
+  - Angle Min: -3.141593 rad (-180.0 deg)
+  - Angle Max: +3.141593 rad (+180.0 deg)
+  - Angle Increment: 0.00581718 rad (0.3333 deg resolution)
+  - Range Bins: 1081 bins (Full 360-degree cylindrical coverage)
+  - Range Limits: [0.05, 25.00] m
+  - Valid Finite Points: 985 / 1081 (91.1%), min: 0.245 m, max: 6.105 m, mean: 2.052 m
+  - Result: PASS
+
+=== 4. RF2O REAL RUNTIME ODOMETRY VERIFICATION ===
+[4] /rf2o/odom (RF2O Laser Odometry Output):
+  - Message Type: nav_msgs/msg/Odometry
+  - header.frame_id: odom
+  - child_frame_id: base_footprint
+  - Observed Rate: 19.70 Hz (min: 10.00, max: 22.16) [Configured freq: 20.0 Hz]
+  - Sample Stamp: (1787125339 sec, 722916000 nsec) [Monotonically advancing, matches scan stamp]
+  - Stationary Velocity (Twist):
+    * vx: mean = -0.000161 m/s, std = 0.002191 m/s, min = -0.009428 m/s, max = +0.007516 m/s
+    * vy: mean =  0.000000 m/s, std = 0.000000 m/s
+    * wz: mean = +0.000011 rad/s, std = 0.003814 rad/s, min = -0.011497 rad/s, max = +0.008804 rad/s
+  - Stationary Position Drift (Pose):
+    * px: mean = -0.000163 m, delta = -0.000364 m (-0.36 mm over 5.2s)
+    * py: mean = +0.000082 m, delta = +0.000080 m (+0.08 mm over 5.2s)
+  - Covariance:
+    * pose.covariance: 36-element array, all 0.0 (REP-103 unknown covariance standard)
+    * twist.covariance: 36-element array, all 0.0 (REP-103 unknown covariance standard)
+  - Result: PASS
+
+=== 5. CRITICAL TF OWNERSHIP RUNTIME VERIFICATION ===
+[5] TF /tf Topic Inspection (260 dynamic TF messages captured):
+  - Active Transforms on /tf:
+    * base_lidar_link_BR_1 -> base_lidar_link_BR_1_calibrated (SICK internal driver)
+    * base_lidar_link_FL_1 -> base_lidar_link_FL_1_calibrated (SICK internal driver)
+  - Forbidden odom -> base_footprint / base_link Broadcast: FALSE (ZERO broadcast observed)
+  - S3 EKF TF Protection: CONFIRMED. RF2O publish_tf:=false is 100% effective in live runtime.
+  - Result: PASS
+
+=== 6. STAGE R2 CONCLUSION ===
+- Stage R2 Status: PASS
+- AMR Motion: ZERO motion (Stationary)
+- Motor Commands: ZERO (No M1 commands sent)

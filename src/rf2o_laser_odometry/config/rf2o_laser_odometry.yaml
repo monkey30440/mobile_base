@@ -1,0 +1,15 @@
+# Copyright 2026 Antigravity Team.
+#
+# RF2O Laser Odometry parameter configuration for S2 / S3 Integration.
+# Consumes 360-degree merged /scan and publishes planar laser odometry on /rf2o/odom.
+# Strictly prohibits TF broadcasting (publish_tf: false) to prevent duplicate odom -> base_footprint broadcast.
+
+rf2o_laser_odometry:
+  ros__parameters:
+    laser_scan_topic: "/scan"
+    odom_topic: "/rf2o/odom"
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    publish_tf: false  # Prohibit RF2O from broadcasting TF; S3 EKF is the sole authority
+    init_pose_from_topic: ""
+    freq: 20.0

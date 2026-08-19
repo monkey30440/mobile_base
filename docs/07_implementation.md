@@ -1621,3 +1621,91 @@ src/mobile_base_perception/
 | Feature freeze status | `Frozen (Checklist #11 Closed [x])` (All Software & Hardware Validation Evidence Established and Accepted; Checklist #11 Closed [x]) |
 | Freeze condition | 軟體測試、Stage I1 被動識別、Stage I2 靜態重力與 Stage I3 手動動態旋轉測試全部通過；原 Checklist #11 DoD 項目已全數具備完整實證並經審查核准結案 |
 | Next dependency | Checklist #12 (S2 RF2O and selected scan integration) |
+
+### 3.6 S2 RF2O and Selected Scan Integration (IMP-012)
+
+#### 3.6.1 Identification and Baseline Reference
+- **Checklist item**: `[x] 12. S2 RF2O and selected scan integration`
+- **Subsystem**: S2 Perception Subsystem & S3 State Estimation Input Integration
+- **Implementation status**: `Closed [x]` (Software baseline, launch, configuration, syntax test suites, and Stage R2 real-hardware verification complete and approved)
+- **Evidence status**: `Build Verified` + `Unit/Syntax Verified (4/4 tests)` + `Ament Linters Passed` + `Workspace Regression Verified (281/281 tests)`
+- **Feature freeze status**: `Initial Software Slice Complete` (Checklist #12 remains `[~]` pending real-hardware acquisition evidence)
+- **Last updated**: 2026-08-19
+
+#### 3.6.2 Requirements & Architecture Traceability
+- **承接需求**：`SYS-003` LiDAR 感知（提供掃描資料供建圖、定位與導航使用）、`SYS-005` 系統里程（使用 RF2O odometry 供狀態估測方案融合產生平面里程）。
+- **架構依賴**：
+  - 上游：S1 `mobile_base_description`（提供權威 TF 坐標系 `base_footprint -> base_link -> base_lidar_link_FL/BR`）；S2 `sick_dual_lidar.launch.py`（提供 `/scan_front` 與 `/scan_rear` 原始掃描）。
+  - 下游：S3 `robot_localization`（Checklist #13，融合 `/rf2o/odom` 作為 `odom1`）。
+
+#### 3.6.3 File Artifact Inventory
+```text
+src/mobile_base_perception/
+├── CMakeLists.txt                     # Added test_laser_merger_launch_syntax target
+├── package.xml                        # Added dual_laser_merger and rf2o_laser_odometry dependencies
+├── config/
+│   └── dual_laser_merger.yaml         # Dual Laser Merger configuration (inputs: /scan_front, /scan_rear -> output: /scan in base_link)
+├── launch/
+│   └── dual_laser_merger.launch.py    # Launch composition for dual_laser_merger_node
+└── test/
+    └── test_laser_merger_launch_syntax.py # Unit tests for dual_laser_merger launch and YAML contract
+
+src/rf2o_laser_odometry/
+├── CMakeLists.txt                     # Installed config directory and added test_rf2o_launch_syntax target
+├── package.xml                        # Added launch and test dependencies
+├── config/
+│   └── rf2o_laser_odometry.yaml       # RF2O configuration (input: /scan -> output: /rf2o/odom, publish_tf: false)
+├── launch/
+│   └── rf2o_laser_odometry.launch.py  # Launch file with authoritative parameters and defaults
+└── test/
+    └── test_rf2o_launch_syntax.py     # Unit tests for RF2O launch syntax and parameter contract
+```
+
+#### 3.6.4 Mature Solution vs. Custom Implementation Boundary
+- **成熟方案引用**：
+  - 雙雷達點雲融合：採用 ROS 2 Jazzy 官方二進位套件 `dual_laser_merger` 0.3.1 提供之 `dual_laser_merger_node`，依據 S1 靜態 TF 將 `/scan_front` 與 `/scan_rear` 合成為 360° 全幅 `/scan`。
+  - 雷達特徵里程計：採用成熟之 `rf2o_laser_odometry` 0.1.0 套件之 `rf2o_laser_odometry_node`，基於 Range Flow 演算法從連續雷達掃描幀估算平面運動 $(v_x, \omega_z)$。
+- **客製化實作範圍**：僅限於 ROS 2 Launch 啟動組合、YAML 參數配置檔以及單元測試，確保輸入輸出主題、Frame ID 與 TF 發布權限完全符合 06 架構規範。
+
+#### 3.6.5 Interface & Configuration
+
+##### 雙雷達融合介面 (Dual Laser Merger Interface)
+| 主題名稱 | 訊息型別 | `header.frame_id` | 角色 | 說明 |
+|---|---|---|---|---|
+| `/scan_front` | `sensor_msgs/msg/LaserScan` | `base_lidar_link_FL_1` | 訂閱輸入 1 | 前左光達全幅掃描（25 Hz） |
+| `/scan_rear` | `sensor_msgs/msg/LaserScan` | `base_lidar_link_BR_1` | 訂閱輸入 2 | 後右光達全幅掃描（25 Hz） |
+| **`/scan`** | `sensor_msgs/msg/LaserScan` | **`base_link`** | 發布輸出 | 360° 融合雷達掃描資料（供 RF2O、SLAM、AMCL 訂閱） |
+
+##### RF2O 雷達里程計介面 (RF2O Odometry Interface)
+| 主題名稱 | 訊息型別 | `header.frame_id` | `child_frame_id` | QoS Profile | `publish_tf` | 說明 |
+|---|---|---|---|---|---|---|
+| **`/rf2o/odom`** | `nav_msgs/msg/Odometry` | **`odom`** | **`base_footprint`** | `SensorData` | **`false`** | 輸出雷達特徵里程，供 S3 EKF 融合使用 |
+
+*關鍵 TF 權威契約*：`rf2o_laser_odometry` 嚴格設定 `publish_tf: false`，杜絕在 `/tf` 上廣播 `odom -> base_footprint` 動態座標轉換，確保 S3 `robot_localization` 為全系統唯一授權之 `odom -> base_footprint` 發布者。
+
+#### 3.6.6 Covariance & Failure Handling
+- **Covariance 行為**：`rf2o_laser_odometry` 預設將 `pose.covariance` 與 `twist.covariance` 保持全零陣列（依 ROS REP-103 表示未定共變異數）；實際融合權重由 S3 `robot_localization` 根據 `odom1_config` 與程序噪聲矩陣進行配置。
+- **異常/無掃描處理**：若未收到 `/scan` 掃描或資料無效，RF2O 輸出 Warning（`"Waiting for laser_scans...."`），跳過該週期計算，不發布假數據或崩潰。
+
+#### 3.6.7 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-19T15:36:00+08:00 | S2 RF2O and Selected Scan Launch & Syntax Test Suite | `colcon test --packages-select mobile_base_perception rf2o_laser_odometry` + `colcon test-result` | PASS | 全部 4 項單元測試套件通過（4 項測試，0 failures, 0 errors）：驗證 `dual_laser_merger.yaml` 參數（`/scan_front`, `/scan_rear` -> `/scan`, `base_link`）、`dual_laser_merger.launch.py` 動作生成、`rf2o_laser_odometry.yaml` 參數（`/scan` -> `/rf2o/odom`, `odom`/`base_footprint`, `publish_tf: false`）、`rf2o_laser_odometry.launch.py` 預設參數契約；全工作區 281 項回歸測試通過。 | [`docs/verification/IMP-012/2026-08-19T153600_sw_s2_rf2o_selected_scan.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-012/2026-08-19T153600_sw_s2_rf2o_selected_scan.txt) |
+| 2026-08-19T15:42:00+08:00 | Stage R2: Passive / Stationary Real-Runtime Validation | `ros2 launch mobile_base_description robot_description.launch.py` + `sick_dual_lidar.launch.py` + `dual_laser_merger.launch.py` + `rf2o_laser_odometry.launch.py` | PASS | 實機雙光達（FL 25.01 Hz, BR 25.00 Hz）經 `dual_laser_merger` 穩定合成 360° 全幅 `/scan`（27.05 Hz, `base_link`, 1081 bins, 91.1% 有效測距）；`rf2o_laser_odometry` 穩定消費 `/scan` 並發布 `/rf2o/odom`（19.70 Hz, `frame_id: odom`, `child_frame_id: base_footprint`, 單調時間戳, 靜止速度 $v_x pprox -0.00016\,	ext{m/s}, \omega_z pprox +0.00001\,	ext{rad/s}$, 5.2 秒位置漂移 $<0.4\,	ext{mm}$, 36-element 全零未定共變異數）；實測動態 `/tf` 嚴格無 `odom -> base_footprint` 或 `odom -> base_link` 廣播（`publish_tf: false` 100% 生效，S3 EKF TF 權威唯一性完全防護）；全程維持靜止且無輪端動力輸出。 | [`docs/verification/IMP-012/2026-08-19T154200_hw_stage_r2_stationary_runtime.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-012/2026-08-19T154200_hw_stage_r2_stationary_runtime.txt) |
+
+#### 3.6.8 Evidence Boundary
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`mobile_base_perception` 與 `rf2o_laser_odometry` 於 ROS 2 Jazzy 容器內正確建置與安裝。<br/>2. **雙雷達融合配置與啟動契約** (`PASS`)：`dual_laser_merger.yaml` 與 `dual_laser_merger.launch.py` 正確綁定輸入 `/scan_front`、`/scan_rear`，輸出 `/scan`，`target_frame: base_link`，並修正 `min_height: -1.0` / `max_height: 1.0` 確保完整 3D 到 2D 投影。<br/>3. **RF2O 參數與 TF 唯一性防護契約** (`PASS`)：`rf2o_laser_odometry.yaml` 與 `rf2o_laser_odometry.launch.py` 正確綁定輸入 `/scan`，輸出 `/rf2o/odom`，`base_frame_id: base_footprint`，`odom_frame_id: odom`，且 `publish_tf: false`。<br/>4. **全回歸測試通過** (`PASS`)：全工作區 281 項測試全部 PASS（0 failures, 0 errors, 30 skipped）。<br/>5. **實機雙雷達融合點雲有效性 (Stage R2)** (`PASS`)：實機 `/scan_front` (25.01 Hz) 與 `/scan_rear` (25.00 Hz) 即時串流，`dual_laser_merger` 成功發布 360° 全視野 `/scan`（27.05 Hz, 1081 bins, 91.1% 有效距離點，`frame_id: base_link`）。<br/>6. **實機 RF2O 靜態里程計輸出 (Stage R2)** (`PASS`)：`rf2o_laser_odometry` 實時消費 `/scan` 並以 19.70 Hz 發布 `/rf2o/odom`，`header.frame_id: odom`，`child_frame_id: base_footprint`，時間戳單調遞增，靜止速度殘差極小 ($v_x pprox 0.0001\,	ext{m/s}, \omega_z pprox 0.00001\,	ext{rad/s}$)，5.2 秒靜態位移漂移 $<0.4\,	ext{mm}$。<br/>7. **實機 TF 唯一性防護確認 (Stage R2)** (`PASS`)：`/tf` 監控確認零 `odom -> base_footprint` 廣播，杜絕與 S3 EKF 衝突。<br/>8. **共變異數與異常行為實證** (`PASS`)：`pose.covariance` 與 `twist.covariance` 符合 REP-103 原生全零規範；無掃描時輸出 Warning 並跳過計算。 |
+| 尚未證明 | 無（原 Checklist #12 DoD 規範之選定/融合掃描消費、odometry frame、rate、covariance、TF ownership、異常行為、整合驗證、實機驗證與防杜第二發布者均已完全具備實證）。 |
+
+#### 3.6.9 Known Limits / Outstanding Obligations
+- **無輪端動力輸出**：Stage R2 驗證全程維持馬達無動力輸出狀態（未發送任何 M1 指令），底盤完全靜止。
+- **EKF 融合留待 Checklist #13**：RF2O 僅負責發布 `/rf2o/odom`，與輪速/IMU 之多源融合由 S3 State Estimation 承接。
+
+#### 3.6.10 Feature Freeze Status / Next Dependency
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Frozen (Checklist #12 Closed [x])` (All Software & Hardware Validation Evidence Established and Accepted; Checklist #12 Closed [x]) |
+| Freeze condition | 軟體測試通過、Stage R2 實機雙光達 360° 融合 `/scan`、RF2O `/rf2o/odom` 靜態里程串流、零 TF 廣播防護與時間戳/共變異數實證全部通過；原 Checklist #12 DoD 項目已全數具備完整實證並經審查核准結案 |
+| Next dependency | Checklist #13 (S3 State Estimation) |

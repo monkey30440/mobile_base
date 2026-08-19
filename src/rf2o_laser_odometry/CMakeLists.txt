@@ -68,8 +68,13 @@ install(TARGETS ${EXECUTABLE_NAME}
   DESTINATION lib/${PROJECT_NAME})
 
 install(
-  DIRECTORY launch  
+  DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_rf2o_launch_syntax test/test_rf2o_launch_syntax.py)
+endif()
 
 ament_package()
 

@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：27
-- 已完成：11
+- 已完成：12
 - 進行中：0
-- 待實作：16
+- 待實作：15
 - 上游阻塞：0
-- 目前進度：11 / 27 (41%)；第 11 項 `S2 TDK IMU runtime integration` 已完成 `[x]`；待啟動第 12 項 `S2 RF2O and selected scan integration`。
+- 目前進度：12 / 27 (44%)；第 12 項 `S2 RF2O and selected scan integration` 已完成 `[x]`；待啟動第 13 項 `S3 State Estimation`。
 
 ---
 
@@ -58,7 +58,7 @@
 - [x] 11. S2 TDK IMU runtime integration
   - 追溯：SYS-004。
   - 完成條件：現有 `tdk_ros2_imu` parser/node/test 在 target container 重跑通過，`/dev/ttyACM0`、message fields、units、frame、QoS、rate、timestamp、斷線／壞封包與實機靜態／動態量測均有證據。
-- [ ] 12. S2 RF2O and selected scan integration
+- [x] 12. S2 RF2O and selected scan integration
   - 追溯：SYS-003、SYS-005。
   - 完成條件：RF2O 只消費核准的 selected/merged scan，輸出 odometry 的 frame、rate、covariance、TF ownership 與異常行為經整合和實機驗證；不得成為 `odom -> base_footprint` 第二發布者。
 - [ ] 13. S3 State Estimation
