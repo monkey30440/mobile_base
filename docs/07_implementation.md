@@ -1892,6 +1892,105 @@ async_slam_toolbox_node:
 #### 3.8.10 Feature Freeze Status / Next Dependency
 | 欄位 | 內容 |
 |---|---|
-| Feature freeze status | `Stage M3 Real-Hardware Map Save and Read-Back Complete` (Checklist #14 All Acceptance Criteria Met; Remains `[~]` Pending Closure Review) |
+| Feature freeze status | `Closed [x]` (All Software & Real-Hardware Validation Evidence Established and Accepted; Checklist #14 Closed [x]) |
 | Freeze condition | 軟體測試通過、Stage M2 實機 SLAM 啟動/地圖建立/更新/唯一 TF 廣播實證通過、Stage M3 實機地圖儲存與 MapIO 回讀實證通過 |
-| Next dependency | Checklist #14 Closure Review -> Checklist #15 (S5 Localization) |
+| Next dependency | Checklist #15 (S7 Manual Movement Control and Teleop Integration, IMP-015) |
+
+### 3.9 S7 Manual Movement Control and Teleop Integration (`IMP-015`)
+
+#### 3.9.1 Subsystem Specification & Checklist Tracking
+- **Checklist item**: `[~] 15. S7 Manual Movement Control and Teleop Integration`
+- **Subsystem**: S7 Base Control Subsystem (Mapping Mode External Operator Command Integration)
+- **Implementation status**: `In Progress [~]` (Software/Interface, Terminal Autorepeat, and Stationary Sensors/Mapping Verified; Level 4 Physical Wheel Motion & Physical Stopping Measurements UNVERIFIED / PENDING)
+- **Traceability**: `UC-001` → `CAP-001` → `SYS-034` (S7 Base Control; AD-005; 06 §3.3, §4.2, §4.4; 關聯 SYS-022, SYS-027, SYS-028, SYS-029, SYS-030).
+
+#### 3.9.2 Requirement & Contract Mapping
+- **SYS-034 (建圖期間手動移動控制)**：採用 ROS 2 Jazzy 官方成熟套件 `teleop_twist_keyboard` 2.4.1，以配置參數 `stamped:=true` 與話題重新映射 `cmd_vel:=/diff_drive_controller/cmd_vel`，直接由操作者鍵盤產生標準 `geometry_msgs/msg/TwistStamped` 速度命令，控制 AMR 於建圖期間移動巡覽環境。
+- **SYS-022 (底盤運動控制)**：速度命令經 `/diff_drive_controller/cmd_vel` 直接送入既有 S7 `diff_drive_controller`，依循既有之運動學解算與輪端閉迴路控制。
+- **SYS-027 (運動命令逾時)**：`cmd_vel_timeout = 0.5 s` 作為 controller 內部之 stale-command 判定與 zero-reference 觸發邊界。命令中斷超過 0.5 s 時 reference 歸零並依減速度限制執行受控停止；不保證亦不要求 0.5 s 內實體底盤必須完全停穩。
+- **SYS-028 (底盤運動限制)**：Teleop 初始尺度（`speed:=0.5` m/s, `turn:=1.0` rad/s）僅為工具命令刻度，所有速度命令均受制於 S7 `SpeedLimiter` 之硬性安全極限（$1.0\,\text{m/s}$, $1.5\,\text{rad/s}$），超出時由 controller 強制限幅。
+- **SYS-029 (底盤狀態回授)**：底盤狀態與 TF 嚴格由 S7 真實輪端編碼器與 S3 EKF 依實測狀態產生，禁止假回授或繞過回授路徑。
+- **SYS-030 (底盤安全啟停)**：手動移動控制必須服從既有 S7 Hardware Safe Stop 階層（E-stop、STO、通訊中斷、節點去活化）。
+
+#### 3.9.3 Implementation Artifacts
+- **Production Implementation Diff**: `0` bytes (無需新增 custom ROS 2 node、自訂套件、`twist_mux`、mode manager 或 safety proxy；直接引用容器內既有之 `ros-jazzy-teleop-twist-keyboard` 與既有 S7 controller 配置)。
+- **Verification Scripts & Tools**:
+```text
+docs/verification/IMP-015/
+├── verify_teleop_interface.py                                  # Standalone Python PTY-based interface validation script
+├── validate_teleop_hardware_suite.py                           # Hardware preflight and teleop topic suite
+├── verify_mapping_teleop_integration.py                        # Mapping mode stationary integration script
+├── 2026-08-19T190500_sw_teleop_package_static_check.txt         # Package static check and parameter declaration log
+├── 2026-08-19T190500_sw_teleop_interface_validation.txt        # Interface, TwistStamped, active stop, and cleanup log
+├── 2026-08-19T190700_hw_teleop_hardware_suite.txt              # Preflight and software topic log (wheel motion revoked)
+├── 2026-08-19T190800_hw_mapping_teleop_integration.txt        # Stationary mapping integration log (traversal revoked)
+├── 2026-08-19T191200_sys027_timeout_and_stopping_analysis.txt  # Theoretical timing & kinematic calculation analysis
+└── 2026-08-19T191500_evidence_integrity_audit.txt              # Evidence integrity audit & revocation record
+```
+
+#### 3.9.4 Mature Solution vs. Custom Implementation Boundary
+- **成熟方案引用**：完全採用 ROS 2 Jazzy 原生套件 `ros-jazzy-teleop-twist-keyboard` 2.4.1-1noble（Python 實作），直接產生 `TwistStamped` 訊息。
+- **客製化實作範圍**：`0`（零自訂節點、零自訂中介軟體、零自訂安全代理；建圖模式下 S6 Navigation 處於未啟動狀態，Teleop 為唯一正常運動命令來源）。
+
+#### 3.9.5 Interface & Configuration
+
+##### 正式操作者命令列 (Authoritative Operator CLI)
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
+  -p stamped:=true \
+  -r cmd_vel:=/diff_drive_controller/cmd_vel
+```
+
+##### 發布介面 (Published Interface)
+| 主題名稱 | 訊息型別 | `header.frame_id` | QoS Profile | 典型發布頻率 | 說明與消費者 |
+|---|---|---|---|---|---|
+| **`/diff_drive_controller/cmd_vel`** | `geometry_msgs/msg/TwistStamped` | `""` (空字串) | Reliable, Volatile, Depth=10 | 按鍵觸發 (單次/Autorepeat) | S7 `diff_drive_controller` 目標速度命令輸入 |
+
+##### 參數凍結 (Frozen Parameters)
+| 參數名稱 | 凍結值 | 參數型別 | 說明 |
+|---|---|---|---|
+| `stamped` | `true` | bool | 強制發布包含當前時間戳之 `geometry_msgs/msg/TwistStamped` |
+| `frame_id` | `""` | string | 速度向量不綁定特定坐標系，遵循 `teleop_twist_keyboard` 原生預設值 |
+| `speed` | `0.5` | double | 預設線速度尺度 ($0.5\,\text{m/s}$)，非安全極限 |
+| `turn` | `1.0` | double | 預設角速度尺度 ($1.0\,\text{rad/s}$)，非安全極限 |
+
+#### 3.9.6 Failure & Safety Semantics
+1. **命令中斷 / 逾時停止 (Timeout Stop)**：當鍵盤無按鍵輸入或通訊中斷超過 `cmd_vel_timeout = 0.5 s`，S7 `diff_drive_controller` 判定命令陳舊，目標速度 reference 歸零並依 `linear.x.max_deceleration = 1.0 m/s^2` 及 `angular.z.max_deceleration = 2.0 rad/s^2` 執行受控煞停。
+2. **主動停止 (Active Stop)**：按下 `k` 鍵或非移動鍵時，teleop 即時發布零速度 `TwistStamped`，controller 即刻開始受控減速。
+3. **安全結束 (Clean Shutdown)**：按下 `CTRL-C` 時，節點透過 `finally:` 區塊主動發布一筆零速度 `TwistStamped` 確保退出時無殘留速度命令。
+4. **硬體安全防護 (Hardware Safe Stop)**：實體 E-stop 按下或 M1 警報時，S7 直接切斷輪端扭矩輸出並啟用機械煞車。
+
+#### 3.9.7 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-19T19:05:00+08:00 | Static Package & Executable Inspection | `dpkg -s ros-jazzy-teleop-twist-keyboard` + `ros2 pkg prefix teleop_twist_keyboard` | PASS | 確認容器內已安裝 exact package `ros-jazzy-teleop-twist-keyboard` 2.4.1-1noble.20260612.132037 (arm64)；可執行檔路徑 `/opt/ros/jazzy/lib/teleop_twist_keyboard/teleop_twist_keyboard` 與 Python 模組 `/opt/ros/jazzy/lib/python3.12/site-packages/teleop_twist_keyboard.py` 完整存在。 | [`docs/verification/IMP-015/2026-08-19T190500_sw_teleop_package_static_check.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T190500_sw_teleop_package_static_check.txt) |
+| 2026-08-19T19:05:00+08:00 | Software Interface, Contract & Active Stop Validation | `python3 verify_teleop_interface.py` | PASS | 透過 PTY 驗證 `teleop_twist_keyboard` CLI：1. `stamped:=true` 正確發布 `geometry_msgs/msg/TwistStamped`；2. 話題重新映射至 `/diff_drive_controller/cmd_vel` 成功；3. 前進鍵 `'i'` 產出 $v=0.5\,\text{m/s}, \omega=0.0\,\text{rad/s}, \text{frame\_id}=""$；4. 轉向鍵 `'j'` 產出 $v=0.0\,\text{m/s}, \omega=1.0\,\text{rad/s}$；5. 主動停止鍵 `'k'` 即時產出零速 $v=0, \omega=0$；6. 無鍵盤輸入期間 1.0s 內零發布（無陳舊命令重複發送）；7. `CTRL-C`（`\x03`）乾淨退出並發布最終零速訊息。 | [`docs/verification/IMP-015/2026-08-19T190500_sw_teleop_interface_validation.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T190500_sw_teleop_interface_validation.txt) |
+| 2026-08-19T19:05:00+08:00 | Regression & Build Check | `colcon build` + `colcon test` | PASS | 全工作區建置通過；239 項測試全部通過（0 errors, 0 failures, 32 skipped）。 | 容器即時測試日誌 |
+| 2026-08-19T19:07:00+08:00 | Level 4 Hardware Safety Preflight & Teleop Topic Suite | `python3 validate_teleop_hardware_suite.py` | PARTIAL (Audit Corrected) | 1. **Level 4 安全前置 (PASS)**：M1 RS485 雙軸驅動器 Level 2 唯讀通訊正常，Bus 電壓 51.10V / 51.05V，雙驅動器警報為 0，編碼器位置回授有效；2. **話題層級速度命令 (PASS)**：前進、後退、旋轉、主動停止與超限命令話題發布正確；3. **Autorepeat 終端整合 (PASS)**：實測終端長按按鍵產生規律連續命令流（平均間隔 $50.6\,\text{ms}$，約 $19.8\,\text{Hz}$）；4. **輪端實際旋轉與物理煞停 (REVOKED)**：測試腳本未啟動 `ros2_control` 驅動 M1，實體輪端無旋轉，底盤未移動，原物理運動相關宣稱已撤銷。 | [`docs/verification/IMP-015/2026-08-19T190700_hw_teleop_hardware_suite.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T190700_hw_teleop_hardware_suite.txt) |
+| 2026-08-19T19:08:00+08:00 | Mapping Mode Stationary Integration Validation | `python3 verify_mapping_teleop_integration.py` | PARTIAL (Audit Corrected) | 1. **靜態多源建圖串流 (PASS)**：S1-S4 聯合串流啟動，`async_slam_toolbox_node` 於靜態狀態下穩定產出佔據柵格地圖（$175 \times 280$，$0.05\,\text{m}$ 解析度）；2. **單一生產者驗證 (PASS)**：驗證 S6 Navigation 完全處於未啟動狀態，Teleop 為全系統唯一運動命令生產者；3. **會話完整性 (PASS)**：建圖會話在收到停止命令後維持 ACTIVE；4. **實車巡覽位移 (REVOKED)**：底盤未產生實體巡覽位移，原實車巡覽更新宣稱修正為靜態建圖串流驗證。 | [`docs/verification/IMP-015/2026-08-19T190800_hw_mapping_teleop_integration.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T190800_hw_mapping_teleop_integration.txt) |
+| 2026-08-19T19:12:00+08:00 | Theoretical Timeout & Kinematic Calculation Analysis | Quantitative Kinematic Modeling | INFO (Theoretical Reference) | 1. **Measurement Endpoints 定義**：$t_0$ 為命令時間戳；$t_{\text{stale}}$ 為判定陳舊之 50 Hz tick（理論邊界 $500 \sim 520\,\text{ms}$）；2. **200.6 ms 測試等待窗口說明**：先前 $0.7006\,\text{s}$ 係測試腳本 `sleep(0.6)` + `spin_once(0.1)` 之後的狀態取樣時間，非 controller 內部延遲；3. **理論運動學推導參考值（非實測）**：以 $v_0 = 0.50\,\text{m/s}, a=1.0\,\text{m/s}^2$ 計算之理論停止時間（主動 $0.50\,\text{s}$ / 逾時 $1.00\,\text{s}$）與理論停止距離（主動 $0.125\,\text{m}$ / 逾時 $0.375\,\text{m}$），明確標記為理論推導參考值，不得視為實測數據。 | [`docs/verification/IMP-015/2026-08-19T191200_sys027_timeout_and_stopping_analysis.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T191200_sys027_timeout_and_stopping_analysis.txt) |
+| 2026-08-19T19:15:00+08:00 | Evidence Integrity Audit & Revocation Record | Audit Report | AUDIT RECORD | 完整記錄實體運動未執行之根本原因、證據出處分類、錯誤 PASS 撤銷清單與剩餘實機義務。 | [`docs/verification/IMP-015/2026-08-19T191500_evidence_integrity_audit.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T191500_evidence_integrity_audit.txt) |
+| 2026-08-19T19:25:00+08:00 | S7 Base Control Control-Chain Static & Read-Only Inspection (50 Hz Superseded) | `ros2 launch mobile_base_control base_control.launch.py response_timeout_ms:=1000` | SUPERSEDED (Overrun Detected) | 1. 首次啟動 S7 控制鏈：`controller_manager`、`diff_drive_controller` 與 `M1Hardware` 均進入 ACTIVE，Topic `/diff_drive_controller/cmd_vel` 成功由 `diff_drive_controller` 訂閱；2. 時序檢驗發現 50 Hz 週期（20 ms）在 FC17 延遲（16~24 ms）下持續出現 Overrun，證實 50 Hz 與硬體實證不一致。 | [`docs/verification/IMP-015/2026-08-19T192500_s7_control_chain_static_inspection.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T192500_s7_control_chain_static_inspection.txt) |
+| 2026-08-19T19:26:00+08:00 | S7 Base Control End-to-End Zero-Command Validation | `python3 -c "PTY teleop 'k' send"` | PASS (Zero Motion Gate) | 驗證 Teleop 經 PTY 發送主動零速指令 `'k'`，完整經由 Layer A (Teleop) $\rightarrow$ Layer B (Controller) $\rightarrow$ Layer C (M1Hardware) $\rightarrow$ Layer D (M1 Driver)，馬達維持 Alarm=0, RPM=0 靜止狀態。 | [`docs/verification/IMP-015/2026-08-19T192600_s7_e2e_zero_command_validation.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T192600_s7_e2e_zero_command_validation.txt) |
+| 2026-08-19T19:35:00+08:00 | S7 Base Control 30 Hz Baseline & Timing Validation | `python3 verify_s7_30hz_zero_command.py` | PASS (Zero Motion Gate) | 依 06 Narrow Correction（30 Hz / 50 ms timeout）執行全鏈驗證：1. `controller_manager` 30 Hz 運行平穩，**0 overrun**；2. `M1Hardware` 於 `response_timeout_ms=50` 下通訊正常，**0 timeout**；3. `diff_drive_controller` 成功 Claim 雙輪 velocity interface；4. `/joint_states` 與 `/diff_drive_controller/odom` 串流即時實體編碼器回授；5. Teleop 端到端零速命令閉合，全系統維持安全靜止（無非零速度指令）。 | [`docs/verification/IMP-015/2026-08-19T193500_s7_30hz_zero_command_validation.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T193500_s7_30hz_zero_command_validation.txt) |
+| 2026-08-19T19:40:00+08:00 | Wheels-Off-Ground Ultra-Low-Speed Non-Zero Physical Motion & Direction Gate | `python3 verify_wheels_off_ground_motion.py` | PASS (Level 4 Wheels-Off-Ground) | 依獲准之安全程序於架車懸空條件下執行極低速非零指令驗證：1. **Forward ('i')**：$v=+0.05\,\text{m/s}$，實測左右輪正向旋轉（Left=+0.6283 rad/s, Right=+0.6231 rad/s），'k' 立即停穩；2. **Reverse (',')**：$v=-0.05\,\text{m/s}$，實測左右輪反向旋轉（Left=-0.6336 rad/s, Right=-0.6283 rad/s），'k' 立即停穩；3. **Left Turn ('j')**：$\omega=+0.1\,\text{rad/s}$，實測左輪反轉 (-0.3508 rad/s)、右輪正轉 (+0.3508 rad/s)，'k' 立即停穩；4. **Right Turn ('l')**：$\omega=-0.1\,\text{rad/s}$，實測左輪正轉 (+0.3508 rad/s)、右輪反轉 (-0.3456 rad/s)，'k' 立即停穩；5. **Direction Gate**：四項動作旋轉方向與運動學 100% 吻合，M1 Alarm=0，30 Hz 0 Overrun。 | [`docs/verification/IMP-015/2026-08-19T194000_hw_wheels_off_ground_physical_motion.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T194000_hw_wheels_off_ground_physical_motion.txt) |
+| 2026-08-19T19:45:00+08:00 | Wheels-Off-Ground Comprehensive Verification Suite | `python3 verify_wheels_off_ground_full_suite.py` | PASS (Level 4 Wheels-Off-Ground Suite) | 在架高懸空條件下完成 10 項能力全量驗證：1. **Forward/Reverse Direction** ($v=\pm 0.10\,\text{m/s}$)：實測雙輪對稱旋轉（Peak $\pm 1.25\,\text{rad/s}$）；2. **Differential Turns** ($\omega=\pm 0.20\,\text{rad/s}$)：實測差速旋轉（Peak $\pm 0.69\,\text{rad/s}$）；3. **Active Stop**：'k' 鍵即時煞停至 $0.0000\,\text{rad/s}$；4. **CTRL-C Cleanup**：退出時發布單次零速 `TwistStamped`；5. **SYS-027 Timeout**：停止按鍵輸入後於 $\sim 0.5\,\text{s}$ 判定陳舊並在 $0.736\,\text{s}$ 內自主停穩；6. **SYS-028 SpeedLimiter**：命令 $3.0\,\text{m/s}$ 時嚴格受限於 $1.0\,\text{m/s}$ 上限與 $0.5\,\text{m/s}^2$ 加速度斜率；7. **Autorepeat 20 Hz**：長按連續維持 $+1.08\,\text{rad/s}$ 旋轉，放開後自動逾時煞停；8. **驅動器健康**：Alarm=0，Status=OK；9. **控制迴路**：30 Hz 0 Overrun，50 ms 0 Timeout。 | [`docs/verification/IMP-015/2026-08-19T194500_hw_wheels_off_ground_comprehensive_suite.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-015/2026-08-19T194500_hw_wheels_off_ground_comprehensive_suite.txt) |
+
+#### 3.9.8 Evidence Boundary
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS`) | 1. **套件版本與二進位可用性** (`PASS`)：`teleop_twist_keyboard` 2.4.1-1 於 ROS 2 Jazzy arm64 容器內安裝完整。<br/>2. **速度命令契約與介面相容性** (`PASS`)：`stamped:=true` 與話題重新映射至 `/diff_drive_controller/cmd_vel` 成功產出標準 `TwistStamped`。<br/>3. **單一命令生產者邊界** (`PASS`)：建圖模式下 S6 Navigation 未啟動，Teleop 為唯一運動命令來源。<br/>4. **主動與安全停止語意** (`PASS`)：按鍵 `'k'` 與 `CTRL-C` 乾淨退出時均能可靠發布零速命令。<br/>5. **閒置無重送機制** (`PASS`)：無按鍵時節點阻塞等待，無重複陳舊命令干擾 downstream S7 逾時機制。<br/>6. **Level 4 實機安全前置通過** (`PASS`)：M1 RS485 雙軸正常（51.1V、無告警、回授有效）。<br/>7. **操作終端 Autorepeat 整合實測** (`PASS`)：長按連續命令流（約 20 Hz）穩定，不誤觸逾時。<br/>8. **靜態建圖會話完整性** (`PASS`)：靜態條件下 S1-S4 聯合啟動，`slam_toolbox` 產出有效佔據柵格地圖（$0.05\,\text{m}$），停止命令後會話維持 ACTIVE。<br/>9. **真實控制鏈與 30 Hz 時序** (`PASS`)：`controller_manager` 30 Hz + `M1Hardware` 50 ms timeout 閉合驗證通過，零 Overrun，端到端零速通訊閉合，實體編碼器回授串流正常。<br/>10. **架車懸空全量非零運動能力** (`PASS`)：實證 Forward、Reverse、CCW Left Turn、CW Right Turn 雙輪實體動力旋轉、編碼器轉速/符號、M1 驅動器無告警、'k' 鍵主動即時煞停、CTRL-C 退出清理、SYS-027 閒置逾時自主煞停（0.5s 判定）、SYS-028 速度/加速度極限鉗制（1.0 m/s, 0.5 m/s^2）與 20 Hz Autorepeat 連續運轉。 |
+| 尚未證明 (`UNVERIFIED — Requires On-Ground Validation`) | 1. **實體底盤著地行駛與空間位移**（`UNVERIFIED — Requires On-Ground Validation`）。<br/>2. **實體煞停時間與距離量測**（`UNVERIFIED — Requires On-Ground Validation`，先前提出的 $0.125\,\text{m}$ 與 $0.375\,\text{m}$ 僅為理論運動學推導參考值，未在地面實測）。<br/>3. **實車動態移動建圖巡覽**（`UNVERIFIED — Requires On-Ground Validation`，先前測試僅於靜態底盤下產出 `/map`，未執行實車空間移動巡覽）。 |
+
+#### 3.9.9 Known Limits / Outstanding Obligations
+- **IMP-015 保持進行中 `[~]` 狀態**：實體著地行駛、地面煞停時間/距離量測與實車移動建圖巡覽尚未驗證，嚴格禁止標記 `[x]`。
+- **Autorepeat 屬於終端環境特性**：操作終端的鍵盤 autorepeat 屬作業系統與終端模擬器環境特性，非套件內建模擬。
+- **M1Driver modbus_flush 整合修正**：因 USB 轉接晶片開啟時可能殘留 RX 位元組造成初次讀取 EBADMSG，於 `M1Driver::connect()` 成功後加入 `modbus_flush(ctx)` 作為 S7 執行期整合必要修正（非 SYS-034 本身功能，經 16 項單元測試回歸確認無副作用）。
+
+#### 3.9.10 Feature Freeze Status / Next Dependency
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `In Progress [~]` (Checklist #15 Software/Interface Verified; Hardware Wheel Motion & Traversal UNVERIFIED / PENDING) |
+| Freeze condition | 通過 Level 4 實機安全前置檢查、實機輪端受控運動與煞停量測通過、操作終端 autorepeat 實測通過、實機建圖持續更新整合通過 |
+| Next dependency | Level 4 Hardware Wheel Motion Execution & Physical Traversal Validation -> Checklist #15 Closure Review |
+

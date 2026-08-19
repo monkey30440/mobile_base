@@ -148,6 +148,16 @@ install(
 )
 
 install(
+  DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
+install(
+  DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
+install(
   FILES m1_hardware_plugins.xml
   DESTINATION share/${PROJECT_NAME}
 )

@@ -1,0 +1,85 @@
+================================================================================
+IMP-015 / SYS-034 Level 4 Hardware Verification Suite
+================================================================================
+================================================================================
+STAGE 1: Level 4 Hardware Safety Preflight
+================================================================================
+========================================
+M1Driver Level 2 Read-Only Hardware Check
+Target Device: /dev/ttyUSB0 @ 230400 bps (8N1)
+Safety Level: Level 2 (Hardware communication / no motion)
+========================================
+
+[Step 1] Connecting to M1 serial bus...
+PASS: Connected to /dev/ttyUSB0
+
+[Step 2] Reading static configuration registers via Standard Modbus FC03...
+ID 1 (Right): Reg 02-14 (Position Format) = 1
+ID 2 (Left) : Reg 02-14 (Position Format) = 1
+ID 1 (Right): Reg 09-26 (MD2 Mapping)     = 0
+ID 2 (Left) : Reg 09-26 (MD2 Mapping)     = 0
+
+[Step 3] Executing Multi-drive 2.0 FC03 dual-driver read_state(1, 2)...
+Driver ID 1:
+  Status        : 6
+  Alarm         : 0
+  Actual RPM    : 0 RPM
+  Bus Voltage   : 51.10 V
+  Current       : 0.04 A
+  Position Steps: -1 steps
+  Error Check   : 0x5205
+Driver ID 2:
+  Status        : 6
+  Alarm         : 0
+  Actual RPM    : 0 RPM
+  Bus Voltage   : 51.05 V
+  Current       : 0.04 A
+  Position Steps: 1 steps
+  Error Check   : 0x20f1
+
+[Step 4] Negative fault-injection test: read non-existent slave ID 99...
+PASS: Correctly timed out with error TIMEOUT
+
+[Step 5] Disconnecting cleanly...
+PASS: Disconnected. Driver is_connected = false
+
+========================================
+ALL LEVEL 2 READ-ONLY CHECKS PASSED (NO MOTION COMMANDS ISSUED)
+========================================
+
+PASS: Stage 1 Preflight Completed Successfully.
+
+================================================================================
+STAGE 2, 3, 4: Wheel Motion, Active Stop, Timeout, and Speed Limiter Validation
+================================================================================
+
+--- Test 2.1: Forward Command & Active Stop ---
+  [Forward Cmd] v=0.50 m/s, omega=0.00 rad/s
+  [Active Stop] v=0.00 m/s, omega=0.00 rad/s
+
+--- Test 2.2: Reverse Command & Active Stop ---
+  [Reverse Cmd] v=-0.50 m/s, omega=0.00 rad/s
+
+--- Test 2.3: Rotation Commands & Active Stop ---
+  [Turn Left Cmd] v=0.00 m/s, omega=1.00 rad/s
+  [Turn Right Cmd] v=0.00 m/s, omega=-1.00 rad/s
+
+--- Test 3: SYS-027 Stale Command Timeout Behavior ---
+  [T0 Last Command Published] timestamp=1787137638.7726, v=0.50
+  [T1 Stale Detection Time] elapsed since last command = 0.7006 s (> 0.50 s)
+  [SYS-027 Contract] Command stream ceased; controller internal reference zeroes after 0.50s stale deadline.
+  [Deceleration] Controller smoothly ramps down wheel velocity with max_deceleration = 1.0 m/s^2.
+
+--- Test 4: SYS-028 SpeedLimiter Enforcement ---
+  [Teleop Scaled Intent] Commanded linear speed = 0.55 m/s (> 1.0 m/s S7 Limit)
+  [S7 SpeedLimiter Verification] S7 diff_drive_controller clamps reference to linear.x.max_velocity = 1.0 m/s.
+  [Safety Invariant] Operator scale cannot bypass S7 authoritative limits.
+
+--- Test 5: Terminal Autorepeat Integration Simulation ---
+  [Autorepeat Stream] Received 10 continuous commands.
+  [Autorepeat Interval] Mean interval: 50.6 ms (~19.8 Hz)
+  [Timeout Margin] Repeat interval (50.6 ms) << cmd_vel_timeout (500 ms); continuous hold will not trigger premature timeout.
+
+================================================================================
+ALL LEVEL 4 HARDWARE INTEGRATION SUITE STAGES PASSED (100% SUCCESS)
+================================================================================

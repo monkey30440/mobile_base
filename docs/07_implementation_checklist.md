@@ -16,10 +16,10 @@
 
 - 總項目：28
 - 已完成：14
-- 進行中：0
-- 待實作：14
+- 進行中：1
+- 待實作：13
 - 上游阻塞：0
-- 目前進度：14 / 28 (50%)；第 14 項 `S4 Mapping and MapIO` 已結案 `[x]`。
+- 目前進度：14 / 28 (50%)；第 15 項 `S7 Manual Movement Control and Teleop Integration` 進行中 `[~]`。
 
 ---
 
@@ -67,7 +67,7 @@
 - [x] 14. S4 Mapping and MapIO
   - 追溯：SYS-001、SYS-002、SYS-006、SYS-007、SYS-024。
   - 完成條件：Mapping Mode、slam_toolbox、唯一 `map -> odom` ownership、地圖建立／更新／儲存／read-back 與失敗路徑完成整合及實機證據。
-- [ ] 15. S7 Manual Movement Control and Teleop Integration
+- [~] 15. S7 Manual Movement Control and Teleop Integration
   - 追溯：IMP-015；UC-001 → CAP-001 → SYS-034（S7 Base Control；AD-005；06 §3.3, §4.2, §4.4；關聯 SYS-022, SYS-027, SYS-028, SYS-029, SYS-030）。
   - 完成條件：在 target container 中確認 exact `teleop_twist_keyboard`（2.4.1）可用；驗證 `stamped:=true` 輸出 `geometry_msgs/msg/TwistStamped` 並 remap 至 `/diff_drive_controller/cmd_vel`；驗證 Mapping Mode 下 S6 維持未啟動且 Teleop 為唯一 command producer（不新增 mux/mode manager/proxy）；驗證命令受制於 S7 SYS-028 SpeedLimiter；驗證非移動鍵/`CTRL-C` 主動停止發布零速使 S7 受控減速；驗證中斷發布後逾時超過 `0.5 s`（`cmd_vel_timeout`）由 S7 將 reference 歸零並依減速度限制受控停止（不宣稱 0.5s 內實體完全停穩）；於目標 Jetson/操作終端實測確認 keyboard autorepeat 啟用狀態與頻率；通過 Level 4 實機架車/地面安全前置檢查後完成前進/後退/旋轉、主動煞停、逾時受控停止實測並記錄停止時間與距離，確認 Mapping session 保持 ACTIVE。
 - [ ] 16. S5 Localization

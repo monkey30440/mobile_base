@@ -288,8 +288,8 @@ graph TD
 #### 3.2 發布介面 (Published Interfaces)
 | 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
 |---|---|---|---|---|
-| **`/joint_states`** | `sensor_msgs/msg/JointState` | Reliable, Volatile, Depth: 10 | $50\,\text{Hz}$ | 包含 `driving_wheel_joint_L` 與 `driving_wheel_joint_R` 狀態，供 S1 發布動態 TF。 |
-| **`/base_control/wheel_odometry`** | `nav_msgs/msg/Odometry` | SensorData / Reliable | $50\,\text{Hz}$ | 輪端純量測里程計資訊，供 S3 EKF 融合使用。 |
+| **`/joint_states`** | `sensor_msgs/msg/JointState` | Reliable, Volatile, Depth: 10 | $30\,\text{Hz}$ | 包含 `driving_wheel_joint_L` 與 `driving_wheel_joint_R` 狀態，供 S1 發布動態 TF。 |
+| **`/base_control/wheel_odometry`** | `nav_msgs/msg/Odometry` | SensorData / Reliable | $30\,\text{Hz}$ | 輪端純量測里程計資訊，供 S3 EKF 融合使用。 |
 | **`/diagnostics`** | `diagnostic_msgs/msg/DiagnosticArray` | SystemDefault | $1\,\text{Hz}$ | 回報 M1 驅動器警報碼、通訊狀態與安全閘門開關狀態。 |
 
 #### 3.3 服務介面 (Service Interfaces)
@@ -305,7 +305,7 @@ graph TD
 # config/base_control_params.yaml
 controller_manager:
   ros__parameters:
-    update_rate: 50 # 控制迴路更新率 (Hz)
+    update_rate: 30 # 控制迴路更新率 (Hz)；依 IMP-008 實機時序實證凍結之 Synchronous Model A2 基準
 
 diff_drive_controller:
   ros__parameters:
@@ -316,21 +316,23 @@ diff_drive_controller:
 
     # 介面契約與安全防護 (SYS-027, SYS-028, SYS-034)
     use_stamped_vel: true # 接收標準 geometry_msgs/msg/TwistStamped
-    cmd_vel_timeout: 0.5 # 命令逾時判定時間 (秒, SYS-027)
+    cmd_vel_timeout: 0.5 # 命令逾時判定時間 (秒, SYS-027 stale command timeout；與 M1 RS485 response_timeout_ms=50ms 區分)
     enable_odom_tf: false # 嚴禁 S7 發布 TF (保留由 S3 唯一發布)
     open_loop: false # 啟用閉迴路反饋
     position_feedback: true
 
     # 權威運作速度與加速度極限 (SYS-028 Authoritative Operational Limits)
+    # 註：ROS 2 Jazzy diff_drive_controller 4.42.1 參數 schema 要求減速度為負值 (<= 0)；
+    # 物理安全減速度大小仍分別為 1.0 m/s^2 與 2.0 rad/s^2。
     linear.x.max_velocity: 1.0 # 最大線速度 (m/s)
     linear.x.min_velocity: -0.5
     linear.x.max_acceleration: 0.5 # 最大加速度 (m/s^2)
-    linear.x.max_deceleration: 1.0 # 最大減速度 (m/s^2)
+    linear.x.max_deceleration: -1.0 # 減速度參數表述 (物理減速度大小 1.0 m/s^2)
 
     angular.z.max_velocity: 1.5 # 最大角速度 (rad/s)
     angular.z.min_velocity: -1.5
-    angular.z.max_acceleration: 1.0
-    angular.z.max_deceleration: 2.0
+    angular.z.max_acceleration: 1.0 # 最大角加速度 (rad/s^2)
+    angular.z.max_deceleration: -2.0 # 減速度參數表述 (物理角減速度大小 2.0 rad/s^2)
 ```
 
 #### 4.2 外部手動控制配置與 CLI 規格 (External Teleop Configuration & Operator CLI)

@@ -305,6 +305,8 @@ Result<void> M1Driver::connect(
     return Result<void>::failure(ErrorCode::CONNECT_FAILED);
   }
 
+  modbus_flush(ctx);
+
   impl_->ctx = ctx;
   return Result<void>::success();
 }

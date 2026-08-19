@@ -17,20 +17,22 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
     pkg_description = get_package_share_directory('mobile_base_description')
-    default_model_path = os.path.join(pkg_description, 'urdf', 'mobile_base.urdf.xacro')
+    pkg_control = get_package_share_directory('mobile_base_control')
+
+    default_params_file = os.path.join(pkg_control, 'config', 'base_control_params.yaml')
 
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
-        description='Use simulation (Gazebo) clock if true',
+        description='Use simulation clock if true',
     )
 
     use_mock_hardware_arg = DeclareLaunchArgument(
@@ -54,49 +56,41 @@ def generate_launch_description():
     response_timeout_ms_arg = DeclareLaunchArgument(
         'response_timeout_ms',
         default_value='50',
-        description='Response timeout in milliseconds (required parameter, no implicit default)',
+        description='Response timeout in milliseconds (IMP-008 frozen runtime baseline: 50 ms)',
     )
 
-    publish_frequency_arg = DeclareLaunchArgument(
-        'publish_frequency',
-        default_value='30.0',
-        description='Publishing frequency of robot_state_publisher (Hz)',
+    robot_description_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_description, 'launch', 'robot_description.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
+            'use_mock_hardware': LaunchConfiguration('use_mock_hardware'),
+            'serial_port': LaunchConfiguration('serial_port'),
+            'baud_rate': LaunchConfiguration('baud_rate'),
+            'response_timeout_ms': LaunchConfiguration('response_timeout_ms'),
+        }.items(),
     )
 
-    robot_description_content = Command(
-        [
-            PathJoinSubstitution([FindExecutable(name='xacro')]),
-            ' ',
-            default_model_path,
-            ' ',
-            'use_mock_hardware:=',
-            LaunchConfiguration('use_mock_hardware'),
-            ' ',
-            'serial_port:=',
-            LaunchConfiguration('serial_port'),
-            ' ',
-            'baud_rate:=',
-            LaunchConfiguration('baud_rate'),
-            ' ',
-            'response_timeout_ms:=',
-            LaunchConfiguration('response_timeout_ms'),
-        ]
-    )
-
-    robot_description = ParameterValue(robot_description_content, value_type=str)
-
-    robot_state_publisher_node = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
+    control_node = Node(
+        package='controller_manager',
+        executable='ros2_control_node',
+        parameters=[default_params_file],
         output='both',
-        parameters=[
-            {
-                'robot_description': robot_description,
-                'use_sim_time': LaunchConfiguration('use_sim_time'),
-                'publish_frequency': LaunchConfiguration('publish_frequency'),
-            }
-        ],
+    )
+
+    joint_state_broadcaster_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['joint_state_broadcaster', '--controller-manager', '/controller_manager'],
+        output='both',
+    )
+
+    diff_drive_controller_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['diff_drive_controller', '--controller-manager', '/controller_manager'],
+        output='both',
     )
 
     return LaunchDescription(
@@ -106,7 +100,9 @@ def generate_launch_description():
             serial_port_arg,
             baud_rate_arg,
             response_timeout_ms_arg,
-            publish_frequency_arg,
-            robot_state_publisher_node,
+            robot_description_launch,
+            control_node,
+            joint_state_broadcaster_spawner,
+            diff_drive_controller_spawner,
         ]
     )

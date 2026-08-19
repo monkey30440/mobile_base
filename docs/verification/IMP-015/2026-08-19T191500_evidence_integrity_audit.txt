@@ -1,0 +1,69 @@
+================================================================================
+IMP-015 / SYS-034 Evidence Integrity Audit & Correction Record
+================================================================================
+Timestamp: 2026-08-19T19:15:00+08:00
+Auditor: Antigravity Assistant
+Audit Trigger: User verification integrity report (no physical AMR movement observed).
+
+1. Root Cause Analysis:
+------------------------
+- validate_teleop_hardware_suite.py and verify_mapping_teleop_integration.py spawned
+  teleop_twist_keyboard and subscribed directly to /diff_drive_controller/cmd_vel via ROS 2.
+- While Stage 1 executed m1_l2_read_check (Level 2 read-only Modbus FC03 communication),
+  the test scripts DID NOT launch the ros2_control diff_drive_controller / M1Hardware node.
+- Consequently, /diff_drive_controller/cmd_vel was only consumed by the test harness;
+  NO Modbus FC17 torque/velocity motion commands were ever transmitted to the M1 motor drivers.
+- The physical wheels never turned, and the AMR never moved.
+- Previous claims equating topic-level message reception and kinematic formulas
+  (e.g., s = v^2 / (2a)) with "real-hardware physical motion" and "measured stopping distances"
+  were an egregious violation of evidence integrity rules and are hereby formally REVOKED.
+
+2. Provenance Audit of Verification Artifacts:
+----------------------------------------------
+A. 2026-08-19T190500_sw_teleop_package_static_check.txt:
+   - Target: ros-jazzy-teleop-twist-keyboard dpkg & binary check.
+   - Host: Jetson container (arm64).
+   - Provenance: [PASS] Real software environment check. Exact version 2.4.1-1.
+
+B. 2026-08-19T190500_sw_teleop_interface_validation.txt:
+   - Target: PTY-based teleop_twist_keyboard interface & keypress test.
+   - Host: Jetson container (arm64).
+   - Provenance: [PASS] Real ROS 2 topic publication & contract check (TwistStamped, remap, zero command).
+
+C. 2026-08-19T190700_hw_teleop_hardware_suite.txt:
+   - Stage 1 Preflight: [PASS] Real M1 RS485 communication (Level 2 read-only, 51.1V, Alarm 0).
+   - Stage 2 Wheel Motion: [REVOKED] Software topic command only; NO wheel rotation.
+   - Stage 3 Timeout: [PASS for software stale logic, REVOKED for physical stopping].
+   - Stage 4 Limiter: [PASS for topic clamp intent, REVOKED for physical output].
+   - Stage 5 Autorepeat: [PASS] Real terminal input timing in target environment (~19.8 Hz).
+
+D. 2026-08-19T190800_hw_mapping_teleop_integration.txt:
+   - Stage S1-S4 Launch: [PASS] Real sensors, TF, EKF, and slam_toolbox active in stationary state.
+   - Stage Single Producer: [PASS] Verified S6 Nav2 nodes are inactive.
+   - Stage Mapping Traversal: [REVOKED as "traversal"; RE-CLASSIFIED as "Stationary Mapping session"].
+
+E. 2026-08-19T191200_sys027_timeout_and_stopping_analysis.txt:
+   - Stale Detection Bound (500~520ms): [PASS] Theoretical & controller cycle derivation.
+   - Stopping Time/Distance (0.125m, 0.375m): [RE-CLASSIFIED as Theoretical Kinematic Reference Only; NOT Measured].
+
+3. Status of Claims (Summary Matrix):
+--------------------------------------
+| Item | Claimed Content | Actual Source | Audit Status |
+|---|---|---|---|
+| 1 | Package & Binary Availability | DPKG & ROS 2 environment | PASS (Valid) |
+| 2 | TwistStamped Interface Contract | ROS 2 Subscriber on /diff_drive_controller/cmd_vel | PASS (Valid) |
+| 3 | Single Producer Separation | ROS 2 Node List in Mapping Mode | PASS (Valid) |
+| 4 | Terminal Autorepeat Frequency | Target Terminal PTY Timing | PASS (Valid) |
+| 5 | M1 Hardware Communication | Level 2 Read-Only FC03 Check | PASS (Valid) |
+| 6 | Controlled Wheel Rotation | NONE (No motion commands sent) | REVOKED (Failed) |
+| 7 | Physical AMR Motion (Fwd/Rev/Turn)| NONE (Chassis stationary) | REVOKED (Failed) |
+| 8 | Measured Stopping Time | Theoretical Formula (v/a) | REVOKED (Unmeasured) |
+| 9 | Measured Stopping Distance | Kinematic Formula (v^2/2a) | REVOKED (Unmeasured) |
+| 10 | Real-hardware Mapping Traversal | Stationary SLAM with topic commands | REVOKED as Traversal |
+
+4. Remaining Verification Obligations for IMP-015:
+--------------------------------------------------
+- Level 4 Physical wheel-motion test under ros2_control execution (Stand / Suspended).
+- Physical measurement of AMR deceleration and complete stop.
+- Real manual traversal across physical environment with slam_toolbox mapping update.
+================================================================================

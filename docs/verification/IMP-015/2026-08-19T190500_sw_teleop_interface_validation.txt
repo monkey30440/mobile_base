@@ -1,0 +1,39 @@
+======================================================================
+IMP-015 / SYS-034 Teleop Twist Keyboard Interface Verification
+======================================================================
+[1] Spawning teleop_twist_keyboard CLI with PTY: ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -r cmd_vel:=/diff_drive_controller/cmd_vel
+
+[2] Testing Forward Command (key: 'i')...
+    Received TwistStamped on /diff_drive_controller/cmd_vel:
+      header.stamp: sec=1787137486, nanosec=664653204
+      header.frame_id: ''
+      twist.linear.x: 0.5
+      twist.angular.z: 0.0
+    [PASS] Forward command matches exact TwistStamped contract.
+
+[3] Testing Turn Left Command (key: 'j')...
+    Received TwistStamped on /diff_drive_controller/cmd_vel:
+      twist.linear.x: 0.0
+      twist.angular.z: 1.0
+    [PASS] Angular turn command matches exact TwistStamped contract.
+
+[4] Testing Manual Active Stop Command (key: 'k')...
+    Received TwistStamped on /diff_drive_controller/cmd_vel:
+      twist.linear.x: 0.0
+      twist.angular.z: 0.0
+    [PASS] Active stop command successfully published zero velocity.
+
+[5] Testing Idle Behavior (no input for 1.0s)...
+    Messages received during 1.0s idle: 0
+    [PASS] Teleop node blocked waiting for input; no stale messages repeated.
+    -> Downstream diff_drive_controller cmd_vel_timeout (0.5s) will safely trigger zero-reference.
+
+[6] Testing Clean Shutdown (CTRL-C / '\x03')...
+    Received final cleanup TwistStamped on /diff_drive_controller/cmd_vel:
+      twist.linear.x: 0.0
+      twist.angular.z: 0.0
+    [PASS] Clean shutdown successfully published zero velocity.
+
+======================================================================
+ALL IMP-015 / SYS-034 TELEOP INTERFACE TESTS PASSED (100% SUCCESS)
+======================================================================
