@@ -19,4 +19,7 @@ RUN apt-get update \
 
 WORKDIR /workspaces/mobile_base
 
+RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc \
+    && echo '[ -f install/setup.bash ] && source install/setup.bash' >> ~/.bashrc
+
 CMD ["bash"]

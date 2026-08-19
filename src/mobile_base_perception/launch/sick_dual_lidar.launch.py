@@ -87,7 +87,7 @@ def generate_launch_description():
         package='sick_scan_xd',
         executable='sick_generic_caller',
         name='front_lidar_node',
-        output='screen',
+        output='log',
         arguments=[
             picoscan_launch_file,
             ['hostname:=', front_hostname],
@@ -113,7 +113,7 @@ def generate_launch_description():
         package='sick_scan_xd',
         executable='sick_generic_caller',
         name='rear_lidar_node',
-        output='screen',
+        output='log',
         arguments=[
             picoscan_launch_file,
             ['hostname:=', rear_hostname],
