@@ -352,12 +352,32 @@ diff_drive_controller:
 > - **Authoritative Safety Limits**：唯一由 `SYS-028` 與 S7 `diff_drive_controller`（`SpeedLimiter`）擁有與強制實施。
 > - **Teleop Command Scale**：僅為外部操作工具之初始步進刻度，非產品安全極限。
 
-##### 建圖操作員唯一正式 CLI
+##### 正式操作與啟動流程 (Authoritative Operator & Bring-up Workflow)
+
+###### Terminal 1: S7 Base Control 啟動
+```bash
+ros2 launch mobile_base_control base_control.launch.py response_timeout_ms:=50
+```
+
+###### Verify: 控制器與硬體介面狀態檢驗
+```bash
+ros2 control list_controllers
+ros2 control list_hardware_components
+```
+*預期狀態*：`diff_drive_controller` 與 `joint_state_broadcaster` 均為 `active`；`M1Hardware` 狀態為 `active`（`claimed`）。
+
+###### Terminal 2: 建圖手動遙控操作 (Operator Teleop CLI)
 ```bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
   -p stamped:=true \
   -r cmd_vel:=/diff_drive_controller/cmd_vel
 ```
+
+###### 操作語意與邊界說明
+- **鍵盤連發與連續移動**：`teleop_twist_keyboard` 每收到一個 stdin 字元發布一筆命令。在本次 target Jetson / operator terminal 實測中，keyboard autorepeat 平均約 20 Hz；實際頻率屬環境特性。
+- **閒置逾時停止 (SYS-027)**：放開按鍵後終端停止發布，無鍵盤輸入時節點阻塞等待，S7 `diff_drive_controller` 於 `cmd_vel_timeout = 0.5 s` 判定陳舊並依 SYS-028 減速度限制接管受控停止。
+- **主動停止 (Active Stop)**：`k` 立即發布 zero `TwistStamped`；S7 `diff_drive_controller` 隨後依 `SYS-028` 減速度限制（$1.0\,\text{m/s}^2, 2.0\,\text{rad/s}^2$）執行受控停止（command-zero timing $\neq$ physical complete-stop timing）。
+- **實機邊界**：AMR 未完成實體著地行駛與空間巡覽驗證前，On-Ground Mapping traversal 仍標記為 `UNVERIFIED — Requires On-Ground Validation`。
 
 ### 5. Failure Detection & Diagnostics
 1. **手動主動停止處置 (Manual Active Stop)**：

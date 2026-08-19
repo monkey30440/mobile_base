@@ -399,8 +399,15 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // 2. Pre-activation check: read current state
-  auto pre_res = driver_->read_state(config_.right_driver_id, config_.left_driver_id);
+  // 2. Pre-activation check: read current state (with bounded retry for transient bus settling)
+  Result<ExchangeResult> pre_res = Result<ExchangeResult>::failure(ErrorCode::RECEIVE_FAILED);
+  for (int attempt = 0; attempt < 3; ++attempt) {
+    pre_res = driver_->read_state(config_.right_driver_id, config_.left_driver_id);
+    if (pre_res.ok) {
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
   if (!pre_res.ok) {
     RCLCPP_ERROR(
       get_logger(),
@@ -417,13 +424,18 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // 3. Send SVON enable command
-  auto enable_res = driver_->enable(config_.right_driver_id, config_.left_driver_id);
-  if (!enable_res.ok) {
-    RCLCPP_ERROR(
-      get_logger(),
-      "Activation enable command failed: error %s",
-      error_code_to_string(enable_res.error));
+  // 3. Send SVON enable command (with bounded retry for transient bus settling)
+  bool enable_ok = false;
+  for (int attempt = 0; attempt < 3; ++attempt) {
+    auto enable_res = driver_->enable(config_.right_driver_id, config_.left_driver_id);
+    if (enable_res.ok) {
+      enable_ok = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  if (!enable_ok) {
+    RCLCPP_ERROR(get_logger(), "Activation enable command failed after 3 attempts");
     return hardware_interface::CallbackReturn::ERROR;
   }
 

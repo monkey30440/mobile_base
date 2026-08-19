@@ -1,0 +1,71 @@
+================================================================================
+IMP-015 Fast-CDR ABI Mismatch Resolution & Runtime Stack Closure Record
+================================================================================
+Timestamp: 2026-08-19T20:45:00+08:00
+Component: S7 Base Control / Docker Container Runtime Environment
+Affected Binary: ros2_control_node (controller_manager) / libpal_statistics.so / libfastcdr.so.2
+
+1. ROOT CAUSE OF ABI INCOMPATIBILITY
+--------------------------------------------------------------------------------
+The base Docker image (nvcr.io/nvidia/isaac/ros:isaac_ros_740c8500df2685ab1f4a4e53852601df-arm64-jetpack)
+contained an older build of Fast-CDR (2.2.5) and Fast-RTPS. When running apt-get to install
+ros-jazzy-ros2-control and ros-jazzy-ros2-controllers, newer dependencies (such as
+ros-jazzy-pal-statistics) were installed that were compiled against Fast-CDR 2.2.7 where primitive
+serialization functions were explicitly mangled and exported.
+This resulted in a runtime symbol lookup error:
+  symbol lookup error: /opt/ros/jazzy/lib/libpal_statistics.so: undefined symbol: _ZN8eprosima7fastcdr3Cdr9serializeEj
+causing ros2_control_node to crash immediately upon launch.
+
+2. REPRODUCIBILITY SCOPE & VERIFIED BUILD MANIFEST
+--------------------------------------------------------------------------------
+Clarification:
+- Rebuildable / Operationally Reproducible: Verified that building from the current Dockerfile
+  and current ROS 2 Jazzy apt repository yields an ABI-compatible runtime environment without
+  manual in-container patching.
+- Exact-version / Bit-for-bit Reproducible: Dockerfile tracks current repository candidate packages
+  rather than frozen Debian pins.
+
+Verified Build Manifest (Resolved runtime package versions during clean build):
+  - ros-jazzy-fastcdr: 2.2.7-1noble.20260225.225058
+  - ros-jazzy-fastrtps: 2.14.6-1noble.20260303.223942
+  - ros-jazzy-rmw-fastrtps-cpp: 8.4.4-1noble.20260612.092346
+  - ros-jazzy-rmw-fastrtps-shared-cpp: 8.4.4-1noble.20260612.091855
+  - ros-jazzy-rosidl-typesupport-fastrtps-cpp: 3.6.4-1noble.20260612.050817
+  - ros-jazzy-rosidl-typesupport-fastrtps-c: 3.6.4-1noble.20260612.051041
+  - ros-jazzy-rosidl-dynamic-typesupport-fastrtps: 0.1.0-3noble.20260612.050502
+
+3. ABI SMOKE CHECK PROCEDURE & SYMBOL RECOVERY
+--------------------------------------------------------------------------------
+Command:
+  nm -D -C /opt/ros/jazzy/lib/libfastcdr.so.2 | grep 'Cdr::serialize(unsigned int)'
+Result:
+  000000000000a650 T eprosima::fastcdr::Cdr::serialize(unsigned int)
+The required symbol is natively exported.
+
+4. CONTROLLER MANAGER & HARDWARE INTERFACE RECOVERY
+--------------------------------------------------------------------------------
+Command: ros2 launch mobile_base_control base_control.launch.py response_timeout_ms:=50
+Result:
+  - controller_manager: ACTIVE (30 Hz loop)
+  - diff_drive_controller: ACTIVE (Claimed wheel velocities)
+  - joint_state_broadcaster: ACTIVE
+  - M1Hardware: ACTIVE (Servo-On engaged, ID 1 & ID 2 status OK, Alarm 0)
+  - /joint_states & /diff_drive_controller/odom: Streaming valid encoder data
+
+5. REGRESSION TEST INVENTORY EXPLANATION
+--------------------------------------------------------------------------------
+- Package-specific scope: `colcon test --packages-select mobile_base_control` executes 16 C++ unit/timing
+  test targets + linters, yielding 218 tests (188 passed, 30 skipped cppcheck).
+- Workspace-wide scope: `colcon test` across the full workspace includes `mobile_base_description` (21 tests),
+  yielding 218 + 21 = 239 tests total (0 errors, 0 failures).
+- Both test inventory figures represent identical underlying coverage with zero regressions.
+
+6. WHEELS-OFF-GROUND PHYSICAL VALIDATION SUMMARY
+--------------------------------------------------------------------------------
+  - Direction Gate: Forward, Reverse, CCW Left Turn, CW Right Turn verified (Peak velocities ~1.25 rad/s and ~0.69 rad/s matching kinematics).
+  - Manual Active Stop: 'k' key immediately commands zero velocity and stops wheels within 0.2~0.3s.
+  - Terminal Autorepeat Integration: Holding motion keys at 20 Hz sustains continuous motion.
+  - Idle Stale-Command Stop: Releasing key stops command publishing; diff_drive_controller detects stale command at 0.5s and autonomously brings wheels to 0.0 rad/s without operator pressing 'k'.
+  - CTRL-C Exit Cleanup: Cleanly issues single zero TwistStamped on shutdown.
+  - Remaining Scope: On-Ground traversal and physical distance/time measurements remain UNVERIFIED until on-ground testing.
+================================================================================

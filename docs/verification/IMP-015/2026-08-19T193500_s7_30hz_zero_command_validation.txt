@@ -9,11 +9,8 @@ Safety Gate: ZERO COMMAND ONLY (linear.x = 0.0, angular.z = 0.0)
 ================================================================================
 
 --- 1. ACTIVE CONTROLLERS (CONTROLLER_STATE) ---
-diff_drive_controller   diff_drive_controller/DiffDriveController      active
 joint_state_broadcaster joint_state_broadcaster/JointStateBroadcaster  active
-
-[STDERR]
-[INFO] [1787139341.250833307] [_ros2cli_6602]: waiting for service /controller_manager/list_controllers to become available...
+diff_drive_controller   diff_drive_controller/DiffDriveController      active
 
 
 --- 2. ACTIVE HARDWARE COMPONENTS (HARDWARE_REGISTER) ---
@@ -29,7 +26,7 @@ Hardware Component 1
 		driving_wheel_joint_R/velocity [available] [claimed]
 
 [STDERR]
-[INFO] [1787139342.453871654] [_ros2cli_6618]: waiting for service /controller_manager/list_hardware_components to become available...
+[INFO] [1787144205.056954194] [_ros2cli_152]: waiting for service /controller_manager/list_hardware_components to become available...
 
 
 --- 3. /diff_drive_controller/cmd_vel BEFORE TELEOP (ROS_TOPIC) ---
@@ -44,7 +41,7 @@ Node namespace: /
 Topic type: geometry_msgs/msg/TwistStamped
 Topic type hash: RIHS01_5f0fcd4f81d5d06ad9b4c4c63e3ea51b82d6ae4d0558f1d475229b1121db6f64
 Endpoint type: SUBSCRIPTION
-GID: 01.0f.27.7e.7a.19.e4.35.00.00.00.00.00.00.7a.04
+GID: 01.0f.27.7e.29.00.bc.18.00.00.00.00.00.00.62.04
 QoS profile:
   Reliability: BEST_EFFORT
   History (Depth): UNKNOWN
@@ -57,13 +54,10 @@ QoS profile:
 
 
 --- 4. READ-ONLY WHEEL FEEDBACK /joint_states (ENCODER_FEEDBACK) ---
-A message was lost!!!
-	total count change:1
-	total count: 1---
 header:
   stamp:
-    sec: 1787139344
-    nanosec: 541734257
+    sec: 1787144207
+    nanosec: 232165238
   frame_id: base_link
 name:
 - driving_wheel_joint_L
@@ -83,8 +77,8 @@ effort:
 --- 5. READ-ONLY WHEEL ODOMETRY /diff_drive_controller/odom (ENCODER_FEEDBACK) ---
 header:
   stamp:
-    sec: 1787139345
-    nanosec: 908354876
+    sec: 1787144208
+    nanosec: 832177777
   frame_id: odom
 child_frame_id: base_link
 pose:
@@ -195,7 +189,7 @@ Node namespace: /
 Topic type: geometry_msgs/msg/TwistStamped
 Topic type hash: RIHS01_5f0fcd4f81d5d06ad9b4c4c63e3ea51b82d6ae4d0558f1d475229b1121db6f64
 Endpoint type: PUBLISHER
-GID: 01.0f.02.0a.12.1a.21.8c.00.00.00.00.00.00.13.03
+GID: 01.0f.27.7e.d0.00.59.22.00.00.00.00.00.00.13.03
 QoS profile:
   Reliability: RELIABLE
   History (Depth): UNKNOWN
@@ -212,7 +206,7 @@ Node namespace: /
 Topic type: geometry_msgs/msg/TwistStamped
 Topic type hash: RIHS01_5f0fcd4f81d5d06ad9b4c4c63e3ea51b82d6ae4d0558f1d475229b1121db6f64
 Endpoint type: SUBSCRIPTION
-GID: 01.0f.27.7e.7a.19.e4.35.00.00.00.00.00.00.7a.04
+GID: 01.0f.27.7e.29.00.bc.18.00.00.00.00.00.00.62.04
 QoS profile:
   Reliability: BEST_EFFORT
   History (Depth): UNKNOWN
@@ -225,8 +219,8 @@ QoS profile:
 
 
 --- 7. CONTROLLER MANAGER 30 HZ TIMING & OVERRUN CHECK ---
-[ros2_control_node-2] [INFO] [1787139332.807920246] [controller_manager]: Overruns handling is : enabled
-[ros2_control_node-2] [WARN] [1787139332.808027754] [controller_manager]: Could not enable FIFO RT scheduling policy: with error number <1>(Operation not permitted). See [https://control.ros.org/master/doc/ros2_control/controller_manager/doc/userdoc.html] for details on how to enable realtime scheduling.
-[ros2_control_node-2] [INFO] [1787139333.316753858] [controller_manager.hardware_component.system.M1Hardware]: M1Hardware initialized: Left='driving_wheel_joint_L' (ID 2, sign +1), Right='driving_wheel_joint_R' (ID 1, sign -1), gear_ratio=20.00, port='/dev/ttyUSB0'@230400, timeout=50 ms
+[ros2_control_node-2] [INFO] [1787144195.631818796] [controller_manager]: Overruns handling is : enabled
+[ros2_control_node-2] [WARN] [1787144195.631890703] [controller_manager]: Could not enable FIFO RT scheduling policy: with error number <1>(Operation not permitted). See [https://control.ros.org/master/doc/ros2_control/controller_manager/doc/userdoc.html] for details on how to enable realtime scheduling.
+[ros2_control_node-2] [INFO] [1787144195.812102066] [controller_manager.hardware_component.system.M1Hardware]: M1Hardware initialized: Left='driving_wheel_joint_L' (ID 2, sign +1), Right='driving_wheel_joint_R' (ID 1, sign -1), gear_ratio=20.00, port='/dev/ttyUSB0'@230400, timeout=50 ms
 
 

@@ -18,6 +18,8 @@ with open(log_file, "w") as f:
     f.write("Safety Gate: ZERO COMMAND ONLY (linear.x = 0.0, angular.z = 0.0)\n")
     f.write("================================================================================\n\n")
 
+print("1. Allowing serial device to settle...")
+time.sleep(3)
 print("1. Launching S7 Base Control at 30 Hz with response_timeout_ms:=50...")
 launch_proc = subprocess.Popen(
     ["ros2", "launch", "mobile_base_control", "base_control.launch.py", "response_timeout_ms:=50"],
