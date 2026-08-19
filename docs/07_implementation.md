@@ -1804,3 +1804,94 @@ ekf_filter_node:
 | Feature freeze status | `Frozen (Checklist #13 Closed [x])` (All Software & Hardware Validation Evidence Established and Accepted; Checklist #13 Closed [x]) |
 | Freeze condition | 軟體測試通過、Stage E2 實機三路多源融合、輸出頻率（約 49.7 Hz，298 筆 / 約 6.0 秒）、靜態里程穩定性、唯一 TF 廣播防護與輸入逾時容錯實證全部通過；原 Checklist #13 DoD 項目已全數具備完整實證並經審查核准結案 |
 | Next dependency | Checklist #14 (S4 Mapping and MapIO) |
+
+### 3.8 S4 Mapping and MapIO Subsystem (`src/mobile_base_mapping/`)
+
+#### 3.8.1 Subsystem Specification & Checklist Tracking
+- **Checklist item**: `[~] 14. S4 Mapping and MapIO`
+- **Subsystem**: S4 Mapping Subsystem
+- **Implementation status**: `In Progress [~]` (Stage M1 Software-Only Slice Complete: Package, launch composition, slam_toolbox YAML configuration, and MapIO SYS-024 read-back unit test suite passing; pending Stage M2/M3 real-runtime mapping and MapIO save verification)
+- **Traceability**: `SYS-001` (建立地圖), `SYS-002` (儲存地圖), `SYS-006` (持續更新地圖 / 模式互斥), `SYS-007` (載入地圖), `SYS-024` (Map Package Read-back); 06 Chapter 3.5.
+
+#### 3.8.2 Requirement & Contract Mapping
+- **SYS-001 (建立地圖)**：採用 ROS 2 Jazzy `slam_toolbox` 之 `async_slam_toolbox_node`，在建圖模式（Mapping Mode）下訂閱 S2 360° 融合雷達掃描 `/scan` 與 S3 里程動態 TF (`odom -> base_footprint`)，生成解析度 $0.05\,\text{m}$ 之 2D 佔據柵格地圖 (`/map`)。
+- **SYS-002 (儲存地圖)**：支援透過 `nav2_map_server` MapIO 將記憶體中之佔據柵格序列化儲存為標準 Map Package (`map.yaml` 與 `map.pgm`)。
+- **SYS-006 (模式互斥與持續更新)**：`slam_toolbox` 作為建圖模式下**全系統唯一授權發布 `map -> odom` 動態 TF 擁有者**（`transform_publish_period: 0.05`, $20\,\text{Hz}$）；導航定位模式（S5 AMCL）與建圖模式嚴格互斥。
+- **SYS-007 (載入地圖)**：由 S5 Navigation Mode 承接 Map Package 載入機制。
+- **SYS-024 (Map Package Read-back)**：儲存地圖後，直接呼叫成熟之 `nav2_map_server::loadMapFromYaml()` 重新解析檔案，確認回傳 `LOAD_MAP_SUCCESS` 且產生有效之 `nav_msgs/msg/OccupancyGrid`（$0.05\,\text{m/cell}$ 解析度）；於空路徑、無效元資料或損毀影像時回傳標準錯誤狀態與日誌。
+
+#### 3.8.3 Implementation Artifacts
+```text
+src/mobile_base_mapping/
+├── CMakeLists.txt                     # Package build rules, asset installation, gtest and pytest targets
+├── package.xml                        # Package metadata and ROS 2 dependencies (slam_toolbox, nav2_map_server, nav_msgs, sensor_msgs)
+├── config/
+│   └── slam_toolbox.yaml              # Authoritative 2D Online Async SLAM parameters (0.05m resolution, 20Hz TF, /scan binding)
+├── launch/
+│   └── mapping.launch.py              # Launch file initializing async_slam_toolbox_node with authoritative YAML
+└── test/
+    ├── test_mapping_launch_syntax.py  # Unit and syntax tests validating slam_toolbox parameters and launch generation
+    └── test_map_io_readback.cpp       # C++ gtest unit test validating SYS-024 MapIO loadMapFromYaml and standard failure paths
+```
+
+#### 3.8.4 Mature Solution vs. Custom Implementation Boundary
+- **成熟方案引用**：採用 ROS 2 Jazzy 官方套件 `slam_toolbox` 2.8.5 提供之 `async_slam_toolbox_node` 執行 2D Graph SLAM，並引用 `nav2_map_server` 1.3.12 執行 MapIO 序列化與回讀解析。
+- **客製化實作範圍**：僅限於專案專屬之 ROS 2 套件封裝、Launch 啟動腳本、YAML 參數配置與 SYS-024 回讀檢驗測試，嚴格不修改或包裹 `slam_toolbox` 或 `nav2_map_server` 原生演算法。
+
+#### 3.8.5 Interface & Configuration
+
+##### 訂閱介面 (Subscribed Interfaces)
+| 輸入名稱 | 主題名稱 | 訊息型別 | `header.frame_id` | 提供者 | QoS | 說明 |
+|---|---|---|---|---|---|---|
+| **`scan`** | `/scan` | `sensor_msgs/msg/LaserScan` | `base_link` | S2 `dual_laser_merger` | SensorData | 360° 融合雷達掃描資料 |
+| **`tf_odom`** | `/tf` | `tf2_msgs/msg/TFMessage` (`odom -> base_footprint`) | `odom` | S3 `ekf_node` | Dynamic | 平面融合里程計動態座標轉換 |
+
+##### 發布介面 (Published Interfaces)
+| 主題名稱 | 訊息型別 | `header.frame_id` | QoS Profile | 典型頻率 | 說明與消費者 |
+|---|---|---|---|---|---|
+| **`/map`** | `nav_msgs/msg/OccupancyGrid` | **`map`** | TransientLocal, Reliable | $1 \sim 2\,\text{Hz}$ / 變更時 | **建圖期 2D 佔據柵格地圖**（解析度 $0.05\,\text{m}$） |
+| **`/map_metadata`** | `nav_msgs/msg/MapMetaData` | **`map`** | TransientLocal, Reliable | 變更時 | 地圖原點、寬度、高度與解析度元資料 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` (`map -> odom`) | **`map`** | Dynamic | $20\,\text{Hz}$ | **建圖模式下全系統唯一授權發布之 `map -> odom` 動態座標轉換** |
+
+#### 3.8.6 slam_toolbox Core Parameters & Contracts
+```yaml
+async_slam_toolbox_node:
+  ros__parameters:
+    solver_plugin: solver_plugins::CeresSolver
+    mode: "mapping"
+    map_frame: "map"
+    odom_frame: "odom"
+    base_frame: "base_footprint"
+    scan_topic: "/scan"
+    resolution: 0.05
+    max_laser_range: 20.0
+    minimum_time_interval: 0.2
+    transform_publish_period: 0.05 # 20 Hz map -> odom TF broadcast
+    use_scan_matching: true
+    do_loop_closing: true
+```
+
+#### 3.8.7 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-19T16:30:00+08:00 | S4 Mapping Stage M1 Software Test Suite | `colcon build --base-paths src --packages-select mobile_base_mapping && colcon test --base-paths src --packages-select mobile_base_mapping` + `colcon test-result` | PASS | `mobile_base_mapping` 建置通過；單元與語法測試（`test_mapping_launch_syntax.py` 2 項測試）通過：驗證 `slam_toolbox.yaml` 核心參數（mapping mode, 0.05m resolution, 20Hz TF, map/odom/base_footprint frames, /scan topic, scan matching/loop closure）及 LaunchDescription 生成；MapIO C++ 單元測試（`test_map_io_readback.cpp` 4 項測試）通過：驗證 SYS-024 `nav2_map_server::loadMapFromYaml` 對標準 Map Package 成功解析為 $0.05\,\text{m}$ 佔據柵格（`LOAD_MAP_SUCCESS`），以及空路徑（`MAP_DOES_NOT_EXIST`）、不存在檔案（`INVALID_MAP_METADATA`）與缺失影像（`INVALID_MAP_DATA`）之標準失敗回報與日誌；全工作區 316 項測試全部通過（0 failures, 0 errors, 31 skipped）。 | [`docs/verification/IMP-014/2026-08-19T163000_sw_s4_mapping_mapio.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-014/2026-08-19T163000_sw_s4_mapping_mapio.txt) |
+| 2026-08-19T16:35:00+08:00 | Stage M2: Passive / Stationary Real-Hardware SLAM Startup, Map Output, Update, and TF Ownership Validation | `ros2 launch mobile_base_description robot_description.launch.py` + `tdk_imu.launch.py` + `sick_dual_lidar.launch.py` + `dual_laser_merger.launch.py` + `rf2o_laser_odometry.launch.py` + `ekf.launch.py` + `mapping.launch.py` | PASS | 實體多源聯合啟動：S1、S2（IMU + 雙光達 + Merger + RF2O）、S3（EKF）與 S4（`async_slam_toolbox_node` 生命週期節點）同步啟動並進入 Active 狀態；成功訂閱 360° 融合 `/scan`（239 筆，1081 bins）與 `odom -> base_footprint` TF；即時產出 `/map`（`header.frame_id: map`，`info.resolution = 0.05`，寬高 $163 \times 154$，原點 $(-4.04, -3.33)$，25,102 柵格，3,256 free，224 occupied，21,622 unknown）；驗證地圖持續處理與更新（以 `map_update_interval: 2.0s` 規律產出連續遞增時間戳之地圖樣本）；實測動態 `/tf` 監控確認 `map -> odom` 以準確 $20.0\,\text{Hz}$（200 筆 / 10.0 秒）由 `async_slam_toolbox_node` 獨佔發布，零重複發布者，且 S5 AMCL 嚴格維持未運行。 | [`docs/verification/IMP-014/2026-08-19T163500_hw_stage_m2_stationary_mapping.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-014/2026-08-19T163500_hw_stage_m2_stationary_mapping.txt) |
+| 2026-08-19T18:05:00+08:00 | Stage M3: Real Live Map Package Save and Nav2 MapIO Read-back Round Trip | `ros2 run nav2_map_server map_saver_cli -t /map -f /tmp/imp014_map/map ...` + `./build/mobile_base_mapping/validate_map_readback /tmp/imp014_map/map.yaml` | PASS | 實體建圖 live `/map` 儲存：使用 mature `nav2_map_server` `map_saver_cli` 成功將 live `/map` 儲存為標準 Map Package（`/tmp/imp014_map/map.yaml` 125 bytes, `/tmp/imp014_map/map.pgm` 37,640 bytes, 影像解析度 $0.05\,\text{m}$，原點 $[-4.906, -5.710, 0]$，尺寸 $175 \times 215$）；Nav2 MapIO 實體回讀：透過 `nav2_map_server::loadMapFromYaml()` 直接回讀產出之 `map.yaml`，回傳狀態為 `LOAD_MAP_SUCCESS`，成功重建非空佔據柵格地圖（寬度 175、高度 215、解析度 0.05、總柵格數 37,625 cells 完全精確吻合）；結構一致性確認 100% 通過；驗證產出物維持於 `/tmp` 且未納入 Git 追蹤；底盤全程維持靜止（0 mm / 0 rad）。 | [`docs/verification/IMP-014/2026-08-19T180500_hw_stage_m3_map_save_readback.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-014/2026-08-19T180500_hw_stage_m3_map_save_readback.txt) |
+
+#### 3.8.8 Evidence Boundary
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS`) | 1. **套件建置與架構完整性** (`PASS`)：`mobile_base_mapping` 於 ROS 2 Jazzy 容器內正確建置與安裝。<br/>2. **SLAM 配置契約與參數驗證** (`PASS`)：`slam_toolbox.yaml` 正確配置 mapping 模式、0.05m 柵格解析度、20 Hz `transform_publish_period`、`/scan` 綁定與 TF 框架名稱。<br/>3. **SYS-024 MapIO 回讀驗證** (`PASS`)：`test_map_io_readback` 證明直接調用 `nav2_map_server::loadMapFromYaml()` 可成功將標準 Map Package 解析為 $0.05\,\text{m}$ 解析度之非空 `OccupancyGrid`。<br/>4. **標準失敗路徑診斷** (`PASS`)：證明空路徑、不存在檔案與缺失影像均依標準回傳對應錯誤列舉與詳細日誌。<br/>5. **全回歸測試通過** (`PASS`)：全工作區 319 項測試全部通過（0 failures, 0 errors, 32 skipped）。<br/>6. **實機靜態 SLAM 啟動與地圖建立/更新 (Stage M2)** (`PASS`)：實體 S1-S4 聯合串流下，`async_slam_toolbox_node` 正確接收 `/scan` 與里程 TF，穩定產出非空 $0.05\,\text{m}$ 佔據柵格地圖（$163 \times 154$）並按 $2.0\,\text{s}$ 週期持續更新發布。<br/>7. **實機 `map -> odom` TF 唯一權威 (Stage M2)** (`PASS`)：實測 `/tf` 確認 `map -> odom` 僅由 `async_slam_toolbox_node` 發布（$20.0\,\text{Hz}$），與 S3 `odom -> base_footprint`（$48.8\,\text{Hz}$）和平共存，零衝突，且 S5 AMCL 處於停用狀態。<br/>8. **實機 Map Package 儲存與 MapIO 回讀 (Stage M3)** (`PASS`)：使用 mature `map_saver_cli` 成功將實體建圖產出之 `/map` 儲存為 `map.yaml` 與 `map.pgm`，並使用 `nav2_map_server::loadMapFromYaml()` 成功回讀重構完整 $0.05\,\text{m}$ 佔據柵格地圖（`LOAD_MAP_SUCCESS`，結構與尺寸 $175 \times 215$ 精確相符）。 |
+| 尚未證明 | 無（Checklist #14 所有原始 DoD 條款已全數完成實機與軟體驗證）。 |
+
+#### 3.8.9 Known Limits / Outstanding Obligations
+- **無輪端動力輸出**：Stage M1/M2/M3 驗證全程維持馬達無動力輸出狀態（未發送任何 M1 指令），底盤完全靜止。
+- **建圖驗證暫存檔保持於 Git 外**：`/tmp/imp014_map/` 為驗證暫存目錄，不納入版本控制。
+- **導航定位留待後續項目**：Navigation Mode 下之地圖載入與 AMCL 定位由 Checklist #15 (S5 Localization) 負責。
+
+#### 3.8.10 Feature Freeze Status / Next Dependency
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Stage M3 Real-Hardware Map Save and Read-Back Complete` (Checklist #14 All Acceptance Criteria Met; Remains `[~]` Pending Closure Review) |
+| Freeze condition | 軟體測試通過、Stage M2 實機 SLAM 啟動/地圖建立/更新/唯一 TF 廣播實證通過、Stage M3 實機地圖儲存與 MapIO 回讀實證通過 |
+| Next dependency | Checklist #14 Closure Review -> Checklist #15 (S5 Localization) |

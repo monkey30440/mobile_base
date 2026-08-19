@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：27
-- 已完成：13
+- 已完成：14
 - 進行中：0
-- 待實作：14
+- 待實作：13
 - 上游阻塞：0
-- 目前進度：13 / 27 (48%)；第 13 項 `S3 State Estimation` 已完成 `[x]`；待啟動第 14 項 `S4 Mapping and MapIO`。
+- 目前進度：14 / 27 (52%)；第 14 項 `S4 Mapping and MapIO` 已結案 `[x]`。
 
 ---
 
@@ -64,7 +64,7 @@
 - [x] 13. S3 State Estimation
   - 追溯：SYS-005。
   - 完成條件：EKF 融合 S7 wheel odometry、S2 IMU、S2 RF2O；唯一 `odom -> base_footprint` owner、covariance、input timeout/異常與實機 odometry 表現符合 06。
-- [ ] 14. S4 Mapping and MapIO
+- [x] 14. S4 Mapping and MapIO
   - 追溯：SYS-001、SYS-002、SYS-006、SYS-007、SYS-024。
   - 完成條件：Mapping Mode、slam_toolbox、唯一 `map -> odom` ownership、地圖建立／更新／儲存／read-back 與失敗路徑完成整合及實機證據。
 - [ ] 15. S5 Localization
