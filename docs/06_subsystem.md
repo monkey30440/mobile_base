@@ -218,7 +218,7 @@ imu_driver_node:
 ## 3.3 S7: Base Control Subsystem
 
 ### 1. Purpose & Architectural Boundary
-* **目的**：接收上層速度命令，依差速運動學控制 M1 馬達動力硬體執行移動，實施命令逾時保護與運動極限約束，檢驗馬達回授有效性（GAP-05），並掌管底盤安全啟停與硬體故障安全閘門（GAP-06）。
+* **目的**：接收上層自主速度命令或建圖期間外部手動速度命令，依差速運動學控制 M1 馬達動力硬體執行移動，實施命令逾時保護與運動極限約束，檢驗馬達回授有效性（GAP-05），並掌管底盤安全啟停與硬體故障安全閘門（GAP-06）。
 * **承接需求**：
   * **SYS-022 底盤運動控制**：差速輪閉迴路速度控制。
   * **SYS-026 底盤故障處理**：Hardware Interface 回傳 `ERROR` 時停用 Controller 並暴露錯誤。
@@ -226,9 +226,10 @@ imu_driver_node:
   * **SYS-028 底盤運動限制**：限制直線/旋轉速度及加速度在 Operational Limits 內。
   * **SYS-029 底盤狀態回授**：提供驅動器有效回授之輪端狀態，**禁止以命令值冒充**（GAP-05）。
   * **SYS-030 底盤安全啟停**：自檢後安全 Enable；停機時確認停轉後切斷驅動使能（GAP-06）。
+  * **SYS-034 手動移動控制**：建圖期間接收並執行外部手動速度命令（`geometry_msgs/msg/TwistStamped`），依差速輪運動學驅動底盤巡覽環境，嚴格服從命令逾時、運動限制與安全啟停保護；未提供命令或命令停止時底盤停止，不中斷建圖程序。
 * **邊界與排除**：
-  * **In-Scope**：`ros2_control` 框架整合、`diff_drive_controller`、M1 專用 Hardware Interface、GAP-05 回授檢查、GAP-06 安全啟停邏輯。
-  * **Out-of-Scope**：全域路徑規劃（S6 負責）、多感測器里程融合（S3 負責）、動態 TF 發布（**S7 嚴禁發布 `odom → base_footprint` TF**）。
+  * **In-Scope**：`ros2_control` 框架整合、`diff_drive_controller`、M1 專用 Hardware Interface、GAP-05 回授檢查、GAP-06 安全啟停邏輯、接收 `TwistStamped` 速度命令。
+  * **Out-of-Scope**：終端鍵盤輸入捕捉（由外部成熟工具 `teleop_twist_keyboard` 負責）、全域路徑規劃（S6 負責）、多感測器里程融合（S3 負責）、動態 TF 發布（**S7 嚴禁發布 `odom → base_footprint` TF**）。
 
 ### 2. Internal Component Decomposition
 ```mermaid
@@ -253,15 +254,16 @@ graph TD
         JSB --> M1HardwareInterface
     end
     
-    CMD["/cmd_vel<br/>(來自 S6 或 遙控工具)"] --> DDC
+    CMD["/diff_drive_controller/cmd_vel<br/>(TwistStamped)<br/>[Navigation: S6 Controller / Mapping: 外部 teleop]"] --> DDC
     JSB --> JS["/joint_states<br/>(提供給 S1 / S3)"]
     DDC --> WHEEL_ODOM["/base_control/wheel_odometry<br/>(供 S3 EKF 融合)"]
     M1HardwareInterface --> M1_MOTORS[(M1 實體馬達驅動器)]
 ```
 
-1. **`diff_drive_controller` (ROS 2 Jazzy 成熟控制器)**：
-   * 訂閱 `/cmd_vel`，依 S1 定義的輪距與輪徑轉換為雙輪目標角速度。
+1. **`diff_drive_controller` (ROS 2 Jazzy 成熟控制器，Exact Version: 4.42.1)**：
+   * 訂閱 `/diff_drive_controller/cmd_vel`（`geometry_msgs/msg/TwistStamped`），依 S1 定義的輪距與輪徑轉換為雙輪目標角速度。
    * 實施 `cmd_vel_timeout`（$0.5\,\text{s}$ 逾時歸零，SYS-027）與速度/加速度限制（SYS-028）。
+   * 依據 `header.stamp` 與節點 Clock 檢驗時間戳新鮮度；`frame_id` 僅供訊息標準化，控制器不執行 TF 轉換。
    * **關閉內建 TF 發布**（`enable_odom_tf: false`），由 S3 唯一發布。
 2. **`joint_state_broadcaster` (ROS 2 成熟元件)**：
    * 讀取硬體介面的輪端狀態，發布 `/joint_states`（提供給 S1 廣播動態關節 TF）。
@@ -271,13 +273,17 @@ graph TD
    * **GAP-06 (安全啟停邏輯)**：
      * **Enable 流程**：自檢通訊正常、無驅動器警報、輪端靜止 $\rightarrow$ 下發馬達使能。
      * **Disable / Stop 流程**：下發零速煞車 $\rightarrow$ 監控實際輪速至完全停止（$< 0.01\,\text{rad/s}$）$\rightarrow$ 關閉馬達使能。任一步驟失敗不阻止其他安全動作。
+4. **外部成熟組件：`teleop_twist_keyboard` (ROS 2 Jazzy 2.4.1-1)**：
+   * 於建圖模式（Mapping Mode）下作為外部使用者輸入來源，由操作員在互動終端中執行。
+   * **互動與發布機制**：節點以 raw TTY 模式自標準輸入讀取按鍵（`sys.stdin.read(1)`）。每接收到一次有效按鍵字元，即時組裝並發布**單一筆**包含當前 timestamp 之 `geometry_msgs/msg/TwistStamped`。
+   * **持續移動與停止行為**：點按一次移動鍵會發布一筆非零速度命令；若後續無新按鍵輸入，該命令在 $0.5\,\text{s}$ 後由 SYS-027 判定為 stale，S7 將速度 reference 歸零並依 SYS-028 減速度限制執行受控停止。持續按鍵時是否形成連續命令流取決於目標終端環境的 keyboard autorepeat 行為，須於 target Jetson / operator terminal integration validation 中確認。
 
 ### 3. ROS 2 Authoritative Interfaces
 
 #### 3.1 訂閱介面 (Subscribed Interfaces)
 | 介面名稱 | 訊息型別 | 提供者 (Producer) | QoS Profile | 說明 |
 |---|---|---|---|---|
-| **`/cmd_vel`** | `geometry_msgs/msg/Twist` | `S6 Navigation` 或 Teleop | SystemDefault / Reliable | 期望車體線速度與角速度（運動意圖）。 |
+| **`/diff_drive_controller/cmd_vel`** | `geometry_msgs/msg/TwistStamped` | `S6 Navigation` (導航模式) 或 外部 `teleop_twist_keyboard` (建圖模式) | SystemDefault / Reliable, Volatile, Depth: 10 | 期望車體線速度與角速度（含時間戳）。下游控制器依據 stamp 與本地 clock 檢驗命令新鮮度並實施 `cmd_vel_timeout`（SYS-027）；`frame_id` 凍結為空字串 `""`，控制器直接依差速運動學運算，無額外 TF 座標轉換依賴。 |
 
 #### 3.2 發布介面 (Published Interfaces)
 | 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
@@ -294,6 +300,7 @@ graph TD
 
 ### 4. Parameters & Configurations
 
+#### 4.1 S7 底盤控制配置 (`config/base_control_params.yaml`)
 ```yaml
 # config/base_control_params.yaml
 controller_manager:
@@ -307,15 +314,18 @@ diff_drive_controller:
     wheel_separation: 0.5545 # 實車輪距 (m, 綁定 S1)
     wheel_radius: 0.080 # 實車輪徑 (m, 綁定 S1)
 
-    # 安全防護與命令鏈約束 (SYS-027, SYS-028)
-    cmd_vel_timeout: 0.5 # 命令逾時保護 (秒)
+    # 介面契約與安全防護 (SYS-027, SYS-028, SYS-034)
+    use_stamped_vel: true # 接收標準 geometry_msgs/msg/TwistStamped
+    cmd_vel_timeout: 0.5 # 命令逾時判定時間 (秒, SYS-027)
     enable_odom_tf: false # 嚴禁 S7 發布 TF (保留由 S3 唯一發布)
+    open_loop: false # 啟用閉迴路反饋
+    position_feedback: true
 
-    # 運作速度與加速度極限 (SYS-028 Operational Limits)
+    # 權威運作速度與加速度極限 (SYS-028 Authoritative Operational Limits)
     linear.x.max_velocity: 1.0 # 最大線速度 (m/s)
     linear.x.min_velocity: -0.5
     linear.x.max_acceleration: 0.5 # 最大加速度 (m/s^2)
-    linear.x.max_deceleration: 1.0
+    linear.x.max_deceleration: 1.0 # 最大減速度 (m/s^2)
 
     angular.z.max_velocity: 1.5 # 最大角速度 (rad/s)
     angular.z.min_velocity: -1.5
@@ -323,22 +333,60 @@ diff_drive_controller:
     angular.z.max_deceleration: 2.0
 ```
 
+#### 4.2 外部手動控制配置與 CLI 規格 (External Teleop Configuration & Operator CLI)
+
+在 Mapping Mode（UC-001）下，操作員使用 mature package `teleop_twist_keyboard`（Exact Version 2.4.1）。
+
+##### 參數凍結與職權劃分
+
+| 參數名稱 | 型別 | 凍結配置值 | 來源與職權劃分 |
+|---|---|---|---|
+| `stamped` | `bool` | `true` | **必填配置**。強制輸出 `geometry_msgs/msg/TwistStamped`，精確契合下游 `diff_drive_controller` 契約。 |
+| `frame_id` | `string` | `""` | **凍結為官方預設值**。`diff_drive_controller` 直接在車體差速幾何下計算輪速，不執行 TF 轉換，維持預設空字串以避免無需求之 frame 語意。 |
+| `speed` | `double` | `0.5` | **凍結為官方預設值**（m/s）。此為操作端初始步進刻度（Tool Command Scale），可於運行時透過 `w/x/q/z` 動態增減，**完全受制於 S7 SYS-028 SpeedLimiter 硬性限幅（$1.0\,\text{m/s}$）**。 |
+| `turn` | `double` | `1.0` | **凍結為官方預設值**（rad/s）。此為操作端初始步進角速度刻度，可於運行時透過 `e/c/q/z` 動態增減，**完全受制於 S7 SYS-028 SpeedLimiter 硬性限幅（$1.5\,\text{rad/s}$）**。 |
+
+> **職權邊界澄清**：
+> - **Authoritative Safety Limits**：唯一由 `SYS-028` 與 S7 `diff_drive_controller`（`SpeedLimiter`）擁有與強制實施。
+> - **Teleop Command Scale**：僅為外部操作工具之初始步進刻度，非產品安全極限。
+
+##### 建圖操作員唯一正式 CLI
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
+  -p stamped:=true \
+  -r cmd_vel:=/diff_drive_controller/cmd_vel
+```
+
 ### 5. Failure Detection & Diagnostics
-1. **命令逾時保護 (SYS-027)**：若超過 $0.5\,\text{秒}$ 未收到新速度命令，`diff_drive_controller` 自動將輪速命令歸零。
-2. **驅動器硬體故障處理 (SYS-026)**：若 M1 回傳驅動器過流、過溫、通訊斷線等故障，Hardware Interface 回傳 `ERROR`，`controller_manager` 自動將控制器轉入 Inactive 狀態並向全系統發布錯誤診斷。
-3. **回授無效防護 (GAP-05 / SYS-029)**：當編碼器回授中斷或校驗錯誤，Hardware Interface 標記狀態不可用，嚴禁以命令速度替代量測值。
-4. **安全停轉防護 (GAP-06 / SYS-030)**：系統關機或停用時，先主動減速並輪詢實際回授直到車輪完全停止，再切斷馬達使能（防止未停穩即自由滑行）。
+1. **手動主動停止處置 (Manual Active Stop)**：
+   * 當操作員輸入非移動鍵（如 `k` 或空白鍵）或按下 `CTRL-C` 退出時，`teleop_twist_keyboard` 主動發布零速 `TwistStamped` 命令。
+   * `diff_drive_controller` 收到零速命令，依 `linear.x.max_deceleration`（$1.0\,\text{m/s}^2$）及 `angular.z.max_deceleration`（$2.0\,\text{rad/s}^2$）執行受控減速停止。
+   * `slam_toolbox`（S4）維持在 ACTIVE 狀態並保留現有地圖，Mapping session 不中斷。
+2. **命令閒置與通訊逾時保護 (Stale Command Detection & Timeout Stop / SYS-027)**：
+   * 無論上游停止產生速度命令、teleop 程序異常終止或 command stream 中斷，若 S7 在 `cmd_vel_timeout = 0.5 s` 內未收到新的有效命令，應將速度 reference 歸零並依 SYS-028 減速度限制開始受控停止。
+   * 實體停止時間與停止距離須依 SYS-027 / SYS-028 於整合及實機驗證取得 evidence。
+   * `slam_toolbox` 維持在 ACTIVE 狀態並保留現有地圖。
+3. **驅動器硬體故障處理 (SYS-026)**：
+   * 若 M1 回傳驅動器過流、過溫、通訊斷線等故障，Hardware Interface 回傳 `ERROR`，`controller_manager` 自動將控制器轉入 Inactive 狀態並向全系統發布錯誤診斷。
+4. **回授無效防護 (GAP-05 / SYS-029)**：
+   * 當編碼器回授中斷或校驗錯誤，Hardware Interface 標記狀態不可用，嚴禁以命令速度替代量測值。
+5. **安全停轉防護 (GAP-06 / SYS-030)**：
+   * 系統關機或停用時，先主動減速並輪詢實際回授直到車輪完全停止，再切斷馬達使能（防止未停穩即自由滑行）。
 
 ### 6. Verification Obligations
 1. **命令逾時與安全閘驗證 (Interface Test)**：
-   * 下發持續速度命令後中斷發布，驗證底盤在 $0.5\,\text{秒}$ 內自動煞停。
+   * 下發持續 `TwistStamped` 命令後中斷發布，驗證 S7 控制器在最後一筆命令逾時超過 $0.5\,\text{秒}$（`cmd_vel_timeout`）時立即將目標速度歸零並依減速度限制開始受控煞停（SYS-027），實測記錄減速曲線與最終停止完成時間。
    * 確認 `enable_odom_tf` 為 `false`，`/tf` 中無任何來自 S7 的 `odom` TF。
-2. **GAP-05 回授防偽造檢驗 (Unit Test)**：
+2. **手動移動控制、限幅與終端輸入驗證 (Interface & Integration Test - SYS-034 / SYS-028)**：
+   * 執行正式 CLI，驗證下發移動命令時底盤平穩運動，且實際輪速受 `SpeedLimiter` 硬性限幅（不超過 $1.0\,\text{m/s}$ 與 $1.5\,\text{rad/s}$）。
+   * 驗證按 `k` 鍵主動發布零速與 `CTRL-C` 退出清理時目標速度即時歸零並受控停止。
+   * **Terminal Autorepeat 整合驗證**：於目標 Jetson / 操作終端環境中實測鍵盤 autorepeat 啟用狀態、初始延遲與 repeat 頻率，確認操作員長按時能維持平穩連續命令流而不異常觸發 `cmd_vel_timeout`。
+3. **GAP-05 回授防偽造檢驗 (Unit Test)**：
    * 模擬硬體通訊斷線，確認 `/joint_states` 與 `/base_control/wheel_odometry` 不會輸出上一次的目標速度。
-3. **GAP-06 安全啟停流程檢驗 (Integration Test)**：
+4. **GAP-06 安全啟停流程檢驗 (Integration Test)**：
    * 在運動狀態下發送 `/base/enable: false`，驗證系統依序執行「煞車 $\rightarrow$ 確認停妥 $\rightarrow$ 釋放使能」。
-4. **實機速度與極限驗收 (Real-hardware Validation)**：
-   * 實車跑測直線 $1.0\,\text{m/s}$ 與旋轉 $1.0\,\text{rad/s}$，驗證實際加速度與減速度符合設定極限。
+5. **建圖巡覽與地圖持續更新整合驗收 (Integration & Real-hardware Validation - UC-001)**：
+   * 在 Mapping Mode 啟動狀態下，透過鍵盤操作 AMR 巡覽環境，驗證 `slam_toolbox` 即時擴展 `/map` 佔據柵格；在操作員暫停按鍵時底盤安全受控停止且地圖完整保留。
 
 ---
 
@@ -782,7 +830,7 @@ graph TD
     BT --> PLANNER
     BT --> CONTROLLER
     CONTROLLER --> CHECKER
-    CONTROLLER --> CMD_VEL["/cmd_vel<br/>(發布至 S7 Base Control)"]
+    CONTROLLER --> CMD_VEL["/diff_drive_controller/cmd_vel<br/>(TwistStamped 發布至 S7)"]
     
     SCANS["/scan_front, /scan_rear, /scan<br/>(來自 S2 Perception)"] --> COSTMAP
 ```
@@ -826,7 +874,7 @@ graph TD
 ### 3.2 發布介面 (Published Interfaces)
 | 介面名稱 | 訊息型別 | QoS Profile | 典型頻率 | 說明與消費者 |
 |---|---|---|---|---|
-| **`/cmd_vel`** | `geometry_msgs/msg/Twist` | SystemDefault / Reliable | $20\,\text{Hz}$ | **輸出車體目標速度至 S7 Base Control**。 |
+| **`/diff_drive_controller/cmd_vel`** | `geometry_msgs/msg/TwistStamped` | SystemDefault / Reliable, Volatile, Depth: 10 | $20\,\text{Hz}$ | **輸出車體目標速度至 S7 Base Control**（依 controller 契約配置 `TwistStamped`）。 |
 | **`/plan`** | `nav_msgs/msg/Path` | TransientLocal / SystemDefault | 變更時 | 全域路徑規劃軌跡。 |
 | **`/local_plan`** | `nav_msgs/msg/Path` | SystemDefault | $20\,\text{Hz}$ | 局部軌跡追隨視覺化。 |
 | **`/global_costmap/costmap`** | `nav_msgs/msg/OccupancyGrid` | TransientLocal | $1\,\text{Hz}$ | 全域障礙物膨脹代價地圖。 |
@@ -998,13 +1046,14 @@ local_costmap:
 | `map → odom` | **Active (`/tf`)** (S4 發布) | **Disabled** (S4 停用) | **S4 Mapping** (`slam_toolbox`) |
 | `map → odom` | **Disabled** (S5 停用) | **Active (`/tf`)** (S5 發布) | **S5 Localization** (`nav2_amcl`) |
 
-## 4.2 三級停止合約實施矩陣 (3-Tier Safety Stop Matrix)
+## 4.2 停止與安全合約實施矩陣 (Stop & Safety Semantics Matrix)
 
-| 停止等級 | 觸發來源 | S6 Navigation 動作 | S7 Base Control 動作 | 物理馬達硬體狀態 |
-|---|---|---|---|---|
-| **Tier 1: 導航終點正常停轉** | 抵達目標點 | 速度減至 0，`StoppedGoalChecker` 驗證 | 依標準減速度曲線平滑減速 | 維持閉迴路使能（保持位置） |
-| **Tier 2: 任務中斷/安全降級** | 障礙物不可通行 (19A)、命令逾時、取消 | 終止規劃，下發 `/cmd_vel = 0` | 觸發 `cmd_vel_timeout` 或零速減速 | 維持使能或進入待命 |
-| **Tier 3: 硬體故障緊急停止** | M1 驅動器 Alarm、急停按下、通訊斷線 | 收到故障診斷，Action 立即回傳失敗 | Hardware Interface 回傳 `ERROR`，觸發 GAP-06 停轉檢查 | **煞停確認後切斷驅動使能 (Disabled)** |
+| 停止等級 | 觸發來源 | S6 Navigation 動作 | 外部 Teleop 動作 | S7 Base Control 動作 | 物理馬達硬體狀態與建圖影響 |
+|---|---|---|---|---|---|
+| **Tier 1a: 導航任務停止** | 抵達目標點 / 使用者 Cancel / 19A 路網耗盡 | 終止規劃與路徑追蹤，下發 zero velocity 意圖 | 不適用（導航模式未啟用） | 目標速度歸零，依 SYS-028 減速度限制執行受控減速停止 | 維持閉迴路使能（保持位置） |
+| **Tier 1b: 手動巡覽停止** | 建圖操作員按 `k`、空白鍵或 `CTRL-C` 退出 | 不適用（建圖模式未啟用） | 主動發布零速 `TwistStamped` 命令 | 目標速度歸零，依 SYS-028 減速度限制（$1.0\,\text{m/s}^2$）執行受控減速停止 | 維持閉迴路使能；**S4 地圖完整保留不中斷** |
+| **Tier 2: 命令逾時停止 (SYS-027)** | 上游通訊斷線、節點崩潰或操作員停止按鍵輸入超過 $0.5\,\text{s}$ | 不適用 | 阻塞於 `stdin` 不發布新 timestamp 命令 | 超過 `cmd_vel_timeout = 0.5 s` 判定 stale，目標速度歸零並依 SYS-028 減速度限制執行受控停止；實體停止時間由實測驗證 | 維持閉迴路使能；**S4 地圖完整保留** |
+| **Tier 3: 硬體故障安全停止 (SYS-030)** | M1 驅動器 Alarm、急停按下、通訊校驗嚴重錯誤 | 收到故障診斷，Action 回傳失敗 | 不適用 | Hardware Interface 回傳 `ERROR`，觸發 GAP-06 安全停轉檢驗 | **煞停確認停轉後切斷驅動使能 (Disabled)** |
 
 ## 4.3 6 個 Custom Gaps 架構歸屬與落地
 
@@ -1016,6 +1065,23 @@ local_costmap:
 | **GAP-04** | Canonical Goal Validator | S6 Navigation | `mobile_base_navigation::TargetAdmission` | SYS-033 |
 | **GAP-05** | Base Feedback Validity Checker | S7 Base Control | `M1HardwareInterface::read()` | SYS-029 |
 | **GAP-06** | Base Safe Enable / Stop Logic | S7 Base Control | `M1HardwareInterface::perform_safe_stop()` | SYS-030 |
+
+## 4.4 建圖模式啟動與命令單一性契約 (Mapping Mode Activation & Single Producer Contract)
+
+在 UC-001 建圖模式下，系統透過既有 Launch Composition 與操作邊界維持單一運動命令來源：
+
+1. **子系統活躍狀態**：
+   * **S1 Robot Description**：`robot_state_publisher` 廣播 `/tf_static` 與動態關節 TF（ACTIVE）。
+   * **S2 Perception**：`sick_dual_lidar`, `dual_laser_merger`, `tdk_imu` 廣播 `/scan` 與 `/imu/data_raw`（ACTIVE）。
+   * **S3 State Estimation**：`rf2o_laser_odometry_node`, `ekf_filter_node` 融合並發布權威 `odom → base_footprint` TF（ACTIVE）。
+   * **S4 Mapping**：`mapping.launch.py` 啟動 `async_slam_toolbox_node` Lifecycle 節點並轉換至 ACTIVE，擁有建圖期 `map → odom` TF（ACTIVE）。
+   * **S7 Base Control**：`controller_manager` 載入並啟用 `diff_drive_controller`、`joint_state_broadcaster` 與 `M1HardwareInterface`（ACTIVE）。
+2. **互斥非活躍子系統**：
+   * **S5 Localization**（`nav2_amcl`）與 **S6 Navigation**（`bt_navigator`, `planner_server`, `controller_server`）嚴格處於**未啟動（Not Launched / Inactive）**狀態。
+3. **命令單一性與仲裁邊界**：
+   * 操作員於獨立終端執行 `teleop_twist_keyboard`（發布 `TwistStamped` 至 `/diff_drive_controller/cmd_vel`）。
+   * 全系統在 Mapping Mode 下存在且僅存在該單一運動命令生產者，無任何自主規劃節點介入，從架構與啟動層面消除命令競爭。
+   * 因此無需額外配置 `twist_mux` 或自訂 Mode Manager 仲裁節點，嚴格遵守 Avoid Premature Structure 原則。
 
 ---
 
@@ -1054,3 +1120,4 @@ local_costmap:
 | **SYS-030** | 底盤安全啟停 | S7 Base Control | GAP-06 Safe Enable / Stop Logic | 3.3 |
 | **SYS-032** | Station Target Resolution | S6 Navigation | GAP-03：Station Catalog → canonical `PoseStamped` | 3.7 |
 | **SYS-033** | Canonical Goal Pose Validation | S6 Navigation | GAP-04：有限值、Frame 與 Quaternion 驗證 | 3.7 |
+| **SYS-034** | 手動移動控制 | S7 Base Control | `teleop_twist_keyboard` (`stamped:=true`, `/diff_drive_controller/cmd_vel`) + `diff_drive_controller` | 3.3, 4.2, 4.4 |

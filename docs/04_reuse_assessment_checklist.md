@@ -20,12 +20,12 @@
 
 ## Progress
 
-- 總議題：40
-- 已完成：40
+- 總議題：41
+- 已完成：41
 - 上游阻塞：0
 - 討論中：0
 - 待討論：0
-- 目前進度：40 / 40 (100%)
+- 目前進度：41 / 41 (100%)
 
 ## A. Common Reuse-assessment Rules
 
@@ -83,61 +83,63 @@
   - 完成條件：完成 ROS 2 Jazzy Navigation2 1.3.12-1 `localization_launch.py map:=...`、lifecycle `map_server`／manager與AMCL之startup Map Package載入、Occupancy Grid發布及載入失敗阻止navigation-ready之成熟方案coverage record；不納入runtime `LoadMap`／hot switch，並保留target version、實際Map Package、lifecycle／map QoS與failure evidence obligations。
 - [x] 20. SYS-024 Map Package Read-back
   - 完成條件：完成 ROS 2 Jazzy Navigation2 `nav2_map_server` 1.3.12-1 public MapIO `loadMapFromYaml()` 對儲存後Map Package之YAML／image解析、Occupancy Grid conversion、標準`LOAD_MAP_STATUS`與原生失敗原因logs之成熟方案coverage record；採標準parser結果而不追加non-empty／quality validation，保留target version、成功與各failure status、path identity及無`/map` side effect之evidence obligations。
+- [x] 21. SYS-034 Manual Movement Control
+  - 完成條件：完成 ROS 2 Jazzy 官方套件 `teleop_twist_keyboard` 2.4.1-1 對終端鍵盤操作、依 controller contract 配置 `stamped:=true` 發布標準 `TwistStamped` 速度命令、主動零速／SYS-027 逾時煞停分層保護、對接既有 S7 Base Control（SYS-022）、服從底盤運動限制（SYS-028）與安全啟停（SYS-030）、不中斷建圖程序（SYS-006）及無需額外 command mux／custom gap 之成熟方案 coverage record。
 
 ### Target, Resource, and Localization
 
-- [x] 21. SYS-008 Navigation Target
+- [x] 22. SYS-008 Navigation Target
   - 完成條件：重新確認 Station／Goal Pose external target forms、最小terminal-facing discriminator，以及分別交由SYS-032／SYS-009形成canonical `PoseStamped`之coverage record；保留terminal syntax、欄位保真及admission boundary之evidence obligations。
-- [x] 22. SYS-009 Goal Pose Normalization
+- [x] 23. SYS-009 Goal Pose Normalization
   - 完成條件：完成v0.1 `nav_goal pose --x <m> --y <m> --yaw-deg <deg>`至canonical `PoseStamped`之成熟型別／tf2 coverage與最小terminal normalization adapter record；保留absolute semantics、degrees-to-radians／quaternion、global frame／timestamp、missing／unparseable reason及SYS-033 handoff之evidence obligations。
-- [x] 23. SYS-032 Station Target Resolution
+- [x] 24. SYS-032 Station Target Resolution
   - 完成條件：完成standard `PoseStamped`／通用parser可重用範圍、Nav2缺少Station semantics所需最小exact-match Station resolver，以及empty／unknown／unresolvable rejection reason之coverage record；保留人工確認Catalog、schema／parser、ID comparison、resolved-pose field preservation與SYS-033 handoff之evidence obligations。
-- [x] 24. SYS-033 Canonical Goal Pose Validation
+- [x] 25. SYS-033 Canonical Goal Pose Validation
   - 完成條件：完成standard finite／tf2 validation primitives、Nav2提交後部分防線與最小pre-navigation combined validator／gate之coverage record；保留quaternion tolerance、TF timeout、frame／timestamp policy、failure reasons、valid-pose field preservation與invalid target不得下送之evidence obligations。
-- [x] 25. SYS-010 Map Localization
+- [x] 26. SYS-010 Map Localization
   - 完成條件：完成ROS 2 Jazzy Navigation2 AMCL 1.3.12-1對loaded map／LaserScan／odom-TF定位、standard pose、exclusive`map -> odom`及RViz Initial Pose之原生coverage record；不追加localization-valid／admission／loss policy，並保留frames／QoS／parameters、人工操作與實機定位evidence obligations。
 ### Navigation Execution
 
-- [x] 26. SYS-011 Path Planning
+- [x] 27. SYS-011 Path Planning
   - 完成條件：完成Navigation2 Jazzy Planner Server 1.3.12-1對current pose／active-stage goal、有效非空path、失敗時不開始tracking及原生規劃結果之coverage record；跨stage continuity、route alternatives、tracking、stop與fallback classification分別保留於SYS-013、SYS-015、SYS-017、SYS-018～021，不重複計入SYS-011。
-- [x] 27. SYS-014 Obstacle Avoidance
+- [x] 28. SYS-014 Obstacle Avoidance
   - 完成條件：完成Navigation2 Jazzy 1.3.12-1 layered global/local costmaps、collision-aware planner/controller、Planner/Controller Server、standard BT與核准納入之`nav2_collision_monitor`對障礙物資訊、occupied-space avoidance、native failure及zero-velocity stop attempt的coverage record；保留sensor freshness、costmap/footprint、Collision Monitor zones/timeouts、cmd_vel chain及physical-stop實機evidence obligations。
-- [x] 28. SYS-015 Path Tracking
+- [x] 29. SYS-015 Path Tracking
   - 完成條件：完成Navigation2 Jazzy 1.3.12-1 Controller Server、`FollowPath`、selected controller、Progress Checker與standard BT對active-stage path tracking、continue/failure判定、zero-velocity stop attempt及原生結果之coverage record；保留controller/progress configuration與實機tracking evidence，並要求SYS-018～020後續assessment承接stage transition及First Mile／On Route／Last Mile continuity。
-- [x] 29. SYS-016 Goal Completion
+- [x] 30. SYS-016 Goal Completion
   - 完成條件：完成Navigation2 Jazzy 1.3.12-1 Controller Server、`FollowPath`、`StoppedGoalChecker`與standard NavigateToPose BT對final target XY／yaw及odometry-derived translational／rotational stopped predicate之coverage record；保留goal/stop thresholds、`stateful`、odom minimum thresholds、final endpoint preservation與實機success-chain evidence obligations。
-- [x] 30. SYS-017 Navigation Result
+- [x] 31. SYS-017 Navigation Result
   - 完成條件：完成ROS 2 action與Navigation2 Jazzy 1.3.12-1 `NavigateToPose`／BT Navigator對`SUCCEEDED`／`ABORTED`／`CANCELED`、child native error-code aggregation及可取得原生failure result之coverage record；不建立stage-aware taxonomy，並保留cancel completion、error propagation與terminal呈現evidence obligations。
-- [x] 31. SYS-025 Navigation Cancellation
+- [x] 32. SYS-025 Navigation Cancellation
   - 完成條件：完成 ROS 2 Jazzy action cancel 協定、Navigation2 1.3.12-1 `NavigateToPose`／`BtActionServer` 對 active navigation cancel request 接收、BT root halt、active child actions 取消、Controller Server 零速下發、標準 terminal `CANCELED` result 回報，以及競態與實體停止邊界之成熟方案 coverage record。
 
 ### Route-assisted Strategy
 
-- [x] 32. SYS-013 Route-preferred Navigation Strategy
+- [x] 33. SYS-013 Route-preferred Navigation Strategy
   - 完成條件：完成 ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_route`（Route Server / `ComputeRoute`）與 Behavior Tree 組裝對 Route Graph 優先、三階段 route-assisted movement 建立、禁止不必要完整 free-space movement 及 v0.1 禁用全局 fallback 邊界之成熟方案 coverage record。
-- [x] 33. SYS-018 First Mile
+- [x] 34. SYS-018 First Mile
   - 完成條件：完成 Navigation2 Planner Server（`ComputePathToPose`）、Controller Server（`FollowPath`）與 Behavior Tree 條件分支對 Route Entry 距離判定、起點至 Entry 安全連接規劃與追蹤、已在 Entry 判定 Not-required 略過執行及連接失敗邊界之成熟方案 coverage record。
-- [x] 34. SYS-019 On Route Navigation
+- [x] 35. SYS-019 On Route Navigation
   - 完成條件：完成 ROS 2 Jazzy Navigation2 1.3.12-1 `nav2_route`（Route Server / `ComputeRoute`）與 `nav2_controller`（Controller Server / `FollowPath`）對 Route Graph 連通性、有向圖行駛方向保證、可用性障礙重選及抵達 Route Exit 交接 Last Mile 之成熟方案 coverage record。
-- [x] 35. SYS-020 Last Mile
+- [x] 36. SYS-020 Last Mile
   - 完成條件：完成 Navigation2 Planner Server（`ComputePathToPose`）、Controller Server（`FollowPath`）、`StoppedGoalChecker` 與 Behavior Tree 條件分支對 Route Exit 至 Canonical Goal Pose 安全連接規劃與追蹤、目標朝向保真、目標已在 Exit 判定 Not-required 略過執行及連接失敗邊界之成熟方案 coverage record。
-- [x] 36. SYS-021 Reserved Free-space Fallback Boundary
+- [x] 37. SYS-021 Reserved Free-space Fallback Boundary
   - 完成條件：完成 Navigation2 Behavior Tree 流程組裝與 Action 失敗傳遞對 4 類無可用路線 eligibility 捕捉、v0.1 禁用全局自由空間降級之約束、零速安全煞停、回報 `ABORTED` / `Free-space Fallback unavailable` 以及前置排他性失敗邊界之成熟方案 coverage record。
 
 ## C. Final Reuse-assessment Audit
 
-- [x] 37. SYS coverage completeness
-  - 完成條件：完成 31 個唯一 SYS requirements 1-to-1 比對，確認各有一份已核准之 coverage record，無任何遺漏、重複或被 group conclusion 取代。
-- [x] 38. Evidence, version, and source consistency
-  - 完成條件：完成全體 31 項 Assessment 之 target platform（Ubuntu 24.04 / Jazzy）、Navigation2 1.3.12-1 等套件版本、官方/源碼依據及 Missing Evidence 驗證義務之一致性審查與追溯確認。
-- [x] 39. Minimum-gap and prohibited-content audit
-  - 完成條件：完成全篇 6 個 Thin Adapter Gaps 錨定審查，確認其餘 25 項均為成熟方案 Composition / Configuration 覆蓋，且 04 未侵犯 05/06 架構邊界，無私造需求或自訂導航元件。
-- [x] 40. 04→05 handoff and final baseline review
-  - 完成條件：完成 04 Reuse Assessment 全體 40 項議題之審查、定案與核准，並產出 `docs/handoff/2026-08-15_00-55-00.md` 作為 05 Architecture 之權威輸入基準。
+- [x] 38. SYS coverage completeness
+  - 完成條件：完成 32 個唯一 SYS requirements 1-to-1 比對，確認各有一份已核准之 coverage record，無任何遺漏、重複或被 group conclusion 取代。
+- [x] 39. Evidence, version, and source consistency
+  - 完成條件：完成全體 32 項 Assessment 之 target platform（Ubuntu 24.04 / Jazzy）、Navigation2 1.3.12-1 等套件版本、官方/源碼依據及 Missing Evidence 驗證義務之一致性審查與追溯確認。
+- [x] 40. Minimum-gap and prohibited-content audit
+  - 完成條件：完成全篇 6 個 Thin Adapter Gaps 錨定審查，確認其餘 26 項均為成熟方案 Composition / Configuration 覆蓋，且 04 未侵犯 05/06 架構邊界，無私造需求或自訂導航元件。
+- [x] 41. 04→05 handoff and final baseline review
+  - 完成條件：完成 04 Reuse Assessment 全體 41 項議題之審查、定案與核准，作為 05 Architecture 之權威輸入基準。
 
 ## Per-requirement Definition of Done
 
-每個第 6–36 項 requirement 只有在下列條件全部成立時才可標記完成：
+每個第 6–37 項 requirement 只有在下列條件全部成立時才可標記完成：
 
 - Requirement ID 與 Required Behavior／Constraint 保持 03 原始語意。
 - Candidate Mature Solution 或 `none` 明確。

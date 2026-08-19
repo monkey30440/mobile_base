@@ -30,7 +30,7 @@
 |---|---|
 | 系統分解為哪些主要 Subsystem | Class / Struct / Function 內部程式碼 |
 | 每個 Subsystem 的主要責任與非責任 | 內部 Package / Source File 目錄結構 |
-| 31 項 SYS 需求的唯一 Subsystem 歸屬 | 具體 ROS Node 名稱、QoS Depth 設定 |
+| 32 項 SYS 需求的唯一 Subsystem 歸屬 | 具體 ROS Node 名稱、QoS Depth 設定 |
 | 6 個 Custom Gaps 的責任區域配置 | ROS Topic / Service / Action 具體字串命名 |
 | 成熟開源方案在架構中的責任配置 | 驅動程式內部 Register、Modbus 封包編解碼 |
 | 跨子系統之資料流、控制流與生命週期依賴 | Launch 檔、YAML 配置之逐行參數值 |
@@ -49,7 +49,7 @@
 | **AD-002** | **統一標準目標 (Canonical Target)** | SYS-008, SYS-009, SYS-032, SYS-033 | Station ID 與 Goal Pose 必須在進入導航編排前完成正規化與合法性驗證，轉為標準 `PoseStamped`。 |
 | **AD-003** | **路網優先導航與三階段編排** | SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025 | 導航以 First Mile → On Route → Last Mile 組成；優先沿 Route Graph 移動；v0.1 簡化重選路邏輯，不實作自由空間 Fallback。 |
 | **AD-004** | **共享感知與狀態估測分離** | SYS-003, SYS-004, SYS-005, SYS-010, SYS-029 | 原始感知資料（LiDAR/IMU）、不依賴地圖的平面里程估測（Odometry）與依賴地圖的全局定位（Localization）分屬獨立責任區域。 |
-| **AD-005** | **閉迴路運動控制與硬體安全閘** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030 | 運動意圖與硬體執行權威分離；底盤控制具備獨立命令逾時、極限限制、回授有效性驗證與硬體安全停止能力。 |
+| **AD-005** | **閉迴路運動控制與硬體安全閘** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 | 運動意圖與硬體執行權威分離；底盤控制具備獨立手動/自主命令執行、命令逾時、極限限制、回授有效性驗證與硬體安全停止能力。 |
 | **AD-006** | **單一權威機器人幾何與座標系** | SYS-023 | 機器人幾何模型、關節結構與靜態 TF 擁有全系統唯一來源；動態 TF 段（`map→odom`、`odom→base_footprint`）嚴格單一發布。 |
 
 ---
@@ -61,38 +61,41 @@
 `mobile_base` 的系統邊界包含 7 大核心子系統及其運行的軟體責任。
 
 外部實體包含：
-- **使用者 / 上層客戶端 (User / Operator)**：提交建圖命令、導航目標或取消請求。
+- **使用者 / 上層客戶端 (User / Operator)**：提交建圖命令、操作鍵盤手動移動（透過外部 `teleop_twist_keyboard`）、提交導航目標或取消請求。
 - **場域資料夾 (Site Artifacts)**：人工選定並確認之地圖、路網與站點檔案。
 - **實體感測器 (LiDAR & IMU)**：提供原始物理量測訊號。
 - **底盤動力硬體 (M1 Drive Hardware & Motors)**：接收物理驅動命令並回傳馬達編碼器狀態。
 
 ```text
        使用者 / 上層客戶端 (User / Operator)
-          │                              │
-          │ 提交導航目標 / 取消           │ 啟動建圖 / 儲存
-          ▼                              ▼
-    ┌──────────────────────────────────────────────┐
-    │                 mobile_base                  │
-    │                                              │
-    │  ┌────────────────┐      ┌────────────────┐  │
+          │                    │                     │
+          │ 提交導航目標 / 取消 │ 啟動建圖 / 儲存      │ 操作鍵盤遙控 (Teleop)
+          ▼                    ▼                     ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │                        mobile_base                          │
+    │                                                             │
+    │  ┌────────────────┐      ┌────────────────┐                 │
     │  │ S1 Robot Desc  │      │ S2 Perception  │◄─┼── 實體感測器 (LiDAR / IMU)
-    │  └───────┬────────┘      └───────┬────────┘  │
-    │          │                       │           │
-    │          ▼                       ▼           │
-    │  ┌────────────────┐      ┌────────────────┐  │
-    │  │ S4 Mapping     │      │ S3 State Estim │  │
-    │  └───────┬────────┘      └───────┬────────┘  │
-    │          │                       │           │
-    │          ▼                       ▼           │
-    │  ┌────────────────┐      ┌────────────────┐  │
-    │  │ S5 Localize    │─────►│ S6 Navigation  │  │
-    │  └────────────────┘      └───────┬────────┘  │
-    │                                  │           │
-    │                                  ▼           │
-    │                          ┌────────────────┐  │
-    │                          │ S7 Base Control│──┼─► 底盤動力硬體 (M1 Motors)
-    │                          └────────────────┘  │
-    └──────────────────────────────────────────────┘
+    │  └───────┬────────┘      └───────┬────────┘  │              │
+    │          │                       │           │              │
+    │          ▼                       ▼           │              │
+    │  ┌────────────────┐      ┌────────────────┐  │              │
+    │  │ S4 Mapping     │      │ S3 State Estim │  │              │
+    │  └───────┬────────┘      └───────┬────────┘  │              │
+    │          │                       │           │              │
+    │          ▼                       ▼           │              │
+    │  ┌────────────────┐      ┌────────────────┐  │              │
+    │  │ S5 Localize    │─────►│ S6 Navigation  │  │              │
+    │  └────────────────┘      └───────┬────────┘  │              │
+    │                                  │           │              │
+    │                                  ▼           │              │
+    │                          ┌────────────────┐  │              │
+    │                          │ S7 Base Control│◄─┴──────────────┘ (手動 TwistStamped)
+    │                          └───────┬────────┘
+    │                                  │
+    │                                  ▼
+    │                                  底盤動力硬體 (M1 Motors)
+    └─────────────────────────────────────────────────────────────┘
                        ▲
                        │ 載入 Map Package / Route Graph / Station Catalog
           ┌────────────┴───────────┐
@@ -118,21 +121,24 @@
       │       (UC-001)      │           │       (UC-002)      │
       ├─────────────────────┤           ├─────────────────────┤
       │ • S4 Mapping (建圖)  │           │ • S4 Mapping (載入) │
-      │ • SLAM 擁有 map→odom │           │ • S5 Localization   │
-      │ • S5, S6 未啟用      │           │ • S6 Navigation     │
-      │                     │           │ • AMCL 擁有 map→odom│
+      │ • Teleop 速度命令輸入│           │ • S5 Localization   │
+      │ • SLAM 擁有 map→odom │           │ • S6 Navigation     │
+      │ • S5, S6 未啟用      │           │ • AMCL 擁有 map→odom│
       └─────────────────────┘           └─────────────────────┘
 ```
 
 1. **Mapping Mode (UC-001)**：
    - 目的：建立環境二維佔據網格地圖並持久化為 Map Package。
    - 活躍子系統：`S1`, `S2`, `S3`, `S4`, `S7`。
-   - TF 特性：由 SLAM 演算法暫時擁有並發布 `map → odom` TF。
+   - 移動命令來源：使用者透過外部 `teleop_twist_keyboard` 發布手動速度命令（`geometry_msgs/msg/TwistStamped`）至 `S7 Base Control`（SYS-034）。手動命令停止或閒置時，底盤維持停止，不終止 Mapping session。
+   - 命令仲裁：Mapping Mode 下 `S6 Navigation` 未啟用（inactive），`teleop_twist_keyboard` 為全系統唯一運動命令來源，不引入 command mux 或 mode manager。
+   - TF 特性：由 SLAM 演算法（`slam_toolbox`）暫時擁有並發布 `map → odom` TF。
    - 互斥約束：`S5 Localization` 與 `S6 Navigation` **不得**處於活躍狀態。
 2. **Navigation Mode (UC-002)**：
    - 目的：基於已載入地圖與路網，自主導航至指定目標。
    - 活躍子系統：`S1`, `S2`, `S3`, `S4` (僅載入), `S5`, `S6`, `S7`。
    - TF 特性：由 `S5 Localization` (AMCL) 唯一擁有並發布權威 `map → odom` TF。
+   - 互斥約束：SLAM 建圖演算法與手動 teleop **不得** 處於活躍狀態。
    - 互斥約束：SLAM 建圖演算法 **不得** 處於活躍狀態。
 
 ---
@@ -287,20 +293,21 @@ graph TD
 ## S7: Base Control
 
 ### 1. 主要職責
-- 負責將 Navigation 提出的速度命令轉為差速輪運動控制，並作為**底盤物理執行與安全防護的最終擁有者**：
-  1. 執行差速輪閉迴路速度控制。
-  2. 實施運動命令逾時保護（Command Timeout Stop）。
-  3. 實施直線／旋轉速度與加速度極限限制（Operational Limits）。
-  4. 驗證馬達驅動器回授狀態之有效性，提供可信的 Measured Wheel State（禁止偽造）。
-  5. 處理底盤硬體錯誤、安全 Enable 條件檢查與安全 Stop / Disable 處置。
-- 承接需求：**SYS-022**, **SYS-026**, **SYS-027**, **SYS-028**, **SYS-029**, **SYS-030**。
+- 負責將 Navigation 提出的自主速度命令或 Mapping 模式下的手動速度命令轉為差速輪運動控制，並作為**底盤物理執行與安全防護的最終擁有者**：
+  1. 執行差速輪閉迴路速度控制（SYS-022）。
+  2. 接收並執行建圖期間來自外部的使用者手動速度命令（SYS-034）。
+  3. 實施運動命令逾時保護（Command Timeout Stop, SYS-027）。
+  4. 實施直線／旋轉速度與加速度極限限制（Operational Limits, SYS-028）。
+  5. 驗證馬達驅動器回授狀態之有效性，提供可信的 Measured Wheel State（禁止偽造, SYS-029）。
+  6. 處理底盤硬體錯誤、安全 Enable 條件檢查與安全 Stop / Disable 處置（SYS-026, SYS-030）。
+- 承接需求：**SYS-022**, **SYS-026**, **SYS-027**, **SYS-028**, **SYS-029**, **SYS-030**, **SYS-034**。
 
 ### 2. 邊界與非職責
-- **In-Scope**：差速運動學控制、底盤安全閘門（Safety Gate）、命令逾時停機、回授狀態檢核、硬體故障處置。
-- **Out-of-Scope**：導航路徑規劃、避障決策、全域座標狀態估測。
+- **In-Scope**：差速運動學控制、手動與自主速度命令執行、底盤安全閘門（Safety Gate）、命令逾時停機、回授狀態檢核、硬體故障處置。
+- **Out-of-Scope**：終端鍵盤輸入擷取（由外部成熟工具 `teleop_twist_keyboard` 承擔）、導航路徑規劃、避障決策、全域座標狀態估測。
 
 ### 3. 成熟技術配置與 Custom Gaps
-- **成熟方案**：`ros2_control` 框架（`controller_manager`, `diff_drive_controller`）+ M1 專用 Hardware Interface。
+- **成熟方案**：`ros2_control` 框架（`controller_manager`, `diff_drive_controller`）+ M1 專用 Hardware Interface；Mapping Mode 外部手動速度輸入由成熟方案 `teleop_twist_keyboard`（發布 `geometry_msgs/msg/TwistStamped`）提供。
 - **2 個 Custom Gaps (Hardware / Safety Layer)**：
   - `SYS-029 Base Feedback Validity Checker`：檢核驅動器編碼器訊號有效性，無效時標記不可用，嚴禁以命令值替代。
   - `SYS-030 Base Safe Enable / Stop Logic`：開機通訊與狀態自檢後使能驅動；停機時確認停轉後切斷驅動使能。
@@ -346,27 +353,54 @@ v0.1 的場域資料夾為人工維護之離線資料，僅包含以下三項產
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as 使用者 / Teleop
-    participant S2 as S2: Perception
+    actor User as 使用者 / Operator
+    participant Teleop as 外部 teleop_twist_keyboard
     participant S7 as S7: Base Control
+    participant M1 as 底盤馬達 (M1 Motors)
+    participant S2 as S2: Perception
     participant S3 as S3: State Estimation
     participant S4 as S4: Mapping
     participant Site as 場域資料夾
 
-    User->>S7: 手動遙控速度命令
-    S7->>S7: 執行速度控制並讀取編碼器
-    S7-->>S3: Valid Measured Wheel State
-    S2-->>S3: IMU & LiDAR Scan (RF2O)
-    S3->>S3: EKF 融合推算
-    S3-->>S4: System Odometry & odom TF
-    S2-->>S4: LaserScan
     User->>S4: 啟動建圖 (Start Mapping)
+    S4->>S4: slam_toolbox 初始化並進入 ACTIVE (SYS-001)
+    S2-->>S4: 權威原始 LaserScan (SYS-003)
+    S2-->>S3: IMU 量測與雷達特徵 (RF2O) (SYS-003, SYS-004)
+
     loop 巡覽環境
-        S4->>S4: slam_toolbox 即時更新地圖並發布 map→odom
+        rect rgb(240, 248, 255)
+            Note over User,M1: Command Path (控制鏈)
+            User->>Teleop: 鍵盤操作巡覽移動
+            Teleop->>S7: 手動 TwistStamped 速度命令 (SYS-034)
+            S7->>S7: 運動極限限制與安全閘門檢核 (SYS-028, SYS-030)
+            S7->>M1: 物理輪速驅動輸出 (SYS-022)
+        end
+
+        rect rgb(255, 250, 240)
+            Note over M1,S4: Feedback & Estimation Path (回授與狀態估測鏈)
+            M1-->>S7: 讀取馬達編碼器物理訊號
+            S7-->>S3: Valid Measured Wheel State (SYS-029)
+            S3->>S3: EKF 融合推算並發布 odom TF (SYS-005)
+            S3-->>S4: System Odometry & odom TF
+        end
+
+        S4->>S4: slam_toolbox 依感知與里程即時更新地圖並發布 map→odom (SYS-006)
+
+        opt 操作員主動停止或命令閒置逾時
+            alt 操作員按停止鍵 (k) 或 CTRL-C 退出 (Manual Movement Stop)
+                Teleop->>S7: 發布零速 TwistStamped 命令
+                S7->>M1: 控制器受控減速煞停
+            else 鍵盤閒置未提供命令 (Timeout Stop)
+                S7->>S7: diff_drive_controller 依 SYS-027 逾時自動歸零煞停
+                S7->>M1: 停止輸出
+            end
+            Note over S4: 底盤維持停止，slam_toolbox 維持現有地圖不中斷 Mapping session
+        end
     end
-    User->>S4: 儲存地圖 (Save Map)
+
+    User->>S4: 儲存地圖 (Save Map) (SYS-002)
     S4->>Site: 寫入 map.pgm 與 map.yaml
-    S4->>S4: 執行 Read-back 驗證
+    S4->>S4: 執行 Read-back 驗證 (SYS-024)
     S4-->>User: 回報建圖與儲存結果 (Success / Failure)
 ```
 
@@ -480,45 +514,63 @@ sequenceDiagram
 ## 7.2 速度命令與執行權限鏈契約 (Velocity Command Chain Contract)
 
 ```text
-    ┌───────────────────────────┐
-    │       S6 Navigation       │
-    └─────────────┬─────────────┘
-                  │ desired cmd_vel (提出運動意圖)
-                  ▼
-    ┌───────────────────────────┐
-    │      S7 Base Control      │
-    │  ┌─────────────────────┐  │
-    │  │ Base Safety Gate    │  │ ◄── 驅動警報 / 回授無效 / 停機中？
-    │  └──────────┬──────────┘  │     (若有異常，立即否決並停止)
-    │             ▼             │
-    │  ┌─────────────────────┐  │
-    │  │ Command Timeout     │  │ ◄── 超過 timeout 時間未收到新命令？
-    │  └──────────┬──────────┘  │     (自動強制歸零)
-    │             ▼             │
-    │  ┌─────────────────────┐  │
-    │  │ Operational Limits  │  │ ◄── 限制速度/加速度 (SYS-028)
-    │  └──────────┬──────────┘  │
-    │             ▼             │
-    │  ┌─────────────────────┐  │
-    │  │ Diff-Drive Control  │  │ ──► 傳送輪速至 M1 硬體驅動
-    │  └─────────────────────┘  │
-    └───────────────────────────┘
+    ┌───────────────────────────┐         ┌───────────────────────────┐
+    │       S6 Navigation       │         │   User / Operator         │
+    │   (Navigation Mode 啟用)   │         │   teleop_twist_keyboard   │
+    │                           │         │   (Mapping Mode 啟用)     │
+    └─────────────┬─────────────┘         └─────────────┬─────────────┘
+                  │                                     │
+                  │ desired TwistStamped                │ manual TwistStamped
+                  │ (自主導航運動意圖)                  │ (手動巡覽運動意圖, SYS-034)
+                  │                                     │
+                  └──────────────────┬──────────────────┘
+                                     │
+                                     ▼
+                      ┌───────────────────────────┐
+                      │      S7 Base Control      │
+                      │  ┌─────────────────────┐  │
+                      │  │ Base Safety Gate    │  │ ◄── 驅動警報 / 回授無效 / 停機中？ (SYS-030)
+                      │  └──────────┬──────────┘  │     (若有異常，立即否決並停止)
+                      │             ▼             │
+                      │  ┌─────────────────────┐  │
+                      │  │ Command Timeout     │  │ ◄── 超過 timeout 時間未收到新命令？ (SYS-027)
+                      │  └──────────┬──────────┘  │     (自動強制歸零煞停)
+                      │             ▼             │
+                      │  ┌─────────────────────┐  │
+                      │  │ Operational Limits  │  │ ◄── 限制速度/加速度 (SYS-028)
+                      │  └──────────┬──────────┘  │
+                      │             ▼             │
+                      │  ┌─────────────────────┐  │
+                      │  │ Diff-Drive Control  │  │ ──► 傳送輪速至 M1 硬體驅動 (SYS-022)
+                      │  └─────────────────────┘  │
+                      └───────────────────────────┘
 ```
 
-1. **意圖與執行分離**：S6 僅負責產出期望運動命令（Desired Velocity）；S7 擁有底盤運動執行的最終安全與裁決權。
-2. **安全否決權 (Safety Gate)**：當底盤處於未 Enable、驅動器報警、通訊中斷或狀態回授無效時，S7 必須拒絕執行非零速度命令。
+1. **意圖與執行分離**：S6（導航模式）或外部 `teleop_twist_keyboard`（建圖模式）僅負責產出期望運動命令（Desired / Manual Velocity, `TwistStamped`）；S7 擁有底盤運動執行的最終安全與裁決權。
+2. **命令源仲裁邊界 (Command Source Arbitration)**：
+   - Mapping Mode 與 Navigation Mode 嚴格互斥。
+   - 建圖期間 S6 未啟用，`teleop_twist_keyboard` 為全系統唯一的運動命令生產者。
+   - 導航期間 teleop 不啟用，S6 為唯一的運動命令生產者。
+   - 因此 v0.1 **不引入** `twist_mux` 或自製 mode manager 仲裁層，維持架構最簡（Avoid Premature Structure）。
+3. **安全否決權 (Safety Gate)**：當底盤處於未 Enable、驅動器報警、通訊中斷或狀態回授無效時，S7 必須拒絕執行非零速度命令。
+4. **命令逾時配置約束 (Command Timeout Configuration Constraint)**：
+   - 為防止 teleop 配置破壞 `SYS-027` 運動命令逾時安全機制：
+     - 若 `teleop_twist_keyboard` 採無按鍵重複發布（`repeat_rate = 0`），使用者停止按鍵後即停止發布新時間戳命令，由 S7 / `diff_drive_controller` 之 `cmd_vel_timeout` 提供 stale-command 逾時煞停保護。
+     - 若未來配置非零 `repeat_rate`，必須同時配置有效之 `key_timeout`，使鍵盤放開後 teleop 主動轉發零速命令，嚴禁以重複發布舊 timestamp / 非零速度命令無限阻止 S7 逾時機制觸發。
+     - 具體參數值保留至 06 子系統設計與實機驗證。
 
 ---
 
-## 7.3 三層停止與安全語意契約 (Three-Tier Stop Contract)
+## 7.3 系統停止與安全語意契約 (Stop & Safety Semantics Contract)
 
-系統明確區分三種層級的「停止」，彼此獨立且互不替代：
+系統明確區分下列層級與情境的「停止」，彼此獨立且互不替代：
 
-| 停止層級 | 觸發來源 | 責任 Subsystem | 行為語意與處置 |
+| 停止類型 | 觸發來源 | 責任擁有者 | 行為語意與處置 |
 |---|---|---|---|
-| **Level 1: Task Stop** | 使用者 Cancel / 導航階段失敗 / 抵達目標 | `S6 Navigation` | 終止導航任務、停止後續路徑追蹤、向 S7 要求零速（停止提出運動意圖）。 |
-| **Level 2: Timeout Stop** | 上游節點異常或通訊逾時未更新命令 | `S7 Base Control` | 底盤控制器自動將目標速度設為零，防止失控運動（SYS-027）。 |
-| **Level 3: Hardware Safe Stop** | 硬體故障 (ERROR) / 系統關機 / 停用請求 | `S7 Base Control` | 主動煞車減速、確認輪端已完全停止、停用馬達驅動器輸出 (Disable Drive)（SYS-030）。 |
+| **Level 1a: Navigation Task Stop** | 使用者 Cancel / 導航階段失敗 / 抵達目標 | `S6 Navigation` | 終止或完成導航任務、停止後續路徑追蹤、向 S7 提出零速運動意圖（歸零 desired velocity）。 |
+| **Level 1b: Manual Movement Stop** | 建圖操作員按停止鍵（如 `k`）/ `CTRL-C` 退出 | 外部 `teleop_twist_keyboard` | 主動發布零速 `TwistStamped` 命令，由 S7 控制器執行受控減速煞停；不涉及導航任務終止，亦不中斷 Mapping session。 |
+| **Level 2: Timeout Stop** | 上游節點異常、通訊中斷或鍵盤操作閒置超過 `cmd_vel_timeout` | `S7 Base Control` | 底盤控制器在超過逾時門檻未收到新有效命令時，自動將速度 reference 強制歸零煞停（SYS-027）。 |
+| **Level 3: Hardware Safe Stop** | 底盤硬體故障 (`ERROR`) / 系統關機 / 停用請求 | `S7 Base Control` | 主動煞車減速、確認輪端已完全停止、切斷馬達驅動器輸出 (Disable Drive)（SYS-030）。 |
 
 ---
 
@@ -605,7 +657,7 @@ $$\text{Base Status} == \text{STOPPED}$$
 
 # 9. 需求與客製缺口追溯矩陣 (Traceability Matrix)
 
-## 9.1 31 項系統需求歸屬表 (SYS Requirement Allocation)
+## 9.1 32 項系統需求歸屬表 (SYS Requirement Allocation)
 
 | Requirement ID | 需求名稱 | 所屬 Subsystem | 對應 Capability | 架構實作機制 / 成熟方案 |
 |---|---|---|---|---|
@@ -640,6 +692,7 @@ $$\text{Base Status} == \text{STOPPED}$$
 | **SYS-030** | 底盤安全啟停 | `S7 Base Control` | CAP-001, 002 | *Custom Gap*: Safe Enable / Stop Logic |
 | **SYS-032** | Station Target Resolution | `S6 Navigation` | CAP-002 | *Custom Gap*: Station Catalog Resolver |
 | **SYS-033** | Canonical Goal Validation | `S6 Navigation` | CAP-002 | *Custom Gap*: Canonical Goal Validator |
+| **SYS-034** | 手動移動控制 | `S7 Base Control` | CAP-001 | 外部 `teleop_twist_keyboard`（`TwistStamped`）+ `diff_drive_controller` 執行 |
 
 ---
 
@@ -667,3 +720,4 @@ $$\text{Base Status} == \text{STOPPED}$$
 | **`nav2_amcl`** | `S5 Localization` | Navigation Mode 下基於地圖定位與發布 `map→odom` | 建圖與即時地圖更新 |
 | **Nav2 Route / Planner / Controller** | `S6 Navigation` | 路網規劃、自由路徑規劃、路徑追蹤、到站檢查 | 底盤硬體通訊與馬達使能 |
 | **`ros2_control` (`diff_drive_controller`)** | `S7 Base Control` | 差速閉迴路控制、命令逾時保護、運動極限限制 | 全域路徑規劃與避障決策 |
+| **`teleop_twist_keyboard`** | 外部使用者輸入（對接 `S7 Base Control`） | Mapping Mode 下鍵盤手動速度命令（`TwistStamped`）發布 | 自主導航路徑規劃與避障 |

@@ -443,7 +443,7 @@ Route-assisted Strategy
 | Robot Description | SYS-023 |
 | Perception and Odometry | SYS-003、SYS-004、SYS-005 |
 | Motion and Drive | SYS-022、SYS-026、SYS-027、SYS-028、SYS-029、SYS-030 |
-| Mapping | SYS-001、SYS-002、SYS-006、SYS-007、SYS-024 |
+| Mapping | SYS-001、SYS-002、SYS-006、SYS-007、SYS-024、SYS-034 |
 | Target and Localization | SYS-008、SYS-009、SYS-032、SYS-033、SYS-010 |
 | Navigation Execution | SYS-011、SYS-014、SYS-015、SYS-016、SYS-017、SYS-025 |
 | Route-assisted Strategy | SYS-013、SYS-018、SYS-019、SYS-020、SYS-021 |
@@ -1141,6 +1141,44 @@ MapIO公開且與node object無關的`loadMapFromYaml()`已完整提供Map Packa
 ### Architecture Considerations
 
 05 應保留SYS-002 SaveMap成功後，以剛儲存的authoritative `map.yaml`執行一次direct MapIO read-back並保留標準status／logs的順序關係。此read-back不應啟動MapServer或發布`/map`；Navigation Mode startup load仍由SYS-007負責，地圖品質與實機定位表現分別留給後續verification與SYS-010的AMCL整合證據。
+
+### MVP Change Candidate
+
+`None`。
+
+## SYS-034 Manual Movement Control
+
+### Required Behavior / Constraint
+
+建圖期間，系統應接受使用者提供之手動速度命令以控制 AMR 移動巡覽環境；該移動控制應遵守既有底盤運動控制、運動限制、命令逾時與安全啟停需求。未提供手動速度命令或命令停止時，建圖程序不應因此終止。
+
+### Candidate Assessment: teleop_twist_keyboard
+
+| Field | Assessment |
+|---|---|
+| Candidate Mature Solution | ROS 2 Jazzy `teleop_twist_keyboard` |
+| Exact Version / Platform | ROS 2 Jazzy／Ubuntu 24.04；Debian package `ros-jazzy-teleop-twist-keyboard` 2.4.1-1noble.20260612.132037（upstream 2.4.1） |
+| Coverage Status | `Fully Covered` |
+| Covered Scope | 捕捉終端 raw TTY 按鍵輸入，映射為標準 ROS 2 速度命令；原生支援 `stamped` 參數以發布 `geometry_msgs/msg/TwistStamped`（或預設 `Twist`），精確契合下游 controller command contract；支援線速度與角速度步進調整與方向控制；操作員輸入非移動鍵或中斷結束時主動發布零速；按鍵閒置停止發布時由下游 `diff_drive_controller` 原生逾時停止機制（SYS-027）接管保護；速度命令通過既有 S7 安全與限幅鏈（SYS-028／SYS-030）；建圖程序獨立維持（SYS-006） |
+| Known Constraints | 必須在具備 TTY／stdin 的終端執行；Jazzy `diff_drive_controller` 4.42.1 topic input 固定為 `TwistStamped`，故整合時需設定 `stamped:=true`；預設發布 topic 為 `cmd_vel`，可透過標準 CLI remap 對接 controller input；Mapping Mode 下單一 command producer 無衝突，不需 command mux 或 mode manager |
+| Uncovered Gap | `None`；不需要自製 teleop 節點、mode manager 或 safety gateway |
+| Evidence | ROS 2 Jazzy `teleop_twist_keyboard` 2.4.1 源碼與參數宣告（`stamped`、`frame_id`、`speed`、`turn`）、Dockerfile baseline（第 17 行已安裝）及 container 內 `dpkg -s` 驗證；詳見 `research/sys-034-manual-movement-control.md` |
+| Missing Evidence | target Jetson／AMR 實機鍵盤操作移動驗證；操作員停止按鍵後主動發布零速與逾時停止之分層驗證；建圖巡覽過程中 Occupancy Grid 持續更新端對端驗證 |
+
+候選搜尋涵蓋 ROS 2 Jazzy 官方手動控制套件。`teleop_twist_keyboard` 已完整提供建圖巡覽所需之鍵盤手動速度命令生成與標準 Twist / TwistStamped 發布能力。
+
+在介面相容性上：Jazzy 官方 `ros2_controllers` 4.42.1 之 `diff_drive_controller` 在非 chained 模式下訂閱 `geometry_msgs/msg/TwistStamped`，而 `teleop_twist_keyboard` 2.4.1 原生具備 `stamped` 參數（設為 `true` 時即發布含 timestamp 與 frame_id 之 `TwistStamped`），並可透過標準 CLI remap（如 `cmd_vel:=/diff_drive_controller/cmd_vel`）對接。此屬標準 ROS 2 composition / launch configuration 範疇，不構成 custom gap。
+
+在停止與逾時語意上，系統具備清晰的分層行為：
+1. **主動停止（Active Zero Command）**：操作員按下非移動按鍵（如 `k` 或空白鍵）時，節點主動發布零速命令；操作員以 `CTRL-C` 退出時，節點亦於清理階段發布零速命令，由下游 controller 執行主動煞停。
+2. **無命令閒置與通訊逾時（Stale Command Protection）**：當操作員放開按鍵、未繼續輸入時，`teleop_twist_keyboard` 保持阻塞等待輸入而不發布新命令；此時下游 `diff_drive_controller` 依據 `SYS-027` 之 `cmd_vel_timeout` 機制判定命令逾時，自動將 reference velocity 歸零並安全煞停底盤。
+3. **建圖持續性**：底盤依上述任一機制停止時，建圖節點（`slam_toolbox`）依 `SYS-006` 維持現有地圖，不中斷 Mapping session。
+
+在 Mapping Mode 下，由於 Nav2 自主導航未啟動，`teleop_twist_keyboard` 為唯一的運動命令來源，不涉及多來源衝突或仲裁。手動命令透過標準 topic 進入 S7 Base Control，完全受 `diff_drive_controller` 的 `SpeedLimiter`（SYS-028）與 `M1Hardware` 安全啟停閘門（SYS-030）約束，不形成任何繞過 S7 的控制旁路。因此不需要新增 custom gap。
+
+### Architecture Considerations
+
+05 應將 `teleop_twist_keyboard` 定位為 Mapping Mode 下外部使用者輸入來源，透過 `stamped:=true` 與 topic remapping 將標準 `geometry_msgs/msg/TwistStamped` 銜接至 S7 Base Control 之命令輸入介面。在 Mapping Mode 下不應引入 `twist_mux`、mode manager 或額外 safety proxy，以維持 MVP 與避免過早結構（Avoid Premature Structure）。
 
 ### MVP Change Candidate
 

@@ -14,12 +14,12 @@
 
 ## Progress
 
-- 總項目：27
+- 總項目：28
 - 已完成：14
 - 進行中：0
-- 待實作：13
+- 待實作：14
 - 上游阻塞：0
-- 目前進度：14 / 27 (52%)；第 14 項 `S4 Mapping and MapIO` 已結案 `[x]`。
+- 目前進度：14 / 28 (50%)；第 14 項 `S4 Mapping and MapIO` 已結案 `[x]`。
 
 ---
 
@@ -67,41 +67,44 @@
 - [x] 14. S4 Mapping and MapIO
   - 追溯：SYS-001、SYS-002、SYS-006、SYS-007、SYS-024。
   - 完成條件：Mapping Mode、slam_toolbox、唯一 `map -> odom` ownership、地圖建立／更新／儲存／read-back 與失敗路徑完成整合及實機證據。
-- [ ] 15. S5 Localization
+- [ ] 15. S7 Manual Movement Control and Teleop Integration
+  - 追溯：IMP-015；UC-001 → CAP-001 → SYS-034（S7 Base Control；AD-005；06 §3.3, §4.2, §4.4；關聯 SYS-022, SYS-027, SYS-028, SYS-029, SYS-030）。
+  - 完成條件：在 target container 中確認 exact `teleop_twist_keyboard`（2.4.1）可用；驗證 `stamped:=true` 輸出 `geometry_msgs/msg/TwistStamped` 並 remap 至 `/diff_drive_controller/cmd_vel`；驗證 Mapping Mode 下 S6 維持未啟動且 Teleop 為唯一 command producer（不新增 mux/mode manager/proxy）；驗證命令受制於 S7 SYS-028 SpeedLimiter；驗證非移動鍵/`CTRL-C` 主動停止發布零速使 S7 受控減速；驗證中斷發布後逾時超過 `0.5 s`（`cmd_vel_timeout`）由 S7 將 reference 歸零並依減速度限制受控停止（不宣稱 0.5s 內實體完全停穩）；於目標 Jetson/操作終端實測確認 keyboard autorepeat 啟用狀態與頻率；通過 Level 4 實機架車/地面安全前置檢查後完成前進/後退/旋轉、主動煞停、逾時受控停止實測並記錄停止時間與距離，確認 Mapping session 保持 ACTIVE。
+- [ ] 16. S5 Localization
   - 追溯：SYS-010。
   - 完成條件：Navigation Mode map load、AMCL、RViz Initial Pose、唯一 `map -> odom` ownership、定位輸出與目標場域誤差／失敗 evidence 符合 06。
-- [ ] 16. S6 Target Admission thin gaps
+- [ ] 17. S6 Target Admission thin gaps
   - 追溯：GAP-01→SYS-008、GAP-02→SYS-009、GAP-03→SYS-032、GAP-04→SYS-033。
   - 完成條件：terminal target form、Goal Pose normalization、Station exact-match resolution、canonical PoseStamped validation 形成單一薄 boundary；invalid target 不下送 Nav2，failure reasons 與 unit/interface tests 完整。
-- [ ] 17. S6 Route-assisted Navigation execution
+- [ ] 18. S6 Route-assisted Navigation execution
   - 追溯：SYS-011、SYS-013、SYS-014、SYS-015、SYS-016、SYS-017、SYS-018、SYS-019、SYS-020、SYS-021、SYS-025。
   - 完成條件：Nav2 Route Server、Planner、Costmap/Collision Monitor、Controller、StoppedGoalChecker、BT 三階段、native result/cancel 與禁用 free-space fallback 的整合和實機 evidence 完整。
 
 ## D. Cross-subsystem Integration Closure
 
-- [ ] 18. TF and frame authority closure
+- [ ] 19. TF and frame authority closure
   - 完成條件：S1 static TF、S3 `odom -> base_footprint`、S4/S5 互斥 `map -> odom` 無斷鏈、重複 owner 或 frame mismatch。
-- [ ] 19. Perception data-flow closure
+- [ ] 20. Perception data-flow closure
   - 完成條件：兩個 raw LiDAR、selected scan、IMU 與 RF2O 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06。
-- [ ] 20. Motion-command and physical-stop closure
-  - 完成條件：S6 command→S7 safety gate→diff drive→M1，以及 Task Cancel、Command Timeout、Hardware Safe Stop 三層停止均量測到實體停止結果。
-- [ ] 21. Feedback and odometry closure
+- [ ] 21. Motion-command and physical-stop closure
+  - 完成條件：S6 command / Mapping teleop command→S7 safety gate→diff drive→M1，以及 Task Cancel、Manual Stop、Command Timeout、Hardware Safe Stop 分層停止均量測到實體停止結果。
+- [ ] 22. Feedback and odometry closure
   - 完成條件：M1 encoder→S7 validity→S3 EKF→S4/S5/S6 的資料鏈、延遲、掉線、禁止假回授與恢復行為完整驗證。
-- [ ] 22. Operational-mode and lifecycle closure
+- [ ] 23. Operational-mode and lifecycle closure
   - 完成條件：Mapping/Navigation mode 的啟動順序、lifecycle transitions、互斥 `map -> odom` authority、停機與部分啟動失敗均可重現。
 
 ## E. Use-case Verification and Feature Freeze
 
-- [ ] 23. UC-001 Mapping end-to-end acceptance
-  - 完成條件：使用者啟動建圖、受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收。
-- [ ] 24. UC-002 Navigation end-to-end acceptance
+- [ ] 24. UC-001 Mapping end-to-end acceptance
+  - 完成條件：使用者啟動建圖、手動受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收。
+- [ ] 25. UC-002 Navigation end-to-end acceptance
   - 完成條件：Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收。
-- [ ] 25. Requirement and custom-gap traceability audit
-  - 完成條件：31 個唯一 `SYS-xxx` 與 GAP-01～GAP-06 均有 implementation artifact、test/evidence 與 owner；無遺漏、錯號或未核准新增行為。
-- [ ] 26. Reproducibility and clean-environment audit
+- [ ] 26. Requirement and custom-gap traceability audit
+  - 完成條件：32 個唯一 `SYS-xxx`（SYS-001 ～ SYS-034）與 GAP-01～GAP-06 均有 implementation artifact、test/evidence 與 owner；無遺漏、錯號或未核准新增行為。
+- [ ] 27. Reproducibility and clean-environment audit
   - 完成條件：從乾淨 image/workspace 依文件重建、測試與啟動，不依賴未提交檔案、舊 build cache 或 running-container 手動安裝。
-- [ ] 27. v0.1 Feature Freeze review
-  - 完成條件：UC-001、UC-002、31 個 requirements、6 個 custom gaps 與所有必要實機 evidence 已通過；未完成項有核准的上游變更或明確不屬 v0.1，才能標記 Feature Frozen。
+- [ ] 28. v0.1 Feature Freeze review
+  - 完成條件：UC-001、UC-002、32 個 requirements、6 個 custom gaps 與所有必要實機 evidence 已通過；未完成項有核准的上游變更或明確不屬 v0.1，才能標記 Feature Frozen。
 
 ## Per-item Definition of Done
 
@@ -115,3 +118,4 @@
 - Failure、timeout、cancel、device loss 或 invalid input 等適用負向路徑已驗證。
 - `07_implementation.md` 已更新目前狀態、證據邊界、known limits 與下一個 dependency。
 - 若要提交，已執行 `gitnexus_detect_changes()`、`git diff --check` 與相關測試，確認影響範圍符合預期。
+
