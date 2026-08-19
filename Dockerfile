@@ -14,6 +14,7 @@ RUN apt-get update \
         ros-jazzy-dual-laser-merger \
         ros-jazzy-sick-scan-xd \
         ros-jazzy-foxglove-bridge \
+        ros-jazzy-teleop-twist-keyboard \
         python3-serial \
     && rm -rf /var/lib/apt/lists/*
 
