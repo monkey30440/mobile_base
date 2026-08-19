@@ -19,7 +19,10 @@ import time
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-import ros2top
+try:
+    import ros2top
+except ImportError:
+    ros2top = None
 from sensor_msgs.msg import Imu
 import serial
 
@@ -152,13 +155,14 @@ def main(args=None) -> None:
     ros2top_node_name = None
     try:
         node = TdkImuNode()
-        ros2top_node_name = node.get_fully_qualified_name()
-        ros2top.register_node(ros2top_node_name)
+        if ros2top is not None:
+            ros2top_node_name = node.get_fully_qualified_name()
+            ros2top.register_node(ros2top_node_name)
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        if ros2top_node_name is not None:
+        if ros2top is not None and ros2top_node_name is not None:
             ros2top.unregister_node(ros2top_node_name)
         if node is not None:
             node.destroy_node()

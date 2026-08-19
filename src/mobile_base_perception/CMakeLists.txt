@@ -21,6 +21,7 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_lidar_launch_syntax test/test_lidar_launch_syntax.py)
+  ament_add_pytest_test(test_imu_launch_syntax test/test_imu_launch_syntax.py)
 endif()
 
 ament_package()

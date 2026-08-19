@@ -1287,42 +1287,32 @@ Linux 系統在重新開機或 USB 熱插拔後，串列埠代號（`/dev/ttyUSB
 1. **反向運動有效性** (`UNVERIFIED`)：負向速度指令（後退）之動態回授與方向正確性。
 2. **雙輪同步動態 Stage D3** (`OPTIONAL CONFIDENCE EVIDENCE`)：雙輪同時非零正向運動下之動態回授（Stage D1 與 Stage D2 已各自證明單輪動態回授與對側隔離，且單次 FC17 transaction 已同時處理雙驅動器傳輸，故 Stage D3 歸類為額外信心測試，非 Checklist #8 結案阻擋項）。
 3. **整車動態與地面行駛行為** (`DOWNSTREAM SCOPE`)：著地行駛行為（Floor-driving behavior）、輪端打滑（Wheel slip）、里程計精度（Odometry accuracy）、導航追隨性能（Navigation performance）與煞車距離特性（Braking-distance characterization），屬下游子系統整合（Checklist #13 State Estimation / Navigation）與系統驗收範疇。
-4. **精密標定與一般定量速度追隨公差** (`UNVERIFIED`)：精密輪速標定（Precision speed calibration）與一般定量速度追隨公差。
-5. **硬體通訊 Watchdog** (`KNOWN LIMITATION`)：M1 硬體通訊 Watchdog 逾時跳脫與復歸閉環行為（v0.1 設計基線 `05-17 = 0` 維持停用，屬已知限制 Known Limit，非 Checklist #8 結案阻擋項）。
-6. **硬即時保證** (`NOT ESTABLISHED`)：任意 CPU 負載極限下的硬即時（Hard Real-Time）時序保證。
+4. **精密標定與一般定量速度追隨公差** (`UNVERIFIED`)：精密輪速標定（Precision speed calibration）與一般定量速�| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-19T13:46:00+08:00 | S2 TDK IMU Launch & Software Test Suite | `colcon test --packages-select tdk_ros2_imu mobile_base_perception` + `colcon test-result` | PASS | 全部 7 項測試套件通過（35 測試項目，0 failures, 0 errors）：驗證 59-byte 封包解析、Checksum 拒絕、雜訊重同步、SI 單位轉換、四元數計算、節點參數防呆、串口斷線/錯誤終止、LaunchDescription 生成、主題重新映射（`/tdk/imu -> /imu/data_raw`）、Frame（`base_imu_link`）；全工作區 5 套件 273 項回歸測試通過。 | [`docs/verification/IMP-011/2026-08-19T134600_sw_s2_imu_runtime_integration.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-011/2026-08-19T134600_sw_s2_imu_runtime_integration.txt) |
+| 2026-08-19T13:48:30+08:00 | Stage I1: Passive Device Identity / Readiness | `ls -l /dev/ttyACM0 /dev/serial/by-id/*` & `udevadm info -n /dev/ttyACM0` | PASS | 實機 `/dev/ttyACM0` (STMicroelectronics Virtual COM Port, VID:PID `0483:5740`, Serial `2063328E4842`, `cdc_acm` 驅動, mode `crw-rw---- root dialout`) 存在；穩定符號連結 `/dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_2063328E4842-if00` 正確指向 `/dev/ttyACM0`；容器內裝置節點可見且具備完整讀寫權限。 | [`docs/verification/IMP-011/2026-08-19T134830_hw_stage_i1_passive_identity.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-011/2026-08-19T134830_hw_stage_i1_passive_identity.txt) |
+| 2026-08-19T13:50:00+08:00 | Stage I2: Real-Hardware Static IMU Acquisition | `ros2 launch mobile_base_description robot_description.launch.py` & `ros2 launch mobile_base_perception tdk_imu.launch.py` | PASS | 實機 `/imu/data_raw` 穩定發布（實測頻率 $176.8\,\text{Hz} \ge 50\,\text{Hz}$，`SensorData` QoS，單調遞增主機時間戳，`frame_id: base_imu_link`）；50 筆靜態樣本統計：車體 $Z$ 軸靜態重力加速度平均 $+9.78879\,\text{m/s}^2$（符合 $+9.81 \pm 0.2\,\text{m/s}^2$ 規範門檻，誤差 $-0.18\%$），水平加速度 $a_x \approx -0.00412, a_y \approx -0.00175\,\text{m/s}^2$，角速度 $\omega_x \approx +0.00013, \omega_y \approx +0.00026, \omega_z \approx -0.00009\,\text{rad/s}$；四元數正規化良好（模長 $1.000000$）；TF `base_link -> base_imu_link`（$[+0.044, -0.008, -0.015]\,\text{m}$，$\text{RPY} = [0, 0, +90^\circ]$）連通正常。 | [`docs/verification/IMP-011/2026-08-19T135000_hw_stage_i2_static_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-011/2026-08-19T135000_hw_stage_i2_static_acquisition.txt) |
 
----
-
-#### 3.2.9 Known Limits / Unresolved Dependencies
-
-- **Checklist #8 結案狀態**：Checklist #8 已依原始 DoD 完成所有 8 項條款（SystemInterface lifecycle、command/state interfaces、真實 wheel feedback validity、禁止 command substitution、diff-drive controller、timeout 與 safe-stop chain）之 unit/interface/integration/real-hardware 驗證證據，正式標記結案 `[x]`。
-- **Stage D3 定位**：Stage D3（雙輪同步動態）屬可選的額外信心測試（Optional Additional Confidence Evidence），非 Checklist #8 結案阻擋項；Stage D1（左輪）與 Stage D2（右輪）已分別於實機獨立驗證真實動態回授與物理旋轉方向，且底層 Multi-drive 2.0 FC17 每次交易均已同時承載並交換雙驅動器資料。
-- **Level 4 非零運動權限**：Level 4 實機運動已完成 Stage D1 與 Stage D2 單輪受控動態驗證；後續測試權限依 §6 治理規範回歸常態管制。
-- **Safe-Stop 鏈屬軟體 Best-Effort**：現行 `stop()` $\rightarrow$ `disable()` 依賴軟體行程正常運作；若行程崩潰（Process Crash / SIGKILL），軟體無法執行清理，此時實體 E-Stop 與電源切斷為最高安全權威。
-- **M1 硬體通訊 Watchdog 為 v0.1 Known Limit**：依 v0.1 設計決策 `05-17 = 0`（通訊 Watchdog 停用），硬體跳脫特性未啟用亦未驗證，屬已知限制，非 Checklist #8 結案阻擋項。
-- **Response Timeout 政策**：`response_timeout_ms` 屬 REQUIRED runtime parameter，API 無隱式預設值；`50 ms` 經實機量測驗證為當前推薦部署參數（Validated Deployment Candidate），但非硬即時常數。
-- **Controller Update Rate 基準與重啟條件**：Synchronous Model A2 @ 30 Hz 已凍結為當前實作基準（Architecture Baseline Frozen），若 Baud rate、串列硬體、M1 韌體、主機平台或上層需求變更時，需依定義之觸發條件重新評估。
-
----
-
-#### 3.2.10 Feature Freeze Status / Next Dependency
+#### 3.5.8 Evidence Boundary
 
 | 欄位 | 內容 |
 |---|---|
-| Feature freeze status | `Baseline Frozen` (Synchronous Model A2 @ 30 Hz validated implementation baseline) |
-| Freeze condition | Synchronous Model A2 @ 30 Hz 實作基準凍結；Checklist #8 依原始 DoD 正式結案 `[x]`；Level 4 實機非零運動權限回歸常態管制 |
-| Next dependency | Checklist #9 `S1 Robot Description` (進行中 `[~]`) |
+| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`tdk_ros2_imu` 與 `mobile_base_perception` 於 ROS 2 Jazzy 環境下正確建置與安裝。<br/>2. **封包解析與校驗和防護** (`PASS`)：59-byte 封包解析無誤，壞校驗和與雜訊能正確過濾並重新同步。<br/>3. **單位轉換與姿態計算** (`PASS`)：加速度換算為 $\text{m/s}^2$、角速度換算為 $\text{rad/s}$、歐拉角換算為正規化四元數。<br/>4. **序列埠異常與斷線安全處理** (`PASS`)：序列埠開啟失敗與運行中斷線均觸發 `RuntimeError` 與 Fatal 日誌。<br/>5. **Launch 組合與主題/Frame 綁定** (`PASS`)：`tdk_imu.launch.py` 正確生成 `imu_driver_node`，`frame_id` 綁定為 `base_imu_link`，主題重新映射為 `/imu/data_raw`。<br/>6. **工作區全回歸測試** (`PASS`)：全工作區 5 套件 273 項測試全部通過（0 failures, 0 errors, 30 skipped）。<br/>7. **實機被動裝置識別與容器可見性 (Stage I1)** (`PASS`)：`/dev/ttyACM0` 存在且硬體 VID:PID（`0483:5740`）、序號（`2063328E4842`）及穩定 by-id 路徑完全吻合，容器內權限完備。<br/>8. **實機靜態數據與發布頻率 (Stage I2)** (`PASS`)：實體 `/imu/data_raw` 穩定串流（$176.8\,\text{Hz}$）、靜態重力 $a_z = +9.78879\,\text{m/s}^2$（符合 $+9.81 \pm 0.2\,\text{m/s}^2$）、單調時間戳、SensorData QoS、零共變異數與 S1 靜態 TF 連通。 |
+| 尚未證明 (後續實機驗證項) | 1. **實機手動旋轉動態響應 (Stage I3)**：手動旋轉/傾斜底盤驗證角速度與加速度符號響應。 |
 
----
+#### 3.5.9 Known Limits / Outstanding Obligations
 
-### 3.3 IMP-009: S1 Robot Description (`mobile_base_description`)
+- **硬體執行邊界保護**：Stage I2 僅在架高靜止之底盤上完成靜態重力與串流品質量測，未執行任何手動動態旋轉/傾斜。
+- **無輪端動力輸出**：IMU 驗證絕不涉及輪端動力輸出或馬達控制（不執行 M1 指令）。
+- **實機驗證排程**：Stage I3 手動旋轉動態響應將於使用者授權後執行。
 
-#### 3.3.1 Identity / Scope / Status
+#### 3.5.10 Feature Freeze Status / Next Dependency
 
 | 欄位 | 內容 |
 |---|---|
-| Checklist item | #9 — S1 `Robot Description` |
-| Item scope | 依 06 baseline 與 legacy CAD URDF 協調結論，建立 `mobile_base_description` 套件，實作標準 Xacro 模型（`mobile_base.urdf.xacro`、`mobile_base_geometry.xacro`、`mobile_base_ros2_control.xacro`）、6 項核心 3D 幾何網格（`base_link.STL`、`driving_wheel_link_L/R.STL`、`base_lidar_link_FL/BR.STL`、`base_imu_link.STL`）、靜態與動態關節定義（`base_footprint` 根坐標系、`base_link` 高程 $0.2560\,\text{m}$、輪心高程 $-0.1760\,\text{m}$、雙輪關節軸 $[0, 1, 0]$、雷達與 IMU 06 標準量測坐標系）、`robot_state_publisher` 啟動檔（`robot_description.launch.py`）、`check_urdf` 與 Xacro 語法自動化測試、`/tf_static` 廣播整合測試、ament linters、語意修正（嚴格逾時參數權屬、感測器網格 $R_{\text{comp}} = R_{\text{joint}}^{-1}$ 逆向補償）以及實機幾何合理性驗證（$< 2.0\,\text{mm}$）。 |
+| Feature freeze status | `Stage I1 & Stage I2 Complete` (S2 Perception IMU Static Acquisition Established; Checklist #11 Remains `[~]` Pending Real-Hardware Stage I3 Dynamic Evidence) |
+| Freeze condition | 軟體測試、Stage I1 被動識別與 Stage I2 實機靜態重力量測全部通過；待 Stage I3 手動旋轉動態響應驗證通過後方可結案 `[x]` |
+| Next dependency | Checklist #11 Stage I3 Real-Hardware Manual Dynamic Validation |��實作標準 Xacro 模型（`mobile_base.urdf.xacro`、`mobile_base_geometry.xacro`、`mobile_base_ros2_control.xacro`）、6 項核心 3D 幾何網格（`base_link.STL`、`driving_wheel_link_L/R.STL`、`base_lidar_link_FL/BR.STL`、`base_imu_link.STL`）、靜態與動態關節定義（`base_footprint` 根坐標系、`base_link` 高程 $0.2560\,\text{m}$、輪心高程 $-0.1760\,\text{m}$、雙輪關節軸 $[0, 1, 0]$、雷達與 IMU 06 標準量測坐標系）、`robot_state_publisher` 啟動檔（`robot_description.launch.py`）、`check_urdf` 與 Xacro 語法自動化測試、`/tf_static` 廣播整合測試、ament linters、語意修正（嚴格逾時參數權屬、感測器網格 $R_{\text{comp}} = R_{\text{joint}}^{-1}$ 逆向補償）以及實機幾何合理性驗證（$< 2.0\,\text{mm}$）。 |
 | Implementation status | `Closed [x]` (All software, TF, mesh, and physical geometry sanity criteria verified and closed) |
 | Evidence status | `Build Verified` + `Unit Verified (8/8 tests)` + `Launch Integration Verified (1/1 test)` + `Ament Linters Passed (5/5 suites)` + `check_urdf Verified` + `Physical Sanity Evidence Verified` |
 | Feature-freeze status | `Baseline Frozen` (Checklist #9 Closed `[x]`) |
@@ -1527,5 +1517,107 @@ src/mobile_base_perception/
 | 欄位 | 內容 |
 |---|---|
 | Feature freeze status | `Feature Freeze / Baseline Closed` (S2 Perception picoScan150 Baseline Established; Checklist #10 Closed `[x]`) |
-| Freeze condition | `mobile_base_perception` 套件建置與單元/語法測試全部通過；雙路實體 picoScan150 實機量測數據與 TF static 連通性驗證完畢；Checklist #10 正式結案 `[x]`；Checklist #11 尚未開始 `[ ]` |
-| Next dependency | Checklist #11 `S2 TDK IMU runtime integration` (`[ ] NOT STARTED`) |
+| Freeze condition | `mobile_base_perception` 套件建置與單元/語法測試全部通過；雙路實體 picoScan150 實機量測數據與 TF static 連通性驗證完畢；Checklist #10 正式結案 `[x]`；Checklist #11 進行中 `[~]` |
+| Next dependency | Checklist #11 `S2 TDK IMU runtime integration` (`[~] IN PROGRESS`) |
+
+### 3.5 IMP-011: S2 TDK IMU Runtime Integration (Checklist Item #11)
+
+#### 3.5.1 Identity / Scope / Status
+
+| 欄位 | 內容 |
+|---|---|
+| Checklist item | #11 — S2 `TDK IMU runtime integration` |
+| Item scope | 依 06 §3.2 baseline 規範與實車 TDK IIM-42652 (HandBoard IMU V1) 硬體設定，整合既存 `tdk_ros2_imu` 驅動套件與 `mobile_base_perception` 感知啟動架構。修復 `tdk_imu_node.py` 遺留之 `ros2top` 缺失相容性問題；配置序列埠 `/dev/ttyACM0`、鮑率 `115200`、Frame `base_imu_link`、標準主題 `/imu/data_raw`（透過 launch 重新映射）；發布標準 `sensor_msgs/msg/Imu`（含 SI 單位轉換、unknown covariance 與 SensorData QoS）；實作 launch/yaml 語法測試與節點 lifecycle/異常斷線測試；準備硬體驗證方案。 |
+| Implementation status | `In Progress [~]` (Software baseline, node lifecycle/error tests, and launch/config tests complete and verified; real-hardware verification prepared) |
+| Evidence status | `Build Verified` + `Unit Verified (7/7 test suites)` + `Workspace Regression Verified (273/273 tests)` |
+| Feature-freeze status | `Initial Software Slice Complete` (Checklist #11 remains `[~]` pending real-hardware acquisition evidence) |
+| Last updated | 2026-08-19 |
+
+#### 3.5.2 Requirements & Architecture Traceability
+
+- **承接需求**：`SYS-004` IMU 感知（提供 IMU 量測資料供定位使用）、`CAP-001`、`CAP-002`。
+- **架構依賴**：
+  - 上游：S1 `mobile_base_description`（提供權威 TF 坐標系 `base_imu_link`）。
+  - 下游：S3 `robot_localization` EKF（Checklist #13，訂閱 `/imu/data_raw`，融合角速度 $\omega_z$ 與線加速度 $a_x$）。
+
+#### 3.5.3 File Artifact Inventory
+
+```text
+src/tdk_ros2_imu/
+├── package.xml
+├── setup.py
+├── launch/
+│   └── tdk_imu.launch.py              # Standalone IMU driver launch with default base_imu_link & /imu/data_raw
+├── tdk_ros2_imu/
+│   ├── conversions.py                 # SI unit and Euler-to-quaternion conversions
+│   ├── protocol.py                    # 59-byte packet parser & checksum validation
+│   └── tdk_imu_node.py                # Driver Node with graceful fallback & exception safety
+└── test/
+    ├── test_conversions.py            # Unit tests for acceleration, angular velocity, and quaternion
+    ├── test_node.py                   # Unit tests for parameter validation, serial open error, disconnect & publish
+    └── test_protocol.py               # Unit tests for packet parsing, checksum rejection, and resync
+
+src/mobile_base_perception/
+├── config/
+│   └── tdk_imu.yaml                   # S2 IMU parameter contract (port, baud_rate, frame_id)
+├── launch/
+│   └── tdk_imu.launch.py              # S2 IMU launch composition with imu_driver_node & remappings
+└── test/
+    └── test_imu_launch_syntax.py      # LaunchDescription and YAML parameter contract tests
+```
+
+#### 3.5.4 Mature Solution vs. Custom Implementation Boundary
+
+- **成熟方案引用**：採用成熟 `tdk_ros2_imu` 0.1.0 處理 59-byte 二進位封包解碼、XOR checksum 檢驗、SI 單位轉換（$g \to \text{m/s}^2$, $\text{deg/s} \to \text{rad/s}$）與姿態四元數計算。
+- **客製化實作範圍**：僅限於標準 ROS 2 launch 啟動組合與 YAML 參數配置檔（`mobile_base_perception`），確保節點命名為 `imu_driver_node` 並重新映射至 06 規範之 `/imu/data_raw` 主題，以及在 `tdk_imu_node.py` 中修復非標準 `ros2top` 依賴之優雅降級防護。
+
+#### 3.5.5 Interface & Configuration
+
+##### 權威發布介面 (Authoritative Published Interface)
+
+| 主題名稱 | 訊息型別 | `header.frame_id` (來自 S1) | QoS Profile | 典型頻率 | 職責與消費者 |
+|---|---|---|---|---|---|
+| **`/imu/data_raw`** | `sensor_msgs/msg/Imu` | **`base_imu_link`** | `SensorData` | $50 \sim 100\,\text{Hz}$ | 原始 3 軸角速度與線性加速度；供 **S3 robot_localization EKF** 訂閱。 |
+
+##### 關鍵驅動參數配置
+- `port`: `/dev/ttyACM0` (CDC ACM 序列埠)
+- `baud_rate`: `115200` (8N1)
+- `frame_id`: `base_imu_link` (符合 S1 URDF 幾何定義)
+- `linear_acceleration`: 單位 $\text{m/s}^2$（靜止時 $a_z \approx +9.81\,\text{m/s}^2$）
+- `angular_velocity`: 單位 $\text{rad/s}$
+- `orientation`: 四元數 $(x,y,z,w)$（由晶片內部互補濾波產出，S3 EKF 明確不融合姿態）
+- `covariance`: 全 0 矩陣（REP-103 定義為 unknown covariance）
+
+#### 3.5.6 Failure Detection & Safety Handling
+
+- **壞封包防護**：Header 錯誤或 Checksum 不符時自動丟棄並記錄節流警告（每 5 秒最多 1 次），串流自動重尋 Header 恢復同步。
+- **序列埠異常與斷線防護**：開啟埠號失敗或通訊讀取中斷時捕捉 `OSError` 與 `serial.SerialException`，記錄 Fatal 等級日誌並拋出 `RuntimeError` 終止節點，杜絕無感測器狀態下靜默發布假數據。
+
+#### 3.5.7 Verification Evidence
+
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-19T13:46:00+08:00 | S2 TDK IMU Launch & Software Test Suite | `colcon test --packages-select tdk_ros2_imu mobile_base_perception` + `colcon test-result` | PASS | 全部 7 項測試套件通過（35 測試項目，0 failures, 0 errors）：驗證 59-byte 封包解析、Checksum 拒絕、雜訊重同步、SI 單位轉換、四元數計算、節點參數防呆、串口斷線/錯誤終止、LaunchDescription 生成、主題重新映射（`/tdk/imu -> /imu/data_raw`）、Frame（`base_imu_link`）；全工作區 5 套件 273 項回歸測試通過。 | [`docs/verification/IMP-011/2026-08-19T134600_sw_s2_imu_runtime_integration.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-011/2026-08-19T134600_sw_s2_imu_runtime_integration.txt) |
+| 2026-08-19T13:48:30+08:00 | Stage I1: Passive Device Identity / Readiness | `ls -l /dev/ttyACM0 /dev/serial/by-id/*` & `udevadm info -n /dev/ttyACM0` | PASS | 實機 `/dev/ttyACM0` (STMicroelectronics Virtual COM Port, VID:PID `0483:5740`, Serial `2063328E4842`, `cdc_acm` 驅動, mode `crw-rw---- root dialout`) 存在；穩定符號連結 `/dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_2063328E4842-if00` 正確指向 `/dev/ttyACM0`；容器內裝置節點可見且具備完整讀寫權限。 | [`docs/verification/IMP-011/2026-08-19T134830_hw_stage_i1_passive_identity.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-011/2026-08-19T134830_hw_stage_i1_passive_identity.txt) |
+| 2026-08-19T13:53:30+08:00 | Stage I2: Real-Hardware Static IMU Acquisition | `ros2 launch mobile_base_description robot_description.launch.py` & `ros2 launch mobile_base_perception tdk_imu.launch.py` | PASS | 實機 `/imu/data_raw` 穩定發布（實測頻率 $177.4 \sim 178.4\,\text{Hz} \ge 50\,\text{Hz}$，`SensorData` QoS，單調遞增主機時間戳，`frame_id: base_imu_link`）；100 筆靜態樣本統計：車體 $Z$ 軸靜態重力加速度平均 $+9.79190\,\text{m/s}^2$（符合 $+9.81 \pm 0.2\,\text{m/s}^2$ 規範門檻，誤差 $-0.15\%$），水平加速度 $a_x \approx -0.00685, a_y \approx -0.00098\,\text{m/s}^2$，角速度 $\omega_x \approx -0.000003, \omega_y \approx +0.000216, \omega_z \approx +0.000009\,\text{rad/s}$；四元數正規化良好（模長 $1.000000$）；TF `base_link -> base_imu_link`（$[+0.044, -0.008, -0.015]\,\text{m}$，$\text{RPY} = [0, 0, +90^\circ]$）連通正常。 | [`docs/verification/IMP-011/2026-08-19T135330_hw_stage_i2_static_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-011/2026-08-19T135330_hw_stage_i2_static_acquisition.txt) |
+| 2026-08-19T14:02:00+08:00 | Stage I3: Real-Hardware Manual Dynamic IMU Validation | 實體底盤架高/無動力狀態下，使用者執行手動 CCW/CW 旋轉驗證 | PASS | 實機手動旋轉動態響應清晰：<br/>1. **逆時針旋轉 (CCW)**：繞 $+Z$ 軸峰值角速度 $\omega_z = +0.397137\,\text{rad/s}$ ($+22.75^\circ/\text{s}$)，平均 $\omega_z = +0.214274\,\text{rad/s}$ ($> 0$，符合右手定則)；<br/>2. **順時針旋轉 (CW)**：繞 $+Z$ 軸峰值角速度 $\omega_z = -0.585636\,\text{rad/s}$ ($-33.55^\circ/\text{s}$)，平均 $\omega_z = -0.357518\,\text{rad/s}$ ($< 0$，符合右手定則)；<br/>3. **靜態回歸性**：每次動作後角速度均於 $<0.2\,\text{s}$ 內平穩回歸靜態零基準線（殘留偏差 $<0.0002\,\text{rad/s}$）；全程無輪端動力輸出。 | [`docs/verification/IMP-011/2026-08-19T140200_hw_stage_i3_dynamic_validation.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-011/2026-08-19T140200_hw_stage_i3_dynamic_validation.txt) |
+
+#### 3.5.8 Evidence Boundary
+
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS`) | 1. **套件建置與結構完整性** (`PASS`)：`tdk_ros2_imu` 與 `mobile_base_perception` 於 ROS 2 Jazzy 環境下正確建置與安裝。<br/>2. **封包解析與校驗和防護** (`PASS`)：59-byte 封包解析無誤，壞校驗和與雜訊能正確過濾並重新同步。<br/>3. **單位轉換與姿態計算** (`PASS`)：加速度換算為 $\text{m/s}^2$、角速度換算為 $\text{rad/s}$、歐拉角換算為正規化四元數。<br/>4. **序列埠異常與斷線安全處理** (`PASS`)：序列埠開啟失敗與運行中斷線均觸發 `RuntimeError` 與 Fatal 日誌。<br/>5. **Launch 組合與主題/Frame 綁定** (`PASS`)：`tdk_imu.launch.py` 正確生成 `imu_driver_node`，`frame_id` 綁定為 `base_imu_link`，主題重新映射為 `/imu/data_raw`。<br/>6. **工作區全回歸測試** (`PASS`)：全工作區 5 套件 273 項測試全部通過（0 failures, 0 errors, 30 skipped）。<br/>7. **實機被動裝置識別與容器可見性 (Stage I1)** (`PASS`)：`/dev/ttyACM0` 存在且硬體 VID:PID（`0483:5740`）、序號（`2063328E4842`）及穩定 by-id 路徑完全吻合，容器內權限完備。<br/>8. **實機靜態數據與發布頻率 (Stage I2)** (`PASS`)：實體 `/imu/data_raw` 穩定串流（$\approx 178\,\text{Hz}$）、靜態重力 $a_z = +9.79190\,\text{m/s}^2$（符合 $+9.81 \pm 0.2\,\text{m/s}^2$）、單調時間戳、SensorData QoS、零共變異數與 S1 靜態 TF 連通。<br/>9. **實機手動旋轉動態響應 (Stage I3)** (`PASS`)：使用者執行手動 CCW/CW 旋轉，實測 $\omega_z$ 於 CCW 時顯著大於 0（峰值 $+0.397\,\text{rad/s}$）、CW 時顯著小於 0（峰值 $-0.586\,\text{rad/s}$），完全符合 ROS 坐標系右手定則，且動作結束後平穩回歸靜態基準線。 |
+| 尚未證明 | 無（原 Checklist #11 DoD 所定義之軟體測試、序列埠通訊、訊息欄位、單位、Frame、QoS、頻率、時間戳、斷線/壞封包安全處理、實機靜態重力與實機動態量測已全部建立完整實證）。 |
+
+#### 3.5.9 Known Limits / Outstanding Obligations
+
+- **無輪端動力輸出**：IMU 驗證全程維持馬達無動力輸出狀態（未發送任何 M1 指令），所有動態測試皆由使用者於架高/安全狀態下手動實施。
+- **定位融合保留至 Checklist #13**：S2 IMU 驅動僅負責 `/imu/data_raw` 之感測器原始資料發布，與輪速里程計之 EKF 融合保留至 S3 State Estimation 進行。
+
+#### 3.5.10 Feature Freeze Status / Next Dependency
+
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Frozen (Checklist #11 Closed [x])` (All Software & Hardware Validation Evidence Established and Accepted; Checklist #11 Closed [x]) |
+| Freeze condition | 軟體測試、Stage I1 被動識別、Stage I2 靜態重力與 Stage I3 手動動態旋轉測試全部通過；原 Checklist #11 DoD 項目已全數具備完整實證並經審查核准結案 |
+| Next dependency | Checklist #12 (S2 RF2O and selected scan integration) |

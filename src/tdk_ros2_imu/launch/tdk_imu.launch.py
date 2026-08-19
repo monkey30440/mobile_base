@@ -25,11 +25,13 @@ def generate_launch_description():
     port = LaunchConfiguration('port')
     baud_rate = LaunchConfiguration('baud_rate')
     frame_id = LaunchConfiguration('frame_id')
+    imu_topic = LaunchConfiguration('imu_topic')
 
     return LaunchDescription([
         DeclareLaunchArgument('port', default_value='/dev/ttyACM0'),
         DeclareLaunchArgument('baud_rate', default_value='115200'),
-        DeclareLaunchArgument('frame_id', default_value='L_BASE_IMU'),
+        DeclareLaunchArgument('frame_id', default_value='base_imu_link'),
+        DeclareLaunchArgument('imu_topic', default_value='/imu/data_raw'),
         Node(
             package='tdk_ros2_imu',
             executable='tdk_imu_node',
@@ -40,5 +42,8 @@ def generate_launch_description():
                 'baud_rate': baud_rate,
                 'frame_id': frame_id,
             }],
+            remappings=[
+                ('/tdk/imu', imu_topic),
+            ],
         ),
     ])

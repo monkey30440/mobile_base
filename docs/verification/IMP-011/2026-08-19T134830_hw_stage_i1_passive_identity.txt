@@ -1,0 +1,67 @@
+=== IMP-011 Stage I1: Passive Device Identity / Readiness ===
+Timestamp: 2026-08-19T13:48:30+08:00
+
+--- Host Serial Devices & Symlinks ---
+lrwxrwxrwx 1 root root        13  7月 28 23:04 /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG03E9MD-if00-port0 -> ../../ttyUSB0
+lrwxrwxrwx 1 root root        13  8月 19 13:34 /dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_2063328E4842-if00 -> ../../ttyACM0
+crw-rw---- 1 root dialout 166, 0  8月 19 13:34 /dev/ttyACM0
+
+--- Host udev Information for /dev/ttyACM0 ---
+P: /devices/platform/bus@0/a80aa10000.usb/usb1/1-4/1-4.1/1-4.1.4/1-4.1.4:1.0/tty/ttyACM0
+M: ttyACM0
+R: 0
+U: tty
+D: c 166:0
+N: ttyACM0
+L: 0
+S: serial/by-path/platform-a80aa10000.usb-usb-0:4.1.4:1.0
+S: serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_2063328E4842-if00
+S: serial/by-path/platform-a80aa10000.usb-usbv2-0:4.1.4:1.0
+E: DEVPATH=/devices/platform/bus@0/a80aa10000.usb/usb1/1-4/1-4.1/1-4.1.4/1-4.1.4:1.0/tty/ttyACM0
+E: DEVNAME=/dev/ttyACM0
+E: MAJOR=166
+E: MINOR=0
+E: SUBSYSTEM=tty
+E: USEC_INITIALIZED=11089321
+E: ID_BUS=usb
+E: ID_MODEL=STM32_Virtual_ComPort
+E: ID_MODEL_ENC=STM32\x20Virtual\x20ComPort
+E: ID_MODEL_ID=5740
+E: ID_SERIAL=STMicroelectronics_STM32_Virtual_ComPort_2063328E4842
+E: ID_SERIAL_SHORT=2063328E4842
+E: ID_VENDOR=STMicroelectronics
+E: ID_VENDOR_ENC=STMicroelectronics
+E: ID_VENDOR_ID=0483
+E: ID_REVISION=0200
+E: ID_TYPE=generic
+E: ID_USB_MODEL=STM32_Virtual_ComPort
+E: ID_USB_MODEL_ENC=STM32\x20Virtual\x20ComPort
+E: ID_USB_MODEL_ID=5740
+E: ID_USB_SERIAL=STMicroelectronics_STM32_Virtual_ComPort_2063328E4842
+E: ID_USB_SERIAL_SHORT=2063328E4842
+E: ID_USB_VENDOR=STMicroelectronics
+E: ID_USB_VENDOR_ENC=STMicroelectronics
+E: ID_USB_VENDOR_ID=0483
+E: ID_USB_REVISION=0200
+E: ID_USB_TYPE=generic
+E: ID_USB_INTERFACES=:020201:0a0000:
+E: ID_USB_INTERFACE_NUM=00
+E: ID_USB_DRIVER=cdc_acm
+E: ID_USB_CLASS_FROM_DATABASE=Communications
+E: ID_USB_SUBCLASS_FROM_DATABASE=Abstract (modem)
+E: ID_VENDOR_FROM_DATABASE=STMicroelectronics
+E: ID_MODEL_FROM_DATABASE=Virtual COM Port
+E: ID_PATH_WITH_USB_REVISION=platform-a80aa10000.usb-usbv2-0:4.1.4:1.0
+E: ID_PATH=platform-a80aa10000.usb-usb-0:4.1.4:1.0
+E: ID_PATH_TAG=platform-a80aa10000_usb-usb-0_4_1_4_1_0
+E: ID_MM_CANDIDATE=1
+E: DEVLINKS=/dev/serial/by-path/platform-a80aa10000.usb-usb-0:4.1.4:1.0 /dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_2063328E4842-if00 /dev/serial/by-path/platform-a80aa10000.usb-usbv2-0:4.1.4:1.0
+E: TAGS=:systemd:
+E: CURRENT_TAGS=:systemd:
+
+
+--- Container Device Visibility ---
+crw-rw---- 1 root dialout 166, 0 Aug 19 05:43 /dev/ttyACM0
+crw-rw---- 1 root dialout 188, 0 Aug 19 05:43 /dev/ttyUSB0
+
+=== Stage I1 Inspection Result: PASS ===

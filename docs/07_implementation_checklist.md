@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：27
-- 已完成：10
+- 已完成：11
 - 進行中：0
-- 待實作：17
+- 待實作：16
 - 上游阻塞：0
-- 目前進度：10 / 27 (37%)；第 10 項 `S2 LiDAR acquisition and scan baseline` 已完成 `[x]`（雙路 SICK picoScan150 實體雷達擷取、Layer-1 光學掃描面 TF static 連通性、RELIABLE/TRANSIENT_LOCAL QoS 紀錄與雙路獨立全幅 LaserScan 串流已完成實機驗收）；第 11 項 `S2 TDK IMU runtime integration` 尚未開始 `[ ]`。
+- 目前進度：11 / 27 (41%)；第 11 項 `S2 TDK IMU runtime integration` 已完成 `[x]`；待啟動第 12 項 `S2 RF2O and selected scan integration`。
 
 ---
 
@@ -55,7 +55,7 @@
 - [x] 10. S2 LiDAR acquisition and scan baseline
   - 追溯：SYS-003。
   - 完成條件：兩具 `sick_scan_xd` source 各自取得有效 LaserScan、frame/QoS/timestamp 可驗證；只有 06 核准的 downstream dependency 才使用 `dual_laser_merger`，不得以 merged output 取代兩個 authoritative raw sources。
-- [ ] 11. S2 TDK IMU runtime integration
+- [x] 11. S2 TDK IMU runtime integration
   - 追溯：SYS-004。
   - 完成條件：現有 `tdk_ros2_imu` parser/node/test 在 target container 重跑通過，`/dev/ttyACM0`、message fields、units、frame、QoS、rate、timestamp、斷線／壞封包與實機靜態／動態量測均有證據。
 - [ ] 12. S2 RF2O and selected scan integration
