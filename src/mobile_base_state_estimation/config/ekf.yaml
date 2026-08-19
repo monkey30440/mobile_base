@@ -1,0 +1,61 @@
+# Copyright 2026 Antigravity Team.
+#
+# S3 State Estimation Subsystem EKF configuration using robot_localization.
+# Fuses wheel odometry (odom0), RF2O laser odometry (odom1), and TDK IMU (imu0).
+# Publishes /odometry/filtered and acts as the sole authority for odom -> base_footprint TF.
+
+ekf_filter_node:
+  ros__parameters:
+    frequency: 50.0
+    sensor_timeout: 0.1
+    two_d_mode: true
+    transform_time_offset: 0.0
+    transform_timeout: 0.0
+    print_diagnostics: false
+    publish_tf: true
+    publish_acceleration: false
+
+    map_frame: "map"
+    odom_frame: "odom"
+    base_link_frame: "base_footprint"
+    world_frame: "odom"
+
+    # odom0: S7 Base Control wheel odometry (fusing vx, yaw_rate)
+    odom0: "/base_control/wheel_odometry"
+    odom0_config: [
+      false, false, false, # x, y, z
+      false, false, false, # roll, pitch, yaw
+      true,  false, false, # vx, vy, vz
+      false, false, true,  # vroll, vpitch, vyaw (yaw_rate)
+      false, false, false  # ax, ay, az
+    ]
+    odom0_queue_size: 10
+    odom0_differential: false
+    odom0_relative: false
+
+    # odom1: S2 RF2O laser odometry (fusing vx, vy, yaw_rate)
+    odom1: "/rf2o/odom"
+    odom1_config: [
+      false, false, false, # x, y, z
+      false, false, false, # roll, pitch, yaw
+      true,  true,  false, # vx, vy, vz
+      false, false, true,  # vroll, vpitch, vyaw (yaw_rate)
+      false, false, false  # ax, ay, az
+    ]
+    odom1_queue_size: 10
+    odom1_differential: false
+    odom1_relative: false
+
+    # imu0: S2 TDK IMU (fusing yaw_rate, ax; orientation strictly excluded)
+    imu0: "/imu/data_raw"
+    imu0_config: [
+      false, false, false, # x, y, z
+      false, false, false, # roll, pitch, yaw (DO NOT fuse IMU orientation)
+      false, false, false, # vx, vy, vz
+      false, false, true,  # vroll, vpitch, vyaw (yaw_rate)
+      true,  false, false  # ax, ay, az
+    ]
+    imu0_queue_size: 10
+    imu0_differential: false
+    imu0_relative: false
+    imu0_remove_gravitational_acceleration: true

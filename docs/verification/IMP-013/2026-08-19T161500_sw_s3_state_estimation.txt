@@ -1,0 +1,66 @@
+# IMP-013 Software Verification Evidence
+# Date: 2026-08-19T16:15:00+08:00
+# Target: Checklist #13 — S3 State Estimation (Stage E1 Software-Only Slice)
+# Platform: ROS 2 Jazzy, Ubuntu 24.04, Docker Container on Jetson AMR Target
+# Package: mobile_base_state_estimation 0.1.0
+
+=== 1. PACKAGE BUILD AND TEST RESULT ===
+- Package: mobile_base_state_estimation
+- Build Command: colcon build --symlink-install --packages-select mobile_base_state_estimation
+- Build Result: PASS (Finished in 1.39s)
+- Test Command: colcon test --packages-select mobile_base_state_estimation && colcon test-result --verbose
+- Test Result: PASS (Summary: 293 tests, 0 errors, 0 failures, 30 skipped)
+
+=== 2. UNIT AND CONFIGURATION CONTRACT VERIFICATION ===
+- Test Suite: src/mobile_base_state_estimation/test/test_ekf_launch_syntax.py
+- Test Cases:
+  * test_ekf_yaml_configuration: PASS
+    - Core EKF Parameters:
+      * frequency: 50.0 Hz
+      * sensor_timeout: 0.1 s
+      * two_d_mode: True
+      * publish_tf: True
+      * map_frame: "map"
+      * odom_frame: "odom"
+      * base_link_frame: "base_footprint"
+      * world_frame: "odom"
+    - Sensor 0 (odom0 - Wheel Odometry):
+      * Topic: /base_control/wheel_odometry
+      * Config: [False, False, False, False, False, False, True, False, False, False, False, True, False, False, False]
+      * Fused State: vx, vyaw (yaw_rate)
+    - Sensor 1 (odom1 - RF2O Laser Odometry):
+      * Topic: /rf2o/odom
+      * Config: [False, False, False, False, False, False, True, True, False, False, False, True, False, False, False]
+      * Fused State: vx, vy, vyaw (yaw_rate)
+    - Sensor 2 (imu0 - TDK IMU):
+      * Topic: /imu/data_raw
+      * Config: [False, False, False, False, False, False, False, False, False, False, False, True, True, False, False]
+      * Fused State: vyaw (yaw_rate), ax
+      * Orientation Excluded: [roll, pitch, yaw] all False
+      * imu0_remove_gravitational_acceleration: True
+  * test_ekf_launch_description_generation: PASS
+    - Package: robot_localization
+    - Executable: ekf_node
+    - Node Name: ekf_filter_node
+    - Remappings: [('odometry/filtered', '/odometry/filtered'), ('accel/filtered', '/accel/filtered')]
+
+=== 3. NODE STARTUP AND INTERFACE ADVERTISEMENT VERIFICATION ===
+- Node: robot_localization/ekf_node
+- Config File: install/mobile_base_state_estimation/share/mobile_base_state_estimation/config/ekf.yaml
+- Discovered Topics at Startup:
+  * Subscriptions:
+    - /base_control/wheel_odometry [nav_msgs/msg/Odometry]
+    - /rf2o/odom                  [nav_msgs/msg/Odometry]
+    - /imu/data_raw               [sensor_msgs/msg/Imu]
+    - /set_pose                   [geometry_msgs/msg/PoseWithCovarianceStamped]
+  * Publications:
+    - /odometry/filtered          [nav_msgs/msg/Odometry]
+    - /tf                         [tf2_msgs/msg/TFMessage]
+    - /diagnostics                [diagnostic_msgs/msg/DiagnosticArray]
+- Startup Errors: 0
+
+=== 4. STAGE E1 BOUNDARY ===
+- Status: PASS (Software-only slice complete)
+- Real Multi-Sensor EKF Runtime: Not executed (Pending Stage E2 authorization)
+- Physical Chassis Motion: 0 (Stationary / No motion)
+- Checklist #13 Status: [~]

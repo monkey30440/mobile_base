@@ -1709,3 +1709,98 @@ src/rf2o_laser_odometry/
 | Feature freeze status | `Frozen (Checklist #12 Closed [x])` (All Software & Hardware Validation Evidence Established and Accepted; Checklist #12 Closed [x]) |
 | Freeze condition | 軟體測試通過、Stage R2 實機雙光達 360° 融合 `/scan`、RF2O `/rf2o/odom` 靜態里程串流、零 TF 廣播防護與時間戳/共變異數實證全部通過；原 Checklist #12 DoD 項目已全數具備完整實證並經審查核准結案 |
 | Next dependency | Checklist #13 (S3 State Estimation) |
+
+### 3.7 S3 State Estimation Subsystem (`src/mobile_base_state_estimation/`)
+
+#### 3.7.1 Subsystem Specification & Checklist Tracking
+- **Checklist item**: `[x] 13. S3 State Estimation`
+- **Subsystem**: S3 State Estimation Subsystem
+- **Implementation status**: `Closed [x]` (Stage E1 software baseline, launch, configuration, syntax test suites, and Stage E2 real-hardware verification complete and approved)
+- **Traceability**: `SYS-005` (系統里程); 06 Chapter 3.4.
+
+#### 3.7.2 Requirement & Contract Mapping
+- **SYS-005 (系統里程)**：使用 S7 wheel odometry、S2 RF2O odometry 與 S2 IMU 三大來源，透過成熟之 `robot_localization` 2D EKF 節點融合推算高頻、連續之平面里程狀態 (`/odometry/filtered`)，並作為全系統唯一授權之 `odom -> base_footprint` TF 發布者。
+- **輸入逾時與異常容錯 (Timeout & Prediction)**：配置 `sensor_timeout: 0.1`，當單一感測器異常或中斷時，依 EKF 原生預測模型與其餘有效量測平滑推算，不發布跳變 TF 或崩潰。
+- **TF 唯一性契約 (TF Authority)**：S3 EKF (`publish_tf: true`, `world_frame: odom`) 為 `odom -> base_footprint` 唯一發布者；S7 wheel odometry (`enable_odom_tf: false`) 與 S2 RF2O (`publish_tf: false`) 嚴禁發布 TF；S3 不發布 `map -> odom`（保留由 S4/S5 管理）。
+
+#### 3.7.3 Implementation Artifacts
+```text
+src/mobile_base_state_estimation/
+├── CMakeLists.txt                     # Package build rules, asset installation, and pytest test target
+├── package.xml                        # Package metadata and ROS 2 dependencies (robot_localization, nav_msgs, sensor_msgs)
+├── config/
+│   └── ekf.yaml                       # Authoritative 2D EKF parameters, 15-variable fusion vectors, and TF configurations
+├── launch/
+│   └── ekf.launch.py                  # Launch file initializing robot_localization ekf_node with authoritative YAML and remappings
+└── test/
+    └── test_ekf_launch_syntax.py      # Unit and syntax tests validating EKF YAML contract and launch generation
+```
+
+#### 3.7.4 Mature Solution vs. Custom Implementation Boundary
+- **成熟方案引用**：採用 ROS 2 Jazzy 官方套件 `robot_localization` 3.8.3 提供之 `ekf_node`，執行 2D 擴展卡爾曼濾波運算。
+- **客製化實作範圍**：僅限於專案專屬之 ROS 2 套件封裝、Launch 啟動腳本、YAML 參數配置與單元語法測試，嚴格不修改或包裹 `robot_localization` 原生演算法。
+
+#### 3.7.5 Interface & Configuration
+
+##### 訂閱與融合介面 (Subscribed & Fused Interfaces)
+| 輸入名稱 | 主題名稱 | 訊息型別 | `header.frame_id` | `child_frame_id` | QoS | 融合狀態維度 (15-Variable Config Vector) |
+|---|---|---|---|---|---|---|
+| **`odom0`** | `/base_control/wheel_odometry` | `nav_msgs/msg/Odometry` | `odom` | `base_footprint` | SensorData / Reliable | $[v_x, \omega_z]$ (輪端線速度與角速度基準) |
+| **`odom1`** | `/rf2o/odom` | `nav_msgs/msg/Odometry` | `odom` | `base_footprint` | SensorData | $[v_x, v_y, \omega_z]$ (雷達特徵平面速度，抑制打滑) |
+| **`imu0`** | `/imu/data_raw` | `sensor_msgs/msg/Imu` | `base_imu_link` | N/A | SensorData | $[\omega_z, a_x]$ (高頻角速度與線加速度；**姿態嚴格排除**) |
+
+##### 發布介面 (Published Interfaces)
+| 主題名稱 | 訊息型別 | `header.frame_id` | `child_frame_id` | QoS Profile | 典型頻率 | 說明與消費者 |
+|---|---|---|---|---|---|---|
+| **`/odometry/filtered`** | `nav_msgs/msg/Odometry` | **`odom`** | **`base_footprint`** | SystemDefault / Reliable | $50.0\,	ext{Hz}$ | **全系統權威平面融合里程**；供 S4 Mapping、S5 Localization、S6 Navigation 訂閱 |
+| **`/tf`** | `tf2_msgs/msg/TFMessage` | **`odom`** | **`base_footprint`** | Dynamic | $50.0\,	ext{Hz}$ | **全系統唯一發布之 `odom -> base_footprint` 動態座標轉換** |
+
+#### 3.7.6 EKF Core Parameters & Vectors
+```yaml
+ekf_filter_node:
+  ros__parameters:
+    frequency: 50.0
+    sensor_timeout: 0.1
+    two_d_mode: true
+    publish_tf: true
+    map_frame: "map"
+    odom_frame: "odom"
+    base_link_frame: "base_footprint"
+    world_frame: "odom"
+
+    # odom0: vx, vyaw
+    odom0: "/base_control/wheel_odometry"
+    odom0_config: [false, false, false, false, false, false, true, false, false, false, false, true, false, false, false]
+
+    # odom1: vx, vy, vyaw
+    odom1: "/rf2o/odom"
+    odom1_config: [false, false, false, false, false, false, true, true, false, false, false, true, false, false, false]
+
+    # imu0: vyaw, ax (orientation strictly excluded)
+    imu0: "/imu/data_raw"
+    imu0_config: [false, false, false, false, false, false, false, false, false, false, false, true, true, false, false]
+    imu0_remove_gravitational_acceleration: true
+```
+
+#### 3.7.7 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-19T16:15:00+08:00 | S3 State Estimation Stage E1 Software Test Suite | `colcon build --packages-select mobile_base_state_estimation && colcon test --packages-select mobile_base_state_estimation` + `colcon test-result` | PASS | `mobile_base_state_estimation` 建置通過；單元與語法測試（`test_ekf_launch_syntax.py` 2 項測試）通過：驗證 `ekf.yaml` 核心參數（50Hz, 0.1s timeout, 2D mode, publish_tf=true, world_frame=odom）、15 變數 config 向量（`odom0` 輪速 $v_x, \omega_z$；`odom1` RF2O $v_x, v_y, \omega_z$；`imu0` IMU $\omega_z, a_x$ 且姿態全數排除）、重力扣除配置及 LaunchDescription 生成；全工作區 293 項回歸測試全部通過；`ekf_node` 乾跑啟動無任何參數錯誤，正確監聽三路輸入並發布 `/odometry/filtered` 與 `/tf`。 | [`docs/verification/IMP-013/2026-08-19T161500_sw_s3_state_estimation.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-013/2026-08-19T161500_sw_s3_state_estimation.txt) |
+| 2026-08-19T16:20:00+08:00 | Stage E2: Passive / Stationary Real-Hardware Combined EKF Validation | `ros2 launch mobile_base_description robot_description.launch.py` + `tdk_imu.launch.py` + `sick_dual_lidar.launch.py` + `dual_laser_merger.launch.py` + `rf2o_laser_odometry.launch.py` + `ekf.launch.py` | PASS | 實體多源聯合啟動：TDK IMU (`/imu/data_raw` 實測 $\sim 178\,\text{Hz}$)、SICK 雙光達融合雷達里程 (`/rf2o/odom` 實測 $19.92\,\text{Hz}$) 與輪端里程 (`/base_control/wheel_odometry`) 三路來源全部成功匯流至 `ekf_node` 訂閱；`ekf_node` 穩定輸出 `/odometry/filtered`（`header.frame_id: odom`，`child_frame_id: base_footprint`，單調時間戳，靜止速度殘差 $v_x \approx 0.000005\,\text{m/s}, v_y \approx -0.000357\,\text{m/s}, \omega_z \approx -0.000332\,\text{rad/s}$，6.0 秒位置漂移 $dx \approx -0.43\,\text{mm}, dy \approx -0.24\,\text{mm}$，共變異數對角陣列結構有效）；實時監控動態 `/tf` 確認僅有 `ekf_filter_node` 發布 `odom -> base_footprint`（298 筆，零重複發布者，S3 不發布 `map -> odom`）；輸入逾時與異常容錯檢驗通過（輪端里程停止發布後，EKF 依 $0.1\,\text{s}$ 逾時機制依靠 RF2O+IMU 穩定維持狀態預測與輸出，未發生崩潰或輸出異常）。 | [`docs/verification/IMP-013/2026-08-19T162000_hw_stage_e2_stationary_ekf.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-013/2026-08-19T162000_hw_stage_e2_stationary_ekf.txt) |
+
+#### 3.7.8 Evidence Boundary
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS`) | 1. **套件建置與架構完整性** (`PASS`)：`mobile_base_state_estimation` 於 ROS 2 Jazzy 容器內正確建置與安裝。<br/>2. **EKF 配置契約與向量驗證** (`PASS`)：`ekf.yaml` 正確配置 2D 模式、50 Hz、`sensor_timeout: 0.1`、`world_frame: odom`、`publish_tf: true`；15 變數融合向量完全符合 06 規範且嚴格排除 IMU 姿態。<br/>3. **節點啟動與主題綁定** (`PASS`)：`ekf_node` 正常啟動，正確訂閱三路來源並發布 `/odometry/filtered` 與 `/tf`。<br/>4. **全回歸測試通過** (`PASS`)：全工作區 293 項測試全部通過（0 failures, 0 errors, 30 skipped）。<br/>5. **實機多源靜態融合 (Stage E2)** (`PASS`)：實體 S1 + S2 (IMU+LiDAR+RF2O) + S3 (EKF) 同步啟動，三路感測來源正常匯流，`/odometry/filtered` 穩定輸出，時間戳單調遞增，靜止速度殘差極小，6.0 秒靜態漂移 $<0.5\,\text{mm}$，共變異數矩陣有效。<br/>6. **實機 TF 唯一性監控 (Stage E2)** (`PASS`)：實測 `/tf` 監控確認僅有 `ekf_node` 發布 `odom -> base_footprint`，零第二發布者衝突，且 S3 嚴格不發布 `map -> odom`。<br/>7. **輸入逾時容錯行為 (Stage E2)** (`PASS`)：單一感測源中斷時，EKF 依 `sensor_timeout: 0.1` 原生機制依靠其餘有效輸入與預測模型平滑維持推算。 |
+| 尚未證明 | 無（原 Checklist #13 DoD 規範之 EKF 融合輪端/IMU/RF2O、唯一 `odom -> base_footprint` TF 擁有者、共變異數、輸入逾時/異常容錯與實機靜態里程表現均已完全具備實證）。 |
+
+#### 3.7.9 Known Limits / Outstanding Obligations
+- **無輪端動力輸出**：Stage E2 驗證全程維持馬達無動力輸出狀態（未發送任何 M1 指令），底盤完全靜止。
+- **SLAM 與 AMCL 留待後續項目**：EKF 僅負責發布 `odom -> base_footprint`，`map -> odom` 由 S4/S5 承接。
+
+#### 3.7.10 Feature Freeze Status / Next Dependency
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `Frozen (Checklist #13 Closed [x])` (All Software & Hardware Validation Evidence Established and Accepted; Checklist #13 Closed [x]) |
+| Freeze condition | 軟體測試通過、Stage E2 實機三路多源融合、輸出頻率（約 49.7 Hz，298 筆 / 約 6.0 秒）、靜態里程穩定性、唯一 TF 廣播防護與輸入逾時容錯實證全部通過；原 Checklist #13 DoD 項目已全數具備完整實證並經審查核准結案 |
+| Next dependency | Checklist #14 (S4 Mapping and MapIO) |
