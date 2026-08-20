@@ -14,27 +14,14 @@
 
 """Launch composition for dual_laser_merger in S2 Perception."""
 
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     """Generate launch description for dual LiDAR scan merger."""
-    perception_pkg = get_package_share_directory('mobile_base_perception')
-
-    default_config_path = PathJoinSubstitution([
-        perception_pkg, 'config', 'dual_laser_merger.yaml'
-    ])
-
-    params_file_arg = DeclareLaunchArgument(
-        'params_file',
-        default_value=default_config_path,
-        description='Path to dual_laser_merger parameter YAML file'
-    )
-
     laser_1_topic_arg = DeclareLaunchArgument(
         'laser_1_topic',
         default_value='/scan_front',
@@ -59,30 +46,40 @@ def generate_launch_description():
         description='Output topic name for merged 360-degree LaserScan'
     )
 
-    params_file = LaunchConfiguration('params_file')
     laser_1_topic = LaunchConfiguration('laser_1_topic')
     laser_2_topic = LaunchConfiguration('laser_2_topic')
     target_frame = LaunchConfiguration('target_frame')
     merged_scan_topic = LaunchConfiguration('merged_scan_topic')
+
+    merger_parameters = {
+        'laser_1_topic': laser_1_topic,
+        'laser_2_topic': laser_2_topic,
+        'target_frame': target_frame,
+        'merged_scan_topic': merged_scan_topic,
+        'merged_cloud_topic': '/sick_internal/merged_cloud',
+        'angle_min': -3.141592653589793,
+        'angle_max': 3.141592653589793,
+        'angle_increment': 0.0058171823974636,
+        'scan_time': 0.04,
+        'range_min': 0.05,
+        'range_max': 25.0,
+        'min_height': -1.0,
+        'max_height': 1.0,
+        'tolerance': 0.05,
+        'allowed_radius': 0.20,
+        'use_inf': True,
+        'inf_epsilon': 1.0,
+    }
 
     merger_node = Node(
         package='dual_laser_merger',
         executable='dual_laser_merger_node',
         name='dual_laser_merger_node',
         output='screen',
-        parameters=[
-            params_file,
-            {
-                'laser_1_topic': laser_1_topic,
-                'laser_2_topic': laser_2_topic,
-                'target_frame': target_frame,
-                'merged_scan_topic': merged_scan_topic,
-            }
-        ],
+        parameters=[merger_parameters],
     )
 
     return LaunchDescription([
-        params_file_arg,
         laser_1_topic_arg,
         laser_2_topic_arg,
         target_frame_arg,

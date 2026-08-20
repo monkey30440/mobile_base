@@ -17,10 +17,10 @@
 import importlib.util
 from pathlib import Path
 
-from launch import LaunchDescription
+from launch import LaunchContext, LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
-import yaml
+from launch_ros.utilities import evaluate_parameters
 
 
 def _load_launch_module(launch_file_path: Path):
@@ -31,30 +31,6 @@ def _load_launch_module(launch_file_path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def test_dual_laser_merger_yaml_configuration():
-    """Verify that dual_laser_merger.yaml matches authoritative S2 contracts."""
-    pkg_dir = Path(__file__).resolve().parent.parent
-    config_path = pkg_dir / 'config' / 'dual_laser_merger.yaml'
-    assert config_path.exists(), f'Configuration file not found: {config_path}'
-
-    with open(config_path, 'r', encoding='utf-8') as f:
-        data = yaml.safe_load(f)
-
-    assert 'dual_laser_merger_node' in data
-    params = data['dual_laser_merger_node']['ros__parameters']
-
-    assert params['laser_1_topic'] == '/scan_front'
-    assert params['laser_2_topic'] == '/scan_rear'
-    assert params['target_frame'] == 'base_link'
-    assert params['merged_scan_topic'] == '/scan'
-    assert params['merged_cloud_topic'] == '/sick_internal/merged_cloud'
-    assert params['range_min'] == 0.05
-    assert params['range_max'] == 25.0
-    assert params['min_height'] == -1.0
-    assert params['max_height'] == 1.0
-    assert params['use_inf'] is True
 
 
 def test_dual_laser_merger_launch_description_generation():
@@ -72,7 +48,7 @@ def test_dual_laser_merger_launch_description_generation():
         action.name for action in ld.entities
         if isinstance(action, DeclareLaunchArgument)
     ]
-    assert 'params_file' in declared_args
+    assert 'params_file' not in declared_args
     assert 'laser_1_topic' in declared_args
     assert 'laser_2_topic' in declared_args
     assert 'target_frame' in declared_args
@@ -88,3 +64,44 @@ def test_dual_laser_merger_launch_description_generation():
     assert merger_node._Node__package == 'dual_laser_merger'
     assert merger_node._Node__node_executable == 'dual_laser_merger_node'
     assert merger_node._Node__node_name == 'dual_laser_merger_node'
+
+
+def test_dual_laser_merger_uses_complete_inline_parameters():
+    """Prevent shared params_file launch state from replacing merger settings."""
+    pkg_dir = Path(__file__).resolve().parent.parent
+    launch_path = pkg_dir / 'launch' / 'dual_laser_merger.launch.py'
+
+    module = _load_launch_module(launch_path)
+    ld = module.generate_launch_description()
+
+    declared_args = {
+        action.name for action in ld.entities
+        if isinstance(action, DeclareLaunchArgument)
+    }
+    assert 'params_file' not in declared_args
+
+    merger_node = next(
+        action for action in ld.entities
+        if isinstance(action, Node)
+    )
+    context = LaunchContext()
+    context.launch_configurations.update({
+        'laser_1_topic': '/scan_front',
+        'laser_2_topic': '/scan_rear',
+        'target_frame': 'base_link',
+        'merged_scan_topic': '/scan',
+    })
+    evaluated = evaluate_parameters(context, merger_node._Node__parameters)
+
+    assert len(evaluated) == 1
+    assert isinstance(evaluated[0], dict)
+    assert evaluated[0]['laser_1_topic'] == '/scan_front'
+    assert evaluated[0]['laser_2_topic'] == '/scan_rear'
+    assert evaluated[0]['target_frame'] == 'base_link'
+    assert evaluated[0]['merged_scan_topic'] == '/scan'
+    assert evaluated[0]['merged_cloud_topic'] == '/sick_internal/merged_cloud'
+    assert evaluated[0]['angle_increment'] == 0.0058171823974636
+    assert evaluated[0]['range_max'] == 25.0
+    assert evaluated[0]['min_height'] == -1.0
+    assert evaluated[0]['max_height'] == 1.0
+    assert evaluated[0]['allowed_radius'] == 0.20
