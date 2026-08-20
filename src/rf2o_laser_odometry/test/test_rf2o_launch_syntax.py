@@ -72,7 +72,7 @@ def test_rf2o_launch_description_generation():
         if isinstance(action, DeclareLaunchArgument)
     ]
     assert 'params_file' in declared_args
-    assert len(declared_args) == 1
+    assert 'log_level' in declared_args
 
     # Inspect Node actions
     node_actions = [
@@ -93,3 +93,8 @@ def test_rf2o_launch_description_generation():
     variable_name = parameter_file_substitutions[0]._LaunchConfiguration__variable_name
     assert len(variable_name) == 1
     assert variable_name[0].perform(LaunchContext()) == 'params_file'
+
+    argument_text = str(rf2o_node._Node__arguments)
+    assert '--ros-args' in argument_text
+    assert '--log-level' in argument_text
+    assert 'rf2o_laser_odometry:=' in argument_text

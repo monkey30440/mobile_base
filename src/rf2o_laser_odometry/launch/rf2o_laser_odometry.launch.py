@@ -34,15 +34,27 @@ def generate_launch_description():
         description='Path to RF2O parameter YAML file'
     )
 
+    log_level_arg = DeclareLaunchArgument(
+        'log_level',
+        default_value='warn',
+        description='RF2O logger level (use info for per-scan diagnostics)'
+    )
+
     rf2o_node = Node(
         package='rf2o_laser_odometry',
         executable='rf2o_laser_odometry_node',
         name='rf2o_laser_odometry',
         output='screen',
         parameters=[LaunchConfiguration('params_file')],
+        arguments=[
+            '--ros-args',
+            '--log-level',
+            ['rf2o_laser_odometry:=', LaunchConfiguration('log_level')],
+        ],
     )
 
     return LaunchDescription([
         params_file_arg,
+        log_level_arg,
         rf2o_node,
     ])
