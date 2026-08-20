@@ -17,6 +17,8 @@
 
 #include "rf2o_laser_odometry/CLaserOdometry2D.hpp"
 
+#include <algorithm>
+
 namespace rf2o {
 
 
@@ -582,11 +584,17 @@ void CLaserOdometry2D::computeWeights()
           kdtita*(dtita(u)*dtita(u)) +
           k2d*(std::abs(dtitat) + std::abs(dtita2));
 
-      weights(u) = std::sqrt(1.f/w_der);
+      // A stationary scan can have zero spatial/temporal derivative.  Avoid
+      // inf -> NaN during normalization; such samples should simply have a
+      // neutral finite weight.
+      weights(u) = std::sqrt(1.f/std::max(w_der, 1e-6f));
     }
 
-  const float inv_max = 1.f / weights.maxCoeff();
-  weights = inv_max*weights;
+  const float max_weight = weights.maxCoeff();
+  if (std::isfinite(max_weight) && max_weight > 0.f)
+    weights = (1.f/max_weight)*weights;
+  else
+    weights.setZero();
 }
 
 void CLaserOdometry2D::findNullPoints()
@@ -839,7 +847,9 @@ bool CLaserOdometry2D::filterLevelSolution()
   Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eigensolver(cov_odo);
   if (eigensolver.info() != Eigen::Success)
   {
-    RCLCPP_WARN(get_logger(), "WARNING: Eigensolver couldn't find a solution. Pose is not updated");
+    RCLCPP_DEBUG_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Eigensolver could not find a solution; pose is not updated (scan geometry is degenerate)");
     return false;
   }
 

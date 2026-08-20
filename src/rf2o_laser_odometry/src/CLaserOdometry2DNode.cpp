@@ -19,7 +19,7 @@
 
 using namespace rf2o;
 
-CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
+CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode"), new_scan_available(false)
 {
   RCLCPP_INFO(get_logger(), "Initializing RF2O node...");
 
@@ -123,7 +123,7 @@ bool CLaserOdometry2DNode::setLaserPoseFromTf()
   catch (tf2::TransformException &ex)
   {
     RCLCPP_ERROR(get_logger(), "%s",ex.what());
-    retrieved = false;
+    return false;
   }
 
   // Keep this transform as Eigen Matrix3d
@@ -175,8 +175,11 @@ void CLaserOdometry2DNode::process()
   }
   else
   {
-    // This is a warning. We depend on laser scans, so no meaning running faster than scan freq.
-    RCLCPP_WARN(get_logger(), "Waiting for laser_scans....");
+    // A timer cycle without a new scan is normal when the executor and sensor
+    // clocks are not phase-aligned. Only report the real startup condition;
+    // silently wait once RF2O is initialized.
+    if (!rf2o_ref.is_initialized())
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Waiting for laser_scans....");
   }
 }
 
