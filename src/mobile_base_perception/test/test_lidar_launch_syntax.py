@@ -58,6 +58,8 @@ def test_launch_description_generation():
         assert 'start_sopas_service:=' in argument_text
         assert 'publish_laserscan_segment_topic:=' in argument_text
         assert 'custom_pointclouds:=' in argument_text
+        assert '/sick_internal/' in argument_text
+        assert "custom_pointclouds:=', 'none'" in argument_text
         assert 'tf_publish_rate:=' in argument_text
         assert '0.0' in argument_text
 

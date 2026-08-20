@@ -49,6 +49,7 @@ def test_dual_laser_merger_yaml_configuration():
     assert params['laser_2_topic'] == '/scan_rear'
     assert params['target_frame'] == 'base_link'
     assert params['merged_scan_topic'] == '/scan'
+    assert params['merged_cloud_topic'] == '/sick_internal/merged_cloud'
     assert params['range_min'] == 0.05
     assert params['range_max'] == 25.0
     assert params['min_height'] == -1.0
