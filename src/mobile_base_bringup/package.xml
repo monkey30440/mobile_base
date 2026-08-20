@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mobile_base_bringup</name>
+  <version>0.1.0</version>
+  <description>Thin real-hardware workflow orchestration for mobile_base.</description>
+  <maintainer email="jimyochen@gmail.com">Jim Chen</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>mobile_base_control</exec_depend>
+  <exec_depend>mobile_base_description</exec_depend>
+  <exec_depend>mobile_base_mapping</exec_depend>
+  <exec_depend>mobile_base_perception</exec_depend>
+  <exec_depend>mobile_base_state_estimation</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>rf2o_laser_odometry</exec_depend>
+  <exec_depend>foxglove_bridge</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
