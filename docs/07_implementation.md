@@ -1426,7 +1426,7 @@ base_footprint (z = 0.0000, 地表投影基準點)
 | 欄位 | 內容 |
 |---|---|
 | Checklist item | #10 — S2 `LiDAR acquisition and scan baseline` |
-| Item scope | 依 06 §3.2 baseline 規範與實車 SICK picoScan150 硬體設定，建立 `mobile_base_perception` 套件，整合成熟 `sick_scan_xd` 3.9.0 官方 `sick_picoscan` 驅動配置。建立前左（FL，IP `192.168.0.1`，UDP Port `2115`，Frame `base_lidar_link_FL`，主題 `/scan_front`）與後右（BR，IP `192.168.0.2`，UDP Port `2116`，Frame `base_lidar_link_BR`，主題 `/scan_rear`）雙路獨立 2D LiDAR 擷取配置（`sick_front_lidar.yaml`、`sick_rear_lidar.yaml`）與啟動架構（`sick_dual_lidar.launch.py`）；設定主機接收端 IP `192.168.0.100`；透過 TCP `2111` 進行 SOPAS 動態連線交握；保留原生 $276^\circ$（$[-138^\circ, +138^\circ]$）視野；停用驅動器內部 TF 廣播（`tf_publish_rate: 0.0`），確保 S1 `robot_state_publisher` 之唯一 TF 權威；實作 launch 與 YAML 語法自動化測試；準備硬體驗證方案。 |
+| Item scope | 依 06 §3.2 baseline 規範與實車 SICK picoScan150 硬體設定，建立 `mobile_base_perception` 套件，整合成熟 `sick_scan_xd` 3.9.0 官方 `sick_picoscan` 驅動配置。建立前左（FL，IP `192.168.0.1`，UDP Port `2115`，Frame `base_lidar_link_FL`，主題 `/scan_front`）與後右（BR，IP `192.168.0.2`，UDP Port `2116`，Frame `base_lidar_link_BR`，主題 `/scan_rear`）雙路獨立 2D LiDAR 擷取配置與啟動架構（`sick_dual_lidar.launch.py`）；設定主機接收端 IP `192.168.0.100`；透過 TCP `2111` 進行 SOPAS 動態連線交握；保留原生 $276^\circ$（$[-138^\circ, +138^\circ]$）視野；停用驅動器內部 TF 廣播（`tf_publish_rate: 0.0`），確保 S1 `robot_state_publisher` 之唯一 TF 權威；實作 launch 語法自動化測試；準備硬體驗證方案。 |
 | Implementation status | `In Progress [~]` (Software baseline and launch/config tests complete and verified; real-hardware verification prepared) |
 | Evidence status | `Build Verified` + `Unit Verified (3/3 tests)` + `Ament Linters Passed (5/5 suites)` + `Workspace Regression Verified (263/263 tests)` |
 | Feature-freeze status | `Initial Software Slice Complete` (Checklist #10 remains `[~]` pending real-hardware acquisition evidence) |
@@ -1445,19 +1445,16 @@ base_footprint (z = 0.0000, 地表投影基準點)
 src/mobile_base_perception/
 ├── CMakeLists.txt
 ├── package.xml
-├── config/
-│   ├── sick_front_lidar.yaml          # FL picoScan150 config (192.168.0.1, UDP 2115, base_lidar_link_FL, /scan_front)
-│   └── sick_rear_lidar.yaml           # BR picoScan150 config (192.168.0.2, UDP 2116, base_lidar_link_BR, /scan_rear)
 ├── launch/
 │   └── sick_dual_lidar.launch.py      # Dual SICK picoScan generic caller launch composition
 └── test/
-    └── test_lidar_launch_syntax.py    # Launch description & picoScan150 YAML parameter contract tests
+    └── test_lidar_launch_syntax.py    # Launch description & picoScan150 contract tests
 ```
 
 #### 3.4.4 Mature Solution vs. Custom Implementation Boundary
 
 - **成熟方案引用**：採用 SICK 官方 ROS 2 Jazzy 二進位套件 `ros-jazzy-sick-scan-xd` 3.9.0 提供之標準 `sick_generic_caller` 節點載入 `sick_picoscan.launch` 範本進行 Ethernet UDP 掃描資料接收、TCP 2111 SOPAS 動態握手與 `sensor_msgs/msg/LaserScan` 全幅資料發布，絕無自定義之底層網路驅動代碼。
-- **客製化實作範圍**：僅限於 ROS 2 標準 launch 啟動組合與 YAML 參數配置檔（`mobile_base_perception`），確保雙 picoScan 實例在單一接收主機（`192.168.0.100`）上透過獨立 UDP 埠號（`2115` / `2116`）獨立運作，並綁定至 06 規範之 Topic 與 Frame ID。
+- **客製化實作範圍**：僅限於 ROS 2 標準 launch 啟動組合，直接依 SICK 官方介面以 `name:=value` 傳入雙 picoScan 實例；確保雙實例在單一接收主機（`192.168.0.100`）上透過獨立 UDP 埠號（`2115` / `2116`）獨立運作，並綁定至 06 規範之 Topic 與 Frame ID。
 
 #### 3.4.5 Interface & Configuration
 
@@ -1493,7 +1490,7 @@ src/mobile_base_perception/
 
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-18T17:23:33+08:00 | S2 picoScan150 Launch & Configuration Syntax Test Suite | `colcon test --packages-select mobile_base_perception` + `colcon test-result` | PASS | 全部 5 項測試套件通過（13 測試項目，0 failures, 0 errors）：驗證 picoScan150 YAML 參數解析、FL/BR 獨立 IP（192.168.0.1 / 192.168.0.2）、UDP 接收埠隔離（2115 / 2116）、Frame（base_lidar_link_FL/BR）、全幅主題（/scan_front, /scan_rear）、`tf_publish_rate: 0.0`、LaunchDescription 生成且無 `dual_laser_merger` 混入；全工作區 5 套件 263 項回歸測試通過。 | [`docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt) |
+| 2026-08-18T17:23:33+08:00 | S2 picoScan150 Launch Syntax Test Suite | `colcon test --packages-select mobile_base_perception` + `colcon test-result` | PASS | 驗證 FL/BR 獨立 node、官方 `sick_picoscan.launch` generic caller、LaunchDescription 生成且無 `dual_laser_merger` 混入。 | [`docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-010/2026-08-18T170342_unit_s2_lidar_acquisition.txt) |
 | 2026-08-18T17:26:49+08:00 | Stage L1: Passive Network / SOPAS TCP Reachability Probing | `nc -zv -w 2 192.168.0.1 2111` & `nc -zv -w 2 192.168.0.2 2111` | PASS | 雙實機 picoScan150 於 TCP 2111 均即時成功連線（exit code 0）。 | Log in transcript & Section 3.4 |
 | 2026-08-18T17:34:00+08:00 | Stage L2: Dual picoScan150 Real-Hardware LaserScan Acquisition | `ros2 launch mobile_base_description robot_description.launch.py` & `ros2 launch mobile_base_perception sick_dual_lidar.launch.py` | PASS | 雙路實體雷達同時穩定發布：<br/>• `/scan_front`：24.999 Hz，1200 點（90.1% 有限實測值，均距 1.425 m），時間戳嚴格單調遞增（1787045620.3627538），Frame `base_lidar_link_FL_1`。<br/>• `/scan_rear`：25.005 Hz，1200 點（90.2% 有限實測值，均距 2.648 m），時間戳嚴格單調遞增（1787045619.9995918），Frame `base_lidar_link_BR_1`。<br/>• S1 TF 權威存在：`base_link -> base_lidar_link_FL`（[0.288, 0.267, -0.060], RPY [180°, 0°, 45°]）與 `base_link -> base_lidar_link_BR`（[-0.247, -0.267, -0.060], RPY [180°, 0°, -135°]）正確無競爭；零封包遺失（0% lost）。 | [`docs/verification/IMP-010/2026-08-18T173400_hw_s2_lidar_dual_acquisition.txt`](file:///home/zzz/mobile_base/docs/verification/IMP-010/2026-08-18T173400_hw_s2_lidar_dual_acquisition.txt) |
 
