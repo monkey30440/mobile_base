@@ -52,6 +52,15 @@ def test_launch_description_generation():
         assert node._Node__package == 'sick_scan_xd', f'Node not sick_scan_xd: {node}'
         assert node._Node__node_executable == 'sick_generic_caller', f'Node not generic: {node}'
 
+        argument_text = str(node._Node__arguments)
+        assert 'imu_enable:=' in argument_text
+        assert 'False' in argument_text
+        assert 'start_sopas_service:=' in argument_text
+        assert 'publish_laserscan_segment_topic:=' in argument_text
+        assert 'custom_pointclouds:=' in argument_text
+        assert 'tf_publish_rate:=' in argument_text
+        assert '0.0' in argument_text
+
     # Verify no dual_laser_merger or static_transform_publisher is launched in #10
     forbidden_packages = {'dual_laser_merger', 'tf2_ros'}
     for node in node_actions:
