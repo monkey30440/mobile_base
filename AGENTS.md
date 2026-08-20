@@ -35,6 +35,8 @@
 - Use the repository's existing Docker/container workflow for builds, tests, and validation.
 - Use relevant existing package-level build and test mechanisms; do not invent parallel validation infrastructure.
 - Run the available software verification relevant to the change. Where hardware is involved, follow the documented hardware verification procedures.
+- Before running new validation, check whether existing approved evidence already covers the same observable behavior and acceptance criterion. Reuse it when the relevant implementation/configuration, target environment, scope, and evidence class remain applicable; otherwise re-run only the affected verification.
+- Do not repeat validation solely because another checklist item references already-verified behavior. Evidence reuse does not increase evidence strength: software/static/topic evidence cannot substitute for required controller, hardware-feedback, or physical-observation evidence.
 
 ## Completion reporting
 
