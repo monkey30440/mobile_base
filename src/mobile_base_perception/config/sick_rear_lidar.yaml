@@ -25,4 +25,4 @@ rear_lidar_node:
     send_sopas_start_stop_cmd: true
     scandataformat: 2  # 2 = compact scandata
     sw_pll_only_publish: true
-    verbose_level: 1
+    verbose_level: 0

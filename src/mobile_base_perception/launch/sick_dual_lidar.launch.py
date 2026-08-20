@@ -87,7 +87,7 @@ def generate_launch_description():
         package='sick_scan_xd',
         executable='sick_generic_caller',
         name='front_lidar_node',
-        output='log',
+        output='screen',
         arguments=[
             picoscan_launch_file,
             ['hostname:=', front_hostname],
@@ -101,6 +101,7 @@ def generate_launch_description():
             ['publish_laserscan_segment_topic:=', '/scan_segment_front'],
             ['tf_publish_rate:=', '0.0'],
             ['sw_pll_only_publish:=', '1'],
+            ['verbose_level:=', '0'],
         ],
         remappings=[
             ('scan_fullframe', front_topic),
@@ -113,7 +114,7 @@ def generate_launch_description():
         package='sick_scan_xd',
         executable='sick_generic_caller',
         name='rear_lidar_node',
-        output='log',
+        output='screen',
         arguments=[
             picoscan_launch_file,
             ['hostname:=', rear_hostname],
@@ -127,6 +128,7 @@ def generate_launch_description():
             ['publish_laserscan_segment_topic:=', '/scan_segment_rear'],
             ['tf_publish_rate:=', '0.0'],
             ['sw_pll_only_publish:=', '1'],
+            ['verbose_level:=', '0'],
         ],
         remappings=[
             ('scan_fullframe', rear_topic),
