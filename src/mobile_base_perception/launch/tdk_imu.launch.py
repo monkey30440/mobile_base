@@ -14,30 +14,24 @@
 
 """Launch composition for TDK IIM-42652 IMU acquisition in S2 Perception."""
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     """Generate launch description for TDK IIM-42652 IMU acquisition."""
-    port_arg = DeclareLaunchArgument(
-        'port',
-        default_value='/dev/ttyACM0',
-        description='USB serial port for TDK HandBoard IMU V1'
-    )
+    pkg_share = get_package_share_directory('mobile_base_perception')
+    default_params_file = PathJoinSubstitution([
+        pkg_share, 'config', 'tdk_imu.yaml'
+    ])
 
-    baud_rate_arg = DeclareLaunchArgument(
-        'baud_rate',
-        default_value='115200',
-        description='Serial baud rate for TDK IMU'
-    )
-
-    frame_id_arg = DeclareLaunchArgument(
-        'frame_id',
-        default_value='base_imu_link',
-        description='Authoritative TF frame ID for IMU'
+    params_file_arg = DeclareLaunchArgument(
+        'params_file',
+        default_value=default_params_file,
+        description='Path to TDK IMU parameter YAML file'
     )
 
     imu_topic_arg = DeclareLaunchArgument(
@@ -46,9 +40,7 @@ def generate_launch_description():
         description='Authoritative output topic for raw IMU measurements'
     )
 
-    port = LaunchConfiguration('port')
-    baud_rate = LaunchConfiguration('baud_rate')
-    frame_id = LaunchConfiguration('frame_id')
+    params_file = LaunchConfiguration('params_file')
     imu_topic = LaunchConfiguration('imu_topic')
 
     imu_node = Node(
@@ -56,20 +48,14 @@ def generate_launch_description():
         executable='tdk_imu_node',
         name='imu_driver_node',
         output='screen',
-        parameters=[{
-            'port': port,
-            'baud_rate': baud_rate,
-            'frame_id': frame_id,
-        }],
+        parameters=[params_file],
         remappings=[
             ('/tdk/imu', imu_topic),
         ],
     )
 
     return LaunchDescription([
-        port_arg,
-        baud_rate_arg,
-        frame_id_arg,
+        params_file_arg,
         imu_topic_arg,
         imu_node,
     ])

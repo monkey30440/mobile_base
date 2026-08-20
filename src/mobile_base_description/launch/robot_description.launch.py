@@ -27,12 +27,6 @@ def generate_launch_description():
     pkg_description = get_package_share_directory('mobile_base_description')
     default_model_path = os.path.join(pkg_description, 'urdf', 'mobile_base.urdf.xacro')
 
-    use_sim_time_arg = DeclareLaunchArgument(
-        'use_sim_time',
-        default_value='false',
-        description='Use simulation (Gazebo) clock if true',
-    )
-
     use_mock_hardware_arg = DeclareLaunchArgument(
         'use_mock_hardware',
         default_value='false',
@@ -57,10 +51,13 @@ def generate_launch_description():
         description='Response timeout in milliseconds (required parameter, no implicit default)',
     )
 
-    publish_frequency_arg = DeclareLaunchArgument(
-        'publish_frequency',
-        default_value='30.0',
-        description='Publishing frequency of robot_state_publisher (Hz)',
+    default_params_file = PathJoinSubstitution([
+        pkg_description, 'config', 'robot_state_publisher.yaml'
+    ])
+    params_file_arg = DeclareLaunchArgument(
+        'params_file',
+        default_value=default_params_file,
+        description='Path to robot_state_publisher parameter YAML file',
     )
 
     robot_description_content = Command(
@@ -91,22 +88,20 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='both',
         parameters=[
+            LaunchConfiguration('params_file'),
             {
                 'robot_description': robot_description,
-                'use_sim_time': LaunchConfiguration('use_sim_time'),
-                'publish_frequency': LaunchConfiguration('publish_frequency'),
             }
         ],
     )
 
     return LaunchDescription(
         [
-            use_sim_time_arg,
             use_mock_hardware_arg,
             serial_port_arg,
             baud_rate_arg,
             response_timeout_ms_arg,
-            publish_frequency_arg,
+            params_file_arg,
             robot_state_publisher_node,
         ]
     )

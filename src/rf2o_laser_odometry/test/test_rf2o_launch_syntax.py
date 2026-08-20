@@ -17,9 +17,11 @@
 import importlib.util
 from pathlib import Path
 
-from launch import LaunchDescription
+from launch import LaunchContext, LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterFile
 import yaml
 
 
@@ -70,13 +72,7 @@ def test_rf2o_launch_description_generation():
         if isinstance(action, DeclareLaunchArgument)
     ]
     assert 'params_file' in declared_args
-    assert 'laser_scan_topic' in declared_args
-    assert 'odom_topic' in declared_args
-    assert 'base_frame_id' in declared_args
-    assert 'odom_frame_id' in declared_args
-    assert 'publish_tf' in declared_args
-    assert 'freq' in declared_args
-    assert 'init_pose_from_topic' in declared_args
+    assert len(declared_args) == 1
 
     # Inspect Node actions
     node_actions = [
@@ -88,3 +84,12 @@ def test_rf2o_launch_description_generation():
     assert rf2o_node._Node__package == 'rf2o_laser_odometry'
     assert rf2o_node._Node__node_executable == 'rf2o_laser_odometry_node'
     assert rf2o_node._Node__node_name == 'rf2o_laser_odometry'
+    parameters = rf2o_node._Node__parameters
+    assert len(parameters) == 1
+    assert isinstance(parameters[0], ParameterFile)
+    parameter_file_substitutions = parameters[0]._ParameterFile__param_file
+    assert len(parameter_file_substitutions) == 1
+    assert isinstance(parameter_file_substitutions[0], LaunchConfiguration)
+    variable_name = parameter_file_substitutions[0]._LaunchConfiguration__variable_name
+    assert len(variable_name) == 1
+    assert variable_name[0].perform(LaunchContext()) == 'params_file'

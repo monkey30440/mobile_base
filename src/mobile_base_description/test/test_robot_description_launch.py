@@ -37,7 +37,6 @@ def generate_test_description():
         launch_arguments={
             'use_mock_hardware': 'true',
             'response_timeout_ms': '50',
-            'publish_frequency': '30.0',
         }.items(),
     )
 

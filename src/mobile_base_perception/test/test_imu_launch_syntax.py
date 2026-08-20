@@ -19,7 +19,10 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext, LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterFile
 import pytest
 import yaml
 
@@ -78,6 +81,26 @@ def test_launch_description_generation():
     assert imu_node._Node__package == 'tdk_ros2_imu'
     assert imu_node._Node__node_executable == 'tdk_imu_node'
     assert imu_node._Node__node_name == 'imu_driver_node'
+
+    declared_args = [
+        action.name for action in ld.entities
+        if isinstance(action, DeclareLaunchArgument)
+    ]
+    assert 'params_file' in declared_args
+    assert 'imu_topic' in declared_args
+    assert 'port' not in declared_args
+    assert 'baud_rate' not in declared_args
+    assert 'frame_id' not in declared_args
+
+    parameters = imu_node._Node__parameters
+    assert len(parameters) == 1
+    assert isinstance(parameters[0], ParameterFile)
+    parameter_file_substitutions = parameters[0]._ParameterFile__param_file
+    assert len(parameter_file_substitutions) == 1
+    assert isinstance(parameter_file_substitutions[0], LaunchConfiguration)
+    variable_name = parameter_file_substitutions[0]._LaunchConfiguration__variable_name
+    assert len(variable_name) == 1
+    assert variable_name[0].perform(LaunchContext()) == 'params_file'
 
     remappings = imu_node._Node__remappings
     assert len(remappings) == 1
