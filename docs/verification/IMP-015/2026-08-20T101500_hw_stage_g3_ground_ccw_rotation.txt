@@ -1,0 +1,59 @@
+================================================================================
+IMP-015 Stage G3: On-Ground CCW Rotation
+================================================================================
+Timestamp: 2026-08-20T02:08:54+0000
+Host: Jetson arm64 (AMR on flat ground, wheels fully contacting)
+Authorization: User Explicit Approval (GATE C: CCW Rotation +0.15 rad/s ~1.0s then Active Stop)
+================================================================================
+
+[1] Starting Authoritative Robot Stack (S1-S4, S7)...
+
+[2] Initial Baseline Verification:
+  Initial Odometry Pose: x0 = 0.0000 m, y0 = 0.0000 m, yaw0 = 0.0000 rad (0.00 deg)
+  Initial Angular Velocity: wz0 = 0.0000 rad/s
+  Initial Joint Positions: L = 0.0000 rad, R = -0.0000 rad
+
+[3] Spawning teleop_twist_keyboard via PTY (speed:=0.10, turn:=0.15, stamped:=true)...
+
+[4] Executing Authorized CCW Rotation Maneuver (angular.z = +0.15 rad/s, target ~1.0s)...
+
+[5] Issuing Manual Active Stop ('k')...
+
+[6] Monitoring Deceleration and Stopping...
+
+================================================================================
+STAGE G3 QUANTITATIVE RESULTS
+================================================================================
+T_command_start:           1787191747.3726 s
+T_stop_command ('k'):      1787191748.5018 s
+T_physical_stop:           1787191749.0148 s
+Commanded CCW Duration:    1.1291 s (Target ~1.0s, Hard max 1.2s)
+Active Stop Braking Time:  0.5130 s
+Initial Yaw (yaw0):        0.0000 rad (0.00 deg)
+Final Stationary Yaw (yaw1):0.1693 rad (9.70 deg)
+Measured Angular Displacement:0.1693 rad (9.70 deg)
+Observed Linear Translation: dx = -0.0000 m, dy = -0.0000 m
+Final Angular Velocity:    0.0000 rad/s
+
+--- WHEEL & ENCODER DIRECTION EVIDENCE ---
+Left Wheel Delta:  -0.5870 rad (Reverse / Negative)
+Right Wheel Delta: 0.5863 rad (Forward / Positive)
+[PASS] Left wheel rotated reverse (< 0) and Right wheel rotated forward (> 0), matching differential CCW rotation.
+[PASS] Odometry confirmed positive CCW angular displacement (dyaw = +0.1693 rad / +9.70 deg).
+
+--- POST-STOP HARDWARE & CONTROLLER HEALTH ---
+diff_drive_controller   diff_drive_controller/DiffDriveController      active
+joint_state_broadcaster joint_state_broadcaster/JointStateBroadcaster  active
+Hardware Component 1
+	name: M1Hardware
+	type: system
+	plugin name: mobile_base_control/M1Hardware
+	state: id=3 label=active
+	read/write rate: 30 Hz
+	is_async: False
+	command interfaces
+		driving_wheel_joint_L/velocity [available] [claimed]
+		driving_wheel_joint_R/velocity [available] [claimed]
+
+[7] Clean Shutdown of Robot Stack...
+[DONE] All processes terminated cleanly.

@@ -1,0 +1,66 @@
+================================================================================
+IMP-015 Stage G4: On-Ground Stale-Command Timeout Controlled Stop
+================================================================================
+Timestamp: 2026-08-20T02:12:31+0000
+Host: Jetson arm64 (AMR on flat ground, wheels fully contacting)
+Authorization: User Explicit Approval (GATE D: Forward +0.10 m/s ~1.0s then CEASE commands for Timeout Stop)
+================================================================================
+
+[1] Starting Authoritative Robot Stack (S1-S4, S7)...
+
+[2] Initial Baseline Verification:
+  Initial Odometry Pose: x0 = 0.0000 m, y0 = 0.0000 m
+  Initial Odometry Velocity: v0 = 0.0000 m/s
+  Initial Joint Positions: L = 0.0000 rad, R = -0.0000 rad
+
+[3] Spawning teleop_twist_keyboard via PTY (speed:=0.10, stamped:=true)...
+
+[4] Executing Fresh Forward Command Phase (linear.x = +0.10 m/s, target ~1.0s)...
+  Fresh command publishing CEASED at t = 1787191966.1584 s. (NO 'k' pressed)
+
+[5] Monitoring cmd_vel_timeout = 0.5s and Autonomous Deceleration...
+
+================================================================================
+STAGE G4 QUANTITATIVE RESULTS
+================================================================================
+T_command_start:           1787191965.0689 s
+T_last_fresh_command:      1787191966.1584 s
+T_timeout_effective:       1787191966.7485 s
+T_physical_stop:           1787191967.1147 s
+Fresh Command Duration:    1.0895 s (Target ~1.0s, Hard max 1.2s)
+Measured Timeout Interval: 0.5901 s (Configured cmd_vel_timeout = 0.5 s)
+Velocity at Timeout Onset: 0.0918 m/s
+Stop Time After Timeout:   0.3662 s
+Total Time (Last Cmd->Stop):0.9563 s
+Initial Pose (x0):         0.0000 m
+Pose at Last Fresh Cmd:    0.0914 m
+Pose at Timeout Onset:     0.1488 m
+Final Stationary Pose (x1):0.1497 m
+Pre-Timeout Coast Distance:0.0574 m
+Post-Timeout Stopping Dist:0.0009 m
+Total Last Cmd->Stop Dist: 0.0583 m
+Total G4 Ground Displacement:0.1497 m
+Final Velocity:            0.0000 m/s
+
+--- WHEEL & ENCODER DIRECTION EVIDENCE ---
+Left Wheel Delta:  1.8696 rad (Forward / Positive)
+Right Wheel Delta: 1.8721 rad (Forward / Positive)
+[PASS] Both Left and Right wheels rotated in positive FORWARD direction.
+[PASS] Odometry confirmed forward displacement (dx = 0.1497 m).
+
+--- POST-STOP HARDWARE & CONTROLLER HEALTH ---
+joint_state_broadcaster joint_state_broadcaster/JointStateBroadcaster  active
+diff_drive_controller   diff_drive_controller/DiffDriveController      active
+Hardware Component 1
+	name: M1Hardware
+	type: system
+	plugin name: mobile_base_control/M1Hardware
+	state: id=3 label=active
+	read/write rate: 30 Hz
+	is_async: False
+	command interfaces
+		driving_wheel_joint_L/velocity [available] [claimed]
+		driving_wheel_joint_R/velocity [available] [claimed]
+
+[6] Clean Shutdown of Robot Stack...
+[DONE] All processes terminated cleanly.
