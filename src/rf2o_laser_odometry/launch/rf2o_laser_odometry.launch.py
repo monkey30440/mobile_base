@@ -14,26 +14,14 @@
 
 """Launch file for rf2o_laser_odometry node with authoritative AMR contracts."""
 
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     """Generate launch description for RF2O laser odometry."""
-    rf2o_pkg = get_package_share_directory('rf2o_laser_odometry')
-    default_config_path = PathJoinSubstitution([
-        rf2o_pkg, 'config', 'rf2o_laser_odometry.yaml'
-    ])
-
-    params_file_arg = DeclareLaunchArgument(
-        'params_file',
-        default_value=default_config_path,
-        description='Path to RF2O parameter YAML file'
-    )
-
     log_level_arg = DeclareLaunchArgument(
         'log_level',
         default_value='warn',
@@ -45,7 +33,15 @@ def generate_launch_description():
         executable='rf2o_laser_odometry_node',
         name='rf2o_laser_odometry',
         output='screen',
-        parameters=[LaunchConfiguration('params_file')],
+        parameters=[{
+            'laser_scan_topic': '/scan',
+            'odom_topic': '/rf2o/odom',
+            'base_frame_id': 'base_footprint',
+            'odom_frame_id': 'odom',
+            'publish_tf': False,
+            'init_pose_from_topic': '',
+            'freq': 20.0,
+        }],
         arguments=[
             '--ros-args',
             '--log-level',
@@ -54,7 +50,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        params_file_arg,
         log_level_arg,
         rf2o_node,
     ])

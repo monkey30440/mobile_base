@@ -19,10 +19,8 @@ from pathlib import Path
 
 from launch import LaunchContext, LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterFile
-import yaml
+from launch_ros.utilities import evaluate_parameters
 
 
 def _load_launch_module(launch_file_path: Path):
@@ -33,27 +31,6 @@ def _load_launch_module(launch_file_path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def test_rf2o_yaml_configuration():
-    """Verify that rf2o_laser_odometry.yaml matches authoritative S2/S3 contracts."""
-    pkg_dir = Path(__file__).resolve().parent.parent
-    config_path = pkg_dir / 'config' / 'rf2o_laser_odometry.yaml'
-    assert config_path.exists(), f'Configuration file not found: {config_path}'
-
-    with open(config_path, 'r', encoding='utf-8') as f:
-        data = yaml.safe_load(f)
-
-    assert 'rf2o_laser_odometry' in data
-    params = data['rf2o_laser_odometry']['ros__parameters']
-
-    assert params['laser_scan_topic'] == '/scan'
-    assert params['odom_topic'] == '/rf2o/odom'
-    assert params['base_frame_id'] == 'base_footprint'
-    assert params['odom_frame_id'] == 'odom'
-    # Critical TF ownership check: RF2O must NOT publish odom -> base_footprint TF
-    assert params['publish_tf'] is False
-    assert params['freq'] == 20.0
 
 
 def test_rf2o_launch_description_generation():
@@ -71,7 +48,7 @@ def test_rf2o_launch_description_generation():
         action.name for action in ld.entities
         if isinstance(action, DeclareLaunchArgument)
     ]
-    assert 'params_file' in declared_args
+    assert 'params_file' not in declared_args
     assert 'log_level' in declared_args
 
     # Inspect Node actions
@@ -84,17 +61,38 @@ def test_rf2o_launch_description_generation():
     assert rf2o_node._Node__package == 'rf2o_laser_odometry'
     assert rf2o_node._Node__node_executable == 'rf2o_laser_odometry_node'
     assert rf2o_node._Node__node_name == 'rf2o_laser_odometry'
-    parameters = rf2o_node._Node__parameters
-    assert len(parameters) == 1
-    assert isinstance(parameters[0], ParameterFile)
-    parameter_file_substitutions = parameters[0]._ParameterFile__param_file
-    assert len(parameter_file_substitutions) == 1
-    assert isinstance(parameter_file_substitutions[0], LaunchConfiguration)
-    variable_name = parameter_file_substitutions[0]._LaunchConfiguration__variable_name
-    assert len(variable_name) == 1
-    assert variable_name[0].perform(LaunchContext()) == 'params_file'
-
     argument_text = str(rf2o_node._Node__arguments)
     assert '--ros-args' in argument_text
     assert '--log-level' in argument_text
     assert 'rf2o_laser_odometry:=' in argument_text
+
+
+def test_rf2o_uses_complete_inline_parameters():
+    """Prevent shared params_file launch state from replacing RF2O contracts."""
+    pkg_dir = Path(__file__).resolve().parent.parent
+    launch_path = pkg_dir / 'launch' / 'rf2o_laser_odometry.launch.py'
+
+    module = _load_launch_module(launch_path)
+    ld = module.generate_launch_description()
+
+    declared_args = {
+        action.name for action in ld.entities
+        if isinstance(action, DeclareLaunchArgument)
+    }
+    assert 'params_file' not in declared_args
+
+    rf2o_node = next(
+        action for action in ld.entities
+        if isinstance(action, Node)
+    )
+    evaluated = evaluate_parameters(LaunchContext(), rf2o_node._Node__parameters)
+
+    assert evaluated == ({
+        'laser_scan_topic': '/scan',
+        'odom_topic': '/rf2o/odom',
+        'base_frame_id': 'base_footprint',
+        'odom_frame_id': 'odom',
+        'publish_tf': False,
+        'init_pose_from_topic': '',
+        'freq': 20.0,
+    },)
