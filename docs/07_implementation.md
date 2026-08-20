@@ -2028,3 +2028,94 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
 | Feature freeze status | `Frozen [x]` (Checklist #15 S7 Manual Movement Control and Teleop Integration complete) |
 | Freeze condition | 通過 Level 4 實機著地前進/後退/旋轉行駛、主動/逾時煞停時間與距離量測、實車移動建圖巡覽持續更新整合驗證 |
 | Next dependency | Checklist #16 (S5 Localization) |
+
+### 3.10 S5 Localization (`IMP-016`)
+
+#### 3.10.1 Subsystem Specification & Checklist Tracking
+- **Checklist item**: `[~] 16. S5 Localization`
+- **Subsystem**: S5 Localization Subsystem (Navigation Mode Map-based 2D AMCL Localization Stack)
+- **Implementation status**: `In Progress [~]` (Stage L0 Software Implementation & Launch Composition Verified; Stage L1 Stationary Real-Runtime Pending Real Map Artifact)
+- **Traceability**: `UC-002` → `CAP-002` → `SYS-010` (S5 Localization; AD-004; 06 §3.6, §4, §6; 04 §3.10; 05 §3.2, §4, §7.1).
+
+#### 3.10.2 Requirement & Contract Mapping
+- **SYS-010 (地圖定位)**：在 Navigation Mode (`UC-002`) 下，透過 `nav2_map_server` 載入已建立之地圖（`OccupancyGrid`），訂閱 S2 360° 融合雷達（`/scan`）與 S3 EKF 里程計（`odom -> base_footprint` TF），以 `nav2_amcl` 估測 AMR 全域位姿，並作為導航期全系統唯一權威發布 `map -> odom` TF 與 `/amcl_pose`。當開機位置不固定時，接受操作者透過 RViz2 `2D Pose Estimate` 提供的 approximate initial pose（`/initialpose`）完成粒子群初始化。
+- **SYS-006 (模式互斥約定)**：Navigation Mode 下 S4 `slam_toolbox` 嚴格處於未啟動狀態，S5 `nav2_amcl` 為 `map -> odom` TF 的唯一合法廣播者（頻率 $20 \pm 2\,\text{Hz}$）。
+- **架構邊界與成熟重用 (Mature Nav2 Reuse)**：100% 重用 ROS 2 Jazzy 官方成熟套件 `nav2_amcl` (1.3.12-1)、`nav2_map_server` (1.3.12-1) 與 `nav2_lifecycle_manager` (1.3.12-1)。不自製粒子濾波演算法、不自製 localizer、不自製 initial-pose 轉接節點、不自製 watchdog 或 admission gate。
+
+#### 3.10.3 Implementation Artifacts
+- **Package Location**: `src/mobile_base_localization/`
+```text
+src/mobile_base_localization/
+├── CMakeLists.txt                               # Package build and test configuration
+├── package.xml                                  # Dependencies (nav2_amcl, nav2_map_server, nav2_lifecycle_manager, etc.)
+├── config/
+│   └── amcl_params.yaml                         # Authoritative AMCL & map_server parameters (06 §3.6.4)
+├── launch/
+│   └── localization.launch.py                   # Navigation Mode S5 lifecycle bringup (map_server + amcl + lifecycle_manager)
+└── test/
+    └── test_localization_launch.py             # Launch structure, parameter schema, and map fixture unit tests
+```
+
+#### 3.10.4 Mature / Custom Boundary
+- **Mature Components (Nav2 Jazzy 1.3.12-1)**:
+  - `nav2_map_server::MapServer` (`map_server`): 靜態地圖載入與 `/map` TransientLocal 發布。
+  - `nav2_amcl::AmclNode` (`amcl`): 2D 粒子濾波、似然場觀測更新、`/amcl_pose`、`map -> odom` TF。
+  - `nav2_lifecycle_manager::LifecycleManager` (`lifecycle_manager_localization`): 管理 `['map_server', 'amcl']` 生命週期。
+  - RViz2 `2D Pose Estimate`: 標準操作者初始位姿注入介面。
+- **Project-Owned Custom Layer**:
+  - 輕量化組態配置 `config/amcl_params.yaml`（僅鎖定 06 核准之座標系、雷達/運動模型與粒子參數）。
+  - 宣告式啟動腳本 `launch/localization.launch.py`（支援 `map`、`params_file`、`use_sim_time`、`autostart` 參數）。
+
+#### 3.10.5 Authoritative AMCL Parameters
+- **Coordinate Frames (Frozen Authority)**:
+  - `global_frame_id: "map"`
+  - `odom_frame_id: "odom"`
+  - `base_frame_id: "base_footprint"`
+  - `scan_topic: "/scan"`
+  - `tf_broadcast: true`
+- **Particle Filter & Models (06 §3.6.4)**:
+  - `min_particles: 500` / `max_particles: 2000`
+  - `resample_interval: 1`
+  - `update_min_d: 0.1` / `update_min_a: 0.1`
+  - `laser_model_type: "likelihood_field"` (`laser_min_range: 0.05`, `laser_max_range: 20.0`, `z_hit: 0.9`, `z_rand: 0.1`, `sigma_hit: 0.2`)
+  - `robot_model_type: "nav2_amcl::DifferentialMotionModel"` (`alpha1: 0.2`, `alpha2: 0.2`, `alpha3: 0.2`, `alpha4: 0.2`)
+  - `set_initial_pose: false` (等待顯式 `/initialpose` 注入)
+
+#### 3.10.6 Interfaces & TF Authority
+- **Subscribed Interfaces**:
+  - `/map` (`nav_msgs/msg/OccupancyGrid`, TransientLocal/Reliable)
+  - `/scan` (`sensor_msgs/msg/LaserScan`, SensorData, 360° 融合雷達)
+  - `odom -> base_footprint` TF (來自 S3 EKF, 50 Hz)
+  - `base_footprint -> base_link -> laser_links` TF (來自 S1 `robot_state_publisher`)
+  - `/initialpose` (`geometry_msgs/msg/PoseWithCovarianceStamped`, SystemDefault/Reliable)
+- **Published Interfaces**:
+  - `/amcl_pose` (`geometry_msgs/msg/PoseWithCovarianceStamped`, SystemDefault)
+  - `/particle_cloud` (`nav2_msgs/msg/ParticleCloud`, SensorData, 可視化/診斷)
+  - `map -> odom` TF (`tf2_msgs/msg/TFMessage`, $20 \pm 2\,\text{Hz}$)
+- **TF Ownership**:
+  - Navigation Mode 下 `nav2_amcl` 為唯一 `map -> odom` TF 發布者；`slam_toolbox` 嚴格排除。
+
+#### 3.10.7 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-20T10:33:00+08:00 | S5 Localization Package Build & Test Suite | `colcon build` + `colcon test --packages-select mobile_base_localization` | PASS (Stage L0 Software) | 1. 套件編譯通過（0 errors）；2. 13 項測試全部通過（`test_localization_launch`, `flake8`, `pep257`, `copyright`, `xmllint`）；3. 驗證 AMCL YAML 參數契約完全符合 06；4. 驗證 Launch 結構正確組合 `map_server` + `amcl` + `lifecycle_manager`，且完全排除 `slam_toolbox` 與 S6 節點；5. 驗證暫態測試地圖與無效地圖路徑處理。 | 容器即時測試日誌 |
+| 2026-08-20T10:33:30+08:00 | S5 Launch Arguments & Interface Parsing Check | `ros2 launch mobile_base_localization localization.launch.py --show-args` | PASS (Stage L0 Interface) | 成功解析 `map`、`params_file`、`use_sim_time`、`autostart`、`log_level` 啟動參數與預設路徑。 | 終端輸出 |
+| 2026-08-20T10:33:40+08:00 | MapIO Readback & Invalid Path Validation | `validate_map_readback` on fixture & non-existent path | PASS (Stage L0 MapIO) | 驗證 `nav2_map_server` 核心讀圖 API 對有效測試地圖（$0.05\,\text{m/cell}$, $20 \times 20$）回傳 `LOAD_MAP_SUCCESS`（Status 0），對無效路徑回傳錯誤狀態碼（Code 2）。 | 終端輸出 |
+
+#### 3.10.8 Evidence Boundary
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS` / `VERIFIED`) | 1. **S5 套件與啟動架構** (`PASS`)：`mobile_base_localization` 套件建立完成，CMake 與 package 依賴正確，編譯與 13 項單元/介面測試全部通過。<br/>2. **AMCL 參數契約** (`PASS`)：`amcl_params.yaml` 嚴格配置 06 核准之座標系（`map`, `odom`, `base_footprint`）、360° 雷達（`/scan`）、差速運動模型與似然場參數，且 `set_initial_pose=false`。<br/>3. **生命週期與排除邊界** (`PASS`)：`lifecycle_manager` 正確管理 `['map_server', 'amcl']`；`slam_toolbox` 與 S6 節點 100% 排除。<br/>4. **地圖讀取介面與無效路徑處理** (`PASS`)：純軟體層級確認 `nav2_map_server` 讀圖 API 與路徑參數對接正常。 |
+| 尚未證明 (`PENDING — Real Hardware Runtime`) | 1. **實體地圖載入與發布**（`PENDING — Awaiting Valid Field Map Artifact`）。<br/>2. **實機 AMCL 節點激活與 `/amcl_pose` 輸出**（`PENDING — Stage L1`）。<br/>3. **實機唯一 `map -> odom` TF 發布與頻率量測**（`PENDING — Stage L1`）。<br/>4. **RViz2 `/initialpose` 注入與粒子收斂實測**（`PENDING — Stage L1`）。<br/>5. **目標場域靜態/動態定位誤差驗收**（`PENDING — Stage L2`）。 |
+
+#### 3.10.9 Known Limits / Outstanding Obligations
+- **目前無持久化實體場域地圖**：`maps/template/` 僅含 0-byte 佔位檔案；IMP-014 產出之地圖為臨時驗證產物。Stage L1 實機執行期驗收前，必須先選定或生成一筆有效之實體場域地圖（`REAL LOCALIZATION MAP READY: NO`）。
+- **禁止未授權之實體運動**：S5 定位核心契約可在靜止狀態（0 運動）下完成 `/initialpose` 注入與位姿精度驗證；未獲獨立授權前不得執行任何底盤運動。
+- **Navigation Mode 互斥性**：實機啟動 S5 前必須確認 S4 `slam_toolbox` 完全關閉。
+
+#### 3.10.10 Feature Freeze Status / Next Dependency
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `In Progress [~]` (Checklist #16 Stage L0 Software Verified; Stage L1/L2 Real-Hardware Validation Pending) |
+| Freeze condition | 通過 Navigation Mode 地圖載入、AMCL 激活、RViz `/initialpose` 注入、唯一 `map -> odom` TF 廣播、目標場域定位誤差驗收 |
+| Next dependency | Checklist #16 Stage L1 (Stationary Real-Runtime Validation on Target AMR with Valid Map) |

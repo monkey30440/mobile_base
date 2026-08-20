@@ -1,0 +1,57 @@
+# Copyright 2026 Antigravity Team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# S5 Localization: AMCL configuration for Mobile Base in Navigation Mode (SYS-010)
+# Authoritative reference: docs/06_subsystem.md Section 3.6.4
+
+amcl:
+  ros__parameters:
+    # 座標框架配置 (Coordinate Frames)
+    global_frame_id: "map"
+    odom_frame_id: "odom"
+    base_frame_id: "base_footprint"
+    scan_topic: "/scan"
+    tf_broadcast: true # 導航期發布 map -> odom
+
+    # 粒子濾波器配置 (Particle Filter Configuration)
+    min_particles: 500
+    max_particles: 2000
+    resample_interval: 1
+    update_min_d: 0.1 # 移動 0.1m 更新一次粒子權重
+    update_min_a: 0.1 # 旋轉 0.1rad 更新一次粒子權重
+
+    # 雷達似然場模型 (Laser Likelihood Field Model)
+    laser_model_type: "likelihood_field"
+    laser_min_range: 0.05
+    laser_max_range: 20.0
+    z_hit: 0.9
+    z_rand: 0.1
+    sigma_hit: 0.2
+
+    # 差速運動模型 (Differential Motion Model)
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    alpha1: 0.2 # 旋轉運動帶來的旋轉噪聲
+    alpha2: 0.2 # 直線運動帶來的旋轉噪聲
+    alpha3: 0.2 # 直線運動帶來的直線噪聲
+    alpha4: 0.2 # 旋轉運動帶來的直線噪聲
+
+    # 初始位姿預設 (SYS-010 Initial Pose)
+    set_initial_pose: false # 預設由 /initialpose 顯式注入
+
+map_server:
+  ros__parameters:
+    frame_id: "map"
+    topic_name: "map"
+    use_sim_time: false
+    yaml_filename: ""
