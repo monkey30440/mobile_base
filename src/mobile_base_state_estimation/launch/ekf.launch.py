@@ -14,35 +14,24 @@
 
 """Launch file for S3 State Estimation EKF node using robot_localization."""
 
+import os
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     """Generate launch description for S3 State Estimation EKF node."""
     pkg_share = get_package_share_directory('mobile_base_state_estimation')
-
-    default_config_path = PathJoinSubstitution([
-        pkg_share, 'config', 'ekf.yaml'
-    ])
-
-    params_file_arg = DeclareLaunchArgument(
-        'params_file',
-        default_value=default_config_path,
-        description='Full path to the EKF parameter YAML file'
-    )
-
-    params_file = LaunchConfiguration('params_file')
+    config_path = os.path.join(pkg_share, 'config', 'ekf.yaml')
 
     ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node',
         output='screen',
-        parameters=[params_file],
+        parameters=[config_path],
         remappings=[
             ('odometry/filtered', '/odometry/filtered'),
             ('accel/filtered', '/accel/filtered'),
@@ -50,6 +39,5 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        params_file_arg,
         ekf_node,
     ])

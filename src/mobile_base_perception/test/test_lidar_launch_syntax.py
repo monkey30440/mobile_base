@@ -62,6 +62,8 @@ def test_launch_description_generation():
         assert "custom_pointclouds:=', 'none'" in argument_text
         assert 'tf_publish_rate:=' in argument_text
         assert '0.0' in argument_text
+        assert 'tick_to_timestamp_mode:=' in argument_text
+        assert "tick_to_timestamp_mode:=', '1'" in argument_text
 
     # Verify no dual_laser_merger or static_transform_publisher is launched in #10
     forbidden_packages = {'dual_laser_merger', 'tf2_ros'}

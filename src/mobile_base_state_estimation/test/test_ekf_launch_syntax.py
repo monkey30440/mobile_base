@@ -17,9 +17,11 @@
 import importlib.util
 from pathlib import Path
 
-from launch import LaunchDescription
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchContext, LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
+from launch_ros.utilities import evaluate_parameters
 import yaml
 
 
@@ -56,7 +58,7 @@ def test_ekf_yaml_configuration():
     assert params['map_frame'] == 'map'
 
     # odom0 (wheel odometry)
-    assert params['odom0'] == '/base_control/wheel_odometry'
+    assert params['odom0'] == '/diff_drive_controller/odom'
     expected_odom0_config = [
         False, False, False,
         False, False, False,
@@ -105,7 +107,7 @@ def test_ekf_launch_description_generation():
         action.name for action in ld.entities
         if isinstance(action, DeclareLaunchArgument)
     ]
-    assert 'params_file' in declared_args
+    assert 'params_file' not in declared_args
 
     # Inspect Node actions
     node_actions = [
@@ -117,3 +119,31 @@ def test_ekf_launch_description_generation():
     assert ekf_node._Node__package == 'robot_localization'
     assert ekf_node._Node__node_executable == 'ekf_node'
     assert ekf_node._Node__node_name == 'ekf_filter_node'
+
+
+def test_ekf_loads_own_parameters_without_shared_launch_state():
+    """Prevent another child launch from replacing the EKF parameter file."""
+    pkg_dir = Path(__file__).resolve().parent.parent
+    launch_path = pkg_dir / 'launch' / 'ekf.launch.py'
+
+    module = _load_launch_module(launch_path)
+    ld = module.generate_launch_description()
+
+    declared_args = {
+        action.name for action in ld.entities
+        if isinstance(action, DeclareLaunchArgument)
+    }
+    assert 'params_file' not in declared_args
+
+    ekf_node = next(
+        action for action in ld.entities
+        if isinstance(action, Node)
+    )
+    evaluated = evaluate_parameters(LaunchContext(), ekf_node._Node__parameters)
+
+    expected_path = (
+        Path(get_package_share_directory('mobile_base_state_estimation'))
+        / 'config'
+        / 'ekf.yaml'
+    )
+    assert evaluated == (expected_path,)
