@@ -2212,20 +2212,22 @@ src/mobile_base_navigation/
 
 #### 3.12.2 Implementation Artifacts
 - **Nav2 參數設定檔**: `src/mobile_base_navigation/config/nav2_params.yaml`
-  - Planner: `nav2_navfn_planner::NavfnPlanner`（A* 搜尋模式）。
+  - Planner: `nav2_navfn_planner::NavfnPlanner`（配置 `use_astar: true` 搜尋模式）。
   - Controller: `nav2_mppi_controller::MPPIController`（DiffDrive 運動模型、橫向速度鎖定為零、配置完整 Critic 集合）。
   - Goal Checker: `nav2_controller::StoppedGoalChecker`（$5\,\text{cm}$ 位置容差、$0.05\,\text{rad}$ 朝向容差、線速度 $<0.01\,\text{m/s}$、角速度 $<0.02\,\text{rad/s}$）。
   - Costmaps: 訂閱 `/scan` 進行光線投射與膨脹層計算，足跡配置為 $[0.35, 0.30] \times [-0.35, -0.30]$。
   - Route Server: `nav2_route::RouteServer` 配置 `GeoJsonGraphFileLoader` 與距離/代價評分器。
 - **三階段行為樹**: `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`
-  - 基於 BTCPP v4 格式，以 `PipelineSequence` 編排 `ComputeRoute` → First Mile Fallback/Sequence (`ArePosesNear` + `ComputePathToPose` + `ConcatenatePaths`) → Last Mile Fallback/Sequence (`ArePosesNear` + `ComputePathToPose` + `ConcatenatePaths`) → `FollowPath`。
+  - 基於 BTCPP v4 格式，以 `PipelineSequence` 編排 `ComputeRoute` (`raw_route_path`) → First Mile Fallback/Sequence (`ArePosesNear` + `<SetBlackboard>` / `ComputePathToPose` + `ConcatenatePaths` 產出 `first_connected_path`) → Last Mile Fallback/Sequence (`ArePosesNear` + `<SetBlackboard>` / `ComputePathToPose` + `ConcatenatePaths` 產出 `final_route_path`) → `FollowPath` (`final_route_path`)。
+  - 避免同一 Blackboard Key in-place overwrite 風險，採用明確鍵值分離 (`raw_route_path` → `first_connected_path` → `final_route_path`)，保證無 First/Last Mile 時透過原生 `<SetBlackboard>` 正確傳遞下游路徑。
   - 嚴格落實 SYS-021：若 `ComputeRoute` 失敗，直接回傳 `FAILURE` 終止導航，不設置全域自由空間 Fallback 分支。
 - **測試路網夾具**: `src/mobile_base_navigation/test/test_data/test_route_graph.geojson`
   - 符合 Nav2 `GeoJsonGraphFileLoader` 規範之 3 節點、2 拓撲邊測試用 FeatureCollection。
 - **導航啟動腳本**: `src/mobile_base_navigation/launch/navigation.launch.py`
   - 啟動 `controller_server`（將 `cmd_vel` remapping 至 `/diff_drive_controller/cmd_vel`）、`planner_server`、`route_server`、`bt_navigator` 與 `lifecycle_manager_navigation`。
-- **軟體整合與合約測試**: `src/mobile_base_navigation/test/test_navigation_launch.py`
-  - 測試 Nav2 參數合約、BT XML 結構與 SYS-021 邊界、GeoJSON 夾具格式、以及 LaunchDescription 組裝與 Remapping 規則。
+- **軟體整合與合約測試**:
+  - `src/mobile_base_navigation/test/test_navigation_launch.py`: 測試 Nav2 參數合約、BT XML 結構與 SYS-021 邊界、GeoJSON 夾具格式、以及 LaunchDescription 組裝與 Remapping 規則。
+  - `src/mobile_base_navigation/test/test_behavior_tree_runtime.cpp`: C++ BehaviorTree Runtime 測試，驗證 9 個 Nav2 BT 外掛動態庫成功註冊、BT XML 於 ROS 節點黑板下正確解析與 Schema 實例化、以及 `ConcatenatePaths` 與 `GetPoseFromPath` 之路徑順序資料流正確性。
 
 #### 3.12.3 Mature vs Custom Boundary
 - **Mature Nav2 Components Reused**:
@@ -2242,6 +2244,7 @@ src/mobile_base_navigation/
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
 | 2026-08-21T11:50:10+08:00 | S6 Navigation Stage A Software & Launch Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 54 項測試全部通過（含 26 GTest + 4 pytest + linter）；3. 驗證 Nav2 參數合約（NavfnPlanner, MPPIController DiffDrive, StoppedGoalChecker 5cm/0.01m/s）；4. 驗證 BT XML 三階段結構與禁用 Fallback；5. 驗證 GeoJSON 路網夾具；6. 驗證 Launch Composition 與 `/diff_drive_controller/cmd_vel` remapping。 | 容器即時測試日誌 |
+| 2026-08-21T11:58:00+08:00 | S6 Navigation Stage A.1 BT Runtime & Dataflow Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 61 項測試全部通過（含 29 GTest + 4 pytest + linter）；3. 驗證 9 個 Nav2 BT Plugin 共享庫註冊；4. 驗證 BT XML Schema 實例化與黑板埠合約解析；5. 驗證 `ConcatenatePaths` 與 `GetPoseFromPath` 資料流順序；6. 驗證鍵值分離 (`raw_route_path`, `first_connected_path`, `final_route_path`)。 | 容器即時測試日誌 |
 
 #### 3.12.5 Known Limits / Outstanding Obligations
 - **實車運動驗證邊界 (Hardware Navigation Verification PENDING)**：Stage A 僅完成純軟體配置、行為樹與 Launch 整合驗證。實機導航到站停止、避障與取消等動態行為需在後續 Stage 經使用者明確授權後執行受控實機測試。

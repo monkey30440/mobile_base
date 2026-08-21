@@ -69,6 +69,21 @@ if(BUILD_TESTING)
     geometry_msgs
   )
 
+  find_package(behaviortree_cpp REQUIRED)
+  find_package(nav_msgs REQUIRED)
+  ament_add_gtest(test_behavior_tree_runtime
+    test/test_behavior_tree_runtime.cpp
+  )
+  target_compile_definitions(test_behavior_tree_runtime PRIVATE
+    BT_XML_PATH="${CMAKE_CURRENT_SOURCE_DIR}/behavior_trees/route_assisted_nav.xml"
+  )
+  ament_target_dependencies(test_behavior_tree_runtime
+    rclcpp
+    behaviortree_cpp
+    nav_msgs
+    geometry_msgs
+  )
+
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_navigation_launch
     test/test_navigation_launch.py

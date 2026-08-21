@@ -89,6 +89,14 @@ def test_bt_xml_structure_and_fallback_policy():
     assert 'ArePosesNear' in all_tags
     assert 'ConcatenatePaths' in all_tags
     assert 'FollowPath' in all_tags
+    assert 'SetBlackboard' in all_tags
+
+    # Verify explicit non-overwriting path keys in BT
+    compute_route_elem = next(root.iter('ComputeRoute'))
+    assert compute_route_elem.attrib.get('path') == '{raw_route_path}'
+
+    follow_path_elem = next(root.iter('FollowPath'))
+    assert follow_path_elem.attrib.get('path') == '{final_route_path}'
 
     # Verify SYS-021: No direct free-space fallback from goal if ComputeRoute fails
     for seq in root.iter('Sequence'):
