@@ -22,9 +22,16 @@
 #include "behaviortree_cpp/bt_factory.h"
 #include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav2_route/nav2_route/plugins/graph_file_loaders/geojson_graph_file_loader.hpp"
+#include "nav2_route/types.hpp"
+#include "nav2_util/lifecycle_node.hpp"
 
 #ifndef BT_XML_PATH
 #define BT_XML_PATH "behavior_trees/route_assisted_nav.xml"
+#endif
+
+#ifndef REAL_ROUTE_GRAPH_PATH
+#define REAL_ROUTE_GRAPH_PATH "../../maps/route_graph.geojson"
 #endif
 
 class BehaviorTreeRuntimeTest : public ::testing::Test
@@ -85,8 +92,6 @@ TEST_F(BehaviorTreeRuntimeTest, FactoryPluginRegistrationAndTreeInstantiate)
     "bt_loop_duration", std::chrono::milliseconds(10));
 
   // Instantiating tree from route_assisted_nav.xml
-  // When no action server is active, BtActionNode connects and times out with std::runtime_error.
-  // We verify that XML parsing and schema resolution succeed (no BT::RuntimeError / LogicError).
   std::string xml_file = BT_XML_PATH;
   try {
     auto tree = factory.createTreeFromFile(xml_file, blackboard);
@@ -96,7 +101,6 @@ TEST_F(BehaviorTreeRuntimeTest, FactoryPluginRegistrationAndTreeInstantiate)
   } catch (const BT::LogicError & e) {
     FAIL() << "BT XML logic error: " << e.what();
   } catch (const std::runtime_error & e) {
-    // Expected in software-only unit test when Action Server is not running
     std::string msg = e.what();
     EXPECT_TRUE(
       msg.find("Action server") != std::string::npos ||
@@ -198,4 +202,25 @@ TEST_F(BehaviorTreeRuntimeTest, GetPoseFromPathDataflow)
 
   EXPECT_DOUBLE_EQ(start_pose.pose.position.x, 1.5);
   EXPECT_DOUBLE_EQ(end_pose.pose.position.x, 3.5);
+}
+
+TEST_F(BehaviorTreeRuntimeTest, RealSiteRouteGraphNativeLoader)
+{
+  nav2_route::GeoJsonGraphFileLoader loader;
+  auto lc_node = std::make_shared<nav2_util::LifecycleNode>("test_route_loader_node");
+  loader.configure(lc_node);
+
+  nav2_route::Graph graph;
+  nav2_route::GraphToIDMap map_ids;
+
+  std::string filepath = REAL_ROUTE_GRAPH_PATH;
+  bool success = loader.loadGraphFromFile(graph, map_ids, filepath);
+  ASSERT_TRUE(success) << "Failed to load real-site route graph from " << filepath;
+
+  EXPECT_EQ(graph.size(), 3u);
+  size_t total_edges = 0;
+  for (const auto & n : graph) {
+    total_edges += n.neighbors.size();
+  }
+  EXPECT_EQ(total_edges, 4u);
 }

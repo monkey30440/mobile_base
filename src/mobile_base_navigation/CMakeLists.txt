@@ -71,17 +71,25 @@ if(BUILD_TESTING)
 
   find_package(behaviortree_cpp REQUIRED)
   find_package(nav_msgs REQUIRED)
+  find_package(nav2_route REQUIRED)
+  find_package(nav2_util REQUIRED)
   ament_add_gtest(test_behavior_tree_runtime
     test/test_behavior_tree_runtime.cpp
   )
+  target_include_directories(test_behavior_tree_runtime PRIVATE
+    /opt/ros/jazzy/include/nav2_route
+  )
   target_compile_definitions(test_behavior_tree_runtime PRIVATE
     BT_XML_PATH="${CMAKE_CURRENT_SOURCE_DIR}/behavior_trees/route_assisted_nav.xml"
+    REAL_ROUTE_GRAPH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../maps/route_graph.geojson"
   )
   ament_target_dependencies(test_behavior_tree_runtime
     rclcpp
     behaviortree_cpp
     nav_msgs
     geometry_msgs
+    nav2_route
+    nav2_util
   )
 
   find_package(ament_cmake_pytest REQUIRED)

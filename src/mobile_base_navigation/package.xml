@@ -30,6 +30,8 @@
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>behaviortree_cpp</test_depend>
   <test_depend>nav_msgs</test_depend>
+  <test_depend>nav2_route</test_depend>
+  <test_depend>nav2_util</test_depend>
   <test_depend>python3-pytest</test_depend>
   <test_depend>python3-yaml</test_depend>
 

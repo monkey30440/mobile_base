@@ -24,6 +24,7 @@ RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
         ros-jazzy-sick-scan-xd \
         ros-jazzy-foxglove-bridge \
         ros-jazzy-teleop-twist-keyboard \
+        ros-jazzy-rviz2 \
         python3-serial \
     && rm -rf /var/lib/apt/lists/*
 

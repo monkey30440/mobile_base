@@ -140,6 +140,46 @@ def test_test_route_graph_geojson_fixture():
         assert 'endid' in props
 
 
+def test_real_site_route_graph_geojson():
+    real_graph_path = os.path.abspath(
+        os.path.join(get_package_source_dir(), '..', '..', 'maps', 'route_graph.geojson')
+    )
+    assert os.path.exists(real_graph_path), f'real route graph not found at {real_graph_path}'
+
+    with open(real_graph_path, 'r', encoding='utf-8') as f:
+        graph = json.load(f)
+
+    assert graph.get('type') == 'FeatureCollection'
+    features = graph.get('features', [])
+    assert len(features) >= 3
+
+    points = [f for f in features if f['geometry']['type'] == 'Point']
+    lines = [f for f in features if f['geometry']['type'] == 'MultiLineString']
+
+    assert len(points) == 3
+    assert len(lines) == 4  # 2 forward edges + 2 reverse edges for bidirectional topology
+
+    # Verify node IDs and coordinates
+    for pt in points:
+        props = pt['properties']
+        assert 'id' in props
+        assert props.get('frame') == 'map'
+        coords = pt['geometry']['coordinates']
+        assert len(coords) == 2
+        # Verify coordinates fall within safe test_site map area
+        assert -3.9 <= coords[0] <= 4.4
+        assert -5.9 <= coords[1] <= 3.7
+
+    # Verify edge connectivity
+    for line in lines:
+        props = line['properties']
+        assert 'id' in props
+        assert 'startid' in props
+        assert 'endid' in props
+        assert props.get('startid') in [0, 1, 2]
+        assert props.get('endid') in [0, 1, 2]
+
+
 def _collect_nodes(entities):
     nodes = []
     for entity in entities:
