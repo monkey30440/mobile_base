@@ -2223,7 +2223,7 @@ src/mobile_base_navigation/
   - 嚴格落實 SYS-021：若 `ComputeRoute` 失敗，直接回傳 `FAILURE` 終止導航，不設置全域自由空間 Fallback 分支。
 - **真實場域路網圖資 (Production Route Graph)**: `maps/test_site/route_graph.geojson`
   - 基於真實場域地圖 `maps/test_site/map.yaml` (0.05m 解析度)，透過 Nav2 原生 GeoJSON 拓撲圖規範建立，與地圖共置於 `maps/test_site/` 目錄。
-  - 包含 3 個位於開闊可通行走廊（障礙物淨空度 $\ge 0.35\,\text{m}$）之頂點：
+  - 包含 3 個位於操作者選定之可通行區域頂點（估計淨空：Node 0 ≈ 0.30 m, Node 1 ≈ 0.46 m, Node 2 ≈ 0.35 m；實際安全可通行性以 Nav2 footprint 與 costmap runtime 證據為準）：
     - Node 0 (`id: 0`, `frame: "map"`, `coordinates: [0.2, -1.4]`, 測試 Route Entry)
     - Node 1 (`id: 1`, `frame: "map"`, `coordinates: [0.2, -0.8]`, 中間拓撲路網節點)
     - Node 2 (`id: 2`, `frame: "map"`, `coordinates: [0.2, -0.2]`, 測試 Route Exit)
