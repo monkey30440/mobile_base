@@ -1,66 +1,62 @@
 {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          0.2,
-          -1.1
-        ]
-      },
-      "properties": {
-        "id": 0,
-        "frame": "map",
-        "metadata": {
-          "name": "Route Entry"
-        }
-      }
+    "crs": {
+        "properties": {
+            "name": "urn:ogc:def:crs:EPSG::3857"
+        },
+        "type": "name"
     },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          0.2,
-          -0.8
-        ]
-      },
-      "properties": {
-        "id": 1,
-        "frame": "map",
-        "metadata": {
-          "name": "Route Exit"
+    "features": [
+        {
+            "geometry": {
+                "coordinates": [
+                    0.0,
+                    0.0
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "frame": "map",
+                "id": 0,
+                "metadata": {
+                    "name": "Route Entry"
+                }
+            },
+            "type": "Feature"
+        },
+        {
+            "geometry": {
+                "coordinates": [
+                    0.0,
+                    -1.0
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "frame": "map",
+                "id": 1,
+                "metadata": {
+                    "name": "Route Exit"
+                }
+            },
+            "type": "Feature"
+        },
+        {
+            "geometry": {
+                "type": "MultiLineString"
+            },
+            "properties": {
+                "cost": 0.30000001192092896,
+                "endid": 1,
+                "id": 2,
+                "metadata": {
+                    "speed_limit": 0.5
+                },
+                "overridable": true,
+                "startid": 0
+            },
+            "type": "Feature"
         }
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "MultiLineString",
-        "coordinates": [
-          [
-            [
-              0.2,
-              -1.1
-            ],
-            [
-              0.2,
-              -0.8
-            ]
-          ]
-        ]
-      },
-      "properties": {
-        "id": 2,
-        "startid": 0,
-        "endid": 1,
-        "cost": 0.3,
-        "metadata": {
-          "speed_limit": 0.5
-        }
-      }
-    }
-  ]
+    ],
+    "name": "graph",
+    "type": "FeatureCollection"
 }
