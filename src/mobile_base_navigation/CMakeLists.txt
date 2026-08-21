@@ -81,7 +81,7 @@ if(BUILD_TESTING)
   )
   target_compile_definitions(test_behavior_tree_runtime PRIVATE
     BT_XML_PATH="${CMAKE_CURRENT_SOURCE_DIR}/behavior_trees/route_assisted_nav.xml"
-    REAL_ROUTE_GRAPH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../maps/route_graph.geojson"
+    REAL_ROUTE_GRAPH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../maps/test_site/route_graph.geojson"
   )
   ament_target_dependencies(test_behavior_tree_runtime
     rclcpp

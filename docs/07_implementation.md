@@ -2221,8 +2221,8 @@ src/mobile_base_navigation/
   - 基於 BTCPP v4 格式，以 `PipelineSequence` 編排 `ComputeRoute` (`raw_route_path`) → First Mile Fallback/Sequence (`ArePosesNear` + `<SetBlackboard>` / `ComputePathToPose` + `ConcatenatePaths` 產出 `first_connected_path`) → Last Mile Fallback/Sequence (`ArePosesNear` + `<SetBlackboard>` / `ComputePathToPose` + `ConcatenatePaths` 產出 `final_route_path`) → `FollowPath` (`final_route_path`)。
   - 避免同一 Blackboard Key in-place overwrite 風險，採用明確鍵值分離 (`raw_route_path` → `first_connected_path` → `final_route_path`)，保證無 First/Last Mile 時透過原生 `<SetBlackboard>` 正確傳遞下游路徑。
   - 嚴格落實 SYS-021：若 `ComputeRoute` 失敗，直接回傳 `FAILURE` 終止導航，不設置全域自由空間 Fallback 分支。
-- **真實場域路網圖資 (Production Route Graph)**: `maps/route_graph.geojson`
-  - 基於真實場域地圖 `maps/test_site/map.yaml` (0.05m 解析度)，透過 Nav2 原生 GeoJSON 拓撲圖規範建立。
+- **真實場域路網圖資 (Production Route Graph)**: `maps/test_site/route_graph.geojson`
+  - 基於真實場域地圖 `maps/test_site/map.yaml` (0.05m 解析度)，透過 Nav2 原生 GeoJSON 拓撲圖規範建立，與地圖共置於 `maps/test_site/` 目錄。
   - 包含 3 個位於開闊可通行走廊（障礙物淨空度 $\ge 0.35\,\text{m}$）之頂點：
     - Node 0 (`id: 0`, `frame: "map"`, `coordinates: [0.2, -1.4]`, 測試 Route Entry)
     - Node 1 (`id: 1`, `frame: "map"`, `coordinates: [0.2, -0.8]`, 中間拓撲路網節點)
@@ -2234,7 +2234,7 @@ src/mobile_base_navigation/
   - 啟動 `controller_server`（將 `cmd_vel` remapping 至 `/diff_drive_controller/cmd_vel`）、`planner_server`、`route_server`、`bt_navigator` 與 `lifecycle_manager_navigation`。
 - **軟體整合與合約測試**:
   - `src/mobile_base_navigation/test/test_navigation_launch.py`: 測試 Nav2 參數合約、BT XML 結構與 SYS-021 邊界、測試與真實 GeoJSON 夾具格式、以及 LaunchDescription 組裝與 Remapping 規則。
-  - `src/mobile_base_navigation/test/test_behavior_tree_runtime.cpp`: C++ BehaviorTree Runtime 測試，驗證 9 個 Nav2 BT 外掛動態庫成功註冊、BT XML 於 ROS 節點黑板下正確解析與 Schema 實例化、`ConcatenatePaths` 與 `GetPoseFromPath` 之路徑順序資料流正確性、以及 `nav2_route::GeoJsonGraphFileLoader` 原生載入 `maps/route_graph.geojson`（3 nodes, 4 edges）完全通過。
+  - `src/mobile_base_navigation/test/test_behavior_tree_runtime.cpp`: C++ BehaviorTree Runtime 測試，驗證 9 個 Nav2 BT 外掛動態庫成功註冊、BT XML 於 ROS 節點黑板下正確解析與 Schema 實例化、`ConcatenatePaths` 與 `GetPoseFromPath` 之路徑順序資料流正確性、以及 `nav2_route::GeoJsonGraphFileLoader` 原生載入 `maps/test_site/route_graph.geojson`（3 nodes, 4 edges）完全通過。
 
 #### 3.12.3 Mature vs Custom Boundary
 - **Mature Nav2 Components Reused**:
@@ -2253,11 +2253,11 @@ src/mobile_base_navigation/
 |---|---|---|---|---|---|
 | 2026-08-21T11:50:10+08:00 | S6 Navigation Stage A Software & Launch Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 54 項測試全部通過（含 26 GTest + 4 pytest + linter）；3. 驗證 Nav2 參數合約（NavfnPlanner, MPPIController DiffDrive, StoppedGoalChecker 5cm/0.01m/s）；4. 驗證 BT XML 三階段結構與禁用 Fallback；5. 驗證 GeoJSON 路網夾具；6. 驗證 Launch Composition 與 `/diff_drive_controller/cmd_vel` remapping。 | 容器即時測試日誌 |
 | 2026-08-21T11:58:00+08:00 | S6 Navigation Stage A.1 BT Runtime & Dataflow Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 61 項測試全部通過（含 29 GTest + 4 pytest + linter）；3. 驗證 9 個 Nav2 BT Plugin 共享庫註冊；4. 驗證 BT XML Schema 實例化與黑板埠合約解析；5. 驗證 `ConcatenatePaths` 與 `GetPoseFromPath` 資料流順序；6. 驗證鍵值分離 (`raw_route_path`, `first_connected_path`, `final_route_path`)。 | 容器即時測試日誌 |
-| 2026-08-21T12:11:36+08:00 | S6 Navigation Stage B Real-Site Route Graph & Native Loader Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 63 項測試全部通過（含 30 GTest + 5 pytest + linter）；3. 驗證 `maps/route_graph.geojson` 真實圖資語法與幾何結構；4. 驗證 Nav2 `GeoJsonGraphFileLoader` 原生解析載入成功（載入 3 個頂點、4 條雙向拓撲邊，零錯誤）。 | 容器即時測試日誌 |
+| 2026-08-21T12:11:36+08:00 | S6 Navigation Stage B Real-Site Route Graph & Native Loader Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 63 項測試全部通過（含 30 GTest + 5 pytest + linter）；3. 驗證 `maps/test_site/route_graph.geojson` 真實圖資語法與幾何結構；4. 驗證 Nav2 `GeoJsonGraphFileLoader` 原生解析載入成功（載入 3 個頂點、4 條雙向拓撲邊，零錯誤）。 | 容器即時測試日誌 |
 
 #### 3.12.5 Known Limits / Outstanding Obligations
 - **實車運動驗證邊界 (Hardware Navigation Verification PENDING)**：Stage A/B 僅完成純軟體配置、行為樹、真實圖資與 Launch 整合驗證。實機導航到站停止、避障與取消等動態行為需在後續 Stage 經使用者明確授權後執行受控實機測試。
-- **站點清單邊界 (Production Station Catalog NOT CREATED)**：`maps/route_graph.geojson` 僅為拓撲路網圖資，不包含業務站點定義。真實站點清單依現場業務需求配置，不偽造假站點資料。
+- **站點清單邊界 (Production Station Catalog NOT CREATED)**：`maps/test_site/route_graph.geojson` 僅為拓撲路網圖資，不包含業務站點定義。真實站點清單依現場業務需求配置，不偽造假站點資料。
 - **硬體執行邊界 (Hardware Execution & Motion NOT EXECUTED)**：本 Stage 明確未執行任何硬體馬達驅動、未發送 Nav2 Action Goal、未輸出 `cmd_vel`。
 
 #### 3.12.6 Status

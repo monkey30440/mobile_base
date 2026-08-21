@@ -936,7 +936,7 @@ graph TD
         description: "Unloading dock 2"
   ```
 
-* **拓撲路網 (`maps/route_graph.geojson`)**：
+* **拓撲路網 (`maps/<site_id>/route_graph.geojson`)**：
   * **格式與載入器**：遵循 Nav2 `nav2_route` 原生標準 GeoJSON FeatureCollection 規範，由 `nav2_route::GeoJsonGraphFileLoader` 載入解析為拓撲路網圖。
   * **結構契約**：
     * 頂層為標準 GeoJSON `FeatureCollection`。

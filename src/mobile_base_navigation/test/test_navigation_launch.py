@@ -142,7 +142,9 @@ def test_test_route_graph_geojson_fixture():
 
 def test_real_site_route_graph_geojson():
     real_graph_path = os.path.abspath(
-        os.path.join(get_package_source_dir(), '..', '..', 'maps', 'route_graph.geojson')
+        os.path.join(
+            get_package_source_dir(), '..', '..', 'maps', 'test_site', 'route_graph.geojson'
+        )
     )
     assert os.path.exists(real_graph_path), f'real route graph not found at {real_graph_path}'
 

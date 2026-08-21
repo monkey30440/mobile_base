@@ -31,7 +31,7 @@
 #endif
 
 #ifndef REAL_ROUTE_GRAPH_PATH
-#define REAL_ROUTE_GRAPH_PATH "../../maps/route_graph.geojson"
+#define REAL_ROUTE_GRAPH_PATH "../../maps/test_site/route_graph.geojson"
 #endif
 
 class BehaviorTreeRuntimeTest : public ::testing::Test
