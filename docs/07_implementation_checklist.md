@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：16
-- 進行中：1
+- 已完成：17
+- 進行中：0
 - 待實作：11
 - 上游阻塞：0
-- 目前進度：16 / 28 (57%)；第 17 項 `S6 Target Admission thin gaps` 進行中 `[~]`。
+- 目前進度：17 / 28 (61%)；第 17 項 `S6 Target Admission thin gaps` 完成 `[x]`，目前無進行中項目。
 
 ---
 
@@ -73,7 +73,7 @@
 - [x] 16. S5 Localization
   - 追溯：SYS-010。
   - 完成條件：Navigation Mode map load、AMCL、RViz Initial Pose、唯一 `map -> odom` ownership、定位輸出與目標場域誤差／失敗 evidence 符合 06。
-- [~] 17. S6 Target Admission thin gaps
+- [x] 17. S6 Target Admission thin gaps
   - 追溯：GAP-01→SYS-008、GAP-02→SYS-009、GAP-03→SYS-032、GAP-04→SYS-033。
   - 完成條件：terminal target form、Goal Pose normalization、Station exact-match resolution、canonical PoseStamped validation 形成單一薄 boundary；invalid target 不下送 Nav2，failure reasons 與 unit/interface tests 完整。
 - [ ] 18. S6 Route-assisted Navigation execution

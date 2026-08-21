@@ -2125,9 +2125,9 @@ src/mobile_base_localization/
 ### 3.11 S6 Target Admission thin gaps (`IMP-017`)
 
 #### 3.11.1 Subsystem Specification & Checklist Tracking
-- **Checklist item**: `[~] 17. S6 Target Admission thin gaps`
+- **Checklist item**: `[x] 17. S6 Target Admission thin gaps`
 - **Subsystem**: S6 Navigation Subsystem (Target Admission Thin Boundary)
-- **Implementation status**: `In Progress [~]` (Stage A Core Module & Unit Verification Complete)
+- **Implementation status**: `Complete [x]` (Target Admission Boundary & Software Verification Closed)
 - **Traceability**: `GAP-01` → `SYS-008` (Navigation Target Discriminator); `GAP-02` → `SYS-009` (Goal Pose Normalizer); `GAP-03` → `SYS-032` (Station Catalog Resolver); `GAP-04` → `SYS-033` (Canonical Goal Pose Validator); 05 §3.3, §4, §7.2 (AD-002 Canonical Target); 06 §2.1, §3.1, §4.1, §5.1.
 
 #### 3.11.2 Requirement & Contract Mapping
@@ -2176,21 +2176,23 @@ src/mobile_base_navigation/
 #### 3.11.6 Verification Evidence
 | Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
 |---|---|---|---|---|---|
-| 2026-08-21T10:53:15+08:00 | S6 Target Admission Build & Full Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Stage A Software) | 1. 套件編譯通過（0 errors）；2. 43 項測試（26 GTest + linter）全部通過；3. 覆蓋 GAP-01 目標識別（Goal Pose, Station, Empty）、GAP-02 角度轉四元數與正規化、GAP-03 站點清單查表與未找到拒絕、GAP-04 有限值/Frame/四元數校驗；4. 驗證所有負向拒絕保證不產出 admitted canonical pose。 | 容器即時測試日誌 |
+| 2026-08-21T10:59:22+08:00 | S6 Target Admission Build & Full Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 43 項測試（26 GTest + linter）全部通過；3. 覆蓋 GAP-01 目標識別（Goal Pose, Station, Empty）、GAP-02 角度轉四元數與正規化、GAP-03 站點清單查表與未找到拒絕、GAP-04 有限值/Frame/四元數校驗；4. 驗證所有負向拒絕保證不產出 admitted canonical pose。 | 容器即時測試日誌 |
 
 #### 3.11.7 Evidence Boundary
 | 欄位 | 內容 |
 |---|---|
-| 已證明 (`PASS` / `VERIFIED`) | 1. **目標型態識別 (GAP-01 / SYS-008)** (`PASS`)：正確區分 Station ID 與 Goal Pose 輸入。<br/>2. **Goal Pose 正規化 (GAP-02 / SYS-009)** (`PASS`)：$(x, y, \text{yaw-deg})$ 正確正規化為標準 `PoseStamped`，四元數計算正確，非有限值安全拒絕。<br/>3. **站點清單精確查表 (GAP-03 / SYS-032)** (`PASS`)：依 06 §4.1 schema 成功解析 `test_station_catalog.yaml`，正確查表輸出標準位姿，空 ID、未知站點與損毀檔案精確拒絕。<br/>4. **標準目標合法性校驗 (GAP-04 / SYS-033)** (`PASS`)：嚴格校驗 NaN/Inf、Frame 空值/不符、四元數退化與非正規化，無效目標保證不產出 admitted pose。<br/>5. **純軟體單元與介面測試** (`PASS`)：43 項測試 100% 通過（0 errors, 0 failures）。 |
+| 已證明 (`PASS` / `VERIFIED`) | 1. **目標型態識別 (GAP-01 / SYS-008)** (`PASS`)：正確區分 Station ID 與 Goal Pose 輸入。<br/>2. **Goal Pose 正規化 (GAP-02 / SYS-009)** (`PASS`)：$(x, y, \text{yaw-deg})$ 正確正規化為標準 `PoseStamped`，四元數計算正確，非有限值安全拒絕。<br/>3. **站點清單精確查表 (GAP-03 / SYS-032)** (`PASS`)：依 06 §4.1 schema 成功解析 `test_station_catalog.yaml`，正確查表輸出標準位姿，空 ID、未知站點與損毀檔案精確拒絕。<br/>4. **標準目標合法性校驗 (GAP-04 / SYS-033)** (`PASS`)：嚴格校驗 NaN/Inf、Frame 空值/不符、四元數退化與非正規化，無效目標保證不產出 admitted pose。<br/>5. **純軟體單元與介面測試** (`PASS`)：43 項測試 100% 通過（26 GTest 全部 PASS，0 errors, 0 failures）。 |
 | 尚未證明 | 無（Target Admission 為純軟體資料轉換與校驗層，無硬體測試義務）。 |
 
 #### 3.11.8 Known Limits / Outstanding Obligations
-- **不包含真實場域站點資料**：`test_data/test_station_catalog.yaml` 明確為測試用 Test Fixture，非真實場域配置。真實場域站點清單由使用者於後續部署時依需求提供。
-- **不包含 Nav2 導航執行**：Target Admission 僅負責目標接收與合規校驗；路徑規劃、Costmap 避障、控制器追隨與 BT 編排屬於 Checklist #18。
+- **真實場域資料邊界 (Production Station Catalog NOT CREATED)**：`test_data/test_station_catalog.yaml` 明確為單元測試用 Test Fixture，非真實場域配置。真實場域站點清單由使用者於後續正式部署時依現場環境提供，不阻礙 Target Admission 薄層能力之結案。
+- **路網拓撲邊界 (Route Graph NOT CREATED)**：`route_graph.geojson` / `route_graph.yaml` 專供 S6 Route Server 於導航路徑規劃時使用，嚴格屬於 Checklist #18 範圍。
+- **Nav2 執行邊界 (Nav2 Goal Execution NOT IMPLEMENTED IN IMP-017)**：Target Admission 僅負責目標接收與合規校驗；路徑規劃、Costmap 避障、控制器追隨與 BT 編排屬於 Checklist #18。
+- **硬體執行邊界 (Hardware Execution & AMR Movement NOT REQUIRED)**：本項為純軟體資料轉換與合規檢查模組，不需要且未執行任何硬體驅動或 AMR 移動。
 
 #### 3.11.9 Feature Freeze Status / Next Dependency
 | 欄位 | 內容 |
 |---|---|
-| Feature freeze status | `In Progress [~]` (Checklist #17 Stage A Implemented & Unit Verified; Awaiting Closure Reassessment) |
-| Freeze condition | 通過 Goal Pose 正規化、Station Catalog 查表解析、Canonical Pose 合法性校驗、結構化拒絕原因回報之單元測試 |
-| Next dependency | Checklist #17 Closure Reassessment |
+| Feature freeze status | `Frozen [x]` (Checklist #17 S6 Target Admission Thin Boundary Implementation & Verification Complete) |
+| Freeze condition | 通過 Goal Pose 正規化、Station Catalog 查表解析、Canonical Pose 合法性校驗、結構化拒絕原因回報與完整 GTest / Linter 單元測試 |
+| Next dependency | Checklist #18 (S6 Route-assisted Navigation execution) |
