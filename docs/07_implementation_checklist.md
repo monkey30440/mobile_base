@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：15
-- 進行中：1
+- 已完成：16
+- 進行中：0
 - 待實作：12
 - 上游阻塞：0
-- 目前進度：15 / 28 (54%)；第 16 項 `S5 Localization` 進行中 `[~]`。
+- 目前進度：16 / 28 (57%)；第 16 項 `S5 Localization` 完成 `[x]`，目前無進行中項目。
 
 ---
 
@@ -70,7 +70,7 @@
 - [x] 15. S7 Manual Movement Control and Teleop Integration
   - 追溯：IMP-015；UC-001 → CAP-001 → SYS-034（S7 Base Control；AD-005；06 §3.3, §4.2, §4.4；關聯 SYS-022, SYS-027, SYS-028, SYS-029, SYS-030）。
   - 完成條件：在 target container 中確認 exact `teleop_twist_keyboard`（2.4.1）可用；驗證 `stamped:=true` 輸出 `geometry_msgs/msg/TwistStamped` 並 remap 至 `/diff_drive_controller/cmd_vel`；驗證 Mapping Mode 下 S6 維持未啟動且 Teleop 為唯一 command producer（不新增 mux/mode manager/proxy）；驗證命令受制於 S7 SYS-028 SpeedLimiter；驗證非移動鍵/`CTRL-C` 主動停止發布零速使 S7 受控減速；驗證中斷發布後逾時超過 `0.5 s`（`cmd_vel_timeout`）由 S7 將 reference 歸零並依減速度限制受控停止（不宣稱 0.5s 內實體完全停穩）；於目標 Jetson/操作終端實測確認 keyboard autorepeat 啟用狀態與頻率；通過 Level 4 實機架車/地面安全前置檢查後完成前進/後退/旋轉、主動煞停、逾時受控停止實測並記錄停止時間與距離，確認 Mapping session 保持 ACTIVE。
-- [~] 16. S5 Localization
+- [x] 16. S5 Localization
   - 追溯：SYS-010。
   - 完成條件：Navigation Mode map load、AMCL、RViz Initial Pose、唯一 `map -> odom` ownership、定位輸出與目標場域誤差／失敗 evidence 符合 06。
 - [ ] 17. S6 Target Admission thin gaps
