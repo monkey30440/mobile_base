@@ -222,3 +222,40 @@ global_costmap:
         cost_scaling_factor: 3.0
         inflation_radius: 0.45
       always_send_full_costmap: true
+
+collision_monitor:
+  ros__parameters:
+    use_sim_time: false
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "cmd_vel_nav"
+    cmd_vel_out_topic: "cmd_vel"
+    state_topic: "collision_monitor_state"
+    transform_tolerance: 0.2
+    source_timeout: 1.0
+    base_shift_correction: true
+    stop_pub_timeout: 2.0
+    enable_stamped_cmd_vel: true
+    polygons: ["PolygonStop", "PolygonSlow"]
+    PolygonStop:
+      type: "polygon"
+      points: "[[0.40, 0.35], [0.40, -0.35], [-0.40, -0.35], [-0.40, 0.35]]"
+      action_type: "stop"
+      min_points: 3
+      visualize: false
+      polygon_pub_topic: "polygon_stop"
+      enabled: true
+    PolygonSlow:
+      type: "polygon"
+      points: "[[0.55, 0.45], [0.55, -0.45], [-0.55, -0.45], [-0.55, 0.45]]"
+      action_type: "slowdown"
+      min_points: 3
+      slowdown_ratio: 0.5
+      visualize: false
+      polygon_pub_topic: "polygon_slowdown"
+      enabled: true
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "/scan"
+      enabled: true

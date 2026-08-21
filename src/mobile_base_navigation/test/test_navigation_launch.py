@@ -66,6 +66,21 @@ def test_nav2_params_contracts():
     route_params = params['route_server']['ros__parameters']
     assert 'DistanceScorer' in route_params['edge_cost_functions']
 
+    # 5. Collision Monitor contract
+    assert 'collision_monitor' in params
+    cm_params = params['collision_monitor']['ros__parameters']
+    assert cm_params['base_frame_id'] == 'base_footprint'
+    assert cm_params['odom_frame_id'] == 'odom'
+    assert cm_params['cmd_vel_in_topic'] == 'cmd_vel_nav'
+    assert cm_params['cmd_vel_out_topic'] == 'cmd_vel'
+    assert 'PolygonStop' in cm_params['polygons']
+    assert 'PolygonSlow' in cm_params['polygons']
+    assert cm_params['PolygonStop']['action_type'] == 'stop'
+    assert cm_params['PolygonSlow']['action_type'] == 'slowdown'
+    assert 'scan' in cm_params['observation_sources']
+    assert cm_params['scan']['topic'] == '/scan'
+    assert cm_params.get('enable_stamped_cmd_vel') is True
+
 
 def test_bt_xml_structure_and_fallback_policy():
     bt_path = os.path.join(
@@ -204,6 +219,7 @@ def test_launch_description_composition():
     assert 'planner_server' in node_names
     assert 'route_server' in node_names
     assert 'bt_navigator' in node_names
+    assert 'collision_monitor' in node_names
     assert 'lifecycle_manager_navigation' in node_names
 
     # Ensure no unauthorized nodes are present in S6 navigation launch
@@ -212,15 +228,29 @@ def test_launch_description_composition():
     assert 'amcl' not in node_names
     assert 'robot_state_publisher' not in node_names
 
-    # Check cmd_vel remapping on controller_server
+    # 1. Check controller_server outputs to /cmd_vel_nav (not directly to diff_drive)
     ctrl_node = next(
         n for n in nodes if getattr(n, '_Node__node_name', '') == 'controller_server'
     )
-    raw_remappings = getattr(ctrl_node, '_Node__remappings', [])
-    remap_pairs = []
-    for src_subst, dst_subst in raw_remappings:
+    ctrl_raw_remappings = getattr(ctrl_node, '_Node__remappings', [])
+    ctrl_remap_pairs = []
+    for src_subst, dst_subst in ctrl_raw_remappings:
         src = ''.join(getattr(s, 'text', str(s)) for s in src_subst)
         dst = ''.join(getattr(d, 'text', str(d)) for d in dst_subst)
-        remap_pairs.append((src, dst))
+        ctrl_remap_pairs.append((src, dst))
 
-    assert any('/diff_drive_controller/cmd_vel' in dst for src, dst in remap_pairs)
+    assert any('/cmd_vel_nav' in dst for src, dst in ctrl_remap_pairs)
+    assert not any('/diff_drive_controller/cmd_vel' in dst for src, dst in ctrl_remap_pairs)
+
+    # 2. Check collision_monitor is the sole publisher to /diff_drive_controller/cmd_vel
+    cm_node = next(
+        n for n in nodes if getattr(n, '_Node__node_name', '') == 'collision_monitor'
+    )
+    cm_raw_remappings = getattr(cm_node, '_Node__remappings', [])
+    cm_remap_pairs = []
+    for src_subst, dst_subst in cm_raw_remappings:
+        src = ''.join(getattr(s, 'text', str(s)) for s in src_subst)
+        dst = ''.join(getattr(d, 'text', str(d)) for d in dst_subst)
+        cm_remap_pairs.append((src, dst))
+
+    assert any('/diff_drive_controller/cmd_vel' in dst for src, dst in cm_remap_pairs)
