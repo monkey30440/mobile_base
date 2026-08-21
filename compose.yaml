@@ -8,8 +8,12 @@ services:
     runtime: nvidia
     network_mode: host
 
+    environment:
+      - DISPLAY=${DISPLAY}
+
     volumes:
       - .:/workspaces/mobile_base
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
     devices:
       - /dev/ttyUSB0:/dev/ttyUSB0
