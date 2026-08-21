@@ -833,7 +833,7 @@ graph TD
         
         subgraph Nav2Stack [Nav2 Jazzy 導航核心]
             BT[bt_navigator<br/>三階段任務編排器 (First/On/Last Mile)<br/>Step 19A 重選路與 Fallback 終止]
-            ROUTE[route_server<br/>拓撲路網規劃器 (route_graph.yaml)]
+            ROUTE[route_server<br/>拓撲路網規劃器 (route_graph.geojson)]
             PLANNER[planner_server<br/>自由路徑幾何規劃 (Navfn / Smac)]
             CONTROLLER[controller_server<br/>路徑追隨控制 (DWB / RPP)]
             COSTMAP[nav2_costmap_2d<br/>全域與局部障礙物代價地圖]
@@ -873,7 +873,7 @@ graph TD
      * 當拓撲邊受阻，使用最新 Current Pose 重新執行既有 route-assisted 選路；仍存在有效且安全方案時繼續優先使用 Route Graph（SYS-013）。
      * 若無替代路徑或恢復重試耗盡，直接下發零速安全停止，回傳 Action 失敗（SYS-021），嚴禁無限自旋重試。
 2. **`route_server` (Nav2 拓撲路網伺服器)**：
-   * 載入 `route_graph.yaml`，依 connectivity、direction 與 availability constraints 計算 Route Entry 至 Route Exit 的 route-assisted 路徑（SYS-013、SYS-019）。
+   * 載入 `route_graph.geojson`，依 connectivity、direction 與 availability constraints 計算 Route Entry 至 Route Exit 的 route-assisted 路徑（SYS-013、SYS-019）。
 3. **`planner_server` (Nav2 自由幾何規劃器)**：
    * 使用 `nav2_navfn_planner` 或 `SmacPlanner2D`，依目前位姿與 active stage 目標計算有效且非空的 2D 路徑（SYS-011）。
 4. **`controller_server` & `stopped_goal_checker` (Nav2 控制器與停轉檢測)**：
@@ -936,32 +936,12 @@ graph TD
         description: "Unloading dock 2"
   ```
 
-* **拓撲路網 (`maps/route_graph.yaml`)**：
-  ```yaml
-  version: "1.0.0"
-  nodes:
-    - id: 1
-      name: "NODE_ENTRY_A"
-      x: 2.00
-      y: 1.20
-    - id: 2
-      name: "NODE_MAIN_CORRIDOR_1"
-      x: 4.00
-      y: 1.20
-    - id: 3
-      name: "NODE_EXIT_B"
-      x: 7.50
-      y: 5.50
-  edges:
-    - from: 1
-      to: 2
-      bidirectional: true
-      speed_limit: 0.8
-    - from: 2
-      to: 3
-      bidirectional: false
-      speed_limit: 0.5
-  ```
+* **拓撲路網 (`maps/route_graph.geojson`)**：
+  * **格式與載入器**：遵循 Nav2 `nav2_route` 原生標準 GeoJSON FeatureCollection 規範，由 `nav2_route::GeoJsonGraphFileLoader` 載入解析為拓撲路網圖。
+  * **結構契約**：
+    * 頂層為標準 GeoJSON `FeatureCollection`。
+    * **節點（Point Features）**：以 `Point` 幾何定義位置坐標，屬性包含 `id`（整數）與 `frame`（預設 `"map"`）。
+    * **邊（MultiLineString Features）**：以 `MultiLineString` 幾何定義路段幾何線段，屬性包含 `id`、`startid`、`endid`，並可透過 `metadata` 定義 `speed_limit` 等運營屬性。
 
 ### 4.2 Nav2 核心參數配置
 
