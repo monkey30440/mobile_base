@@ -1,0 +1,44 @@
+<!--
+  Route-Assisted 3-Stage Navigation Behavior Tree for mobile_base AMR
+  Implements SYS-011, SYS-013, SYS-015, SYS-016, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025
+  Stage 1: First Mile (Current Pose -> Route Entry)
+  Stage 2: On Route (Route Entry -> Route Exit via Route Graph)
+  Stage 3: Last Mile (Route Exit -> Canonical Goal Pose)
+  v0.1 Policy (SYS-021): Full Free-space Fallback is disabled. If ComputeRoute fails, terminate with FAILURE.
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateRouteAssisted">
+      <RateController hz="1.0">
+        <Sequence name="ComputeRouteAssistedPath">
+          <!-- Step 1: Compute Route on Topological Graph (SYS-013, SYS-019) -->
+          <ComputeRoute goal="{goal}" use_poses="true" path="{route_path}" route="{route}" error_code_id="{compute_route_error_code}"/>
+          
+          <!-- Step 2: First Mile Connector (SYS-018) -->
+          <GetPoseFromPath path="{route_path}" index="0" pose="{route_start_pose}"/>
+          <GetCurrentPose global_frame="map" robot_base_frame="base_footprint" current_pose="{current_pose}"/>
+          <Fallback name="FirstMileCheck">
+            <ArePosesNear ref_pose="{current_pose}" target_pose="{route_start_pose}" tolerance="0.2"/>
+            <Sequence name="PlanFirstMile">
+              <ComputePathToPose start="{current_pose}" goal="{route_start_pose}" use_start="true" path="{first_mile_path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
+              <ConcatenatePaths input_path1="{first_mile_path}" input_path2="{route_path}" output_path="{route_path}"/>
+            </Sequence>
+          </Fallback>
+
+          <!-- Step 3: Last Mile Connector (SYS-020) -->
+          <GetPoseFromPath path="{route_path}" index="-1" pose="{route_end_pose}"/>
+          <Fallback name="LastMileCheck">
+            <ArePosesNear ref_pose="{route_end_pose}" target_pose="{goal}" tolerance="0.2"/>
+            <Sequence name="PlanLastMile">
+              <ComputePathToPose start="{route_end_pose}" goal="{goal}" use_start="true" path="{last_mile_path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
+              <ConcatenatePaths input_path1="{route_path}" input_path2="{last_mile_path}" output_path="{route_path}"/>
+            </Sequence>
+          </Fallback>
+        </Sequence>
+      </RateController>
+
+      <!-- Step 4: Execute Path Tracking & Stopped Goal Checking (SYS-015, SYS-016) -->
+      <FollowPath path="{route_path}" controller_id="FollowPath" goal_checker_id="stopped_goal_checker" error_code_id="{follow_path_error_code}"/>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

@@ -2196,3 +2196,56 @@ src/mobile_base_navigation/
 | Feature freeze status | `Frozen [x]` (Checklist #17 S6 Target Admission Thin Boundary Implementation & Verification Complete) |
 | Freeze condition | 通過 Goal Pose 正規化、Station Catalog 查表解析、Canonical Pose 合法性校驗、結構化拒絕原因回報與完整 GTest / Linter 單元測試 |
 | Next dependency | Checklist #18 (S6 Route-assisted Navigation execution) |
+
+---
+
+### 3.12 S6 Route-assisted Navigation execution (Checklist #18)
+
+#### 3.12.1 Requirement and Subsystem Trace
+- **需求追溯**: `SYS-011` (幾何路徑規劃), `SYS-013` (路網優先移動策略), `SYS-014` (障礙物感知與避讓), `SYS-015` (路徑追隨與速度輸出), `SYS-016` (到站與停穩判定), `SYS-017` (導航結果原生回報), `SYS-018` (First Mile 安全連接), `SYS-019` (On Route 拓撲路網導航), `SYS-020` (Last Mile 安全連接), `SYS-021` (v0.1 禁用 Full Free-space Fallback), `SYS-025` (導航取消協定)。
+- **子系統與架構歸屬**: S6 Navigation（`mobile_base_navigation`）整合 Nav2 Jazzy 1.3.12 原生 Stack（`nav2_route`, `nav2_planner`, `nav2_controller`, `nav2_costmap_2d`, `nav2_bt_navigator`, `nav2_lifecycle_manager`）。
+- **架構決策 (AD-003)**:
+  1. **Route-preferred Strategy**: 存在有效路網時優先沿拓撲邊行駛，禁止任意選擇完全自由空間導航。
+  2. **三階段編排**: First Mile（起點連接）→ On Route（拓撲巡航）→ Last Mile（目標對齊與進站）。
+  3. **v0.1 Fallback 邊界**: 禁用全局自由空間 Fallback；路網方案用盡或阻塞時立即煞停並回報失敗。
+  4. **零 Custom Code 原則**: 完全複用 Nav2 Jazzy 原生節點、外掛與 BT 節點，僅提供專案配置與專用 BT XML。
+
+#### 3.12.2 Implementation Artifacts
+- **Nav2 參數設定檔**: `src/mobile_base_navigation/config/nav2_params.yaml`
+  - Planner: `nav2_navfn_planner::NavfnPlanner`（A* 搜尋模式）。
+  - Controller: `nav2_mppi_controller::MPPIController`（DiffDrive 運動模型、橫向速度鎖定為零、配置完整 Critic 集合）。
+  - Goal Checker: `nav2_controller::StoppedGoalChecker`（$5\,\text{cm}$ 位置容差、$0.05\,\text{rad}$ 朝向容差、線速度 $<0.01\,\text{m/s}$、角速度 $<0.02\,\text{rad/s}$）。
+  - Costmaps: 訂閱 `/scan` 進行光線投射與膨脹層計算，足跡配置為 $[0.35, 0.30] \times [-0.35, -0.30]$。
+  - Route Server: `nav2_route::RouteServer` 配置 `GeoJsonGraphFileLoader` 與距離/代價評分器。
+- **三階段行為樹**: `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`
+  - 基於 BTCPP v4 格式，以 `PipelineSequence` 編排 `ComputeRoute` → First Mile Fallback/Sequence (`ArePosesNear` + `ComputePathToPose` + `ConcatenatePaths`) → Last Mile Fallback/Sequence (`ArePosesNear` + `ComputePathToPose` + `ConcatenatePaths`) → `FollowPath`。
+  - 嚴格落實 SYS-021：若 `ComputeRoute` 失敗，直接回傳 `FAILURE` 終止導航，不設置全域自由空間 Fallback 分支。
+- **測試路網夾具**: `src/mobile_base_navigation/test/test_data/test_route_graph.geojson`
+  - 符合 Nav2 `GeoJsonGraphFileLoader` 規範之 3 節點、2 拓撲邊測試用 FeatureCollection。
+- **導航啟動腳本**: `src/mobile_base_navigation/launch/navigation.launch.py`
+  - 啟動 `controller_server`（將 `cmd_vel` remapping 至 `/diff_drive_controller/cmd_vel`）、`planner_server`、`route_server`、`bt_navigator` 與 `lifecycle_manager_navigation`。
+- **軟體整合與合約測試**: `src/mobile_base_navigation/test/test_navigation_launch.py`
+  - 測試 Nav2 參數合約、BT XML 結構與 SYS-021 邊界、GeoJSON 夾具格式、以及 LaunchDescription 組裝與 Remapping 規則。
+
+#### 3.12.3 Mature vs Custom Boundary
+- **Mature Nav2 Components Reused**:
+  - `nav2_route::RouteServer` (Jazzy 1.3.12)
+  - `nav2_planner::PlannerServer` + `nav2_navfn_planner::NavfnPlanner`
+  - `nav2_controller::ControllerServer` + `nav2_mppi_controller::MPPIController`
+  - `nav2_controller::StoppedGoalChecker`
+  - `nav2_costmap_2d`
+  - `nav2_bt_navigator` + `nav2_behavior_tree` 原生 Action/Condition/Control Nodes
+  - `nav2_lifecycle_manager`
+- **Project-Owned Custom Code**: **`NONE`**（零自製 C++ / Python 節點或外掛，完全由配置與 BT XML 驅動）。
+
+#### 3.12.4 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-21T11:50:10+08:00 | S6 Navigation Stage A Software & Launch Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 54 項測試全部通過（含 26 GTest + 4 pytest + linter）；3. 驗證 Nav2 參數合約（NavfnPlanner, MPPIController DiffDrive, StoppedGoalChecker 5cm/0.01m/s）；4. 驗證 BT XML 三階段結構與禁用 Fallback；5. 驗證 GeoJSON 路網夾具；6. 驗證 Launch Composition 與 `/diff_drive_controller/cmd_vel` remapping。 | 容器即時測試日誌 |
+
+#### 3.12.5 Known Limits / Outstanding Obligations
+- **實車運動驗證邊界 (Hardware Navigation Verification PENDING)**：Stage A 僅完成純軟體配置、行為樹與 Launch 整合驗證。實機導航到站停止、避障與取消等動態行為需在後續 Stage 經使用者明確授權後執行受控實機測試。
+- **真實場域資料邊界 (Production Data NOT CREATED)**：`test_data/test_route_graph.geojson` 僅為測試夾具，非真實場域路網。
+
+#### 3.12.6 Status
+- **Current Status**: In Progress `[~]`（Stage A 軟體配置與整合測試完成，待後續驗證）。

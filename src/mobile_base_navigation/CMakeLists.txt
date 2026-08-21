@@ -28,7 +28,7 @@ target_link_libraries(target_admission_lib
   yaml-cpp
 )
 
-# Install
+# Install libraries and headers
 install(
   TARGETS target_admission_lib
   EXPORT export_${PROJECT_NAME}
@@ -40,6 +40,12 @@ install(
 install(
   DIRECTORY include/
   DESTINATION include
+)
+
+# Install launch, config, and behavior_trees
+install(
+  DIRECTORY config behavior_trees launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
@@ -61,6 +67,11 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_target_admission
     rclcpp
     geometry_msgs
+  )
+
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_navigation_launch
+    test/test_navigation_launch.py
   )
 endif()
 

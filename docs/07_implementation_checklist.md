@@ -16,10 +16,10 @@
 
 - 總項目：28
 - 已完成：17
-- 進行中：0
-- 待實作：11
+- 進行中：1
+- 待實作：10
 - 上游阻塞：0
-- 目前進度：17 / 28 (61%)；第 17 項 `S6 Target Admission thin gaps` 完成 `[x]`，目前無進行中項目。
+- 目前進度：17 / 28 (61%)；第 18 項 `S6 Route-assisted Navigation execution` 進行中 `[~]`（Stage A 完成，待後續驗證）。
 
 ---
 
@@ -76,7 +76,7 @@
 - [x] 17. S6 Target Admission thin gaps
   - 追溯：GAP-01→SYS-008、GAP-02→SYS-009、GAP-03→SYS-032、GAP-04→SYS-033。
   - 完成條件：terminal target form、Goal Pose normalization、Station exact-match resolution、canonical PoseStamped validation 形成單一薄 boundary；invalid target 不下送 Nav2，failure reasons 與 unit/interface tests 完整。
-- [ ] 18. S6 Route-assisted Navigation execution
+- [~] 18. S6 Route-assisted Navigation execution
   - 追溯：SYS-011、SYS-013、SYS-014、SYS-015、SYS-016、SYS-017、SYS-018、SYS-019、SYS-020、SYS-021、SYS-025。
   - 完成條件：Nav2 Route Server、Planner、Costmap/Collision Monitor、Controller、StoppedGoalChecker、BT 三階段、native result/cancel 與禁用 free-space fallback 的整合和實機 evidence 完整。
 
