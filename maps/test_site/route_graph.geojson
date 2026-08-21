@@ -1,171 +1,65 @@
 {
   "type": "FeatureCollection",
-  "name": "test_site_route_graph",
-  "crs": {
-    "type": "name",
-    "properties": {
-      "name": "urn:ogc:def:crs:EPSG::3857"
-    }
-  },
-  "date_generated": "2026-08-21",
   "features": [
     {
       "type": "Feature",
-      "properties": {
-        "id": 0,
-        "frame": "map",
-        "metadata": {
-          "name": "route_entry"
-        }
-      },
       "geometry": {
         "type": "Point",
         "coordinates": [
           0.2,
-          -1.4
+          -1.1
         ]
+      },
+      "properties": {
+        "id": 0,
+        "frame": "map",
+        "metadata": {
+          "name": "Route Entry"
+        }
       }
     },
     {
       "type": "Feature",
-      "properties": {
-        "id": 1,
-        "frame": "map",
-        "metadata": {
-          "name": "route_midway"
-        }
-      },
       "geometry": {
         "type": "Point",
         "coordinates": [
           0.2,
           -0.8
         ]
-      }
-    },
-    {
-      "type": "Feature",
+      },
       "properties": {
-        "id": 2,
+        "id": 1,
         "frame": "map",
         "metadata": {
-          "name": "route_exit"
+          "name": "Route Exit"
         }
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          0.2,
-          -0.2
-        ]
       }
     },
     {
       "type": "Feature",
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [
+            [
+              0.2,
+              -1.1
+            ],
+            [
+              0.2,
+              -0.8
+            ]
+          ]
+        ]
+      },
       "properties": {
-        "id": 3,
+        "id": 2,
         "startid": 0,
         "endid": 1,
-        "cost": 0.6,
+        "cost": 0.3,
         "metadata": {
           "speed_limit": 0.5
         }
-      },
-      "geometry": {
-        "type": "MultiLineString",
-        "coordinates": [
-          [
-            [
-              0.2,
-              -1.4
-            ],
-            [
-              0.2,
-              -0.8
-            ]
-          ]
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "id": 4,
-        "startid": 1,
-        "endid": 2,
-        "cost": 0.6,
-        "metadata": {
-          "speed_limit": 0.5
-        }
-      },
-      "geometry": {
-        "type": "MultiLineString",
-        "coordinates": [
-          [
-            [
-              0.2,
-              -0.8
-            ],
-            [
-              0.2,
-              -0.2
-            ]
-          ]
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "id": 5,
-        "startid": 1,
-        "endid": 0,
-        "cost": 0.6,
-        "metadata": {
-          "speed_limit": 0.5
-        }
-      },
-      "geometry": {
-        "type": "MultiLineString",
-        "coordinates": [
-          [
-            [
-              0.2,
-              -0.8
-            ],
-            [
-              0.2,
-              -1.4
-            ]
-          ]
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "id": 6,
-        "startid": 2,
-        "endid": 1,
-        "cost": 0.6,
-        "metadata": {
-          "speed_limit": 0.5
-        }
-      },
-      "geometry": {
-        "type": "MultiLineString",
-        "coordinates": [
-          [
-            [
-              0.2,
-              -0.2
-            ],
-            [
-              0.2,
-              -0.8
-            ]
-          ]
-        ]
       }
     }
   ]

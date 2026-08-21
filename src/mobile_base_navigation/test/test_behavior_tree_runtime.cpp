@@ -217,10 +217,10 @@ TEST_F(BehaviorTreeRuntimeTest, RealSiteRouteGraphNativeLoader)
   bool success = loader.loadGraphFromFile(graph, map_ids, filepath);
   ASSERT_TRUE(success) << "Failed to load real-site route graph from " << filepath;
 
-  EXPECT_EQ(graph.size(), 3u);
+  EXPECT_EQ(graph.size(), 2u);
   size_t total_edges = 0;
   for (const auto & n : graph) {
     total_edges += n.neighbors.size();
   }
-  EXPECT_EQ(total_edges, 4u);
+  EXPECT_EQ(total_edges, 1u);
 }

@@ -153,13 +153,13 @@ def test_real_site_route_graph_geojson():
 
     assert graph.get('type') == 'FeatureCollection'
     features = graph.get('features', [])
-    assert len(features) >= 3
+    assert len(features) == 3
 
     points = [f for f in features if f['geometry']['type'] == 'Point']
     lines = [f for f in features if f['geometry']['type'] == 'MultiLineString']
 
-    assert len(points) == 3
-    assert len(lines) == 4  # 2 forward edges + 2 reverse edges for bidirectional topology
+    assert len(points) == 2
+    assert len(lines) == 1
 
     # Verify node IDs and coordinates
     for pt in points:
@@ -178,8 +178,8 @@ def test_real_site_route_graph_geojson():
         assert 'id' in props
         assert 'startid' in props
         assert 'endid' in props
-        assert props.get('startid') in [0, 1, 2]
-        assert props.get('endid') in [0, 1, 2]
+        assert props.get('startid') in [0, 1]
+        assert props.get('endid') in [0, 1]
 
 
 def _collect_nodes(entities):

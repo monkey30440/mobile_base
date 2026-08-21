@@ -2223,18 +2223,17 @@ src/mobile_base_navigation/
   - 嚴格落實 SYS-021：若 `ComputeRoute` 失敗，直接回傳 `FAILURE` 終止導航，不設置全域自由空間 Fallback 分支。
 - **真實場域路網圖資 (Production Route Graph)**: `maps/test_site/route_graph.geojson`
   - 基於真實場域地圖 `maps/test_site/map.yaml` (0.05m 解析度)，透過 Nav2 原生 GeoJSON 拓撲圖規範建立，與地圖共置於 `maps/test_site/` 目錄。
-  - 包含 3 個位於操作者選定之可通行區域頂點（估計淨空：Node 0 ≈ 0.30 m, Node 1 ≈ 0.46 m, Node 2 ≈ 0.35 m；實際安全可通行性以 Nav2 footprint 與 costmap runtime 證據為準）：
-    - Node 0 (`id: 0`, `frame: "map"`, `coordinates: [0.2, -1.4]`, 測試 Route Entry)
-    - Node 1 (`id: 1`, `frame: "map"`, `coordinates: [0.2, -0.8]`, 中間拓撲路網節點)
-    - Node 2 (`id: 2`, `frame: "map"`, `coordinates: [0.2, -0.2]`, 測試 Route Exit)
-  - 包含 4 條雙向拓撲邊（Edge 3: 0→1, Edge 4: 1→2, Edge 5: 1→0, Edge 6: 2→1），長度各為 $0.6\,\text{m}$，速限設為 $0.5\,\text{m/s}$。
+  - 為滿足 MVP 最小靜態 RouteServer 規劃驗證，校準為 2 個位於全域代價地圖 100% 自由通行空間（所有抽樣點 cost = 0、障礙物膨脹淨空度 $> 0.45\,\text{m}$）之頂點：
+    - Node 0 (`id: 0`, `frame: "map"`, `coordinates: [0.2, -1.1]`, Route Entry)
+    - Node 1 (`id: 1`, `frame: "map"`, `coordinates: [0.2, -0.8]`, Route Exit)
+  - 包含 1 條單向拓撲邊（Edge 2: 0→1），長度為 $0.30\,\text{m}$，速限設為 $0.5\,\text{m/s}$。
 - **測試路網夾具**: `src/mobile_base_navigation/test/test_data/test_route_graph.geojson`
   - 符合 Nav2 `GeoJsonGraphFileLoader` 規範之 3 節點、2 拓撲邊測試用 FeatureCollection。
 - **導航啟動腳本**: `src/mobile_base_navigation/launch/navigation.launch.py`
   - 啟動 `controller_server`（將 `cmd_vel` remapping 至 `/diff_drive_controller/cmd_vel`）、`planner_server`、`route_server`、`bt_navigator` 與 `lifecycle_manager_navigation`。
 - **軟體整合與合約測試**:
   - `src/mobile_base_navigation/test/test_navigation_launch.py`: 測試 Nav2 參數合約、BT XML 結構與 SYS-021 邊界、測試與真實 GeoJSON 夾具格式、以及 LaunchDescription 組裝與 Remapping 規則。
-  - `src/mobile_base_navigation/test/test_behavior_tree_runtime.cpp`: C++ BehaviorTree Runtime 測試，驗證 9 個 Nav2 BT 外掛動態庫成功註冊、BT XML 於 ROS 節點黑板下正確解析與 Schema 實例化、`ConcatenatePaths` 與 `GetPoseFromPath` 之路徑順序資料流正確性、以及 `nav2_route::GeoJsonGraphFileLoader` 原生載入 `maps/test_site/route_graph.geojson`（3 nodes, 4 edges）完全通過。
+  - `src/mobile_base_navigation/test/test_behavior_tree_runtime.cpp`: C++ BehaviorTree Runtime 測試，驗證 9 個 Nav2 BT 外掛動態庫成功註冊、BT XML 於 ROS 節點黑板下正確解析與 Schema 實例化、`ConcatenatePaths` 與 `GetPoseFromPath` 之路徑順序資料流正確性、以及 `nav2_route::GeoJsonGraphFileLoader` 原生載入 `maps/test_site/route_graph.geojson`（2 nodes, 1 edge）完全通過。
 
 #### 3.12.3 Mature vs Custom Boundary
 - **Mature Nav2 Components Reused**:
@@ -2253,12 +2252,15 @@ src/mobile_base_navigation/
 |---|---|---|---|---|---|
 | 2026-08-21T11:50:10+08:00 | S6 Navigation Stage A Software & Launch Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 54 項測試全部通過（含 26 GTest + 4 pytest + linter）；3. 驗證 Nav2 參數合約（NavfnPlanner, MPPIController DiffDrive, StoppedGoalChecker 5cm/0.01m/s）；4. 驗證 BT XML 三階段結構與禁用 Fallback；5. 驗證 GeoJSON 路網夾具；6. 驗證 Launch Composition 與 `/diff_drive_controller/cmd_vel` remapping。 | 容器即時測試日誌 |
 | 2026-08-21T11:58:00+08:00 | S6 Navigation Stage A.1 BT Runtime & Dataflow Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 61 項測試全部通過（含 29 GTest + 4 pytest + linter）；3. 驗證 9 個 Nav2 BT Plugin 共享庫註冊；4. 驗證 BT XML Schema 實例化與黑板埠合約解析；5. 驗證 `ConcatenatePaths` 與 `GetPoseFromPath` 資料流順序；6. 驗證鍵值分離 (`raw_route_path`, `first_connected_path`, `final_route_path`)。 | 容器即時測試日誌 |
-| 2026-08-21T12:11:36+08:00 | S6 Navigation Stage B Real-Site Route Graph & Native Loader Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 63 項測試全部通過（含 30 GTest + 5 pytest + linter）；3. 驗證 `maps/test_site/route_graph.geojson` 真實圖資語法與幾何結構；4. 驗證 Nav2 `GeoJsonGraphFileLoader` 原生解析載入成功（載入 3 個頂點、4 條雙向拓撲邊，零錯誤）。 | 容器即時測試日誌 |
+| 2026-08-21T12:11:36+08:00 | S6 Navigation Stage B Real-Site Route Graph & Native Loader Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Software-only) | 1. 套件編譯通過（0 errors）；2. 63 項測試全部通過（含 30 GTest + 5 pytest + linter）；3. 驗證 `maps/test_site/route_graph.geojson` 真實圖資語法與幾何結構；4. 驗證 Nav2 `GeoJsonGraphFileLoader` 原生解析載入成功（零錯誤）。 | 容器即時測試日誌 |
+| 2026-08-21T12:42:00+08:00 | S6 Navigation Stage C Stationary Full Nav2 Runtime & Costmap Safety Check | Nav2 Launch + `ComputeRoute 0->2` | FAIL / SAFETY REJECTION (Negative Evidence) | 1. 全節點 Active（controller, planner, route, bt_navigator, lifecycle_manager）；2. StoppedGoalChecker 門檻驗證（5cm, 0.05rad, 0.01m/s）；3. 全域 Costmap 顯示初版 Node 2 (0.2, -0.2) 與 Edge 1->2 侵入 Inscribed Obstacle (cost 99/253)；4. RouteServer CostmapScorer 正確阻斷並回報 `error_code: 405 (NO_VALID_ROUTE)`；5. 識別 Collision Monitor 獨立節點缺口。 | 容器即時測試日誌 |
+| 2026-08-21T13:35:10+08:00 | S6 Navigation Stage C.1 Minimal Real Route Calibration & Stationary ComputeRoute | Nav2 Launch + `ComputeRoute 0->1` | PASS (Stationary-only) | 1. 簡化路網為 2 頂點 1 拓撲邊 (0.2, -1.1) -> (0.2, -0.8)，沿線 20 個抽樣點 costmap cost 全為 0；2. `nav2_route::GeoJsonGraphFileLoader` 成功載入 2 nodes / 1 edge；3. `ComputeRoute` 成功完成規劃（`status: SUCCEEDED`, `error_code: 0`, 規劃耗時 122 微秒，產出 7 個 dense poses 之 Path 與拓撲 Route）；4. 前後全程監控 `cmd_vel` 輸出為零，底盤完全靜止。 | 容器即時測試日誌 |
 
 #### 3.12.5 Known Limits / Outstanding Obligations
-- **實車運動驗證邊界 (Hardware Navigation Verification PENDING)**：Stage A/B 僅完成純軟體配置、行為樹、真實圖資與 Launch 整合驗證。實機導航到站停止、避障與取消等動態行為需在後續 Stage 經使用者明確授權後執行受控實機測試。
+- **實車運動驗證邊界 (Hardware Navigation Verification PENDING)**：Stage A/B/C 僅完成純軟體配置、行為樹、真實圖資校準、Costmap 碰撞防護與靜止 ComputeRoute 驗證。實機導航到站停止、避障與取消等動態行為需在後續 Stage 經使用者明確授權後執行受控實機測試。
+- **碰撞監控節點整合邊界 (Collision Monitor Integration PENDING)**：Checklist #18 DoD 涵蓋之成熟 `nav2_collision_monitor` 速度鏈防線節點尚待整合。
 - **站點清單邊界 (Production Station Catalog NOT CREATED)**：`maps/test_site/route_graph.geojson` 僅為拓撲路網圖資，不包含業務站點定義。真實站點清單依現場業務需求配置，不偽造假站點資料。
-- **硬體執行邊界 (Hardware Execution & Motion NOT EXECUTED)**：本 Stage 明確未執行任何硬體馬達驅動、未發送 Nav2 Action Goal、未輸出 `cmd_vel`。
+- **硬體執行邊界 (Hardware Execution & Motion NOT EXECUTED)**：本 Stage 明確未執行任何硬體馬達驅動、未發送 `NavigateToPose` 或 `FollowPath` Action Goal、未輸出 `cmd_vel`。
 
 #### 3.12.6 Status
-- **Current Status**: In Progress `[~]`（Stage A/B 軟體配置、行為樹修復與真實場域圖資原生載入驗證完成，待後續實車驗證）。
+- **Current Status**: In Progress `[~]`（Stage A/B/C/C.1 軟體配置、行為樹修復、真實場域圖資校準與靜止 ComputeRoute 規劃驗證完成，待 Collision Monitor 整合與後續實車驗證）。
