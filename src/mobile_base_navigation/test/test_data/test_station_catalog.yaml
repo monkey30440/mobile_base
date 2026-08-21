@@ -1,0 +1,15 @@
+version: "1.0.0"
+namespace: "test_fixture"
+stations:
+  - name: "STATION_A"
+    x: 2.50
+    y: 1.20
+    yaw: 0.0
+    metadata:
+      description: "Test loading dock 1"
+  - name: "STATION_B"
+    x: 8.00
+    y: 5.50
+    yaw: 1.57079632679
+    metadata:
+      description: "Test unloading dock 2"

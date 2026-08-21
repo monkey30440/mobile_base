@@ -1,0 +1,4 @@
+version: "1.0.0"
+stations:
+  - name: ""
+    x: "not_a_number"

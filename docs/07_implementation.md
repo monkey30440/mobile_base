@@ -2121,3 +2121,76 @@ src/mobile_base_localization/
 | Feature freeze status | `Frozen [x]` (Checklist #16 S5 Localization Subsystem Implementation & Verification Complete) |
 | Freeze condition | 通過 Navigation Mode 地圖載入、AMCL 激活、RViz `/initialpose` 注入、唯一 `map -> odom` TF 廣播、實車受控位移定位誤差驗收與負向防護驗證 |
 | Next dependency | Checklist #17 (S6 Target Admission thin gaps) |
+
+### 3.11 S6 Target Admission thin gaps (`IMP-017`)
+
+#### 3.11.1 Subsystem Specification & Checklist Tracking
+- **Checklist item**: `[~] 17. S6 Target Admission thin gaps`
+- **Subsystem**: S6 Navigation Subsystem (Target Admission Thin Boundary)
+- **Implementation status**: `In Progress [~]` (Stage A Core Module & Unit Verification Complete)
+- **Traceability**: `GAP-01` → `SYS-008` (Navigation Target Discriminator); `GAP-02` → `SYS-009` (Goal Pose Normalizer); `GAP-03` → `SYS-032` (Station Catalog Resolver); `GAP-04` → `SYS-033` (Canonical Goal Pose Validator); 05 §3.3, §4, §7.2 (AD-002 Canonical Target); 06 §2.1, §3.1, §4.1, §5.1.
+
+#### 3.11.2 Requirement & Contract Mapping
+- **SYS-008 (GAP-01 Target Discriminator)**：提供統一入口辨識終端提交之目標型態（Station ID 字串 vs. 數值 Goal Pose）。
+- **SYS-009 (GAP-02 Goal Pose Normalizer)**：將外部提交之 $(x, y, \text{yaw-deg})$ 轉為全域座標系（`map`）中之標準 `geometry_msgs/msg/PoseStamped`，保留數值語意並計算四元數。
+- **SYS-032 (GAP-03 Station Catalog Resolver)**：載入目前場域之 `station_catalog.yaml`（06 §4.1 schema），依 Station ID 進行精確查表匹配並解析為標準 `PoseStamped`；ID 為空、查無站點或資料損毀時拒絕並回報具體原因。
+- **SYS-033 (GAP-04 Canonical Goal Pose Validator)**：在導航開始前校驗標準 `PoseStamped` 之有限值（非 NaN/Inf）、Frame 非空且合法、以及 Quaternion 有效性與正規化模長；驗證失敗時即時拒絕並阻止目標下送 Nav2。
+- **架構邊界 (AD-002 Canonical Target)**：Target Admission 作為單一薄層邊界，確保僅有完全合法的標準 `PoseStamped` 輸出，無效輸入保證不產出 admitted target，且嚴格不跨入 Nav2 Planning/Execution/BT 範圍（留待 #18）。
+
+#### 3.11.3 Implementation Artifacts
+- **Package Location**: `src/mobile_base_navigation/`
+```text
+src/mobile_base_navigation/
+├── CMakeLists.txt                               # Package build and test configuration
+├── package.xml                                  # Dependencies (rclcpp, geometry_msgs, yaml-cpp)
+├── include/
+│   └── mobile_base_navigation/
+│       └── target_admission.hpp                 # TargetAdmission class, AdmissionResult, and GAP-01~04 interfaces
+├── src/
+│   └── target_admission.cpp                     # Core implementation of normalization, YAML resolution, and validation
+└── test/
+    ├── test_target_admission.cpp                # 26 GTest unit test cases covering positive/negative paths
+    └── test_data/
+        ├── test_station_catalog.yaml            # Test fixture conforming to 06 §4.1 schema
+        └── malformed_station_catalog.yaml       # Malformed fixture for negative test
+```
+
+#### 3.11.4 Mature / Custom Boundary
+- **Mature Components (ROS 2 Jazzy)**:
+  - `geometry_msgs::msg::PoseStamped`: ROS 2 原生標準全域位姿資料結構。
+  - `yaml-cpp`: 標準 YAML 解析器。
+- **Project-Owned Custom Layer**:
+  - `mobile_base_navigation::TargetAdmission`: 封裝 GAP-01~04 核心薄層邏輯，提供目標型態辨識、正規化、站點查表解析、數值與四元數幾何校驗、以及結構化拒絕原因。
+
+#### 3.11.5 Rejection Codes & Failure Handling
+- `REJECTED_EMPTY_TARGET`: 輸入目標為空。
+- `REJECTED_EMPTY_STATION_ID`: 站點 ID 為空字串。
+- `REJECTED_STATION_NOT_FOUND`: 站點清單中查無指定 Station ID。
+- `REJECTED_CATALOG_UNAVAILABLE`: 站點清單檔案不存在或未成功載入。
+- `REJECTED_CATALOG_MALFORMED`: 站點清單 YAML 格式損毀或欄位缺失。
+- `REJECTED_NON_FINITE_COORDINATES`: 座標或旋轉角包含 NaN 或 Inf。
+- `REJECTED_EMPTY_FRAME_ID`: Frame ID 為空字串。
+- `REJECTED_INVALID_FRAME_ID`: Frame ID 與預期全域座標框架不符。
+- `REJECTED_INVALID_QUATERNION`: 四元數為零向量或未正規化（$|N-1.0| > 10^{-3}$）。
+
+#### 3.11.6 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-21T10:53:15+08:00 | S6 Target Admission Build & Full Test Suite | `colcon build --packages-select mobile_base_navigation` + `colcon test` | PASS (Stage A Software) | 1. 套件編譯通過（0 errors）；2. 43 項測試（26 GTest + linter）全部通過；3. 覆蓋 GAP-01 目標識別（Goal Pose, Station, Empty）、GAP-02 角度轉四元數與正規化、GAP-03 站點清單查表與未找到拒絕、GAP-04 有限值/Frame/四元數校驗；4. 驗證所有負向拒絕保證不產出 admitted canonical pose。 | 容器即時測試日誌 |
+
+#### 3.11.7 Evidence Boundary
+| 欄位 | 內容 |
+|---|---|
+| 已證明 (`PASS` / `VERIFIED`) | 1. **目標型態識別 (GAP-01 / SYS-008)** (`PASS`)：正確區分 Station ID 與 Goal Pose 輸入。<br/>2. **Goal Pose 正規化 (GAP-02 / SYS-009)** (`PASS`)：$(x, y, \text{yaw-deg})$ 正確正規化為標準 `PoseStamped`，四元數計算正確，非有限值安全拒絕。<br/>3. **站點清單精確查表 (GAP-03 / SYS-032)** (`PASS`)：依 06 §4.1 schema 成功解析 `test_station_catalog.yaml`，正確查表輸出標準位姿，空 ID、未知站點與損毀檔案精確拒絕。<br/>4. **標準目標合法性校驗 (GAP-04 / SYS-033)** (`PASS`)：嚴格校驗 NaN/Inf、Frame 空值/不符、四元數退化與非正規化，無效目標保證不產出 admitted pose。<br/>5. **純軟體單元與介面測試** (`PASS`)：43 項測試 100% 通過（0 errors, 0 failures）。 |
+| 尚未證明 | 無（Target Admission 為純軟體資料轉換與校驗層，無硬體測試義務）。 |
+
+#### 3.11.8 Known Limits / Outstanding Obligations
+- **不包含真實場域站點資料**：`test_data/test_station_catalog.yaml` 明確為測試用 Test Fixture，非真實場域配置。真實場域站點清單由使用者於後續部署時依需求提供。
+- **不包含 Nav2 導航執行**：Target Admission 僅負責目標接收與合規校驗；路徑規劃、Costmap 避障、控制器追隨與 BT 編排屬於 Checklist #18。
+
+#### 3.11.9 Feature Freeze Status / Next Dependency
+| 欄位 | 內容 |
+|---|---|
+| Feature freeze status | `In Progress [~]` (Checklist #17 Stage A Implemented & Unit Verified; Awaiting Closure Reassessment) |
+| Freeze condition | 通過 Goal Pose 正規化、Station Catalog 查表解析、Canonical Pose 合法性校驗、結構化拒絕原因回報之單元測試 |
+| Next dependency | Checklist #17 Closure Reassessment |
