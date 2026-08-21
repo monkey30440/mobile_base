@@ -835,7 +835,7 @@ graph TD
             BT[bt_navigator<br/>三階段任務編排器 (First/On/Last Mile)<br/>Step 19A 重選路與 Fallback 終止]
             ROUTE[route_server<br/>拓撲路網規劃器 (route_graph.geojson)]
             PLANNER[planner_server<br/>自由路徑幾何規劃 (Navfn / Smac)]
-            CONTROLLER[controller_server<br/>路徑追隨控制 (DWB / RPP)]
+            CONTROLLER[controller_server<br/>路徑追隨控制 (MPPI)]
             COSTMAP[nav2_costmap_2d<br/>全域與局部障礙物代價地圖]
             CHECKER[stopped_goal_checker<br/>停轉確認檢測器]
         end
@@ -877,7 +877,7 @@ graph TD
 3. **`planner_server` (Nav2 自由幾何規劃器)**：
    * 使用 `nav2_navfn_planner` 或 `SmacPlanner2D`，依目前位姿與 active stage 目標計算有效且非空的 2D 路徑（SYS-011）。
 4. **`controller_server` & `stopped_goal_checker` (Nav2 控制器與停轉檢測)**：
-   * 使用 `DWBLocalPlanner` 或 `RegulatedPurePursuitController`，透過 Navigation2 `FollowPath` 追蹤 active stage 路徑並輸出 `/cmd_vel` 至 S7（SYS-015）。
+   * 使用 `nav2_mppi_controller::MPPIController`，透過 Navigation2 `FollowPath` 追蹤 active stage 路徑並輸出 `/cmd_vel` 至 S7（SYS-015）。
    * 抵達目標容差半徑後，由 `stopped_goal_checker` 檢驗實際線速度 $< 0.01\,\text{m/s}$ 且角速度 $< 0.02\,\text{rad/s}$，確認位置、朝向與底盤停止皆滿足後方判定成功（SYS-016）；最終結果透過 Navigation2 原生結果回報（SYS-017）。
 5. **`nav2_costmap_2d` (全域與局部代價地圖)**：
    * 訂閱 S2 的 `/scan_front` 與 `/scan_rear`（或融合 `/scan`），進行光線投射（Ray-tracing）、障礙物標記與膨脹層計算，避免規劃或執行穿越占用區域（SYS-014）。
@@ -956,6 +956,9 @@ controller_server:
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["stopped_goal_checker"]
     controller_plugins: ["FollowPath"]
+
+    FollowPath:
+      plugin: "nav2_mppi_controller::MPPIController"
 
     stopped_goal_checker:
       plugin: "nav2_controller::StoppedGoalChecker"

@@ -674,7 +674,7 @@ $$\text{Base Status} == \text{STOPPED}$$
 | **SYS-011** | 路徑規劃 | `S6 Navigation` | CAP-002 | Nav2 `nav2_planner` (Smac / NavFn) |
 | **SYS-013** | Route-preferred Strategy | `S6 Navigation` | CAP-002 | Nav2 `nav2_route` + Stage Orchestration |
 | **SYS-014** | 障礙物避讓 | `S6 Navigation` | CAP-002 | Nav2 `nav2_costmap_2d` 障礙層約束 |
-| **SYS-015** | 路徑追蹤 | `S6 Navigation` | CAP-002 | Nav2 `nav2_controller` (RPP / DWB) |
+| **SYS-015** | 路徑追蹤 | `S6 Navigation` | CAP-002 | Nav2 `nav2_controller` (MPPI) |
 | **SYS-016** | 到站判定 | `S6 Navigation` | CAP-002 | Nav2 `StoppedGoalChecker` 停妥檢查 |
 | **SYS-017** | 導航結果 | `S6 Navigation` | CAP-002 | Nav2 Action 回傳標準導航狀態 |
 | **SYS-018** | First Mile | `S6 Navigation` | CAP-002 | Stage Orchestration (Current → Route Entry) |
