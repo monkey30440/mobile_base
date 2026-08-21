@@ -72,8 +72,8 @@ controller_server:
 
     stopped_goal_checker:
       plugin: "nav2_controller::StoppedGoalChecker"
-      xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.25 #0.15
+      yaw_goal_tolerance: 0.5236 #0.25
       trans_stopped_velocity: 0.05
       rot_stopped_velocity: 0.10
 
@@ -85,7 +85,7 @@ controller_server:
       vx_std: 0.2
       vy_std: 0.0
       wz_std: 0.4
-      vx_max: 0.15
+      vx_max: 0.5
       vx_min: -0.35
       vy_max: 0.0
       wz_max: 1.5
