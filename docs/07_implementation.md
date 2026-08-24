@@ -2523,16 +2523,16 @@ src/mobile_base_navigation/
 #### 3.16.5 Evidence Provenance & Historical Reuse
 - **New Stage B Consolidated Evidence**:
   - `src/mobile_base_bringup/test/test_feedback_odometry_chain.py`: 5 項自動化合約測試通過。
-  - 跨 3 套件共 257 項測試全部通過（0 failures）。
+  - 跨 3 套件（`mobile_base_bringup`, `mobile_base_control`, `mobile_base_state_estimation`）共 257 項測試全部通過（0 failures）。
 - **Reused Historical Runtime Evidence**:
   - **IMP-007 / IMP-008**: M1 Modbus FC17 雙軸讀取延遲 $\approx 3.8\,\text{ms}$、真實編碼器回授、CRC 錯誤隔離與停轉使能釋放實測。
   - **IMP-012 / IMP-013**: RF2O 與 EKF 50 Hz 多源實機融合、`sensor_timeout = 0.1 s` 掉線隔離與恢復實測。
   - **IMP-015**: 實車著地移動輪端里程計累積量測。
   - **IMP-018 Stage L1**: 自主導航實車運行 MPPI 消費 `/odometry/filtered` 與 StoppedGoalChecker 速度停穩檢驗。
-- **執行邊界確認**: 本 Stage 為純軟體合約與配置驗證，嚴格未發送導航目標、未發布非零速度命令、未移動 AMR 底盤。
+- **執行邊界確認**: 本次 closure 嚴格未執行硬體馬達輸出，AMR 維持完全靜止；無 fresh hardware runtime。
 
 #### 3.16.6 Status
-- **Implementation Status**: `Implemented`
-- **Evidence Status**: `Software Verified` (Stage B 自動化回授與里程計契約測試通過)
-- **Checklist Status**: `[~] In Progress` (Stage B 驗證通過，待進入後續 closure 評估)。
-- **Next Dependency**: Checklist #22 Closure Reassessment。
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (Stage B 自動化合約測試與 S2/S3/S7 歷史實機 evidence 完整覆蓋)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #22 原始 DoD 全部要求：M1 encoder→S7 validity→S3 EKF→S4/S5/S6 的資料鏈、延遲、掉線、禁止假回授與恢復行為完整驗證，未引入新 gate)。
+- **Next Dependency**: Checklist #23 (`Operational-mode and lifecycle closure`)。
