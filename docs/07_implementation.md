@@ -2635,3 +2635,35 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (現有自動化測試、產出地圖與 S4/S5/S6/S7 歷史實機 evidence 完整覆蓋)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #24 原始 DoD 全部要求：使用者啟動建圖、手動受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收，未引入新 gate)。
 - **Next Dependency**: Checklist #25 (`UC-002 Navigation end-to-end acceptance`)。
+
+---
+
+### 3.19 UC-002 Navigation end-to-end acceptance (Checklist #25)
+
+#### 3.19.1 Use Case and Requirement Trace
+- **Use Case 追溯**: `UC-002` (導航至指定目標), `CAP-002` (拓撲路網輔助自主導航能力)。
+- **需求追溯**: `SYS-008` (目標表示正規化 `GAP-01`), `SYS-009` (准入失敗回報 `GAP-02`), `SYS-010` (AMCL 地圖定位), `SYS-011` (路網圖載入), `SYS-013` (拓撲路徑計算), `SYS-014` (三階段路網輔助導航), `SYS-015` (零長度階段跳過), `SYS-016` (禁用自由空間備援), `SYS-017` (路徑規劃與 MPPI 控制), `SYS-018` (Nav2 原生結果與取消), `SYS-019` (StoppedGoalChecker 停穩檢驗), `SYS-020` (Costmap 與 Collision Monitor), `SYS-021` (站點目錄管理), `SYS-025` (導航生命週期), `SYS-032` (站點精確比對 `GAP-03`), `SYS-033` (位姿校驗 `GAP-04`)。
+- **完成條件 (Exact Original DoD)**: `Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收。`
+
+#### 3.19.2 End-to-End Acceptance & Evidence Boundary
+1. **已驗證之軟體合約與管線**:
+   - **目標准入與正規化 (Target Admission)**: 經 `test_target_admission.cpp`（25 項單元測試）完整覆蓋 Station 目錄精確查表、Goal Pose 四元數正規化與 NaN/Inf/無效位姿過濾。
+   - **拓撲路網載入與規劃 (RouteServer)**: 經 `test_route_server.cpp`（6 項單元測試）驗證 GeoJSON 解析、拓撲路徑搜尋與路網不可達攔截。
+   - **三階段導航與自由空間禁用 (3-Stage Route-Assisted BT)**: 經 `test_route_assisted_pipeline.cpp`（4 項整合測試）驗證 First Mile $\rightarrow$ On Route $\rightarrow$ Last Mile 行為樹流轉、零長度階段省略與嚴格禁用 Free-space Fallback。
+   - **安全碰撞監控與命令管線 (Collision Monitor & Motion Chain)**: 經 `test_navigation_launch.py` 與 `test_motion_command_stop_chain.py` 驗證 `/cmd_vel_nav` $\rightarrow$ Collision Monitor $\rightarrow$ `/diff_drive_controller/cmd_vel` 之重映射與停止合約。
+   - **任務取消軟體合約 (Task Cancel Software Contract)**: 經 Action Cancel 介面測試驗證發送 Cancel 請求即時終止 BT 導航並發布零速。
+2. **重用之歷史實機自主導航證據 (Reused Historical Runtime Evidence)**:
+   - **IMP-016**: 實車載入 `maps/test_site/map.yaml`，AMCL 穩定以 50 Hz 發布 `map -> odom` TF。
+   - **IMP-018 Stage L1**: 實車於測試場地自主運行，載入 `maps/test_site/route_graph.geojson`，發送目標位姿 (`x = 1.0 m, y = 0.0 m, yaw = 0.0 rad`)；MPPI 驅動底盤完成 3-Stage 導航；StoppedGoalChecker 檢驗速度歸零停穩；最終量測位置誤差 $0.0938\,\text{m}$（小於容差門檻）；NavigateToPose 回傳 `SUCCEEDED`；實車物理停穩經確認。
+3. **明確遞延之實機驗收證據 (Explicitly Deferred Physical Acceptance Evidence)**:
+   依工程紀律與當前邊界，不以軟體測試假冒實機測試，下列兩項實機驗證予以明確遞延記錄：
+   - **實機動態障礙物介入測試 (Physical Obstacle-Intervention)**: 於 AMR 移動路徑前方動態置入實體障礙物觸發 Collision Monitor 減速／急停之實體觀測。
+   - **移動中專屬 Cancel 煞停距離量測 (Dedicated In-Motion Cancel Physical Test)**: 於 AMR 巡航移動中發送 Cancel 請求並實測實體煞停距離與反應時間。
+4. **非阻塞性調校項目 (Deferred Tuning)**:
+   - 最終量產級到站精度（5 cm 位置 / 0.05 rad 朝向）、MPPI 極限速度參數調校與動態安全多邊形微調屬於後續最佳化，不阻塞基線推進。
+
+#### 3.19.3 Status
+- **Implementation Status**: `Implemented`
+- **Evidence Status**: `Software Verified & Partially Hardware Verified` (軟體合約完整、IMP-018 實車自主導航到站驗證，動態障礙介入與行進中 Cancel 實測遞延)
+- **Checklist Status**: `[~] In Progress` (依決策保持 `[~]`，明確記錄證據邊界與遞延驗收決策，不阻塞 Checklist #26 繼續進行)。
+- **Next Dependency**: Checklist #26 (`Requirement and custom-gap traceability audit`)。

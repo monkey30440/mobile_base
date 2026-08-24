@@ -16,10 +16,10 @@
 
 - 總項目：28
 - 已完成：24
-- 進行中：0
-- 待實作：4
+- 進行中：2
+- 待實作：2
 - 上游阻塞：0
-- 目前進度：24 / 28 (86%)；第 24 項 `UC-001 Mapping end-to-end acceptance` 已完成 `[x]`；第 25 項待啟動。
+- 目前進度：24 / 28 (86%)；第 25 項 `UC-002 Navigation end-to-end acceptance` 進行中 `[~]`（實機動態障礙介入與專屬行進中 Cancel 實測遞延）；第 26 項 `Requirement and custom-gap traceability audit` 進行中 `[~]`。
 
 ---
 
@@ -97,9 +97,9 @@
 
 - [x] 24. UC-001 Mapping end-to-end acceptance
   - 完成條件：使用者啟動建圖、手動受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收。
-- [ ] 25. UC-002 Navigation end-to-end acceptance
+- [~] 25. UC-002 Navigation end-to-end acceptance
   - 完成條件：Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收。
-- [ ] 26. Requirement and custom-gap traceability audit
+- [~] 26. Requirement and custom-gap traceability audit
   - 完成條件：32 個唯一 `SYS-xxx`（SYS-001 ～ SYS-034）與 GAP-01～GAP-06 均有 implementation artifact、test/evidence 與 owner；無遺漏、錯號或未核准新增行為。
 - [ ] 27. Reproducibility and clean-environment audit
   - 完成條件：從乾淨 image/workspace 依文件重建、測試與啟動，不依賴未提交檔案、舊 build cache 或 running-container 手動安裝。
