@@ -27,6 +27,7 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_mapping_bringup test/test_mapping_bringup.py)
+  ament_add_pytest_test(test_navigation_bringup test/test_navigation_bringup.py)
   ament_add_pytest_test(test_save_map test/test_save_map.py)
 endif()
 

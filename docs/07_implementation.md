@@ -2550,7 +2550,7 @@ src/mobile_base_navigation/
    - **啟動編排**: `mobile_base_bringup/launch/mapping.launch.py` 依序啟動底盤控制 (`base_control`)、感測器 (`sick_dual_lidar`, `dual_laser_merger`, `tdk_imu`)、狀態估測 (`rf2o`, `ekf`) 與建圖 (`mapping`)。
    - **模式隔離**: S5 定位 (`map_server`, `amcl`) 與 S6 導航模組嚴格處於未啟動狀態；`async_slam_toolbox_node` 透過 Lifecycle Event 轉換為 `ACTIVE` (state 3) 並作為 `map -> odom` TF 的唯一發布者；外部 `teleop_twist_keyboard` 為全系統唯一運動命令生產者。
 2. **Navigation Mode (導航模式)**:
-   - **啟動編排**: `mobile_base_localization/launch/localization.launch.py` 與 `mobile_base_navigation/launch/navigation.launch.py`。
+   - **啟動編排**: `mobile_base_bringup/launch/navigation.launch.py`（統一編排 `base_control`、`tdk_imu`、`sick_dual_lidar`、`dual_laser_merger`、`rf2o`、`ekf`、`localization` 與 `navigation`）或個別子系統啟動腳本。
    - **模式隔離**: S4 建圖模組嚴格處於未啟動狀態；`lifecycle_manager_localization`（管理 `map_server`, `amcl`）與 `lifecycle_manager_navigation`（管理 `controller_server`, `planner_server`, `route_server`, `bt_navigator`, `collision_monitor`）統一控制 7 個 Lifecycle 節點轉換為 `ACTIVE [3]`；`nav2_amcl` 為 `map -> odom` TF 的唯一發布者；S6 MPPI 為全系統唯一運動命令生產者。
 3. **ros2_control / Hardware Lifecycle**:
    - `M1Hardware` 依循 ros2_control Lifecycle 流轉（`on_init` $\rightarrow$ `on_configure` $\rightarrow$ `on_activate` $\rightarrow$ `read/write` $\rightarrow$ `on_deactivate`）；Deactivate 或關機時先下發停止指令並確認 0 RPM 後釋放馬達使能（GAP-06 / SYS-030），防止未停穩自由滑行。
@@ -2559,11 +2559,11 @@ src/mobile_base_navigation/
 1. **Mapping Mode 啟動順序可重現**:
    - 經 `test_mapping_bringup.py` 與 `test_mapping_launch_syntax.py` 自動化測試驗證；歷史實機於 `IMP-014` / `IMP-015` 成功啟動建圖。
 2. **Navigation Mode 啟動順序可重現**:
-   - 經 `test_localization_launch.py` 與 `test_navigation_launch.py` 自動化測試驗證；歷史實機於 `IMP-016` / `IMP-018` 成功啟動定位與導航。
+   - 經 `test_navigation_bringup.py`、`test_localization_launch.py` 與 `test_navigation_launch.py` 自動化測試驗證；歷史實機於 `IMP-016` / `IMP-018` 成功啟動定位與導航。
 3. **Lifecycle Transitions 可重現**:
    - `lifecycle_manager_localization` 與 `lifecycle_manager_navigation` 成功管理 7 節點轉換至 `ACTIVE [3]`；`async_slam_toolbox_node` 成功經事件流轉至 `ACTIVE`。
 4. **互斥 `map -> odom` Authority 可重現**:
-   - 經 `test_tf_authority.py` 自動化測試斷言與 `IMP-019` 結案驗證，兩模式 `map -> odom` 廣播者嚴格互斥，無重複發布或 TF 環路。
+   - 經 `test_tf_authority.py` 與 `test_navigation_bringup.py` 自動化測試斷言與 `IMP-019` 結案驗證，兩模式 `map -> odom` 廣播者嚴格互斥，無重複發布或 TF 環路。
 5. **停機可重現**:
    - 經 `test_m1_hardware.cpp` 單元測試與 `IMP-007` / `IMP-008` / `IMP-015` / `IMP-021` 實機 Deactivate 停轉確認後切斷使能驗證。
 6. **部分啟動失敗可重現 (Partial Startup Failure)**:
@@ -2573,6 +2573,7 @@ src/mobile_base_navigation/
 - **Current Automated/Config/Source Evidence**:
   - `mobile_base_bringup/test/test_tf_authority.py` (TF 權威與模式互斥測試 PASS)
   - `mobile_base_bringup/test/test_mapping_bringup.py` (建圖模式編排測試 PASS)
+  - `mobile_base_bringup/test/test_navigation_bringup.py` (導航模式編排與參數轉發測試 PASS)
   - `mobile_base_localization/test/test_localization_launch.py` (定位 Lifecycle 測試 PASS)
   - `mobile_base_navigation/test/test_navigation_launch.py` (導航 Lifecycle 測試 PASS)
   - `mobile_base_control/test/test_m1_hardware.cpp` (ros2_control Lifecycle 與安全停轉測試 PASS)

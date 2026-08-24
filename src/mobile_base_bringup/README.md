@@ -1,38 +1,18 @@
-# mobile_base_bringup Mapping Mode
+# mobile_base_bringup
 
 ## Purpose
 
-Mapping Mode starts the complete real-hardware mapping stack by composing the already validated subsystem launch files. `mobile_base_bringup` adds orchestration only; subsystem packages remain authoritative for drivers, controllers, estimation, SLAM parameters, and TF ownership.
+`mobile_base_bringup` provides thin, top-level real-hardware workflow orchestration for `mobile_base` operational modes (Mapping Mode and Navigation Mode) by composing validated subsystem launch files. Subsystem packages remain authoritative for drivers, controllers, estimation, SLAM/AMCL parameters, Nav2 configuration, and TF ownership.
 
-Starting Mapping Mode does not command chassis motion. Teleop remains a deliberate operator action in a separate terminal.
+---
 
-## Prerequisites
+## Mapping Mode
 
-- Docker is running.
-- AMR hardware is connected and the required `/dev` devices are mapped into the container.
-- The physical work area is safe and clear.
-- E-stop/STO is available to the operator.
-- The workspace has already been built.
+### Purpose
 
-## Start the container
+Mapping Mode starts the complete real-hardware mapping stack. It does not command chassis motion; teleop remains a deliberate operator action in a separate terminal.
 
-On the host:
-
-```bash
-docker compose up -d
-docker compose exec mobile_base bash
-```
-
-## Source the environment
-
-In every new container terminal:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-```
-
-## Start Mapping Mode
+### Start Mapping Mode
 
 Without Foxglove:
 
@@ -51,13 +31,61 @@ Healthy Mapping Mode provides these major runtime contracts:
 
 - `/scan`: merged front and rear LiDAR scan
 - `/imu/data_raw`: raw IMU measurements
-- `/rf2o/odom`: RF2O laser odometry, with RF2O TF publication disabled by its subsystem configuration
+- `/rf2o/odom`: RF2O laser odometry, with RF2O TF publication disabled
 - `/odometry/filtered`: EKF fused odometry
 - `/map`: slam_toolbox occupancy grid
 - TF `odom -> base_footprint`: owned by EKF
 - TF `map -> odom`: owned by slam_toolbox
 
 Mapping Mode does not start AMCL, `mobile_base_localization`, or S6 Navigation.
+
+---
+
+## Navigation Mode
+
+### Purpose
+
+Navigation Mode starts the complete real-hardware autonomous navigation stack by composing S7 base control, S1 description, S2 perception (IMU, dual LiDAR, laser merger, RF2O), S3 state estimation (EKF), S5 localization (Map Server, AMCL), and S6 navigation (Nav2 route-assisted stack, collision monitor).
+
+Starting Navigation Mode does not command chassis motion. Motion occurs only upon receiving valid navigation goals.
+
+### Start Navigation Mode
+
+Without Foxglove:
+
+```bash
+ros2 launch mobile_base_bringup navigation.launch.py \
+  map:=$(pwd)/maps/test_site/map.yaml \
+  route_graph:=$(pwd)/maps/test_site/route_graph.geojson
+```
+
+With optional Foxglove visualization:
+
+```bash
+ros2 launch mobile_base_bringup navigation.launch.py \
+  map:=$(pwd)/maps/test_site/map.yaml \
+  route_graph:=$(pwd)/maps/test_site/route_graph.geojson \
+  use_foxglove:=true
+```
+
+Healthy Navigation Mode provides these major runtime contracts:
+
+- `/scan`: merged front and rear LiDAR scan
+- `/imu/data_raw`: raw IMU measurements
+- `/rf2o/odom`: RF2O laser odometry (TF disabled)
+- `/odometry/filtered`: EKF fused odometry
+- `/map`: static map published by `nav2_map_server`
+- `/amcl_pose`: AMCL estimated global pose
+- TF `odom -> base_footprint`: owned solely by EKF
+- TF `map -> odom`: owned solely by `nav2_amcl` (after initial pose received)
+- Velocity Command Chain: `controller_server` (`/cmd_vel_nav`) -> `collision_monitor` -> `/diff_drive_controller/cmd_vel`
+- S4 `slam_toolbox` is strictly excluded and not running.
+
+### Initial Pose Injection
+
+After starting Navigation Mode, inject the approximate initial pose via RViz2 `2D Pose Estimate` tool or published `/initialpose` topic. AMCL will initialize its particle filter and begin publishing `map -> odom` TF.
+
+---
 
 ## Start Teleop in a second terminal
 
