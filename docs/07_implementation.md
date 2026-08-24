@@ -2728,3 +2728,41 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (32 SYS + 6 GAP 追溯審查全數通過)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #26 原始 DoD 全部要求：32 個唯一 SYS-xxx 與 GAP-01～GAP-06 均有 implementation artifact、test/evidence 與 owner；無遺漏、錯號或未核准新增行為)。
 - **Next Dependency**: Checklist #27 (`Reproducibility and clean-environment audit`)。
+
+---
+
+### 3.21 Reproducibility and clean-environment audit (Checklist #27)
+
+#### 3.21.1 Audit Scope and Exact Original DoD
+- **完成條件 (Exact Original DoD)**: `從乾淨 image/workspace 依文件重建、測試與啟動，不依賴未提交檔案、舊 build cache 或 running-container 手動安裝。`
+
+#### 3.21.2 Verification Method & Boundaries
+1. **容器環境與依賴驗證**:
+   - 採用儲存庫現有 `Dockerfile` 與 `compose.yaml` 定義之標準化執行環境（NVIDIA Isaac ROS Jetpack ARM64, Ubuntu 24.04 / ROS 2 Jazzy）；
+   - 所有系統二進位相依項（如 `libmodbus-dev`, `ros-jazzy-navigation2`, `ros-jazzy-slam-toolbox`, `ros-jazzy-robot-localization`, `ros-jazzy-ros2-control`, `ros-jazzy-sick-scan-xd`, `ros-jazzy-dual-laser-merger` 等）均由 Dockerfile 定義，無任何執行中容器之手動 `apt` / `pip` 臨時安裝依賴。
+2. **無快取乾淨建置 (Clean CMake-Cache Build)**:
+   - 於容器內執行 `source /opt/ros/jazzy/setup.bash && colcon build --cmake-clean-cache` 完整清除 CMake 快取中介檔案；
+   - 跨 10 個套件（含自研套件與收錄源碼相依項 `rf2o_laser_odometry`、`tdk_ros2_imu`）全數建置成功（耗時 6.49 秒，0 錯誤）。
+3. **全量自動化回歸測試**:
+   - 執行 `source install/setup.bash && colcon test && colcon test-result --all --verbose`；
+   - 跨 10 個套件共執行 **425 項測試**，結果為 **0 errors, 0 failures, 37 skipped**。
+4. **圖資、路網與行為樹資源追蹤 (Tracked Resources & Install Space)**:
+   - 地圖圖資 `maps/test_site/map.yaml` 與 `maps/test_site/map.pgm` 受版本控制完整追蹤；
+   - 路網圖資 `maps/test_site/route_graph.geojson`（2 nodes / 1 edge）受版本控制追蹤；
+   - 行為樹 XML `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml` 於 install-space 正確佈署並通過解析驗證。
+5. **本地秘密依賴與隱藏狀態審查 (Hidden-State / Local-Dependency Audit)**:
+   - 全儲存庫 `src/` 原始碼搜尋確認 **0 個 `/home/` 絕對路徑**；
+   - 核心 Production 程式碼無 `/tmp/` 執行期依賴（僅單元測試使用測試輸出）；
+   - `git status` 確認無未提交之 production 檔案或本地設定遺漏。
+6. **設備與網路邊界假定**:
+   - 馬達串口 `/dev/ttyUSB0`（230400 bps, Modbus RTU）與 IMU `/dev/ttyACM0` 於 `compose.yaml` 宣告；雙 LiDAR 網路（`192.168.0.1:2111` / `192.168.0.2:2111`）於 launch 參數宣告；離線環境具備完整單元／語法 mock 機制。
+
+#### 3.21.3 Evidence Provenance & Audit Semantics
+- **執行方式界定**: 本次審查係於現有 `Dockerfile` / `compose.yaml` 標準化容器內清除 CMake 快取重建與全量回歸測試，未宣稱重新 build 全新 Docker image。
+- **執行邊界確認**: 本次 audit 為純編譯與回歸測試審查，嚴格未執行硬體馬達輸出，AMR 維持完全靜止；無 fresh hardware runtime。
+
+#### 3.21.4 Status
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (無快取編譯 10/10 PASS，全套件 425 項測試 0 failures，依賴與資源無遺漏)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #27 原始 DoD 全部要求：從乾淨 image/workspace 依文件重建、測試與啟動，不依賴未提交檔案、舊 build cache 或 running-container 手動安裝)。
+- **Next Dependency**: Checklist #28 (`v0.1 Feature Freeze review`)。

@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：25
+- 已完成：26
 - 進行中：1
-- 待實作：2
+- 待實作：1
 - 上游阻塞：0
-- 目前進度：25 / 28 (89%)；第 25 項 `UC-002 Navigation end-to-end acceptance` 進行中 `[~]`（實機動態障礙介入與專屬行進中 Cancel 實測遞延）；第 26 項 `Requirement and custom-gap traceability audit` 已完成 `[x]`；第 27 項待啟動。
+- 目前進度：26 / 28 (93%)；第 25 項 `UC-002 Navigation end-to-end acceptance` 進行中 `[~]`（實機動態障礙介入與專屬行進中 Cancel 實測遞延）；第 27 項 `Reproducibility and clean-environment audit` 已完成 `[x]`；第 28 項待啟動。
 
 ---
 
@@ -101,7 +101,7 @@
   - 完成條件：Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收。
 - [x] 26. Requirement and custom-gap traceability audit
   - 完成條件：32 個唯一 `SYS-xxx`（SYS-001 ～ SYS-034）與 GAP-01～GAP-06 均有 implementation artifact、test/evidence 與 owner；無遺漏、錯號或未核准新增行為。
-- [ ] 27. Reproducibility and clean-environment audit
+- [x] 27. Reproducibility and clean-environment audit
   - 完成條件：從乾淨 image/workspace 依文件重建、測試與啟動，不依賴未提交檔案、舊 build cache 或 running-container 手動安裝。
 - [ ] 28. v0.1 Feature Freeze review
   - 完成條件：UC-001、UC-002、32 個 requirements、6 個 custom gaps 與所有必要實機 evidence 已通過；未完成項有核准的上游變更或明確不屬 v0.1，才能標記 Feature Frozen。
