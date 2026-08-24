@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：27
-- 進行中：1
+- 已完成：28
+- 進行中：0
 - 待實作：0
 - 上游阻塞：0
-- 目前進度：27 / 28 (96%)；第 25 項 `UC-002 Navigation end-to-end acceptance` 進行中 `[~]`（實機動態障礙介入與專屬行進中 Cancel 實測遞延）；第 28 項 `v0.1 Feature Freeze review` 已完成 `[x]`（正式批准 v0.1 基線凍結）。
+- 目前進度：28 / 28 (100%)；v0.1 全數 28 項 implementation checklist（含 UC-001、UC-002、32 項系統需求、6 項 Custom Gaps、全量可重現性審查與 Feature Freeze）全數完成驗收 `[x]`。
 
 ---
 
@@ -97,7 +97,7 @@
 
 - [x] 24. UC-001 Mapping end-to-end acceptance
   - 完成條件：使用者啟動建圖、手動受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收。
-- [~] 25. UC-002 Navigation end-to-end acceptance
+- [x] 25. UC-002 Navigation end-to-end acceptance
   - 完成條件：Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收。
 - [x] 26. Requirement and custom-gap traceability audit
   - 完成條件：32 個唯一 `SYS-xxx`（SYS-001 ～ SYS-034）與 GAP-01～GAP-06 均有 implementation artifact、test/evidence 與 owner；無遺漏、錯號或未核准新增行為。

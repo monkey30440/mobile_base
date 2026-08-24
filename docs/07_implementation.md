@@ -2646,27 +2646,45 @@ src/mobile_base_navigation/
 - **需求追溯**: `SYS-008` (目標表示正規化 `GAP-01`), `SYS-009` (准入失敗回報 `GAP-02`), `SYS-010` (AMCL 地圖定位), `SYS-011` (路網圖載入), `SYS-013` (拓撲路徑計算), `SYS-014` (三階段路網輔助導航), `SYS-015` (零長度階段跳過), `SYS-016` (禁用自由空間備援), `SYS-017` (路徑規劃與 MPPI 控制), `SYS-018` (Nav2 原生結果與取消), `SYS-019` (StoppedGoalChecker 停穩檢驗), `SYS-020` (Costmap 與 Collision Monitor), `SYS-021` (站點目錄管理), `SYS-025` (導航生命週期), `SYS-032` (站點精確比對 `GAP-03`), `SYS-033` (位姿校驗 `GAP-04`)。
 - **完成條件 (Exact Original DoD)**: `Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收。`
 
-#### 3.19.2 End-to-End Acceptance & Evidence Boundary
-1. **已驗證之軟體合約與管線**:
+#### 3.19.2 End-to-End Acceptance & Authoritative Physical Evidence
+1. **已驗證之軟體合約與管線 (Software Contracts & Pipelines)**:
    - **目標准入與正規化 (Target Admission)**: 經 `test_target_admission.cpp`（25 項單元測試）完整覆蓋 Station 目錄精確查表、Goal Pose 四元數正規化與 NaN/Inf/無效位姿過濾。
    - **拓撲路網載入與規劃 (RouteServer)**: 經 `test_route_server.cpp`（6 項單元測試）驗證 GeoJSON 解析、拓撲路徑搜尋與路網不可達攔截。
    - **三階段導航與自由空間禁用 (3-Stage Route-Assisted BT)**: 經 `test_route_assisted_pipeline.cpp`（4 項整合測試）驗證 First Mile $\rightarrow$ On Route $\rightarrow$ Last Mile 行為樹流轉、零長度階段省略與嚴格禁用 Free-space Fallback。
    - **安全碰撞監控與命令管線 (Collision Monitor & Motion Chain)**: 經 `test_navigation_launch.py` 與 `test_motion_command_stop_chain.py` 驗證 `/cmd_vel_nav` $\rightarrow$ Collision Monitor $\rightarrow$ `/diff_drive_controller/cmd_vel` 之重映射與停止合約。
    - **任務取消軟體合約 (Task Cancel Software Contract)**: 經 Action Cancel 介面測試驗證發送 Cancel 請求即時終止 BT 導航並發布零速。
-2. **重用之歷史實機自主導航證據 (Reused Historical Runtime Evidence)**:
-   - **IMP-016**: 實車載入 `maps/test_site/map.yaml`，AMCL 穩定以 50 Hz 發布 `map -> odom` TF。
-   - **IMP-018 Stage L1**: 實車於測試場地自主運行，載入路網 `maps/test_site/route_graph.geojson`（2 nodes / 1 edge: Node 0 `(0.60, -1.55)` $\rightarrow$ Node 1 `(0.60, -1.25)`，拓撲邊長 $0.30\,\text{m}$）；發送導航目標至 Node 1；MPPI 驅動底盤平穩自主前進約 $0.27\,\text{m}$；StoppedGoalChecker 判定到站並檢驗速度完全歸零停穩；最終量測到站位置誤差 $0.0938\,\text{m} \le 0.15\,\text{m}$（當時測試容差通過，測試條件 $v_{x,\max} = 0.15\,\text{m/s}$）；NavigateToPose 回傳原生 Action 結果 `SUCCEEDED` (status 4)；實車物理停穩經確認。
-3. **明確遞延之實機驗收證據 (Explicitly Deferred Physical Acceptance Evidence)**:
-   依工程紀律與當前邊界，不以軟體測試假冒實機測試，下列兩項實機驗證予以明確遞延記錄：
-   - **實機動態障礙物介入測試 (Physical Obstacle-Intervention)**: 於 AMR 移動路徑前方動態置入實體障礙物觸發 Collision Monitor 減速／急停之實體觀測。
-   - **移動中專屬 Cancel 煞停距離量測 (Dedicated In-Motion Cancel Physical Test)**: 於 AMR 巡航移動中發送 Cancel 請求並實測實體煞停距離與反應時間。
-4. **非阻塞性調校項目 (Deferred Tuning)**:
-   - 最終量產級到站精度（5 cm 位置 / 0.05 rad 朝向）、MPPI 極限速度參數調校與動態安全多邊形微調屬於後續最佳化，不阻塞基線推進。
+
+2. **核准採納之實車自主導航與到站停妥證據 (A. IMP-018 Stage L1 Physical Navigation)**:
+   - **路網與測試場域**: `maps/test_site/route_graph.geojson`（2 nodes / 1 edge: Node 0 `(0.60, -1.55)` $\rightarrow$ Node 1 `(0.60, -1.25)`，拓撲邊長 $0.30\,\text{m}$）。
+   - **實車自主位移**: MPPI 控制器驅動底盤平穩自主前進約 $0.27\,\text{m}$。
+   - **歷史測試條件**: $v_{x,\max} = 0.15\,\text{m/s}$, $\text{xy\_goal\_tolerance} = 0.15\,\text{m}$, $\text{yaw\_goal\_tolerance} = 0.25\,\text{rad}$。
+   - **到站停妥判定**: `StoppedGoalChecker` 判定到站並檢驗速度完全歸零停穩；最終量測到站位置誤差 $0.0938\,\text{m} \le 0.15\,\text{m}$；`NavigateToPose` 回傳原生 Action 結果 `SUCCEEDED` (Status 4)；實車物理停穩經確認。
+
+3. **專屬行進中取消實測證據 (B. Dedicated In-Motion Cancel Physical Test)**:
+   - **取消請求與狀態**: AMR 於著地行進中發送 Cancel 請求；Action 伺服器於 **$1.6\,\text{ms}$** 內接受取消；終態回傳 `STATUS_CANCELED` (Status 5)。
+   - **實體制動指標**: 實測物理制動時間 **$0.5399\,\text{s}$**；滑行煞停距離 **$0.0068\,\text{m}$ ($0.68\,\text{cm}$)**。
+   - **底盤安全終態**: 輪端速度歸零 ($0\,\text{RPM}$)，`/diff_drive_controller/cmd_vel = 0`，M1 驅動器 Alarm = 0；無任何緊急介入。
+
+4. **實體障礙物介入實車測試證據 (C. Physical Obstacle Intervention Ground Test)**:
+   - **實體障礙設定**: 使用大型平整厚紙箱置入車頭前方主路徑。
+   - **雷達感知與觸發**: 雙 SICK 雷達合併點雲（`/scan` 1081 點）於前向約 $0.519\,\text{m}$ 穩定偵測障礙物；`PolygonStop` ($+0.55\,\text{m}$) 觸發 `Action = 1 (STOP)`。
+   - **獨立命令截斷**: 上層 MPPI 持續輸出行駛意圖（約 $0.080\,\text{m/s}$），Collision Monitor 於 **$< 30\,\text{ms}$** 內將 `/diff_drive_controller/cmd_vel` 強制截斷為 $0.000\,\text{m/s}$。
+   - **實體制動與安全餘量**: 實車於約 **$0.50\,\text{s}$** 內完全煞停，最終停止時與障礙物保持約 **$0.48\,\text{m}$ ($48.0\,\text{cm}$)** 之安全淨距；輪端速度與里程計速度均為 $0$；M1 Alarm = 0；100% 無物理碰撞；障礙物移至減速區時亦觀測到 `PolygonSlow` 降速行為。
+
+5. **測試歷史語意保全 (Evidence History Preservation)**:
+   - **早期障礙物測試嘗試**: 判定為 **INCONCLUSIVE for dedicated Collision Monitor intervention**。原因為初期安全多邊形幾何為佔位符（零面積）且存在自身結構干擾，導致車輛係由 MPPI/Costmap 煞停而非 Collision Monitor 獨立截斷。
+   - **最終實體障礙物測試**: 判定為 **PASS**。原因為修正自身結構濾波並配置有效多邊形後，清楚觀測並記錄到 Collision Monitor 獨立於 MPPI 截斷速度命令並使實車於安全距離煞停。
+
+6. **非阻塞性調校與範疇邊界 (Scope & Deferred Tuning Boundary)**:
+   - 下列項目**非屬** Checklist #25 Exact Original DoD 之阻塞條件，依工程規範歸類為後續量產階段之非阻塞性調校（Deferred / Post-v0.1 Tuning）：
+     - 多節點長距離拓撲巡航（Node 0 $\to$ Node 1 $\to$ Node 2）；
+     - 「最後 1 米」特殊驗收與量產級極限到站精度（$< 0.05\,\text{m}$ 位置 / $< 5^\circ$ 朝向）；
+     - MPPI 速度曲線與 Critic 權重深度微調。
 
 #### 3.19.3 Status
-- **Implementation Status**: `Implemented`
-- **Evidence Status**: `Software Verified & Partially Hardware Verified` (軟體合約完整、IMP-018 實車自主導航到站驗證，動態障礙介入與行進中 Cancel 實測遞延)
-- **Checklist Status**: `[~] In Progress` (依決策保持 `[~]`，明確記錄證據邊界與遞延驗收決策，不阻塞 Checklist #26 繼續進行)。
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (軟體合約完整、IMP-018 實車自主導航到站驗收、專屬行進中 Cancel 實測與實體障礙物介入實測全數通過)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #25 原始 DoD 全部要求：Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收)。
 - **Next Dependency**: Checklist #26 (`Requirement and custom-gap traceability audit`)。
 
 ---
@@ -2779,12 +2797,12 @@ src/mobile_base_navigation/
 1. **v0.1 Feature Freeze 審查結論**: **`APPROVED [x]`**。
 2. **使用案例驗證狀態**:
    - **UC-001 Mapping (Checklist #24 `[x]`)**: 使用者啟動建圖、手動受控巡覽、持續更新、主動／逾時受控煞停、Map Package 儲存與 Read-Back 完整通過實機驗收。
-   - **UC-002 Navigation (Checklist #25 `[~]`)**: 軟體架構與合約完整落實（Target Admission GAP-01~04、RouteServer 拓撲路徑、3-Stage Route-Assisted BT、禁用 Free-space Fallback、Collision Monitor 速度管線、Nav2 Action Cancel 合約）；歷史實車自主導航由 `IMP-018 Stage L1` 驗證（2 nodes / 1 edge, Node 0 `(0.60, -1.55)` $\rightarrow$ Node 1 `(0.60, -1.25)`，拓撲邊長 $0.30\,\text{m}$，自主前進位移約 $0.27\,\text{m}$，終點位置誤差 $0.0938\,\text{m} \le 0.15\,\text{m}$，測試條件 $v_{x,\max} = 0.15\,\text{m/s}$，StoppedGoalChecker 停穩檢驗通過，Action 結果 `SUCCEEDED`）。
-3. **IMP-025 遞延驗收證據之合規性 (Accepted Deferred Physical Acceptance Evidence)**:
-   - 依據 Checklist #28 Original DoD 的「**未完成項有核准的上游變更或明確不屬 v0.1，才能標記 Feature Frozen**」條款，下列兩項實機驗證經操作員明確指示列為核准遞延項目：
-     1. **實機動態障礙物介入測試 (Physical Obstacle-Intervention)**；
-     2. **移動中專屬 Cancel 煞停距離量測 (Dedicated In-Motion Cancel Physical Test)**；
-   - Checklist #25 嚴格保持 `[~] In Progress`，不將遞延測試假冒為已執行，符合上游治理邊界。
+   - **UC-002 Navigation (Checklist #25 `[x]`)**: 軟體架構與合約完整落實（Target Admission GAP-01~04、RouteServer 拓撲路徑、3-Stage Route-Assisted BT、禁用 Free-space Fallback、Collision Monitor 速度管線、Nav2 Action Cancel 合約）；全量實機驗證（IMP-018 Stage L1 實車自主導航到站驗收、專屬行進中 Cancel 實測與實體障礙物介入實測）全數通過驗收。
+3. **IMP-025 實機驗收證據完整閉環 (IMP-025 Physical Acceptance Closure)**:
+   - 經執行專屬實機測試，下列實機驗證已全數完成並載入 07 紀錄：
+     1. **實機動態障礙物介入測試 (Physical Obstacle-Intervention)**：實測紙箱障礙物介入、Collision Monitor 獨立截斷速度命令、車輛於 $0.50\,\text{s}$ 內在障礙物前約 $0.48\,\text{m}$ 處完全煞停；
+     2. **移動中專屬 Cancel 煞停距離量測 (Dedicated In-Motion Cancel Physical Test)**：實測行進中發送取消、響應延遲 $1.6\,\text{ms}$、制動時間 $0.5399\,\text{s}$、煞停距離 $0.0068\,\text{m}$ ($0.68\,\text{cm}$)；
+   - Checklist #25 正式標記為 `[x] Completed`。
 4. **需求追溯與差距審查 (Checklist #26 `[x]`)**:
    - 32 個唯一 `SYS-xxx` 需求（`SYS-001`～`SYS-011`、`SYS-013`～`SYS-021`、`SYS-022`～`SYS-030`、`SYS-032`～`SYS-034`）與 6 個 Custom Gaps（`GAP-01`～`GAP-06`）全部具備明確的程式碼實施、測試套件與 Subsystem Owner；無遺漏、錯號或未核准新增行為。
 5. **跨子系統整合閉環 (#19～#23 `[x]`)**:
@@ -2802,10 +2820,10 @@ src/mobile_base_navigation/
   - 部署場域特定 Station Catalog 配置。
 - **Feature Freeze 語意澄清 (Feature Freeze Semantics)**:
   - Feature Freeze 代表 **v0.1 軟體架構與功能基線正式凍結**。
-  - **不代表** Checklist #25 已結案、**不代表** 遞延實機測試已執行、**不代表** 生產環境極限精度調校已完成。
+  - **不代表** 生產環境極限精度調校已完成（屬於後續量產階段最佳化）。
 
 #### 3.22.4 Status
 - **Implementation Status**: `Complete`
-- **Evidence Status**: `Complete` (軟體架構、全套件回歸測試、需求追溯與歷史實機數據完備，遞延實機測量具備上游授權)
+- **Evidence Status**: `Complete` (軟體架構、全套件回歸測試、需求追溯與實機驗收數據完備)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #28 原始 DoD 全部要求：UC-001、UC-002、32 個 requirements、6 個 custom gaps 與所有必要實機 evidence 已通過；未完成項有核准的上游變更，正式標記 Feature Frozen)。
-- **Next Dependency**: 全部 28 項 Checklist 實作與審查已完成收斂（Completed: 27, In Progress: 1 [#25 遞延實機驗收], Pending: 0, Total: 28, Progress: 27 / 28 [96%]）。
+- **Next Dependency**: 全部 28 項 Checklist 實作與審查已全數完成閉環（Completed: 28, In Progress: 0, Pending: 0, Total: 28, Progress: 28 / 28 [100%]）。
