@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：18
-- 進行中：1
+- 已完成：19
+- 進行中：0
 - 待實作：9
 - 上游阻塞：0
-- 目前進度：18 / 28 (64%)；第 19 項 `TF and frame authority closure` 進行中 `[~]`（Stage A 整合合約測試通過，待後續閉環）。
+- 目前進度：19 / 28 (68%)；第 19 項 `TF and frame authority closure` 已完成 `[x]`；第 20 項待啟動。
 
 ---
 
@@ -82,7 +82,7 @@
 
 ## D. Cross-subsystem Integration Closure
 
-- [~] 19. TF and frame authority closure
+- [x] 19. TF and frame authority closure
   - 完成條件：S1 static TF、S3 `odom -> base_footprint`、S4/S5 互斥 `map -> odom` 無斷鏈、重複 owner 或 frame mismatch。
 - [ ] 20. Perception data-flow closure
   - 完成條件：兩個 raw LiDAR、selected scan、IMU 與 RF2O 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06。

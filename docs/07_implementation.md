@@ -2321,11 +2321,24 @@ src/mobile_base_navigation/
 | 2026-08-24T11:05:52+08:00 | S1~S7 TF Authority & Frame Consistency Consolidated Test Suite | `colcon build --packages-select mobile_base_bringup` + `colcon test` | PASS (Software-only) | 1. 16 項測試全部通過（含 5 項 TF 權威測試 + 11 項 bringup / map / linter 測試）；2. 驗證 S1 URDF/Xacro 靜態拓撲樹無斷鏈且 $Z=0.2560\,\text{m}$；3. 驗證 S3 EKF 唯一擁有 `odom -> base_footprint`（DiffDrive 與 RF2O 嚴格停用 TF）；4. 驗證 S4/S5 模式互斥隔離（Mapping 下 slam 獨占、Navigation 下 amcl 獨占）；5. 驗證感測器 Frame ID 與 URDF 零 mismatch。 | 容器即時測試日誌 |
 | 2026-08-24T11:06:40+08:00 | S1 Robot Description Stationary Static TF Buffer Lookup | `ros2 launch mobile_base_description robot_description.launch.py` + `tf2_ros` buffer lookup | PASS (Stationary-only) | 1. `robot_state_publisher` 成功啟動並發布 `/tf_static`；2. 實測成功 lookup `base_footprint -> base_link` ($Z = +0.256\,\text{m}$)、`base_link -> base_lidar_link_FL`、`base_link -> base_lidar_link_BR`、`base_link -> base_imu_link`；3. 全程靜態無位移。 | 容器即時測試日誌 |
 
-#### 3.13.6 Known Limits / Outstanding Obligations
-- **AMR 運動邊界 (Hardware Motion NOT EXECUTED)**: 本 Stage 為純軟體合約與靜態 TF 拓撲驗證，嚴格未發送任何導航目標或移動 AMR 底盤。
+#### 3.13.6 Evidence Provenance & Historical Reuse
+- **New Stage A Consolidated Evidence**:
+  - `src/mobile_base_bringup/test/test_tf_authority.py`: 5 項自動化合約測試全數通過（驗證 Xacro 樹狀拓撲結構、S3 EKF 唯一 TF 廣播配置、S4/S5 模式隔離互斥、感測器 Frame 匹配）。
+  - 跨 5 個 TF 相關套件（`mobile_base_bringup`, `mobile_base_description`, `mobile_base_localization`, `mobile_base_mapping`, `mobile_base_perception`）共 102 項測試通過。
+  - `robot_state_publisher` 靜止 `/tf_static` buffer lookup 實測成功。
+- **Reused Historical Runtime Evidence**:
+  - **IMP-009**: S1 URDF 幾何語法驗證、`/tf_static` 廣播驗證。
+  - **IMP-010**: S2 雙光達 Frame IDs (`base_lidar_link_FL`, `base_lidar_link_BR`) 與融合光達 Frame (`base_link`) 實機驗證。
+  - **IMP-011**: S2 TDK IMU Frame ID (`base_imu_link`) 實機驗證。
+  - **IMP-012**: S2 RF2O Laser Odometry `publish_tf: False` 實機驗證。
+  - **IMP-013**: S3 State Estimation `ekf_filter_node` 唯一 50 Hz `odom -> base_footprint` 實機動態與靜態驗證。
+  - **IMP-014**: S4 Mapping Mode `slam_toolbox` 唯一發布 `map -> odom` 實機建圖驗證。
+  - **IMP-016**: S5 Localization Mode `amcl` 唯一發布 `map -> odom` 實機定位驗證。
+  - **IMP-018 Stage L1**: S6 自主路網導航實車運行，全域 TF 樹（`map -> odom -> base_footprint -> base_link -> sensors`）同步無跳變與斷鏈實證。
+- **執行邊界確認**: 本次 closure 嚴格未重新執行 Mapping / Navigation runtime，未執行硬體馬達輸出，AMR 維持完全靜止。
 
 #### 3.13.7 Status
-- **Implementation Status**: `Implemented`
-- **Evidence Status**: `Software & Stationary Verified` (Stage A 自動化合約測試與靜態 TF Lookup 通過)
-- **Checklist Status**: `[~] In Progress` (Stage A 驗證通過，待進入後續 closure 評估)。
-- **Next Dependency**: Checklist #19 Closure Reassessment。
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (Stage A 自動化合約測試、靜態 TF Lookup 與 S1~S6 歷史實機 evidence 完整覆蓋)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #19 原始 DoD 全部要求：S1 static TF、S3 odom -> base_footprint、S4/S5 互斥 map -> odom 無斷鏈、無重複 owner、無 frame mismatch，未引入新 gate)。
+- **Next Dependency**: Checklist #20 (`Perception data-flow closure`)。
