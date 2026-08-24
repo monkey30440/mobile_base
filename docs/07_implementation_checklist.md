@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：23
+- 已完成：24
 - 進行中：0
-- 待實作：5
+- 待實作：4
 - 上游阻塞：0
-- 目前進度：23 / 28 (82%)；第 23 項 `Operational-mode and lifecycle closure` 已完成 `[x]`；第 24 項待啟動。
+- 目前進度：24 / 28 (86%)；第 24 項 `UC-001 Mapping end-to-end acceptance` 已完成 `[x]`；第 25 項待啟動。
 
 ---
 
@@ -95,7 +95,7 @@
 
 ## E. Use-case Verification and Feature Freeze
 
-- [ ] 24. UC-001 Mapping end-to-end acceptance
+- [x] 24. UC-001 Mapping end-to-end acceptance
   - 完成條件：使用者啟動建圖、手動受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收。
 - [ ] 25. UC-002 Navigation end-to-end acceptance
   - 完成條件：Station/Goal Pose 輸入、admission、localization、First Mile→On Route→Last Mile、障礙處理、停妥成功、失敗與取消流程通過實機驗收。

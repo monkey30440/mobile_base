@@ -2589,3 +2589,49 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (現有自動化測試與 S4/S5/S6/S7 歷史實機 evidence 完整覆蓋)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #23 原始 DoD 全部要求：Mapping/Navigation mode 的啟動順序、lifecycle transitions、互斥 map -> odom authority、停機與部分啟動失敗均可重現，未引入新 gate)。
 - **Next Dependency**: Section E Use-case Verification and Feature Freeze (Checklist #24 `UC-001 Mapping end-to-end acceptance`)。
+
+---
+
+### 3.18 UC-001 Mapping end-to-end acceptance (Checklist #24)
+
+#### 3.18.1 Use Case and Requirement Trace
+- **Use Case 追溯**: `UC-001` (建立地圖), `CAP-001` (2D 佔據柵格建圖能力)。
+- **需求追溯**: `SYS-001` (2D 佔據柵格地圖生成), `SYS-002` (地圖儲存與載入), `SYS-006` (SLAM / 定位模式互斥), `SYS-007` (地圖生命週期管理), `SYS-024` (地圖管理 Read-Back 驗證), `SYS-034` (手動移動控制 / Teleop), `SYS-027` (運動命令逾時), `SYS-028` (底盤運動極限約束), `SYS-030` (底盤安全啟停 `GAP-06`)。
+- **完成條件 (Exact Original DoD)**: `使用者啟動建圖、手動受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收。`
+
+#### 3.18.2 End-to-End Acceptance Summary
+1. **啟動建圖與模式就緒**:
+   - `ros2 launch mobile_base_bringup mapping.launch.py` 啟動 S1 機器人描述、S2 雙光達感知與 IMU、S3 狀態估測（RF2O + EKF）、S7 底盤控制與 S4 `async_slam_toolbox_node`。
+   - `slam_toolbox` 順利流轉至 `ACTIVE`，成為 `map -> odom` TF 的唯一發布者，即時於 `/map` 主題發布 2D Occupancy Grid。
+2. **手動受控移動與地圖持續更新**:
+   - 操作員透過 `teleop_twist_keyboard` 發布速度命令至 `/diff_drive_controller/cmd_vel`，驅動底盤著地巡覽環境（經 `IMP-015` 實機測試）；
+   - S7 SpeedLimiter 生效保護；SLAM 持續接收 `/scan` 與 `odom -> base_footprint` TF，連續更新佔據柵格。
+3. **移動停止與 Session 保持**:
+   - 操作員執行主動煞停（按鍵 'k'）或停止按鍵觸發命令逾時煞停（`cmd_vel_timeout = 0.5 s`），底盤平穩減速煞停；
+   - S4 建圖 Session 於底盤停止期間維持 `ACTIVE`，地圖資料完整保留不中斷。
+4. **地圖儲存 (Map Package Generation)**:
+   - 呼叫 `ros2 run nav2_map_server map_saver_cli -f maps/test_site/map`，產出標準 Map Package（`maps/test_site/map.yaml` 與 `maps/test_site/map.pgm`，解析度 0.05 m/pixel）。
+5. **Read-Back 與下游定位載入驗證**:
+   - 所產出之地圖檔案透過 `test_map_io_readback.cpp` 完成二進位格式與參數校驗；並於 `IMP-016`（定位）與 `IMP-018`（自主導航）成功由 `nav2_map_server` 載入，供 AMCL 執行粒子濾波定位與 MPPI 路徑導航，完成端到端 Read-Back 閉環驗收。
+6. **主要失敗流程**:
+   - 缺少必要資源時拒絕進入 operational 狀態；手動命令中斷時底盤受控停止但不破壞建圖程序。
+
+#### 3.18.3 Evidence Provenance & Historical Reuse
+- **Current Automated/Config/Source Evidence**:
+  - `mobile_base_bringup/test/test_mapping_bringup.py` (Mapping Mode 啟動編排與參數傳遞 PASS)
+  - `mobile_base_bringup/test/test_save_map.py` (地圖儲存 CLI 與 Map Package 結構 PASS)
+  - `mobile_base_mapping/test/test_map_io_readback.cpp` (Map IO Read-Back 解析與校驗 PASS)
+  - `mobile_base_bringup/test/test_tf_authority.py` (建圖模式單一 TF 廣播權威 PASS)
+  - `mobile_base_bringup/test/test_motion_command_stop_chain.py` (Teleop 命令直通與停止層級 PASS)
+- **Reused Historical Runtime Evidence**:
+  - **IMP-014**: 建圖模式實機啟動、`slam_toolbox` 生成 `/map` Occupancy Grid、儲存 `maps/test_site/map.yaml` 與 `maps/test_site/map.pgm` (704x704, 0.05 m/pixel)。
+  - **IMP-015**: 實車著地在測試場地透過 `teleop_twist_keyboard` 受控巡覽、主動煞停 ($0.5237\,\text{s}, 1.49\,\text{cm}$) 與逾時受控煞停 ($0.9563\,\text{s}, 5.83\,\text{cm}$)，建圖 Session 維持 `ACTIVE`。
+  - **IMP-016 / IMP-018**: 生成之 Map Package 成功載入至 `nav2_map_server`，供 AMCL 與 MPPI 完成實車定位與自主導航。
+  - **IMP-019 ~ IMP-023**: TF 樹唯一性、感知資料流、運動停止鏈、回授里程計與生命週期跨子系統閉環。
+- **執行邊界確認**: 本次 closure 為純文件結案，嚴格未執行硬體馬達輸出，AMR 維持完全靜止；無 fresh hardware runtime (`Fresh runtime during IMP-024 closure: NO`)。
+
+#### 3.18.4 Status
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (現有自動化測試、產出地圖與 S4/S5/S6/S7 歷史實機 evidence 完整覆蓋)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #24 原始 DoD 全部要求：使用者啟動建圖、手動受控移動、持續更新、停止、儲存及 read-back 的成功與主要失敗流程通過實機驗收，未引入新 gate)。
+- **Next Dependency**: Checklist #25 (`UC-002 Navigation end-to-end acceptance`)。
