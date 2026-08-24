@@ -2654,7 +2654,7 @@ src/mobile_base_navigation/
    - **任務取消軟體合約 (Task Cancel Software Contract)**: 經 Action Cancel 介面測試驗證發送 Cancel 請求即時終止 BT 導航並發布零速。
 2. **重用之歷史實機自主導航證據 (Reused Historical Runtime Evidence)**:
    - **IMP-016**: 實車載入 `maps/test_site/map.yaml`，AMCL 穩定以 50 Hz 發布 `map -> odom` TF。
-   - **IMP-018 Stage L1**: 實車於測試場地自主運行，載入 `maps/test_site/route_graph.geojson`，發送目標位姿 (`x = 1.0 m, y = 0.0 m, yaw = 0.0 rad`)；MPPI 驅動底盤完成 3-Stage 導航；StoppedGoalChecker 檢驗速度歸零停穩；最終量測位置誤差 $0.0938\,\text{m}$（小於容差門檻）；NavigateToPose 回傳 `SUCCEEDED`；實車物理停穩經確認。
+   - **IMP-018 Stage L1**: 實車於測試場地自主運行，載入路網 `maps/test_site/route_graph.geojson`（2 nodes / 1 edge: Node 0 `(0.60, -1.55)` $\rightarrow$ Node 1 `(0.60, -1.25)`，拓撲邊長 $0.30\,\text{m}$）；發送導航目標至 Node 1；MPPI 驅動底盤平穩自主前進約 $0.27\,\text{m}$；StoppedGoalChecker 判定到站並檢驗速度完全歸零停穩；最終量測到站位置誤差 $0.0938\,\text{m} \le 0.15\,\text{m}$（當時測試容差通過，測試條件 $v_{x,\max} = 0.15\,\text{m/s}$）；NavigateToPose 回傳原生 Action 結果 `SUCCEEDED` (status 4)；實車物理停穩經確認。
 3. **明確遞延之實機驗收證據 (Explicitly Deferred Physical Acceptance Evidence)**:
    依工程紀律與當前邊界，不以軟體測試假冒實機測試，下列兩項實機驗證予以明確遞延記錄：
    - **實機動態障礙物介入測試 (Physical Obstacle-Intervention)**: 於 AMR 移動路徑前方動態置入實體障礙物觸發 Collision Monitor 減速／急停之實體觀測。
