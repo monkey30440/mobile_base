@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：19
-- 進行中：1
+- 已完成：20
+- 進行中：0
 - 待實作：8
 - 上游阻塞：0
-- 目前進度：19 / 28 (68%)；第 20 項 `Perception data-flow closure` 進行中 `[~]`（Stage A 整合合約測試通過，待後續閉環）。
+- 目前進度：20 / 28 (71%)；第 20 項 `Perception data-flow closure` 已完成 `[x]`；第 21 項待啟動。
 
 ---
 
@@ -84,7 +84,7 @@
 
 - [x] 19. TF and frame authority closure
   - 完成條件：S1 static TF、S3 `odom -> base_footprint`、S4/S5 互斥 `map -> odom` 無斷鏈、重複 owner 或 frame mismatch。
-- [~] 20. Perception data-flow closure
+- [x] 20. Perception data-flow closure
   - 完成條件：兩個 raw LiDAR、selected scan、IMU 與 RF2O 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06。
 - [ ] 21. Motion-command and physical-stop closure
   - 完成條件：S6 command / Mapping teleop command→S7 safety gate→diff drive→M1，以及 Task Cancel、Manual Stop、Command Timeout、Hardware Safe Stop 分層停止均量測到實體停止結果。

@@ -2398,11 +2398,31 @@ src/mobile_base_navigation/
 |---|---|---|---|---|---|
 | 2026-08-24T11:24:59+08:00 | S2/S3/S6 Perception Data-Flow Consolidated Test Suite | `colcon build --packages-select mobile_base_bringup` + `colcon test` | PASS (Software-only) | 1. 17 項測試全部通過（含 6 項感知資料流合約測試 + 5 項 TF 權威測試 + 6 項 bringup / map / linter 測試）；2. 驗證雙光達至融合光達至 RF2O/Costmap/Collision Monitor 之主題與 Frame 鏈路；3. 驗證 IMU 至 EKF 融合配置；4. 驗證超時門檻設定。 | 容器即時測試日誌 |
 
-#### 3.14.6 Known Limits / Outstanding Obligations
-- **AMR 運動邊界 (Hardware Motion NOT EXECUTED)**: 本 Stage 為純軟體合約與感知資料流規格檢核，未發送導航目標或移動 AMR 底盤。
+#### 3.14.6 Freshness, Failure Propagation & Evidence Provenance
+1. **Freshness & Timeout Contracts (Current Repository Actual)**:
+   - **EKF (`ekf_filter_node`)**: `sensor_timeout = 0.1 s`（100 ms，輸入逾時即標記為 stale 並進行源隔離推算）。
+   - **Collision Monitor (`nav2_collision_monitor`)**: `source_timeout = 3.0 s`（雷達數據逾時停止輸出移動速度）。
+   - **DiffDrive (`diff_drive_controller`)**: `cmd_vel_timeout = 0.5 s`（速度命令逾時受控煞停）。
+2. **Failure Propagation (Evidence-Supported)**:
+   - **雙光達或單側光達中斷**: 驅動層停止發布；`dual_laser_merger` 偵測輸入中斷停止產出無效點雲；SICK 驅動透過 ROS 2 診斷發布錯誤狀態。
+   - **`/scan` 串流中斷**: RF2O 停止更新位姿；EKF 超過 `0.1 s` 觸發 `sensor_timeout` 隔離 `odom1` 並依輪端與 IMU 推算；`nav2_collision_monitor` 超過 `source_timeout` 煞停。
+   - **IMU 串流中斷**: EKF 超過 `0.1 s` 觸發 `sensor_timeout` 隔離 `imu0`，持續依輪端與 RF2O 維持推算。
+   - **RF2O 串流中斷**: EKF 超過 `0.1 s` 觸發 `sensor_timeout` 隔離 `odom1`，持續依輪端與 IMU 維持推算。
+3. **Evidence Provenance & Historical Reuse**:
+   - **New Stage A Consolidated Evidence**:
+     - `src/mobile_base_bringup/test/test_perception_dataflow.py`: 6 項自動化合約測試通過（涵蓋雙光達、融合光達、IMU、RF2O 之主題、型別、框架、消費者配置與超時門檻）。
+     - 跨套件共 64 項迴歸測試通過。
+   - **Reused Historical Runtime Evidence**:
+     - **IMP-010**: 雙光達與 360° 融合雷達 $25.13\,\text{Hz}$ 實機發布與 Frame 驗證。
+     - **IMP-011**: TDK IMU $100.0\,\text{Hz}$ 實機發布與重力向量驗證。
+     - **IMP-012**: RF2O $20.0\,\text{Hz}$ 實機運行與 `publish_tf: False` 驗證。
+     - **IMP-013**: EKF 50.0 Hz 多源融合與 `sensor_timeout` 實機驗證。
+     - **IMP-016**: AMCL 訂閱 `/scan` 實機定位驗證。
+     - **IMP-018 Stage L1**: 導航與 Collision Monitor 實車自主導航全程訂閱 `/scan` 實機運行驗證。
+   - **執行邊界確認**: 本次 closure 嚴格未重新執行感測器硬體，未執行硬體馬達輸出，AMR 維持完全靜止。
 
 #### 3.14.7 Status
-- **Implementation Status**: `Implemented`
-- **Evidence Status**: `Software Verified` (Stage A 自動化感知資料流契約測試通過)
-- **Checklist Status**: `[~] In Progress` (Stage A 驗證通過，待進入後續 closure 評估)。
-- **Next Dependency**: Checklist #20 Closure Reassessment。
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (Stage A 自動化合約測試與 S2~S6 歷史實機 evidence 完整覆蓋)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #20 原始 DoD 全部要求：兩個 raw LiDAR、selected scan、IMU 與 RF2O 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06，未引入新 gate)。
+- **Next Dependency**: Checklist #21 (`Motion-command and physical-stop closure`)。
