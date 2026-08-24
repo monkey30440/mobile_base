@@ -2766,3 +2766,45 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (無快取編譯 10/10 PASS，全套件 425 項測試 0 failures，依賴與資源無遺漏)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #27 原始 DoD 全部要求：從乾淨 image/workspace 依文件重建、測試與啟動，不依賴未提交檔案、舊 build cache 或 running-container 手動安裝)。
 - **Next Dependency**: Checklist #28 (`v0.1 Feature Freeze review`)。
+
+---
+
+### 3.22 v0.1 Feature Freeze review (Checklist #28)
+
+#### 3.22.1 Review Scope and Exact Original DoD
+- **完成條件 (Exact Original DoD)**: `UC-001、UC-002、32 個 requirements、6 個 custom gaps 與所有必要實機 evidence 已通過；未完成項有核准的上游變更或明確不屬 v0.1，才能標記 Feature Frozen。`
+
+#### 3.22.2 Feature Freeze Decision & Evidence Summary
+1. **v0.1 Feature Freeze 審查結論**: **`APPROVED [x]`**。
+2. **使用案例驗證狀態**:
+   - **UC-001 Mapping (Checklist #24 `[x]`)**: 使用者啟動建圖、手動受控巡覽、持續更新、主動／逾時受控煞停、Map Package 儲存與 Read-Back 完整通過實機驗收。
+   - **UC-002 Navigation (Checklist #25 `[~]`)**: 軟體架構與合約完整落實（Target Admission GAP-01~04、RouteServer 拓撲路徑、3-Stage Route-Assisted BT、禁用 Free-space Fallback、Collision Monitor 速度管線、Nav2 Action Cancel 合約）；歷史實車自主導航由 `IMP-018 Stage L1` 驗證（2 nodes / 1 edge, Node 0 `(0.60, -1.55)` $\rightarrow$ Node 1 `(0.60, -1.25)`，拓撲邊長 $0.30\,\text{m}$，自主前進位移約 $0.27\,\text{m}$，終點位置誤差 $0.0938\,\text{m} \le 0.15\,\text{m}$，測試條件 $v_{x,\max} = 0.15\,\text{m/s}$，StoppedGoalChecker 停穩檢驗通過，Action 結果 `SUCCEEDED`）。
+3. **IMP-025 遞延驗收證據之合規性 (Accepted Deferred Physical Acceptance Evidence)**:
+   - 依據 Checklist #28 Original DoD 的「**未完成項有核准的上游變更或明確不屬 v0.1，才能標記 Feature Frozen**」條款，下列兩項實機驗證經操作員明確指示列為核准遞延項目：
+     1. **實機動態障礙物介入測試 (Physical Obstacle-Intervention)**；
+     2. **移動中專屬 Cancel 煞停距離量測 (Dedicated In-Motion Cancel Physical Test)**；
+   - Checklist #25 嚴格保持 `[~] In Progress`，不將遞延測試假冒為已執行，符合上游治理邊界。
+4. **需求追溯與差距審查 (Checklist #26 `[x]`)**:
+   - 32 個唯一 `SYS-xxx` 需求（`SYS-001`～`SYS-011`、`SYS-013`～`SYS-021`、`SYS-022`～`SYS-030`、`SYS-032`～`SYS-034`）與 6 個 Custom Gaps（`GAP-01`～`GAP-06`）全部具備明確的程式碼實施、測試套件與 Subsystem Owner；無遺漏、錯號或未核准新增行為。
+5. **跨子系統整合閉環 (#19～#23 `[x]`)**:
+   - TF 權威樹唯一性 (#19)、感知資料流 (#20)、運動停止分層鏈 (#21)、回授里程計閉環 (#22) 與生命週期／模式切換 (#23) 全數通過整合驗證。
+6. **環境可重現性審查 (Checklist #27 `[x]`)**:
+   - 乾淨無快取編譯（10/10 套件通過，耗時 6.49 秒）；全套件 425 項自動化測試通過（0 errors, 0 failures, 37 skipped）；無隱藏本地狀態或生產環境 `/home` / `/tmp` 依賴。
+7. **無殘留 Feature Freeze 阻塞項 (Zero Freeze Blockers)**:
+   - 經審查無任何編譯／測試錯誤、無未解決架構矛盾、無未授權新增行為。
+
+#### 3.22.3 Known Limitations & Deferred Tuning Boundary
+- **非阻塞性調校項目 (Deferred Tuning / Post-MVP Optimization)**:
+  - 量產級 $5\,\text{cm} / 0.05\,\text{rad}$ 到站精度極限微調；
+  - MPPI 速度曲線與 Critic 權重深度最佳化；
+  - Collision Monitor 現場動態安全多邊形微調；
+  - 部署場域特定 Station Catalog 配置。
+- **Feature Freeze 語意澄清 (Feature Freeze Semantics)**:
+  - Feature Freeze 代表 **v0.1 軟體架構與功能基線正式凍結**。
+  - **不代表** Checklist #25 已結案、**不代表** 遞延實機測試已執行、**不代表** 生產環境極限精度調校已完成。
+
+#### 3.22.4 Status
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (軟體架構、全套件回歸測試、需求追溯與歷史實機數據完備，遞延實機測量具備上游授權)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #28 原始 DoD 全部要求：UC-001、UC-002、32 個 requirements、6 個 custom gaps 與所有必要實機 evidence 已通過；未完成項有核准的上游變更，正式標記 Feature Frozen)。
+- **Next Dependency**: 全部 28 項 Checklist 實作與審查已完成收斂（Completed: 27, In Progress: 1 [#25 遞延實機驗收], Pending: 0, Total: 28, Progress: 27 / 28 [96%]）。
