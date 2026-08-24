@@ -137,7 +137,15 @@ def generate_launch_description():
         },
     )
     tdk_imu = _python_launch(
-        'mobile_base_perception', 'tdk_imu.launch.py'
+        'mobile_base_perception',
+        'tdk_imu.launch.py',
+        launch_arguments={
+            'params_file': os.path.join(
+                get_package_share_directory('mobile_base_perception'),
+                'config',
+                'tdk_imu.yaml',
+            )
+        },
     )
     sick_dual_lidar = _python_launch(
         'mobile_base_perception', 'sick_dual_lidar.launch.py'

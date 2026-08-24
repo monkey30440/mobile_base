@@ -19,6 +19,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node, SetParameter
+from launch_ros.descriptions import ParameterFile
+from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
@@ -72,6 +74,21 @@ def generate_launch_description():
 
     lifecycle_nodes = ['map_server', 'amcl']
 
+    param_substitutions = {
+        'use_sim_time': use_sim_time,
+        'yaml_filename': map_yaml_file,
+    }
+
+    configured_params = ParameterFile(
+        RewrittenYaml(
+            source_file=params_file,
+            root_key='',
+            param_rewrites=param_substitutions,
+            convert_types=True,
+        ),
+        allow_substs=True,
+    )
+
     localization_nodes = GroupAction(
         actions=[
             SetParameter('use_sim_time', use_sim_time),
@@ -81,10 +98,7 @@ def generate_launch_description():
                 executable='map_server',
                 name='map_server',
                 output='screen',
-                parameters=[
-                    params_file,
-                    {'yaml_filename': map_yaml_file}
-                ],
+                parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
             ),
             # AMCL Node (Lifecycle)
@@ -93,9 +107,7 @@ def generate_launch_description():
                 executable='amcl',
                 name='amcl',
                 output='screen',
-                parameters=[
-                    params_file,
-                ],
+                parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
             ),
             # Lifecycle Manager for Localization
