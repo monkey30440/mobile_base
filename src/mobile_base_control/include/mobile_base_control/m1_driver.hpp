@@ -107,6 +107,15 @@ struct ExchangeResult
   std::array<MotorState, 2> states{};
 };
 
+struct TransactionTiming
+{
+  double tx_syscall_us{-1.0};
+  double wait_first_rx_us{-1.0};
+  double rx_duration_us{-1.0};
+  double total_us{0.0};
+  bool transport_ok{false};
+};
+
 enum class DriveId : int
 {
   Right = 1,
@@ -199,6 +208,11 @@ public:
 
   // Hook for testing without physical hardware
   void set_transact_override(TransactFn fn);
+
+  // Single-threaded validation-harness capture for the existing transaction path.
+  // Disabled by default; the diagnostic executable supplies the syscall observer.
+  void begin_detailed_timing_capture(size_t capacity);
+  std::vector<TransactionTiming> end_detailed_timing_capture();
 
 protected:
   virtual Result<std::vector<uint8_t>> transact(const std::vector<uint8_t> & request_without_crc);

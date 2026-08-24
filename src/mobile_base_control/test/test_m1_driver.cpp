@@ -14,8 +14,13 @@
 
 #include <gtest/gtest.h>
 
+#include <pty.h>
+#include <unistd.h>
+
 #include <array>
+#include <chrono>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -181,6 +186,19 @@ std::vector<uint8_t> create_dummy_md2_response(
   append_driver(s2_status, s2_alarm, s2_rpm, s2_pos);
 
   return rsp;
+}
+
+uint16_t modbus_crc(const std::vector<uint8_t> & bytes)
+{
+  uint16_t crc = 0xFFFF;
+  for (const uint8_t byte : bytes) {
+    crc ^= byte;
+    for (int bit = 0; bit < 8; ++bit) {
+      crc = (crc & 1) != 0 ? static_cast<uint16_t>((crc >> 1) ^ 0xA001) :
+        static_cast<uint16_t>(crc >> 1);
+    }
+  }
+  return crc;
 }
 }  // namespace
 
@@ -393,4 +411,84 @@ TEST(M1DriverTest, ConnectFailureHandling)
   EXPECT_FALSE(res.ok);
   EXPECT_EQ(res.error, ErrorCode::CONNECT_FAILED);
   EXPECT_FALSE(driver.is_connected());
+}
+
+TEST(M1DriverTest, DetailedTimingObservesLibmodbusWriteAndFirstReadOnPseudoTty)
+{
+  int master_fd = -1;
+  int slave_fd = -1;
+  char slave_name[128]{};
+  ASSERT_EQ(openpty(&master_fd, &slave_fd, slave_name, nullptr, nullptr), 0);
+  close(slave_fd);
+
+  M1Driver driver;
+  ASSERT_TRUE(driver.connect(slave_name, 230400, 100).ok);
+
+  std::thread responder([master_fd]() {
+      std::array<uint8_t, 64> request{};
+      size_t received = 0;
+      while (received < 21) {
+        const ssize_t count = ::read(
+          master_fd, request.data() + received, request.size() - received);
+        ASSERT_GT(count, 0);
+        received += static_cast<size_t>(count);
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      auto response = create_dummy_md2_response(0x17, 0, 0, 0, 0, 0, 0, 0, 0);
+      const uint16_t crc = modbus_crc(response);
+      response.push_back(static_cast<uint8_t>(crc & 0xFF));
+      response.push_back(static_cast<uint8_t>(crc >> 8));
+      ASSERT_EQ(::write(master_fd, response.data(), response.size()),
+        static_cast<ssize_t>(response.size()));
+    });
+
+  driver.begin_detailed_timing_capture(1);
+  const auto result = driver.exchange_zero(1, 2);
+  const auto timings = driver.end_detailed_timing_capture();
+  responder.join();
+  close(master_fd);
+
+  ASSERT_TRUE(result.ok) << mobile_base_control::error_code_to_string(result.error);
+  ASSERT_EQ(timings.size(), 1u);
+  EXPECT_GE(timings[0].tx_syscall_us, 0.0);
+  EXPECT_GE(timings[0].wait_first_rx_us, 0.0);
+  EXPECT_GE(timings[0].rx_duration_us, 0.0);
+  EXPECT_GE(timings[0].total_us, timings[0].wait_first_rx_us);
+  EXPECT_TRUE(timings[0].transport_ok);
+}
+
+TEST(M1DriverTest, DetailedTimingLeavesRxDurationUnavailableAfterPartialResponseTimeout)
+{
+  int master_fd = -1;
+  int slave_fd = -1;
+  char slave_name[128]{};
+  ASSERT_EQ(openpty(&master_fd, &slave_fd, slave_name, nullptr, nullptr), 0);
+  close(slave_fd);
+
+  M1Driver driver;
+  ASSERT_TRUE(driver.connect(slave_name, 230400, 20).ok);
+  std::thread responder([master_fd]() {
+      std::array<uint8_t, 21> request{};
+      size_t received = 0;
+      while (received < request.size()) {
+        const ssize_t count = ::read(
+          master_fd, request.data() + received, request.size() - received);
+        ASSERT_GT(count, 0);
+        received += static_cast<size_t>(count);
+      }
+      const uint8_t partial_response = 0x65;
+      ASSERT_EQ(::write(master_fd, &partial_response, 1), 1);
+    });
+
+  driver.begin_detailed_timing_capture(1);
+  const auto result = driver.exchange_zero(1, 2);
+  const auto timings = driver.end_detailed_timing_capture();
+  responder.join();
+  close(master_fd);
+
+  EXPECT_FALSE(result.ok);
+  ASSERT_EQ(timings.size(), 1u);
+  EXPECT_GE(timings[0].wait_first_rx_us, 0.0);
+  EXPECT_EQ(timings[0].rx_duration_us, -1.0);
+  EXPECT_FALSE(timings[0].transport_ok);
 }

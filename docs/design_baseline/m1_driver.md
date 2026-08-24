@@ -775,6 +775,21 @@ final lifecycle poll delay/count
 
 These must be decided together using measured system behavior.
 
+The optional FC17 detailed timing mode divides a transaction into:
+
+```text
+TX syscall duration
+write return -> first successful RX read return
+first successful RX read return -> complete libmodbus response
+total M1Driver transaction
+```
+
+It observes the existing libmodbus RTU path and buffers records in memory until
+the validation harness completes. "First RX byte" means the first byte observed
+by userspace when libmodbus's `read()` returns; software timestamps cannot identify
+when that byte reached the UART, USB controller, USB host, or kernel TTY buffer.
+Detailed timing is disabled during normal runtime.
+
 ---
 
 ## 23. MVP non-goals

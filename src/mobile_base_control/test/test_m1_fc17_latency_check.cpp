@@ -13,7 +13,10 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
+#include <cstdio>
+#include <fstream>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include "mobile_base_control/m1_driver.hpp"
@@ -228,6 +231,36 @@ TEST(Fc17LatencyCheckTest, FullMockMeasurementLifecycle)
   EXPECT_NE(out.str().find("Successful Samples: 5"), std::string::npos);
 }
 
+TEST(Fc17LatencyCheckTest, RawOutputUsesDetailedTimingSchemaAndMarksMockPhasesUnavailable)
+{
+  Fc17LatencyCheckOptions opts;
+  opts.device = "mock";
+  opts.execute = true;
+  opts.warmup_samples = 0;
+  opts.measured_samples = 1;
+  opts.raw_output_file = "/tmp/mobile_base_fc17_detailed_timing_test.csv";
+  std::remove(opts.raw_output_file.c_str());
+
+  M1Driver driver;
+  std::ostringstream out, err;
+  ASSERT_EQ(run_fc17_latency_check(opts, driver, out, err), 0) << err.str();
+
+  std::ifstream csv(opts.raw_output_file);
+  ASSERT_TRUE(csv.is_open());
+  std::string header;
+  std::string row;
+  ASSERT_TRUE(static_cast<bool>(std::getline(csv, header)));
+  ASSERT_TRUE(static_cast<bool>(std::getline(csv, row)));
+
+  EXPECT_EQ(
+    header,
+    "seq,tx_syscall_us,wait_first_rx_us,rx_duration_us,total_us,ok,error,"
+    "driver1_alarm,driver1_rpm,driver2_alarm,driver2_rpm");
+  EXPECT_EQ(row.rfind("1,-1.00,-1.00,-1.00,", 0), 0u);
+
+  std::remove(opts.raw_output_file.c_str());
+}
+
 TEST(Fc17LatencyCheckTest, NonZeroObservedRpmAbortsAndExecutesCleanup)
 {
   Fc17LatencyCheckOptions opts;
@@ -295,6 +328,8 @@ TEST(Fc17LatencyCheckTest, ActiveAlarmAbortsAndExecutesCleanup)
   opts.dry_run = false;
   opts.warmup_samples = 0;
   opts.measured_samples = 5;
+  opts.raw_output_file = "/tmp/mobile_base_fc17_abort_timing_test.csv";
+  std::remove(opts.raw_output_file.c_str());
 
   M1Driver driver;
   size_t jg_calls = 0;
@@ -342,4 +377,13 @@ TEST(Fc17LatencyCheckTest, ActiveAlarmAbortsAndExecutesCleanup)
   EXPECT_EQ(ret, 10);
   EXPECT_TRUE(disable_called);
   EXPECT_NE(err.str().find("PRIMARY MEASUREMENT FAILED"), std::string::npos);
+
+  std::ifstream csv(opts.raw_output_file);
+  ASSERT_TRUE(csv.is_open());
+  std::string header;
+  std::string row;
+  EXPECT_TRUE(static_cast<bool>(std::getline(csv, header)));
+  EXPECT_TRUE(static_cast<bool>(std::getline(csv, row)));
+  EXPECT_NE(row.find(",1,0,"), std::string::npos);
+  std::remove(opts.raw_output_file.c_str());
 }

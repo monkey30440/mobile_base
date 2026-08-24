@@ -30,6 +30,10 @@ struct SampleRecord
 {
   size_t seq{0};
   double elapsed_us{0.0};
+  double detailed_total_us{0.0};
+  double tx_syscall_us{-1.0};
+  double wait_first_rx_us{-1.0};
+  double rx_duration_us{-1.0};
   bool ok{false};
   ErrorCode error{ErrorCode::NONE};
   uint16_t driver1_alarm{0};

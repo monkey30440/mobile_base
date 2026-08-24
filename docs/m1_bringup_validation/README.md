@@ -41,6 +41,19 @@ python3 scripts/10_fc17_timing.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --
 python3 scripts/11_read_comm_error_history.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
 ```
 
+For phase-level timing of the production C++/libmodbus path, use the existing
+zero-speed harness with detailed capture enabled:
+
+```bash
+ros2 run mobile_base_control m1_fc17_latency_check \
+  --device /dev/ttyUSB0 --baud 230400 --samples 300 \
+  --execute --raw-output /tmp/fc17_detailed.csv
+```
+
+`--raw-output` buffers timestamps in memory during the measured FC17 loop and
+writes the CSV only after the stop/disable/post-check sequence. The test remains
+hard-bound to JG 0 RPM and retains the physical E-stop/STO requirements.
+
 ## Target architecture-level M1 configuration
 
 These are design choices, not values to accept merely because the hardware currently has them:

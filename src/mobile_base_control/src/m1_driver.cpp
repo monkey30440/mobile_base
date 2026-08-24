@@ -17,13 +17,66 @@
 #include <modbus/modbus.h>
 #include <modbus/modbus-rtu.h>
 
+#include <sys/types.h>
+
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace
+{
+using TimingClock = std::chrono::steady_clock;
+
+struct ActiveSerialTiming
+{
+  int fd{-1};
+  TimingClock::time_point write_before{};
+  TimingClock::time_point write_after{};
+  TimingClock::time_point receive_wait_start{};
+  TimingClock::time_point first_rx{};
+  TimingClock::time_point response_complete{};
+  bool write_seen{false};
+  bool receive_wait_started{false};
+  bool first_rx_seen{false};
+  bool response_complete_seen{false};
+};
+
+thread_local ActiveSerialTiming * active_serial_timing = nullptr;
+}  // namespace
+
+namespace mobile_base_control::detail
+{
+void observe_serial_write_before(int fd)
+{
+  ActiveSerialTiming * timing = active_serial_timing;
+  if (timing != nullptr && timing->fd == fd) {
+    timing->write_before = TimingClock::now();
+  }
+}
+
+void observe_serial_write_after(int fd)
+{
+  ActiveSerialTiming * timing = active_serial_timing;
+  if (timing != nullptr && timing->fd == fd) {
+    timing->write_after = TimingClock::now();
+    timing->write_seen = true;
+  }
+}
+
+void observe_serial_read_return(int fd, ssize_t result)
+{
+  ActiveSerialTiming * timing = active_serial_timing;
+  if (result > 0 && timing != nullptr && timing->fd == fd && !timing->first_rx_seen) {
+    timing->first_rx = TimingClock::now();
+    timing->first_rx_seen = true;
+  }
+}
+}  // namespace mobile_base_control::detail
 
 namespace mobile_base_control
 {
@@ -239,6 +292,8 @@ struct M1Driver::Impl
   modbus_t * ctx{nullptr};
   bool is_mock{false};
   TransactFn transact_override;
+  bool detailed_timing_enabled{false};
+  std::vector<TransactionTiming> detailed_timings;
 };
 
 M1Driver::M1Driver()
@@ -264,6 +319,25 @@ void M1Driver::set_transact_override(TransactFn fn)
   if (impl_) {
     impl_->transact_override = std::move(fn);
   }
+}
+
+void M1Driver::begin_detailed_timing_capture(size_t capacity)
+{
+  if (!impl_) {
+    return;
+  }
+  impl_->detailed_timings.clear();
+  impl_->detailed_timings.reserve(capacity);
+  impl_->detailed_timing_enabled = true;
+}
+
+std::vector<TransactionTiming> M1Driver::end_detailed_timing_capture()
+{
+  if (!impl_) {
+    return {};
+  }
+  impl_->detailed_timing_enabled = false;
+  return std::move(impl_->detailed_timings);
 }
 
 Result<void> M1Driver::connect(
@@ -326,12 +400,45 @@ Result<void> M1Driver::disconnect()
 
 Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & request_without_crc)
 {
+  const auto transaction_start = TimingClock::now();
+  const bool capture_timing = impl_ != nullptr && impl_->detailed_timing_enabled &&
+    request_without_crc.size() >= 2 && request_without_crc[1] == FC_READ_WRITE_MULTIPLE;
+  ActiveSerialTiming serial_timing;
+  if (capture_timing && impl_->ctx != nullptr) {
+    serial_timing.fd = modbus_get_socket(impl_->ctx);
+    active_serial_timing = &serial_timing;
+  }
+  const auto finish = [&](Result<std::vector<uint8_t>> result) {
+      const auto transaction_end = TimingClock::now();
+      active_serial_timing = nullptr;
+      if (capture_timing) {
+        TransactionTiming timing;
+        timing.total_us = std::chrono::duration<double, std::micro>(
+          transaction_end - transaction_start).count();
+        timing.transport_ok = result.ok;
+        if (serial_timing.write_seen) {
+          timing.tx_syscall_us = std::chrono::duration<double, std::micro>(
+            serial_timing.write_after - serial_timing.write_before).count();
+        }
+        if (serial_timing.write_seen && serial_timing.first_rx_seen) {
+          timing.wait_first_rx_us = std::chrono::duration<double, std::micro>(
+            serial_timing.first_rx - serial_timing.write_after).count();
+        }
+        if (serial_timing.first_rx_seen && serial_timing.response_complete_seen) {
+          timing.rx_duration_us = std::chrono::duration<double, std::micro>(
+            serial_timing.response_complete - serial_timing.first_rx).count();
+        }
+        impl_->detailed_timings.push_back(timing);
+      }
+      return result;
+    };
+
   if (!impl_) {
-    return Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED);
+    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED));
   }
 
   if (impl_->transact_override) {
-    return impl_->transact_override(request_without_crc);
+    return finish(impl_->transact_override(request_without_crc));
   }
 
   if (impl_->is_mock) {
@@ -394,16 +501,16 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
 
       append_driver(0, 0, rpm1, 0);
       append_driver(0, 0, rpm2, 0);
-      return Result<std::vector<uint8_t>>::success(std::move(rsp));
+      return finish(Result<std::vector<uint8_t>>::success(std::move(rsp)));
     }
   }
 
   if (impl_->ctx == nullptr) {
-    return Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED);
+    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED));
   }
 
   if (request_without_crc.empty()) {
-    return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_ARGUMENT);
+    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_ARGUMENT));
   }
 
   // In libmodbus RTU, setting the expected slave ID allows confirmation matching
@@ -417,23 +524,31 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
 
   if (send_ret == -1) {
     if (errno == ETIMEDOUT) {
-      return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+      return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT));
     }
-    return Result<std::vector<uint8_t>>::failure(ErrorCode::SEND_FAILED);
+    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::SEND_FAILED));
   }
 
   uint8_t rsp[MODBUS_RTU_MAX_ADU_LENGTH];
+  if (capture_timing) {
+    serial_timing.receive_wait_start = TimingClock::now();
+    serial_timing.receive_wait_started = true;
+  }
   const int recv_ret = modbus_receive_confirmation(impl_->ctx, rsp);
+  if (capture_timing && recv_ret >= 0) {
+    serial_timing.response_complete = TimingClock::now();
+    serial_timing.response_complete_seen = true;
+  }
 
   if (recv_ret == -1) {
     if (errno == ETIMEDOUT) {
-      return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+      return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT));
     }
-    return Result<std::vector<uint8_t>>::failure(ErrorCode::RECEIVE_FAILED);
+    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::RECEIVE_FAILED));
   }
 
-  return Result<std::vector<uint8_t>>::success(
-    std::vector<uint8_t>(rsp, rsp + recv_ret));
+  return finish(Result<std::vector<uint8_t>>::success(
+    std::vector<uint8_t>(rsp, rsp + recv_ret)));
 }
 
 Result<ExchangeResult> M1Driver::read_state(int driver_a, int driver_b)

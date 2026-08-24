@@ -76,6 +76,7 @@ target_compile_features(m1_latency_check PUBLIC cxx_std_17)
 add_executable(m1_fc17_latency_check
   src/m1_fc17_latency_check_main.cpp
   src/m1_fc17_latency_check_core.cpp
+  src/m1_timing_syscall_interpose.cpp
 )
 target_link_libraries(m1_fc17_latency_check m1_driver)
 target_compile_features(m1_fc17_latency_check PUBLIC cxx_std_17)
@@ -169,6 +170,7 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_m1_driver
     test/test_m1_driver.cpp
+    src/m1_timing_syscall_interpose.cpp
   )
   target_link_libraries(test_m1_driver m1_driver)
 

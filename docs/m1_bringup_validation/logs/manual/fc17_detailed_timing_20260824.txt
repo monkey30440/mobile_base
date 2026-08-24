@@ -1,0 +1,60 @@
+FC17 detailed zero-speed timing evidence
+Date: 2026-08-24 (Asia/Taipei)
+
+Test conditions
+- Device: /dev/ttyUSB0
+- USB UART: FTDI FT232R USB UART
+- Kernel driver: ftdi_sio
+- latency_timer: 16 ms
+- Serial: 230400 bps, 8N1
+- Drivers: ID1 and ID2
+- Command: FC17 JG 0 RPM
+- Warm-up: 5 transactions
+- Measured: 300 transactions, delay_ms=0
+- Timeout condition: 50 ms (test condition, not production default)
+
+Safety/result
+- Successful: 300
+- Failed: 0
+- Timeout: 0
+- Post-check ID1: Status=6, Alarm=0, RPM=0
+- Post-check ID2: Status=6, Alarm=0, RPM=0
+
+Outer exchange_zero timing
+- min: 15.376 ms
+- mean: 15.996 ms
+- p50: 15.996 ms
+- p95: 16.026 ms
+- p99: 16.071 ms
+- max: 16.620 ms
+- stddev: 0.058 ms
+
+Detailed M1Driver transaction phases
+- TX syscall: mean 8.399 us, p95 14.33 us, p99 19.35 us, max 108.97 us
+- write return -> first RX read return: mean 15970.771 us, p95 15999.69 us,
+  p99 16057.37 us, max 16589.21 us
+- first RX read return -> complete response: mean 3.893 us, p95 5.07 us,
+  p99 5.39 us, max 5.51 us
+- detailed total: mean 15989.931 us, p95 16017.51 us, p99 16066.53 us,
+  max 16613.45 us
+
+Mean detailed phase share
+- TX syscall: 0.053%
+- write return -> first RX: 99.880%
+- RX receive: 0.024%
+- remaining M1Driver overhead: 0.043%
+
+Interpretation boundary
+- First RX is timestamped when libmodbus's first successful read() returns to
+  userspace. It does not reveal when the byte reached the M1 UART, FTDI device,
+  USB host controller, or kernel TTY buffer.
+- The approximately 15.97 ms first-RX wait matches the observed FTDI 16 ms
+  latency_timer. This strongly identifies USB/TTY buffering as the dominant
+  software-visible delay. It does not separately measure the M1's internal
+  command-processing response time below that buffering boundary.
+- PREEMPT_RT is not the next diagnostic step. A controlled, reversible FTDI
+  latency_timer reduction followed by the same zero-speed test would test this
+  root-cause hypothesis directly.
+
+Raw samples
+- fc17_detailed_timing_20260824.csv

@@ -25,6 +25,33 @@
 namespace mobile_base_control
 {
 
+namespace
+{
+bool write_detailed_csv(
+  const std::string & path, const std::vector<SampleRecord> & records, std::ostream & err)
+{
+  if (path.empty()) {
+    return true;
+  }
+  std::ofstream out_file(path);
+  if (!out_file.is_open()) {
+    err << "FAIL: Could not open raw timing output: " << path << std::endl;
+    return false;
+  }
+  out_file << "seq,tx_syscall_us,wait_first_rx_us,rx_duration_us,total_us,ok,error,"
+    "driver1_alarm,driver1_rpm,driver2_alarm,driver2_rpm\n";
+  for (const auto & rec : records) {
+    out_file << rec.seq << "," << std::fixed << std::setprecision(2)
+             << rec.tx_syscall_us << "," << rec.wait_first_rx_us << ","
+             << rec.rx_duration_us << "," << rec.detailed_total_us << ","
+             << (rec.ok ? 1 : 0) << "," << static_cast<int>(rec.error) << ","
+             << rec.driver1_alarm << "," << rec.driver1_rpm << ","
+             << rec.driver2_alarm << "," << rec.driver2_rpm << "\n";
+  }
+  return true;
+}
+}  // namespace
+
 Fc17LatencyCheckOptions parse_fc17_latency_command_line(int argc, char ** argv)
 {
   Fc17LatencyCheckOptions opts;
@@ -247,6 +274,9 @@ int run_fc17_latency_check(
     std::endl;
   std::vector<SampleRecord> records;
   records.reserve(opts.measured_samples);
+  if (!opts.raw_output_file.empty()) {
+    driver.begin_detailed_timing_capture(opts.measured_samples);
+  }
 
   bool abort_triggered = false;
   for (size_t i = 0; i < opts.measured_samples; ++i) {
@@ -291,6 +321,17 @@ int run_fc17_latency_check(
     }
   }
 
+  std::vector<TransactionTiming> detailed_timings;
+  if (!opts.raw_output_file.empty()) {
+    detailed_timings = driver.end_detailed_timing_capture();
+    for (size_t i = 0; i < records.size() && i < detailed_timings.size(); ++i) {
+      records[i].tx_syscall_us = detailed_timings[i].tx_syscall_us;
+      records[i].wait_first_rx_us = detailed_timings[i].wait_first_rx_us;
+      records[i].rx_duration_us = detailed_timings[i].rx_duration_us;
+      records[i].detailed_total_us = detailed_timings[i].total_us;
+    }
+  }
+
   // Step 6 & 7: Ordered Cleanup Sequence
   out << "[Step 6] Executing safe stop and disable cleanup sequence..." << std::endl;
   auto stop_res = driver.stop(opts.driver_a, opts.driver_b);
@@ -316,10 +357,15 @@ int run_fc17_latency_check(
 
   driver.disconnect();
 
+  const bool csv_written = write_detailed_csv(opts.raw_output_file, records, err);
+
   if (abort_triggered) {
     err << "PRIMARY MEASUREMENT FAILED: Best-effort cleanup was executed, "
         << "but best-effort cleanup is NOT an independent safety guarantee." << std::endl;
     return 10;
+  }
+  if (!csv_written) {
+    return 11;
   }
 
   // Step 9: Statistical output
@@ -362,19 +408,6 @@ int run_fc17_latency_check(
       << std::setw(18) << std::fixed << std::setprecision(3) << stats.stddev_us / 1000.0 <<
     std::endl;
   out << "================================================================" << std::endl;
-
-  if (!opts.raw_output_file.empty()) {
-    std::ofstream out_file(opts.raw_output_file);
-    if (out_file.is_open()) {
-      out_file << "seq,elapsed_us,ok,error,driver1_alarm,driver1_rpm,driver2_alarm,driver2_rpm\n";
-      for (const auto & rec : records) {
-        out_file << rec.seq << "," << std::fixed << std::setprecision(2) << rec.elapsed_us << ","
-                 << (rec.ok ? 1 : 0) << "," << static_cast<int>(rec.error) << ","
-                 << rec.driver1_alarm << "," << rec.driver1_rpm << ","
-                 << rec.driver2_alarm << "," << rec.driver2_rpm << "\n";
-      }
-    }
-  }
 
   return 0;
 }
