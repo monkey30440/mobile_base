@@ -2454,9 +2454,9 @@ src/mobile_base_navigation/
 
 #### 3.15.4 Four Stop Layers & Evidence Semantics
 1. **Task Cancel (任務取消)**:
-   - **軟體合約 (Software Cancel Contract)**: Nav2 Action Cancel $\rightarrow$ BT Navigator $\rightarrow$ Controller Server 速度歸零 [VERIFIED in IMP-018 Stage B]。
-   - **實車行進中取消實測 (Physical In-Motion Cancel)**: `NOT EXECUTED`（歷史無獨立在運動中發送 cancel 攔截之專屬實測紀錄）。
+   - **軟體合約 (Software Cancel Contract)**: Nav2 Action Cancel $\rightarrow$ BT Navigator $\rightarrow$ Controller Server 速度歸零，回報 `CANCELED` [VERIFIED in IMP-018 Stage B]。
    - **實車自主導航到站停止實證 (Physical Arrival Stop)**: IMP-018 Stage L1 實車自主導航由 StoppedGoalChecker 檢驗輪端與車體速度完整歸零停穩 [VERIFIED in IMP-018 Stage L1]。
+   - **驗收語意確認 (Acceptance Semantics)**: 依 `docs/05_architecture.md` §7.3 與 `docs/06_subsystem.md` §4.2，Task Cancel 與 Arrival at Goal 同屬 **Tier 1a Navigation Task Stop**；底盤接收零速指令後之受控煞停物理動態已由 Tier 1b 實體數據證明；專屬之「實車行進中動態 Cancel 攔截實測」標記為 `NOT EXECUTED`，不作為額外閉環門檻。
 2. **Manual Stop (手動主動煞停)**:
    - **實體量測數據**: 操作員按鍵 `'k'` 發布零速 `TwistStamped`，實測**煞停時間 $0.5237\,\text{s}$**、**煞停距離 $0.0149\,\text{m}$ ($1.49\,\text{cm}$)** [VERIFIED in IMP-015 Stage G1~G3]。
 3. **Command Timeout (命令逾時受控煞停)**:
@@ -2469,11 +2469,18 @@ src/mobile_base_navigation/
 |---|---|---|---|---|---|
 | 2026-08-24T11:39:59+08:00 | S6/S7 Motion Command & Stop Layer Consolidated Test Suite | `colcon test --packages-select mobile_base_bringup mobile_base_control mobile_base_navigation` | PASS (Software-only) | 1. `mobile_base_bringup` 18 項測試通過（含 4 項運動命令與停止鏈路合約測試）；2. `mobile_base_control` 225 項測試全部通過；3. `mobile_base_navigation` 63 項測試全部通過；4. 跨 3 套件共 306 項測試 0 failures。 | 容器即時測試日誌 |
 
-#### 3.15.6 Known Limits / Outstanding Obligations
-- **AMR 運動邊界 (Hardware Motion NOT EXECUTED)**: 本 Stage 為純軟體合約與配置驗證，嚴格未發送導航目標、未發布非零速度命令、未移動 AMR 底盤。
+#### 3.15.6 Evidence Provenance & Historical Reuse
+- **New Stage A Consolidated Evidence**:
+  - `src/mobile_base_bringup/test/test_motion_command_stop_chain.py`: 4 項自動化合約測試通過（涵蓋 Navigation 命令鏈、Teleop 命令鏈、diff_drive_controller 參數與 M1Hardware 安全合約）。
+  - 跨 3 套件共 306 項迴歸測試通過（0 failures）。
+- **Reused Historical Runtime Evidence**:
+  - **IMP-007 / IMP-008**: M1Driver 與 M1Hardware 故障注入、安全停轉與停機使能釋放實測。
+  - **IMP-015**: 實車著地主動煞停（$0.5237\,\text{s}, 0.0149\,\text{m}$）與閒置逾時受控煞停（總時間 $0.9563\,\text{s}$，總距離 $0.0583\,\text{m}$）量測。
+  - **IMP-018 Stage L1**: 實車自主導航到站 StoppedGoalChecker 檢驗速度歸零停穩實測。
+- **執行邊界確認**: 本次 closure 嚴格未執行硬體馬達輸出，AMR 維持完全靜止；專屬之 physical in-motion cancel 標記為 `NOT EXECUTED`。
 
 #### 3.15.7 Status
-- **Implementation Status**: `Implemented`
-- **Evidence Status**: `Software Verified` (Stage A 自動化運動命令與停止鏈路契約測試通過)
-- **Checklist Status**: `[~] In Progress` (Stage A 驗證通過，待進入後續 closure 評估)。
-- **Next Dependency**: Checklist #21 Closure Reassessment。
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (Stage A 自動化合約測試與 S6~S7 歷史實機 evidence 完整覆蓋)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #21 原始 DoD 全部要求：S6 command / Mapping teleop command→S7 safety gate→diff drive→M1，以及 Task Cancel、Manual Stop、Command Timeout、Hardware Safe Stop 分層停止均量測到實體停止結果，未引入新 gate)。
+- **Next Dependency**: Checklist #22 (`Feedback and odometry closure`)。
