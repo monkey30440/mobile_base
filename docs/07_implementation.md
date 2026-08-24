@@ -2278,4 +2278,54 @@ src/mobile_base_navigation/
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #18 原始 DoD 全部要求，無殘留未滿足條件，未引入新 gate)。
 - **Next Dependency**: Checklist #19 (`TF and frame authority closure`)。
 
+---
 
+### 3.13 TF and frame authority closure (Checklist #19)
+
+#### 3.13.1 Requirement and Subsystem Trace
+- **需求追溯**: `SYS-023` (S1 靜態幾何與坐標框架), `SYS-005` (S3 平面里程融合與 `odom -> base_footprint` TF 擁有權), `SYS-006` (S4 建圖模式 `map -> odom` TF 擁有權), `SYS-010` (S5 定位模式 `map -> odom` TF 擁有權), `AD-004` (模式隔離與互斥 TF 廣播規則；`05_architecture.md` §3, §7.1；`06_subsystem.md` §4.1)。
+- **完成條件 (DoD)**: S1 static TF、S3 `odom -> base_footprint`、S4/S5 互斥 `map -> odom` 無斷鏈、重複 owner 或 frame mismatch。
+
+#### 3.13.2 Authority and Topology Architecture
+1. **全域 TF 樹權威拓撲**:
+   - `map → odom`: 動態座標變換，依操作模式互斥擁有：
+     - **Mapping Mode (UC-001)**: 由 `slam_toolbox`（`async_slam_toolbox_node`）唯一發布（20 Hz）；`nav2_amcl` 完全不啟動。
+     - **Navigation Mode (UC-002)**: 由 `nav2_amcl` 唯一發布（接收 Initial Pose 後更新）；`slam_toolbox` 完全不啟動。
+   - `odom → base_footprint`: 動態座標變換，由 S3 `robot_localization`（`ekf_filter_node`）於 50 Hz 唯一發布。
+     - `diff_drive_controller`（`enable_odom_tf: false`）與 `rf2o_laser_odometry`（`publish_tf: false`）嚴格禁止發布 TF。
+   - `base_footprint → base_link`: 靜態座標變換（底盤離地高度 $Z = +0.2560\,\text{m}$），由 S1 `robot_state_publisher` 透過 `/tf_static` 廣播。
+   - `base_link → base_lidar_link_FL / BR / base_imu_link`: 靜態感測器座標變換，由 S1 `robot_state_publisher` 透過 `/tf_static` 廣播。
+   - `base_link → driving_wheel_link_L / R`: 動態輪端座標變換，由 S1 `robot_state_publisher` 訂閱 S7 `joint_state_broadcaster`（`/joint_states`）後發布至 `/tf`。
+2. **零自製 TF 元件原則**: 完全依賴 ROS 2 Jazzy 原生標準 URDF/Xacro、`robot_state_publisher`、`robot_localization`、`slam_toolbox` 與 `nav2_amcl` 配置，不引入額外的 TF Proxy、Frame Manager 或自製廣播節點。
+
+#### 3.13.3 Implementation & Test Artifacts
+- **自動化 TF 權威與拓撲合約測試**: `src/mobile_base_bringup/test/test_tf_authority.py`
+  - `test_s1_urdf_tf_tree_structure`: 自動調用 `xacro` 解析權威 `mobile_base.urdf.xacro`，驗證 Canonical Links（`base_footprint`, `base_link`, `base_lidar_link_FL`, `base_lidar_link_BR`, `base_imu_link`, `driving_wheel_link_L`, `driving_wheel_link_R`）完整存在，驗證 `base_joint` 為 `fixed` 且 $Z=0.2560\,\text{m}$，驗證雙光達、IMU 與雙輪關節型態與父子關係符合規範，無重複子節點或拓撲環。
+  - `test_s3_odom_to_base_footprint_sole_authority`: 驗證 `ekf.yaml` 中 `publish_tf: true` 且 `world_frame: odom`，同時驗證 `base_control_params.yaml`（`diff_drive_controller`）配置 `enable_odom_tf: false` 以及 `rf2o_laser_odometry.launch.py` 配置 `publish_tf: False`，證明 EKF 為全系統唯一配置之 `odom -> base_footprint` 廣播者。
+  - `test_s4_mapping_mode_map_to_odom_authority`: 驗證 `slam_toolbox.yaml` 配置 `transform_publish_period > 0`，且 `mapping.launch.py` 啟動 `slam_toolbox` 並嚴格排除 `amcl`。
+  - `test_s5_navigation_mode_map_to_odom_authority`: 驗證 `amcl_params.yaml` 配置 `tf_broadcast: true`，且 `navigation.launch.py` 啟動 `nav2_amcl` 並嚴格排除 `slam_toolbox`。
+  - `test_sensor_and_perception_frame_ids_match_urdf`: 驗證 `dual_laser_merger` 目標框架為 `base_link`，雙光達驅動框架為 `base_lidar_link_FL` / `base_lidar_link_BR`，IMU 驅動框架為 `base_imu_link`，與 S1 URDF 框架名稱完全一致。
+
+#### 3.13.4 Mature vs Custom Boundary
+- **Mature Components Reused**:
+  - `robot_state_publisher` (ROS 2 Jazzy)
+  - `robot_localization::ekf_filter_node`
+  - `slam_toolbox::async_slam_toolbox_node`
+  - `nav2_amcl::AmclNode`
+  - `tf2_ros`
+- **Project-Owned Custom Code**: **`NONE`**（零自製 TF 節點，完全由標準 ROS 2 / Nav2 套件設定驅動）。
+
+#### 3.13.5 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-24T11:05:52+08:00 | S1~S7 TF Authority & Frame Consistency Consolidated Test Suite | `colcon build --packages-select mobile_base_bringup` + `colcon test` | PASS (Software-only) | 1. 16 項測試全部通過（含 5 項 TF 權威測試 + 11 項 bringup / map / linter 測試）；2. 驗證 S1 URDF/Xacro 靜態拓撲樹無斷鏈且 $Z=0.2560\,\text{m}$；3. 驗證 S3 EKF 唯一擁有 `odom -> base_footprint`（DiffDrive 與 RF2O 嚴格停用 TF）；4. 驗證 S4/S5 模式互斥隔離（Mapping 下 slam 獨占、Navigation 下 amcl 獨占）；5. 驗證感測器 Frame ID 與 URDF 零 mismatch。 | 容器即時測試日誌 |
+| 2026-08-24T11:06:40+08:00 | S1 Robot Description Stationary Static TF Buffer Lookup | `ros2 launch mobile_base_description robot_description.launch.py` + `tf2_ros` buffer lookup | PASS (Stationary-only) | 1. `robot_state_publisher` 成功啟動並發布 `/tf_static`；2. 實測成功 lookup `base_footprint -> base_link` ($Z = +0.256\,\text{m}$)、`base_link -> base_lidar_link_FL`、`base_link -> base_lidar_link_BR`、`base_link -> base_imu_link`；3. 全程靜態無位移。 | 容器即時測試日誌 |
+
+#### 3.13.6 Known Limits / Outstanding Obligations
+- **AMR 運動邊界 (Hardware Motion NOT EXECUTED)**: 本 Stage 為純軟體合約與靜態 TF 拓撲驗證，嚴格未發送任何導航目標或移動 AMR 底盤。
+
+#### 3.13.7 Status
+- **Implementation Status**: `Implemented`
+- **Evidence Status**: `Software & Stationary Verified` (Stage A 自動化合約測試與靜態 TF Lookup 通過)
+- **Checklist Status**: `[~] In Progress` (Stage A 驗證通過，待進入後續 closure 評估)。
+- **Next Dependency**: Checklist #19 Closure Reassessment。
