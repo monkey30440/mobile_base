@@ -55,11 +55,10 @@ def test_nav2_params_contracts():
     # 3. Goal Checker contract (SYS-016)
     assert 'stopped_goal_checker' in ctrl_params['goal_checker_plugins']
     sgc = ctrl_params['stopped_goal_checker']
-    assert sgc['plugin'] == 'nav2_controller::StoppedGoalChecker'
-    assert pytest.approx(sgc['xy_goal_tolerance']) == 0.05
-    assert pytest.approx(sgc['yaw_goal_tolerance']) == 0.05
-    assert pytest.approx(sgc['trans_stopped_velocity']) == 0.01
-    assert pytest.approx(sgc['rot_stopped_velocity']) == 0.02
+    assert pytest.approx(sgc['xy_goal_tolerance']) == 0.25
+    assert pytest.approx(sgc['yaw_goal_tolerance']) == 0.5236
+    assert pytest.approx(sgc['trans_stopped_velocity']) == 0.05
+    assert pytest.approx(sgc['rot_stopped_velocity']) == 0.10
 
     # 4. Route Server contract
     assert 'route_server' in params

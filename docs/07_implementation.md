@@ -2426,3 +2426,54 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (Stage A 自動化合約測試與 S2~S6 歷史實機 evidence 完整覆蓋)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #20 原始 DoD 全部要求：兩個 raw LiDAR、selected scan、IMU 與 RF2O 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06，未引入新 gate)。
 - **Next Dependency**: Checklist #21 (`Motion-command and physical-stop closure`)。
+
+---
+
+### 3.15 Motion-command and physical-stop closure (Checklist #21)
+
+#### 3.15.1 Requirement and Subsystem Trace
+- **需求追溯**: `SYS-022` (S7 差速底盤運動控制), `SYS-026` (S7 底盤故障安全處理), `SYS-027` (S7 運動命令逾時保護), `SYS-028` (S7 運動限幅與減速度約束), `SYS-029` (S7 輪端編碼器真實回授 `GAP-05`), `SYS-030` (S7 安全啟停與停妥釋放使能 `GAP-06`), `SYS-034` (S7 手動移動控制與 Teleop 整合), `SYS-011`/`SYS-018`/`SYS-020` (S6 導航、MPPI 控制器與 Collision Monitor 安全閘), `05_architecture.md` §3, §7.2, §7.3, `06_subsystem.md` §3.3, §3.6, §4.2, §4.4。
+- **完成條件 (DoD)**: S6 command / Mapping teleop command→S7 safety gate→diff drive→M1，以及 Task Cancel、Manual Stop、Command Timeout、Hardware Safe Stop 分層停止均量測到實體停止結果。
+
+#### 3.15.2 Command Chain & Safety Architecture
+1. **自主導航命令鏈 (Navigation Command Chain)**:
+   - `nav2_controller_server` (MPPI 30 Hz) 發布 `/cmd_vel_nav` (`geometry_msgs/msg/TwistStamped`)；
+   - `nav2_collision_monitor` 訂閱 `/cmd_vel_nav` 與 `/scan`，依安全多邊形約束速度後輸出至 `/diff_drive_controller/cmd_vel`；
+   - `diff_drive_controller` (ros2_control, 30 Hz, `cmd_vel_timeout = 0.5 s`, `SpeedLimiter` $v_x \le 1.0\,\text{m/s}, \omega_z \le 1.5\,\text{rad/s}$, $a_{\text{decel}} = -1.0\,\text{m/s}^2$) 輸出輪端速度指令；
+   - `M1Hardware` (`response_timeout_ms = 50`) 透過 `M1Driver` (Modbus RTU FC17 `/dev/ttyUSB0`) 驅動 M1 雙軸馬達與實體車輪。
+2. **手動鍵盤命令鏈 (Mapping / Teleop Command Chain)**:
+   - `teleop_twist_keyboard` (`stamped:=true`) 重新映射直通 `/diff_drive_controller/cmd_vel`；
+   - 由 S7 `diff_drive_controller` 之 `SpeedLimiter` 與 `cmd_vel_timeout` 提供終端安全限幅與煞停防護。
+
+#### 3.15.3 Implementation & Test Artifacts
+- **自動化運動命令與停止鏈路契約測試**: `src/mobile_base_bringup/test/test_motion_command_stop_chain.py`
+  - `test_navigation_motion_command_chain_contract`: 驗證 `controller_server` 輸出重映射至 `/cmd_vel_nav`，`collision_monitor` 訂閱 `/cmd_vel_nav` 並輸出至 `/diff_drive_controller/cmd_vel`，啟用 `stamped` 訊息與 `/scan` 綁定。
+  - `test_teleop_motion_command_chain_contract`: 驗證 `diff_drive_controller` 設定支援 `use_stamped_vel: true`。
+  - `test_diff_drive_controller_safety_and_limits`: 驗證 30 Hz 執行頻率、`cmd_vel_timeout = 0.5 s`、`enable_odom_tf = false`、速度限幅 ($v_x \le 1.0, \omega_z \le 1.5$) 與減速度限制 ($a_{\text{decel}} = -1.0\,\text{m/s}^2, \alpha_{\text{decel}} = -2.0\,\text{rad/s}^2$)。
+  - `test_m1_hardware_safe_stop_and_timeout_contract`: 驗證 URDF Xacro 必填 `response_timeout_ms` 參數與 C++ 原始碼中 `on_deactivate` 停轉確認後切斷使能（GAP-06 / SYS-030）安全順序。
+
+#### 3.15.4 Four Stop Layers & Evidence Semantics
+1. **Task Cancel (任務取消)**:
+   - **軟體合約 (Software Cancel Contract)**: Nav2 Action Cancel $\rightarrow$ BT Navigator $\rightarrow$ Controller Server 速度歸零 [VERIFIED in IMP-018 Stage B]。
+   - **實車行進中取消實測 (Physical In-Motion Cancel)**: `NOT EXECUTED`（歷史無獨立在運動中發送 cancel 攔截之專屬實測紀錄）。
+   - **實車自主導航到站停止實證 (Physical Arrival Stop)**: IMP-018 Stage L1 實車自主導航由 StoppedGoalChecker 檢驗輪端與車體速度完整歸零停穩 [VERIFIED in IMP-018 Stage L1]。
+2. **Manual Stop (手動主動煞停)**:
+   - **實體量測數據**: 操作員按鍵 `'k'` 發布零速 `TwistStamped`，實測**煞停時間 $0.5237\,\text{s}$**、**煞停距離 $0.0149\,\text{m}$ ($1.49\,\text{cm}$)** [VERIFIED in IMP-015 Stage G1~G3]。
+3. **Command Timeout (命令逾時受控煞停)**:
+   - **實體量測數據**: 停止發送命令後，實測**逾時判定時間 $0.5901\,\text{s}$**（符合 `cmd_vel_timeout = 0.5 s`）、**逾時後受控煞停時間 $0.3662\,\text{s}$**（末筆命令起算總時間 $0.9563\,\text{s}$）、**逾時後受控煞停距離 $0.0009\,\text{m}$ ($0.09\,\text{cm}$)**（末筆命令起算總距離 $0.0583\,\text{m}$）[VERIFIED in IMP-015 Stage G4]。
+4. **Hardware Safe Stop (硬體安全停轉與使能釋放)**:
+   - **實體量測數據**: 停機／Deactivate 時先下發停止指令並輪詢速度回授直至完全停轉，再釋放馬達使能（GAP-06 / SYS-030），防止未停穩自由滑行，實測 30 Hz 0 Overrun，Alarm=0 [VERIFIED in IMP-007 / IMP-008 / IMP-015]。
+
+#### 3.15.5 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-24T11:39:59+08:00 | S6/S7 Motion Command & Stop Layer Consolidated Test Suite | `colcon test --packages-select mobile_base_bringup mobile_base_control mobile_base_navigation` | PASS (Software-only) | 1. `mobile_base_bringup` 18 項測試通過（含 4 項運動命令與停止鏈路合約測試）；2. `mobile_base_control` 225 項測試全部通過；3. `mobile_base_navigation` 63 項測試全部通過；4. 跨 3 套件共 306 項測試 0 failures。 | 容器即時測試日誌 |
+
+#### 3.15.6 Known Limits / Outstanding Obligations
+- **AMR 運動邊界 (Hardware Motion NOT EXECUTED)**: 本 Stage 為純軟體合約與配置驗證，嚴格未發送導航目標、未發布非零速度命令、未移動 AMR 底盤。
+
+#### 3.15.7 Status
+- **Implementation Status**: `Implemented`
+- **Evidence Status**: `Software Verified` (Stage A 自動化運動命令與停止鏈路契約測試通過)
+- **Checklist Status**: `[~] In Progress` (Stage A 驗證通過，待進入後續 closure 評估)。
+- **Next Dependency**: Checklist #21 Closure Reassessment。
