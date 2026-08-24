@@ -2484,3 +2484,55 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (Stage A 自動化合約測試與 S6~S7 歷史實機 evidence 完整覆蓋)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #21 原始 DoD 全部要求：S6 command / Mapping teleop command→S7 safety gate→diff drive→M1，以及 Task Cancel、Manual Stop、Command Timeout、Hardware Safe Stop 分層停止均量測到實體停止結果，未引入新 gate)。
 - **Next Dependency**: Checklist #22 (`Feedback and odometry closure`)。
+
+---
+
+### 3.16 Feedback and odometry closure (Checklist #22)
+
+#### 3.16.1 Requirement and Subsystem Trace
+- **需求追溯**: `SYS-005` (系統里程融合), `SYS-029` (底盤狀態回授與禁止假回授 `GAP-05`), `05_architecture.md` §7.1 (TF 唯一權威), `06_subsystem.md` §3.3 (S7 Base Control), §3.4 (S3 State Estimation), §4.1 (全域 TF 樹矩陣)。
+- **完成條件 (DoD)**: M1 encoder→S7 validity→S3 EKF→S4/S5/S6 的資料鏈、延遲、掉線、禁止假回授與恢復行為完整驗證。
+
+#### 3.16.2 Feedback and Odometry Architecture
+系統明確區分並維護三級回授與里程計架構：
+1. **馬達實體回授 (Wheel / Motor Feedback)**:
+   - M1 雙軸馬達透過 Modbus RTU FC17 讀取 steps 與 RPM（延遲 $\approx 3.8\,\text{ms}$）；
+   - `M1Hardware::read()` 進行實體有效性校驗（GAP-05 / SYS-029），禁止使用 command 假冒回授，透過 16-bit wrap-around 解算連續弧度與角速度；
+   - 導出 `driving_wheel_joint_L` 與 `driving_wheel_joint_R` 之 `position` 與 `velocity` state interfaces；`joint_state_broadcaster` 以 30 Hz 發布 `/joint_states`。
+2. **輪端里程計 (Wheel Odometry)**:
+   - S7 `diff_drive_controller` (30 Hz) 依權威物理幾何（輪徑 $0.080\,\text{m}$、輪距 $0.5545\,\text{m}$）計算正向運動學，輸出 `/diff_drive_controller/odom` (`odom0`)；
+   - `enable_odom_tf: false`（嚴格禁止 S7 廣播 `odom -> base_footprint` TF）。
+3. **多源融合里程計 (Fused Odometry)**:
+   - S3 `robot_localization` EKF (50 Hz) 融合 `odom0` (輪端 $v_x, \omega_z$)、`odom1` (/rf2o/odom $v_x, v_y, \omega_z$)、`imu0` (/imu/data_raw $\omega_z, a_x$)；
+   - 輸出 `/odometry/filtered`，並作為全系統 `odom -> base_footprint` TF 的**唯一發布權威**；
+   - S4 `slam_toolbox`、S5 `nav2_amcl`、S6 `controller_server` 與 `collision_monitor` 統一消費該權威位姿與速度。
+
+#### 3.16.3 Implementation & Test Artifacts
+- **自動化回授與里程計鏈路契約測試**: `src/mobile_base_bringup/test/test_feedback_odometry_chain.py`
+  - `test_m1_physical_feedback_contract`: 驗證 URDF Xacro 存在 position/velocity state interfaces，驗證 C++ 原始碼 read 實體解算、有效性標記與錯誤回傳路徑（GAP-05 / SYS-029）。
+  - `test_wheel_odometry_contract`: 驗證 `diff_drive_controller` 關節綁定、輪徑 $0.080\,\text{m}$、輪距 $0.5545\,\text{m}$、`enable_odom_tf = false` 與 `position_feedback = true`。
+  - `test_fused_odometry_ekf_contract`: 驗證 EKF 50 Hz 頻率、`sensor_timeout = 0.1 s`、`publish_tf = true`、`odom0`/`odom1`/`imu0` 綁定與 Frame 設定。
+  - `test_tf_authority_odometry_prohibitions`: 驗證 `diff_drive_controller` 與 `rf2o` 均未發布 `odom -> base_footprint` TF，權威唯一性完整。
+  - `test_feedback_failure_and_stale_data_contract`: 驗證 EKF 100 ms 感測器逾時隔離與 S7 500 ms 命令逾時保護合約。
+
+#### 3.16.4 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-24T12:05:44+08:00 | S7/S3/S2 Feedback & Odometry Consolidated Test Suite | `colcon test --packages-select mobile_base_bringup mobile_base_control mobile_base_state_estimation` | PASS (Software-only) | 1. `mobile_base_bringup` 19 項測試通過（含 5 項回授與里程計鏈路合約測試）；2. `mobile_base_control` 225 項測試全部通過；3. `mobile_base_state_estimation` 13 項測試全部通過；4. 跨 3 套件共 257 項測試 0 failures。 | 容器即時測試日誌 |
+
+#### 3.16.5 Evidence Provenance & Historical Reuse
+- **New Stage B Consolidated Evidence**:
+  - `src/mobile_base_bringup/test/test_feedback_odometry_chain.py`: 5 項自動化合約測試通過。
+  - 跨 3 套件共 257 項測試全部通過（0 failures）。
+- **Reused Historical Runtime Evidence**:
+  - **IMP-007 / IMP-008**: M1 Modbus FC17 雙軸讀取延遲 $\approx 3.8\,\text{ms}$、真實編碼器回授、CRC 錯誤隔離與停轉使能釋放實測。
+  - **IMP-012 / IMP-013**: RF2O 與 EKF 50 Hz 多源實機融合、`sensor_timeout = 0.1 s` 掉線隔離與恢復實測。
+  - **IMP-015**: 實車著地移動輪端里程計累積量測。
+  - **IMP-018 Stage L1**: 自主導航實車運行 MPPI 消費 `/odometry/filtered` 與 StoppedGoalChecker 速度停穩檢驗。
+- **執行邊界確認**: 本 Stage 為純軟體合約與配置驗證，嚴格未發送導航目標、未發布非零速度命令、未移動 AMR 底盤。
+
+#### 3.16.6 Status
+- **Implementation Status**: `Implemented`
+- **Evidence Status**: `Software Verified` (Stage B 自動化回授與里程計契約測試通過)
+- **Checklist Status**: `[~] In Progress` (Stage B 驗證通過，待進入後續 closure 評估)。
+- **Next Dependency**: Checklist #22 Closure Reassessment。
