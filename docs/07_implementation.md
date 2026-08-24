@@ -2213,8 +2213,8 @@ src/mobile_base_navigation/
 #### 3.12.2 Implementation Artifacts
 - **Nav2 參數設定檔**: `src/mobile_base_navigation/config/nav2_params.yaml`
   - Planner: `nav2_navfn_planner::NavfnPlanner`（配置 `use_astar: true` 搜尋模式）。
-  - Controller: `nav2_mppi_controller::MPPIController`（DiffDrive 運動模型、橫向速度鎖定為零、配置完整 Critic 集合）。
-  - Goal Checker: `nav2_controller::StoppedGoalChecker`（配置操作員授權之 MVP bring-up 容差：位置容差 $0.15\,\text{m}$、朝向容差 $0.25\,\text{rad}$、停轉線速度 $<0.05\,\text{m/s}$、角速度 $<0.10\,\text{rad/s}$）。
+  - Controller: `nav2_mppi_controller::MPPIController`（DiffDrive 運動模型、橫向速度鎖定為零、配置完整 Critic 集合；MVP functional baseline $v_{x,\max} = 0.50\,\text{m/s}$）。
+  - Goal Checker: `nav2_controller::StoppedGoalChecker`（Post-closure MVP functional baseline：位置容差 $0.25\,\text{m}$、朝向容差 $0.5236\,\text{rad}$、停轉線速度 $<0.05\,\text{m/s}$、角速度 $<0.10\,\text{rad/s}$）。
   - Costmaps: 訂閱 `/scan` 進行光線投射與膨脹層計算，足跡配置為 $[0.35, 0.30] \times [-0.35, -0.30]$。
   - Route Server: `nav2_route::RouteServer` 配置 `GeoJsonGraphFileLoader` 與距離/代價評分器。
   - Collision Monitor: 獨立 `nav2_collision_monitor::CollisionMonitor`，作為速度鏈唯一終端 Publisher，輸出重定向至 `/diff_drive_controller/cmd_vel`。
@@ -2259,10 +2259,15 @@ src/mobile_base_navigation/
 | 2026-08-21T13:35:10+08:00 | S6 Navigation Stage C.1 Minimal Real Route Calibration & Stationary ComputeRoute | Nav2 Launch + `ComputeRoute 0->1` | PASS (Stationary-only) | 1. 簡化路網為 2 頂點 1 拓撲邊 (0.2, -1.1) -> (0.2, -0.8)，沿線 20 個抽樣點 costmap cost 全為 0；2. `nav2_route::GeoJsonGraphFileLoader` 成功載入 2 nodes / 1 edge；3. `ComputeRoute` 成功完成規劃（`status: SUCCEEDED`, `error_code: 0`, 規劃耗時 122 微秒，產出 7 個 dense poses 之 Path 與拓撲 Route）；4. 前後全程監控 `cmd_vel` 輸出為零，底盤完全靜止。 | 容器即時測試日誌 |
 | 2026-08-21T13:43:00+08:00 | S6 Navigation Stage D Collision Monitor Integration & Stationary Velocity Chain | Nav2 Launch + `ComputeRoute 0->1` + Velocity Chain Verification | PASS (Stationary-only) | 1. 獨立 `nav2_collision_monitor` 節點整合完成；2. 速度鏈收斂驗證：`controller_server` 發布至 `/cmd_vel_nav`，`collision_monitor` 訂閱 `/cmd_vel_nav` 並作為唯一 Publisher 輸出至 `/diff_drive_controller/cmd_vel`（Pub count = 1, Sub count = 1）；3. `lifecycle_manager_navigation` 成功管理 5 個節點（全部 Active [3]）；4. `/scan` 來源健康（25.13 Hz）；5. 靜止期間 `diff_drive` 速度命令完全為零；6. `ComputeRoute` 回歸驗證成功（SUCCEEDED, error_code: 0, 119 微秒）。 | 容器即時測試日誌 |
 | 2026-08-21T17:10:00+08:00 | S6 Navigation Stage E Route Graph Post-Edit Revalidation | `GeoJsonGraphFileLoader` + Costmap Sampling + `ComputeRoute 0->1` | PASS (Stationary-only) | 1. 操作者透過 RViz / Route Tool 編輯之 `maps/test_site/route_graph.geojson` 驗證通過；2. 全域 Costmap 取樣驗證：Node 0 (0.20, -1.10) cost = 0，Node 1 (0.20, -0.80) cost = 0，沿線 20 個抽樣點 cost 全為 0；3. 靜態 `ComputeRoute` 規劃成功；4. Collision Monitor 與速度鏈全生命週期 Active，全域完全靜止。 | 容器即時測試日誌 |
-| 2026-08-21T17:58:03+08:00 | S6 Navigation Stage L1 Minimal Controlled Real-Hardware Route Navigation | Nav2 Launch + `NavigateToPose` Goal to Node 1 (0.60, -1.25) | PASS (Hardware Verified) | 1. 前置檢查：7 個 Lifecycle 節點全為 Active [3]，`/scan` 與 TF 鏈健康；2. 安全閘門：Start Gate 通過（距離 Node 0 為 $0.0689\,\text{m} \le 0.15\,\text{m}$，航向偏差 $0.55^\circ \le 15.0^\circ$），Speed Gate 通過（$v_{x,\max} = 0.15\,\text{m/s}$）；3. 路網規劃：`ComputeRoute` 成功（2 nodes, 1 edge）；4. 實車運動執行：MPPI `FollowPath` 實際驅動雙輪平穩前進約 $13\,\text{秒}$，實測前進位移約 $0.27\,\text{m}$；5. 速度限制：最高觀測命令線速度 $0.0970\,\text{m/s} \le 0.15\,\text{m/s}$，最高角速度 $0.1393\,\text{rad/s}$；6. 到站與停穩：`StoppedGoalChecker` 判定到站，實測終點位置誤差 $0.0938\,\text{m} \le 0.15\,\text{m}$（MVP 容差通過），底盤實體線速度 $0.0000\,\text{m/s}$、角速度 $0.0000\,\text{rad/s}$ 完全停穩；7. 原生結果：`NavigateToPose` 回傳 `SUCCEEDED` (status 4)；8. 安全與穩定：無定位遺失、無 TF 中斷、無雷達逾時、無異常行為；9. 碰撞監視器：全生命週期 Active，`/scan` 健康，作為唯一終端速度發布者（無障礙淨空路徑上未需介入減速/煞停）。 | 容器即時測試日誌 |
+| 2026-08-21T17:58:03+08:00 | S6 Navigation Stage L1 Minimal Controlled Real-Hardware Route Navigation | Nav2 Launch + `NavigateToPose` Goal to Node 1 (0.60, -1.25) | PASS (Hardware Verified) | 1. 前置檢查：7 個 Lifecycle 節點全為 Active [3]，`/scan` 與 TF 鏈健康；2. 安全閘門：Start Gate 通過（距離 Node 0 為 $0.0689\,\text{m} \le 0.15\,\text{m}$，航向偏差 $0.55^\circ \le 15.0^\circ$），Speed Gate 通過（當時測試條件 $v_{x,\max} = 0.15\,\text{m/s}$）；3. 路網規劃：`ComputeRoute` 成功（2 nodes, 1 edge）；4. 實車運動執行：MPPI `FollowPath` 實際驅動雙輪平穩前進約 $13\,\text{秒}$，實測前進位移約 $0.27\,\text{m}$；5. 速度限制：最高觀測命令線速度 $0.0970\,\text{m/s} \le 0.15\,\text{m/s}$，最高角速度 $0.1393\,\text{rad/s}$；6. 到站與停穩：`StoppedGoalChecker` 判定到站，實測終點位置誤差 $0.0938\,\text{m} \le 0.15\,\text{m}$（當時測試容差通過），底盤實體線速度 $0.0000\,\text{m/s}$、角速度 $0.0000\,\text{rad/s}$ 完全停穩；7. 原生結果：`NavigateToPose` 回傳 `SUCCEEDED` (status 4)；8. 安全與穩定：無定位遺失、無 TF 中斷、無雷達逾時、無異常行為；9. 碰撞監視器：全生命週期 Active，`/scan` 健康，作為唯一終端速度發布者（無障礙淨空路徑上未需介入減速/煞停）。 | 容器即時測試日誌 |
 
 #### 3.12.5 Known Limits / Accepted MVP Limitations
-- **MVP Bring-up 參數調校與量產精度待精修 (MVP Bring-up Tuning Baseline)**：現有容差（位置容差 $0.15\,\text{m}$、朝向容差 $0.25\,\text{rad}$、停轉線速度 $<0.05\,\text{m/s}$、最大速度 $0.15\,\text{m/s}$）為操作員明確授權之 MVP 功能驗證基線。本項目**不明確宣稱已證明最終量產 $5\,\text{cm}$ 到站精度或 $0.05\,\text{rad}$ 朝向精度**（保留於後續 Checklist #25 端到端驗收階段進行精細調校）。
+- **Post-Closure MVP 功能基線對齊 (Post-Closure MVP Functional Baseline Alignment)**：
+  - **Current MVP Baseline**: `xy_goal_tolerance = 0.25 m`、`yaw_goal_tolerance = 0.5236 rad` ($30^\circ$)、`vx_max = 0.50 m/s`。
+  - **說明**: 這些參數為 IMP-018 closure 後正式接受的 current MVP functional baseline，目的在於優先推進後續跨子系統閉環（IMP-019 ～ IMP-023）與端到端使用案例（IMP-024, IMP-025），而非在此階段提前進行細部導航 tuning。
+  - **歷史數據獨立性 (Historical Stage L1 Evidence Preserved)**: Stage L1 實車物理驗證證據（2026-08-21T17:58:03+08:00）完整保留當時實際運行的測試條件（$v_{x,\max} = 0.15\,\text{m/s}$, 位置容差 $0.15\,\text{m}$, 角度容差 $0.25\,\text{rad}$, 實測誤差 $0.0938\,\text{m}$），不改寫歷史實驗數據。Current working baseline 與 historical Stage L1 evidence 明確區分。
+  - **遞延調校範圍 (Deferred Tuning)**: 最終量產到站精度（$5\,\text{cm} / 0.05\,\text{rad}$）、速度曲線優化、MPPI Critic 權重深度 tuning、以及 Collision Monitor 多邊形動態調校等，明確遞延至後續適當 checklist（如 Checklist #25 端到端驗收）處理。
+  - **Closure 狀態維持**: 此 post-closure 參數基線同步不重新開啟 IMP-018，Checklist #18 維持 `[x] Completed`。
 - **碰撞監視器實體干預邊界 (Physical Collision Monitor Intervention NOT CLAIMED)**：Stage L1 在無障礙之純淨路徑上完成，未對 AMR 施加實體障礙物阻擋；碰撞監視器在 Stage L1 維持 Active 且未發生干預。路網與代價地圖之危險路徑阻斷由 Stage C 負向測試提供證據。
 - **實體行進中取消邊界 (Physical In-motion Cancellation NOT CLAIMED)**：Nav2 原生 Action 取消介面與 BT 取消機制已在軟體與客戶端架構中驗證，Stage L1 實車測試完成正常抵達；未進行額外實體行進中中斷取消測試。
 - **站點清單邊界 (Production Station Catalog NOT CREATED)**：`maps/test_site/route_graph.geojson` 僅為拓撲路網圖資，不包含業務站點定義。真實站點清單依現場業務需求配置，不偽造假站點資料。
@@ -2272,4 +2277,5 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Hardware Verified` (Stage A~E 軟體／靜態測試與 Stage L1 實車自主受控導航通過)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #18 原始 DoD 全部要求，無殘留未滿足條件，未引入新 gate)。
 - **Next Dependency**: Checklist #19 (`TF and frame authority closure`)。
+
 
