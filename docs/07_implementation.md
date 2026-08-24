@@ -2536,3 +2536,56 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (Stage B 自動化合約測試與 S2/S3/S7 歷史實機 evidence 完整覆蓋)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #22 原始 DoD 全部要求：M1 encoder→S7 validity→S3 EKF→S4/S5/S6 的資料鏈、延遲、掉線、禁止假回授與恢復行為完整驗證，未引入新 gate)。
 - **Next Dependency**: Checklist #23 (`Operational-mode and lifecycle closure`)。
+
+---
+
+### 3.17 Operational-mode and lifecycle closure (Checklist #23)
+
+#### 3.17.1 Requirement and Subsystem Trace
+- **需求追溯**: `SYS-006` (SLAM / 定位模式互斥), `SYS-007` (地圖生命週期管理), `SYS-030` (底盤安全啟停與停妥釋放使能 `GAP-06`), `05_architecture.md` §7.1 (TF 唯一權威), §7.2 (速度命令鏈與命令源仲裁邊界), §9 (系統運營與啟停順序), `06_subsystem.md` §4.1 (全域 TF 樹矩陣), §4.4 (建圖模式啟動與單一生產者契約)。
+- **完成條件 (Exact Original DoD)**: `Mapping/Navigation mode 的啟動順序、lifecycle transitions、互斥 map -> odom authority、停機與部分啟動失敗均可重現。`
+
+#### 3.17.2 Operational Modes & Lifecycle Architecture
+1. **Mapping Mode (建圖模式)**:
+   - **啟動編排**: `mobile_base_bringup/launch/mapping.launch.py` 依序啟動底盤控制 (`base_control`)、感測器 (`sick_dual_lidar`, `dual_laser_merger`, `tdk_imu`)、狀態估測 (`rf2o`, `ekf`) 與建圖 (`mapping`)。
+   - **模式隔離**: S5 定位 (`map_server`, `amcl`) 與 S6 導航模組嚴格處於未啟動狀態；`async_slam_toolbox_node` 透過 Lifecycle Event 轉換為 `ACTIVE` (state 3) 並作為 `map -> odom` TF 的唯一發布者；外部 `teleop_twist_keyboard` 為全系統唯一運動命令生產者。
+2. **Navigation Mode (導航模式)**:
+   - **啟動編排**: `mobile_base_localization/launch/localization.launch.py` 與 `mobile_base_navigation/launch/navigation.launch.py`。
+   - **模式隔離**: S4 建圖模組嚴格處於未啟動狀態；`lifecycle_manager_localization`（管理 `map_server`, `amcl`）與 `lifecycle_manager_navigation`（管理 `controller_server`, `planner_server`, `route_server`, `bt_navigator`, `collision_monitor`）統一控制 7 個 Lifecycle 節點轉換為 `ACTIVE [3]`；`nav2_amcl` 為 `map -> odom` TF 的唯一發布者；S6 MPPI 為全系統唯一運動命令生產者。
+3. **ros2_control / Hardware Lifecycle**:
+   - `M1Hardware` 依循 ros2_control Lifecycle 流轉（`on_init` $\rightarrow$ `on_configure` $\rightarrow$ `on_activate` $\rightarrow$ `read/write` $\rightarrow$ `on_deactivate`）；Deactivate 或關機時先下發停止指令並確認 0 RPM 後釋放馬達使能（GAP-06 / SYS-030），防止未停穩自由滑行。
+
+#### 3.17.3 Verification Evidence & Six Dimensions Coverage
+1. **Mapping Mode 啟動順序可重現**:
+   - 經 `test_mapping_bringup.py` 與 `test_mapping_launch_syntax.py` 自動化測試驗證；歷史實機於 `IMP-014` / `IMP-015` 成功啟動建圖。
+2. **Navigation Mode 啟動順序可重現**:
+   - 經 `test_localization_launch.py` 與 `test_navigation_launch.py` 自動化測試驗證；歷史實機於 `IMP-016` / `IMP-018` 成功啟動定位與導航。
+3. **Lifecycle Transitions 可重現**:
+   - `lifecycle_manager_localization` 與 `lifecycle_manager_navigation` 成功管理 7 節點轉換至 `ACTIVE [3]`；`async_slam_toolbox_node` 成功經事件流轉至 `ACTIVE`。
+4. **互斥 `map -> odom` Authority 可重現**:
+   - 經 `test_tf_authority.py` 自動化測試斷言與 `IMP-019` 結案驗證，兩模式 `map -> odom` 廣播者嚴格互斥，無重複發布或 TF 環路。
+5. **停機可重現**:
+   - 經 `test_m1_hardware.cpp` 單元測試與 `IMP-007` / `IMP-008` / `IMP-015` / `IMP-021` 實機 Deactivate 停轉確認後切斷使能驗證。
+6. **部分啟動失敗可重現 (Partial Startup Failure)**:
+   - 當缺少必要資源（如未提供地圖 YAML 或路網檔案損毀）或硬體未連線時，Lifecycle Manager 報錯並拒絕將 stack 轉換至 `ACTIVE` 狀態，終止啟動流程且不產生虛假 TF 或命令（經 `test_localization_launch.py`, `test_target_admission.cpp`, `IMP-007`, `IMP-016` 驗證）。
+
+#### 3.17.4 Evidence Provenance & Historical Reuse
+- **Current Automated/Config/Source Evidence**:
+  - `mobile_base_bringup/test/test_tf_authority.py` (TF 權威與模式互斥測試 PASS)
+  - `mobile_base_bringup/test/test_mapping_bringup.py` (建圖模式編排測試 PASS)
+  - `mobile_base_localization/test/test_localization_launch.py` (定位 Lifecycle 測試 PASS)
+  - `mobile_base_navigation/test/test_navigation_launch.py` (導航 Lifecycle 測試 PASS)
+  - `mobile_base_control/test/test_m1_hardware.cpp` (ros2_control Lifecycle 與安全停轉測試 PASS)
+- **Reused Historical Runtime Evidence**:
+  - `IMP-007 / IMP-008`: `M1Hardware` 啟動、使能、安全停轉與停機使能釋放實測。
+  - `IMP-014 / IMP-015`: 建圖模式實機啟動、`slam_toolbox` Active 與退出。
+  - `IMP-016`: 定位模式實機啟動、`lifecycle_manager_localization` 達到 `ACTIVE [3]`。
+  - `IMP-018 Stage L1`: 導航模式實車自主導航、7 個 Lifecycle 節點達到 `ACTIVE [3]` 與到站任務結束。
+  - `IMP-019`: 全域 TF 樹唯一性與互斥權威閉環。
+- **執行邊界確認**: 本次 closure 嚴格未執行硬體馬達輸出，AMR 維持完全靜止；無 fresh hardware runtime。
+
+#### 3.17.5 Status
+- **Implementation Status**: `Complete`
+- **Evidence Status**: `Complete` (現有自動化測試與 S4/S5/S6/S7 歷史實機 evidence 完整覆蓋)
+- **Checklist Status**: `[x] Completed` (滿足 Checklist #23 原始 DoD 全部要求：Mapping/Navigation mode 的啟動順序、lifecycle transitions、互斥 map -> odom authority、停機與部分啟動失敗均可重現，未引入新 gate)。
+- **Next Dependency**: Section E Use-case Verification and Feature Freeze (Checklist #24 `UC-001 Mapping end-to-end acceptance`)。

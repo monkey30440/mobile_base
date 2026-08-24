@@ -15,11 +15,11 @@
 ## Progress
 
 - 總項目：28
-- 已完成：22
+- 已完成：23
 - 進行中：0
-- 待實作：6
+- 待實作：5
 - 上游阻塞：0
-- 目前進度：22 / 28 (79%)；第 22 項 `Feedback and odometry closure` 已完成 `[x]`；第 23 項待啟動。
+- 目前進度：23 / 28 (82%)；第 23 項 `Operational-mode and lifecycle closure` 已完成 `[x]`；第 24 項待啟動。
 
 ---
 
@@ -90,7 +90,7 @@
   - 完成條件：S6 command / Mapping teleop command→S7 safety gate→diff drive→M1，以及 Task Cancel、Manual Stop、Command Timeout、Hardware Safe Stop 分層停止均量測到實體停止結果。
 - [x] 22. Feedback and odometry closure
   - 完成條件：M1 encoder→S7 validity→S3 EKF→S4/S5/S6 的資料鏈、延遲、掉線、禁止假回授與恢復行為完整驗證。
-- [ ] 23. Operational-mode and lifecycle closure
+- [x] 23. Operational-mode and lifecycle closure
   - 完成條件：Mapping/Navigation mode 的啟動順序、lifecycle transitions、互斥 `map -> odom` authority、停機與部分啟動失敗均可重現。
 
 ## E. Use-case Verification and Feature Freeze
