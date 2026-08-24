@@ -2342,3 +2342,67 @@ src/mobile_base_navigation/
 - **Evidence Status**: `Complete` (Stage A 自動化合約測試、靜態 TF Lookup 與 S1~S6 歷史實機 evidence 完整覆蓋)
 - **Checklist Status**: `[x] Completed` (滿足 Checklist #19 原始 DoD 全部要求：S1 static TF、S3 odom -> base_footprint、S4/S5 互斥 map -> odom 無斷鏈、無重複 owner、無 frame mismatch，未引入新 gate)。
 - **Next Dependency**: Checklist #20 (`Perception data-flow closure`)。
+
+---
+
+### 3.14 Perception data-flow closure (Checklist #20)
+
+#### 3.14.1 Requirement and Subsystem Trace
+- **需求追溯**: `SYS-003` (S2 雙光達資料擷取與 360° 視野融合), `SYS-004` (S2 6 軸 IMU 慣性數據擷取), `SYS-005` (S3 多源里程與慣性數據 EKF 狀態估測), `05_architecture.md` §4, §7.4 (感知與里程資料流邊界), `06_subsystem.md` §3.2 (S2 Perception), §3.4 (S3 State Estimation), §4.3 (Perception Data Flow)。
+- **完成條件 (DoD)**: 兩個 raw LiDAR、selected scan、IMU 與 RF2O 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06。
+
+#### 3.14.2 Perception Data-Flow Architecture & Interface Contracts
+1. **前左原始光達 (Front-Left LiDAR)**:
+   - 生產者: `sick_scan_xd` (`front_lidar`)
+   - 主題: `/scan_front` (`sensor_msgs/msg/LaserScan`, `frame_id: base_lidar_link_FL`, QoS SensorData/Reliable, 標稱 $25.0\,\text{Hz}$ / 實測 $25.13\,\text{Hz}$)
+   - 消費者: `dual_laser_merger_node` (`laser_1_topic`)
+2. **後右原始光達 (Rear-Right LiDAR)**:
+   - 生產者: `sick_scan_xd` (`rear_lidar`)
+   - 主題: `/scan_rear` (`sensor_msgs/msg/LaserScan`, `frame_id: base_lidar_link_BR`, QoS SensorData/Reliable, 標稱 $25.0\,\text{Hz}$ / 實測 $25.13\,\text{Hz}$)
+   - 消費者: `dual_laser_merger_node` (`laser_2_topic`)
+3. **360° 融合光達 (Authoritative Selected / Merged Scan)**:
+   - 生產者: `dual_laser_merger_node`
+   - 主題: `/scan` (`sensor_msgs/msg/LaserScan`, `frame_id: base_link`, QoS SensorData/SystemDefault, 標稱 $25.0\,\text{Hz}$ / 實測 $25.13\,\text{Hz}$)
+   - 消費者: S3 `rf2o_laser_odometry`、S4 `slam_toolbox` (Mapping Mode)、S5 `nav2_amcl` (Navigation Mode)、S6 Nav2 Local/Global Costmap、S6 `nav2_collision_monitor`。
+4. **TDK IMU 慣性感測器**:
+   - 生產者: `tdk_ros2_imu` (`imu_driver_node`)
+   - 主題: `/imu/data_raw` (`sensor_msgs/msg/Imu`, `frame_id: base_imu_link`, QoS SensorData, 標稱 $100.0\,\text{Hz}$ / 實測 $100.0\,\text{Hz}$)
+   - 消費者: S3 `ekf_filter_node` (`imu0`: 融合 $\omega_z, a_x$；嚴格排除 orientation 融合)。
+5. **RF2O 平面雷達里程計**:
+   - 生產者: `rf2o_laser_odometry` (`rf2o_laser_odometry_node`)
+   - 輸入: `/scan`
+   - 輸出主題: `/rf2o/odom` (`nav_msgs/msg/Odometry`, `header.frame_id: odom`, `child_frame_id: base_footprint`, `publish_tf: False`, 標稱 $20.0\,\text{Hz}$ / 實測 $20.0\,\text{Hz}$)
+   - 消費者: S3 `ekf_filter_node` (`odom1`: 融合 $v_x, v_y, \omega_z$)。
+
+#### 3.14.3 Implementation & Test Artifacts
+- **自動化感知資料流契約測試**: `src/mobile_base_bringup/test/test_perception_dataflow.py`
+  - `test_front_lidar_data_contract`: 驗證前光達啟動參數、主題名稱 `/scan_front`、`base_lidar_link_FL` 框架與 `dual_laser_merger` 綁定。
+  - `test_rear_lidar_data_contract`: 驗證後光達啟動參數、主題名稱 `/scan_rear`、`base_lidar_link_BR` 框架與 `dual_laser_merger` 綁定。
+  - `test_merged_scan_data_contract_and_consumers`: 驗證 `dual_laser_merger` 輸出 `/scan` (`base_link`)，並自動檢核所有核准之消費者（RF2O、slam_toolbox、AMCL、Local/Global Costmaps、Collision Monitor）均正確訂閱 `/scan`。
+  - `test_imu_data_contract_and_ekf_consumer`: 驗證 TDK IMU 輸出 `/imu/data_raw` (`base_imu_link`)，並檢核 EKF `imu0` 參數綁定與 2D 融合設定（融合 vyaw, ax；排除 orientation）。
+  - `test_rf2o_laser_odometry_contract_and_ekf_consumer`: 驗證 RF2O 訂閱 `/scan`、輸出 `/rf2o/odom` (`odom -> base_footprint`，`publish_tf: False`)，並檢核 EKF `odom1` 參數綁定。
+  - `test_freshness_and_timeout_configurations`: 驗證 EKF `sensor_timeout` (0.1s)、Collision Monitor `source_timeout` (>= 0.5s) 與 DiffDrive `cmd_vel_timeout` (0.5s) 逾時保護閾值設定。
+
+#### 3.14.4 Mature vs Custom Boundary
+- **Mature Components Reused**:
+  - `sick_scan_xd` (ROS 2 Jazzy Driver)
+  - `dual_laser_merger` (ROS 2 Jazzy 0.3.1)
+  - `tdk_ros2_imu` (Driver Component)
+  - `rf2o_laser_odometry` (Planar Odometry Component)
+  - `robot_localization::ekf_filter_node`
+  - `nav2_costmap_2d` & `nav2_collision_monitor`
+- **Project-Owned Custom Code**: **`NONE`**（零自製感知中繼節點，完全由標準 ROS 2 / Nav2 介面與參數驅動）。
+
+#### 3.14.5 Verification Evidence
+| Timestamp | Test target | Command | Result | Evidence boundary | Storage path |
+|---|---|---|---|---|---|
+| 2026-08-24T11:24:59+08:00 | S2/S3/S6 Perception Data-Flow Consolidated Test Suite | `colcon build --packages-select mobile_base_bringup` + `colcon test` | PASS (Software-only) | 1. 17 項測試全部通過（含 6 項感知資料流合約測試 + 5 項 TF 權威測試 + 6 項 bringup / map / linter 測試）；2. 驗證雙光達至融合光達至 RF2O/Costmap/Collision Monitor 之主題與 Frame 鏈路；3. 驗證 IMU 至 EKF 融合配置；4. 驗證超時門檻設定。 | 容器即時測試日誌 |
+
+#### 3.14.6 Known Limits / Outstanding Obligations
+- **AMR 運動邊界 (Hardware Motion NOT EXECUTED)**: 本 Stage 為純軟體合約與感知資料流規格檢核，未發送導航目標或移動 AMR 底盤。
+
+#### 3.14.7 Status
+- **Implementation Status**: `Implemented`
+- **Evidence Status**: `Software Verified` (Stage A 自動化感知資料流契約測試通過)
+- **Checklist Status**: `[~] In Progress` (Stage A 驗證通過，待進入後續 closure 評估)。
+- **Next Dependency**: Checklist #20 Closure Reassessment。
