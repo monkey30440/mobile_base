@@ -27,21 +27,16 @@ using mobile_base_navigation::TargetAdmission;
 using mobile_base_navigation::TargetInput;
 
 static const char kValidCatalogYaml[] =
-  "version: \"1.0.0\"\n"
-  "namespace: \"test_factory\"\n"
+  "frame_id: map\n"
   "stations:\n"
-  "  - name: \"STATION_A\"\n"
+  "  - id: \"STATION_A\"\n"
   "    x: 2.50\n"
   "    y: 1.20\n"
-  "    yaw: 0.0\n"
-  "    metadata:\n"
-  "      description: \"Loading dock 1\"\n"
-  "  - name: \"STATION_B\"\n"
+  "    yaw_rad: 0.0\n"
+  "  - id: \"STATION_B\"\n"
   "    x: 8.00\n"
   "    y: 5.50\n"
-  "    yaw: 1.57079632679\n"
-  "    metadata:\n"
-  "      description: \"Unloading dock 2\"\n";
+  "    yaw_rad: 1.57079632679\n";
 
 /* =========================================================================
  * 1. Goal Pose Normalization Tests (SYS-009 / GAP-02)
@@ -232,6 +227,218 @@ TEST(TargetAdmissionStation, RejectsMalformedCatalog)
   std::string err;
   EXPECT_FALSE(admission.load_station_catalog_from_string(malformed_yaml, &err));
   EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, RejectsMissingOrInvalidGlobalFrame)
+{
+  TargetAdmission admission;
+  std::string err;
+
+  const char missing_frame[] =
+    "stations:\n"
+    "  - id: STATION_A\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n";
+  EXPECT_FALSE(admission.load_station_catalog_from_string(missing_frame, &err));
+  EXPECT_NE(err.find("frame_id"), std::string::npos) << err;
+
+  const char wrong_frame[] =
+    "frame_id: odom\n"
+    "stations:\n"
+    "  - id: STATION_A\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n";
+  EXPECT_FALSE(admission.load_station_catalog_from_string(wrong_frame, &err));
+  EXPECT_NE(err.find("map"), std::string::npos) << err;
+  EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, RejectsEmptyStationList)
+{
+  TargetAdmission admission;
+  std::string err;
+  EXPECT_FALSE(
+    admission.load_station_catalog_from_string("frame_id: map\nstations: []\n", &err));
+  EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, RejectsMissingStationFields)
+{
+  TargetAdmission admission;
+  std::string err;
+  const char missing_yaw[] =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - id: STATION_A\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n";
+
+  EXPECT_FALSE(admission.load_station_catalog_from_string(missing_yaw, &err));
+  EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, RejectsEmptyOrWhitespacePaddedStationIds)
+{
+  TargetAdmission admission;
+  std::string err;
+  const char empty_id[] =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - id: \"\"\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n";
+  EXPECT_FALSE(admission.load_station_catalog_from_string(empty_id, &err));
+  EXPECT_NE(err.find("empty"), std::string::npos) << err;
+
+  const char padded_id[] =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - id: \" STATION_A\"\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n";
+  EXPECT_FALSE(admission.load_station_catalog_from_string(padded_id, &err));
+  EXPECT_NE(err.find("whitespace"), std::string::npos) << err;
+
+  const char trailing_padded_id[] =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - id: \"STATION_A \"\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n";
+  EXPECT_FALSE(admission.load_station_catalog_from_string(trailing_padded_id, &err));
+  EXPECT_NE(err.find("whitespace"), std::string::npos) << err;
+  EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, RejectsDuplicateStationIds)
+{
+  TargetAdmission admission;
+  std::string err;
+  const char duplicate_ids[] =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - id: STATION_A\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n"
+    "  - id: STATION_A\n"
+    "    x: 9.0\n"
+    "    y: 8.0\n"
+    "    yaw_rad: 1.0\n";
+
+  EXPECT_FALSE(admission.load_station_catalog_from_string(duplicate_ids, &err));
+  EXPECT_NE(err.find("Duplicate"), std::string::npos) << err;
+  EXPECT_EQ(admission.station_count(), 0u);
+  EXPECT_EQ(
+    admission.resolve_station("STATION_A").status,
+    AdmissionStatus::REJECTED_CATALOG_UNAVAILABLE);
+}
+
+TEST(TargetAdmissionStation, RejectsUnknownRootOrStationFields)
+{
+  TargetAdmission admission;
+  std::string err;
+  const char unknown_root[] =
+    "frame_id: map\n"
+    "version: 1\n"
+    "stations:\n"
+    "  - id: STATION_A\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n";
+  EXPECT_FALSE(admission.load_station_catalog_from_string(unknown_root, &err));
+  EXPECT_NE(err.find("Unknown root field"), std::string::npos) << err;
+
+  const char unknown_station_field[] =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - id: STATION_A\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw_rad: 0.0\n"
+    "    description: dock\n";
+  EXPECT_FALSE(admission.load_station_catalog_from_string(unknown_station_field, &err));
+  EXPECT_NE(err.find("Unknown station field"), std::string::npos) << err;
+  EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, RejectsLegacyNameAndYawSchema)
+{
+  TargetAdmission admission;
+  std::string err;
+  const char legacy_catalog[] =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - name: STATION_A\n"
+    "    x: 1.0\n"
+    "    y: 2.0\n"
+    "    yaw: 0.0\n";
+
+  EXPECT_FALSE(admission.load_station_catalog_from_string(legacy_catalog, &err));
+  EXPECT_NE(err.find("Unknown station field"), std::string::npos) << err;
+  EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, RejectsNonFiniteStationValues)
+{
+  TargetAdmission admission;
+  std::string err;
+  const std::string prefix =
+    "frame_id: map\n"
+    "stations:\n"
+    "  - id: STATION_A\n";
+
+  EXPECT_FALSE(admission.load_station_catalog_from_string(
+      prefix + "    x: .nan\n    y: 2.0\n    yaw_rad: 0.0\n", &err));
+  EXPECT_NE(err.find("non-finite"), std::string::npos) << err;
+  EXPECT_FALSE(admission.load_station_catalog_from_string(
+      prefix + "    x: 1.0\n    y: .inf\n    yaw_rad: 0.0\n", &err));
+  EXPECT_NE(err.find("non-finite"), std::string::npos) << err;
+  EXPECT_FALSE(admission.load_station_catalog_from_string(
+      prefix + "    x: 1.0\n    y: 2.0\n    yaw_rad: -.inf\n", &err));
+  EXPECT_NE(err.find("non-finite"), std::string::npos) << err;
+  EXPECT_EQ(admission.station_count(), 0u);
+}
+
+TEST(TargetAdmissionStation, FailedReloadClearsPreviouslyUsableCatalog)
+{
+  TargetAdmission admission;
+  ASSERT_TRUE(admission.load_station_catalog_from_string(kValidCatalogYaml));
+  ASSERT_TRUE(admission.resolve_station("STATION_A").admitted);
+
+  std::string err;
+  EXPECT_FALSE(
+    admission.load_station_catalog_from_string("frame_id: map\nstations: []\n", &err));
+  EXPECT_EQ(admission.station_count(), 0u);
+  EXPECT_FALSE(admission.has_station("STATION_A"));
+  EXPECT_EQ(
+    admission.resolve_station("STATION_A").status,
+    AdmissionStatus::REJECTED_CATALOG_UNAVAILABLE);
+}
+
+TEST(TargetAdmissionStation, ResolvesRadiansToNormalizedQuaternion)
+{
+  TargetAdmission admission;
+  ASSERT_TRUE(admission.load_station_catalog_from_string(kValidCatalogYaml));
+
+  const auto result = admission.resolve_station("STATION_B");
+  ASSERT_TRUE(result.admitted);
+  ASSERT_TRUE(result.canonical_pose.has_value());
+  const auto & pose = *result.canonical_pose;
+  EXPECT_EQ(pose.header.frame_id, "map");
+  EXPECT_NEAR(pose.pose.orientation.z, std::sin(M_PI / 4.0), 1e-6);
+  EXPECT_NEAR(pose.pose.orientation.w, std::cos(M_PI / 4.0), 1e-6);
+  const double norm_sq =
+    pose.pose.orientation.x * pose.pose.orientation.x +
+    pose.pose.orientation.y * pose.pose.orientation.y +
+    pose.pose.orientation.z * pose.pose.orientation.z +
+    pose.pose.orientation.w * pose.pose.orientation.w;
+  EXPECT_NEAR(norm_sq, 1.0, 1e-12);
 }
 
 /* =========================================================================

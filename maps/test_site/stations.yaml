@@ -1,0 +1,12 @@
+# Software integration coordinates only — NOT HARDWARE APPROVED.
+# These poses mirror existing route-graph nodes and require human validation before AMR use.
+frame_id: map
+stations:
+  - id: station_A
+    x: 0.6
+    y: -1.55
+    yaw_rad: 1.5707963267948966
+  - id: station_B
+    x: 0.6
+    y: -1.25
+    yaw_rad: 1.5707963267948966

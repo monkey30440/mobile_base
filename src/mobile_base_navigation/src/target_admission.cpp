@@ -15,6 +15,8 @@
 #include "mobile_base_navigation/target_admission.hpp"
 
 #include <yaml-cpp/yaml.h>
+
+#include <cctype>
 #include <fstream>
 #include <sstream>
 
@@ -34,6 +36,7 @@ bool TargetAdmission::load_station_catalog(
 {
   std::ifstream ifs(catalog_path);
   if (!ifs.is_open()) {
+    clear_stations();
     std::string err = "Failed to open station catalog file: " + catalog_path;
     if (error_msg) {
       *error_msg = err;
@@ -51,94 +54,94 @@ bool TargetAdmission::load_station_catalog_from_string(
   const std::string & yaml_content,
   std::string * error_msg)
 {
+  clear_stations();
+
+  const auto reject_catalog = [this, error_msg](const std::string & error) {
+      clear_stations();
+      if (error_msg) {
+        *error_msg = error;
+      }
+      return false;
+    };
+
   try {
     YAML::Node root = YAML::Load(yaml_content);
     if (!root || !root.IsMap()) {
-      std::string err = "Station catalog root must be a YAML map.";
-      if (error_msg) {
-        *error_msg = err;
-      }
-      catalog_loaded_ = false;
-      return false;
+      return reject_catalog("Station catalog root must be a YAML map.");
     }
 
-    if (root["version"]) {
-      catalog_version_ = root["version"].as<std::string>();
+    for (const auto & field : root) {
+      const auto key = field.first.as<std::string>();
+      if (key != "frame_id" && key != "stations") {
+        return reject_catalog("Unknown root field in station catalog: " + key);
+      }
     }
-    if (root["namespace"]) {
-      catalog_namespace_ = root["namespace"].as<std::string>();
+
+    if (!root["frame_id"] || !root["frame_id"].IsScalar()) {
+      return reject_catalog("Station catalog requires scalar 'frame_id'.");
+    }
+    const auto frame_id = root["frame_id"].as<std::string>();
+    if (frame_id != "map") {
+      return reject_catalog("Station catalog frame_id must be exactly 'map'.");
     }
 
     if (!root["stations"] || !root["stations"].IsSequence()) {
-      std::string err = "Station catalog must contain a 'stations' sequence.";
-      if (error_msg) {
-        *error_msg = err;
-      }
-      catalog_loaded_ = false;
-      return false;
+      return reject_catalog("Station catalog must contain a 'stations' sequence.");
+    }
+    if (root["stations"].size() == 0u) {
+      return reject_catalog("Station catalog 'stations' sequence must not be empty.");
     }
 
     std::unordered_map<std::string, StationEntry> parsed_stations;
     for (const auto & item : root["stations"]) {
       if (!item.IsMap()) {
-        std::string err = "Station entry must be a map.";
-        if (error_msg) {
-          *error_msg = err;
-        }
-        catalog_loaded_ = false;
-        return false;
+        return reject_catalog("Station entry must be a map.");
       }
 
-      if (!item["name"] || !item["x"] || !item["y"] || !item["yaw"]) {
-        std::string err = "Station entry missing required fields (name, x, y, yaw).";
-        if (error_msg) {
-          *error_msg = err;
+      for (const auto & field : item) {
+        const auto key = field.first.as<std::string>();
+        if (key != "id" && key != "x" && key != "y" && key != "yaw_rad") {
+          return reject_catalog("Unknown station field: " + key);
         }
-        catalog_loaded_ = false;
-        return false;
+      }
+
+      if (!item["id"] || !item["x"] || !item["y"] || !item["yaw_rad"]) {
+        return reject_catalog("Station entry missing required fields (id, x, y, yaw_rad).");
       }
 
       StationEntry entry;
-      entry.name = item["name"].as<std::string>();
+      entry.name = item["id"].as<std::string>();
       if (entry.name.empty()) {
-        std::string err = "Station name cannot be empty.";
-        if (error_msg) {
-          *error_msg = err;
-        }
-        catalog_loaded_ = false;
-        return false;
+        return reject_catalog("Station ID cannot be empty.");
+      }
+      if (
+        std::isspace(static_cast<unsigned char>(entry.name.front())) ||
+        std::isspace(static_cast<unsigned char>(entry.name.back())))
+      {
+        return reject_catalog("Station ID cannot contain leading or trailing whitespace.");
       }
 
       entry.x = item["x"].as<double>();
       entry.y = item["y"].as<double>();
-      entry.yaw = item["yaw"].as<double>();
+      entry.yaw = item["yaw_rad"].as<double>();
 
       if (!std::isfinite(entry.x) || !std::isfinite(entry.y) || !std::isfinite(entry.yaw)) {
-        std::string err = "Station '" + entry.name + "' contains non-finite coordinates.";
-        if (error_msg) {
-          *error_msg = err;
-        }
-        catalog_loaded_ = false;
-        return false;
+        return reject_catalog(
+          "Station '" + entry.name + "' contains non-finite x, y, or yaw_rad.");
       }
 
-      if (item["metadata"] && item["metadata"]["description"]) {
-        entry.description = item["metadata"]["description"].as<std::string>();
+      if (parsed_stations.find(entry.name) != parsed_stations.end()) {
+        return reject_catalog("Duplicate Station ID: " + entry.name);
       }
 
-      parsed_stations[entry.name] = entry;
+      parsed_stations.emplace(entry.name, entry);
     }
 
     stations_ = std::move(parsed_stations);
     catalog_loaded_ = true;
     return true;
   } catch (const std::exception & e) {
-    std::string err = std::string("YAML parsing error: ") + e.what();
-    if (error_msg) {
-      *error_msg = err;
-    }
-    catalog_loaded_ = false;
-    return false;
+    return reject_catalog(std::string("YAML parsing error: ") + e.what());
   }
 }
 
@@ -273,7 +276,7 @@ AdmissionResult TargetAdmission::resolve_station(const std::string & station_id)
   pose.pose.orientation.z = qz;
   pose.pose.orientation.w = qw;
 
-  return AdmissionResult::success(pose, "Station resolved successfully.");
+  return validate_canonical_pose(pose, "map");
 }
 
 AdmissionResult TargetAdmission::validate_canonical_pose(

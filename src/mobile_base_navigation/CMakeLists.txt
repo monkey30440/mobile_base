@@ -8,7 +8,9 @@ endif()
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
@@ -28,6 +30,36 @@ target_link_libraries(target_admission_lib
   yaml-cpp
 )
 
+# One-shot Station ID navigation application
+add_library(navigate_to_station_app_lib
+  src/navigate_to_station_app.cpp
+)
+target_include_directories(navigate_to_station_app_lib PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(navigate_to_station_app_lib
+  target_admission_lib
+)
+ament_target_dependencies(navigate_to_station_app_lib
+  rclcpp
+  rclcpp_action
+  geometry_msgs
+  nav2_msgs
+)
+
+add_executable(navigate_to_station
+  src/navigate_to_station_main.cpp
+)
+target_include_directories(navigate_to_station PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(navigate_to_station
+  navigate_to_station_app_lib
+)
+ament_target_dependencies(navigate_to_station
+  rclcpp
+)
+
 # Install libraries and headers
 install(
   TARGETS target_admission_lib
@@ -35,6 +67,11 @@ install(
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
+)
+
+install(
+  TARGETS navigate_to_station
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 install(
@@ -67,6 +104,26 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_target_admission
     rclcpp
     geometry_msgs
+  )
+
+  ament_add_gtest(test_navigate_to_station
+    test/test_navigate_to_station.cpp
+  )
+  target_include_directories(test_navigate_to_station PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
+  target_compile_definitions(test_navigate_to_station PRIVATE
+    NAVIGATE_TO_STATION_EXECUTABLE="$<TARGET_FILE:navigate_to_station>"
+  )
+  target_link_libraries(test_navigate_to_station
+    navigate_to_station_app_lib
+    target_admission_lib
+  )
+  ament_target_dependencies(test_navigate_to_station
+    rclcpp
+    rclcpp_action
+    geometry_msgs
+    nav2_msgs
   )
 
   find_package(behaviortree_cpp REQUIRED)

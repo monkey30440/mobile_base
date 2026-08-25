@@ -1,4 +1,4 @@
-version: "1.0.0"
+frame_id: map
 stations:
-  - name: ""
+  - id: ""
     x: "not_a_number"
