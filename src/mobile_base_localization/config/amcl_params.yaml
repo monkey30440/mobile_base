@@ -48,6 +48,12 @@ amcl:
 
     # 初始位姿預設 (SYS-010 Initial Pose)
     set_initial_pose: false # 預設由 /initialpose 顯式注入
+    # set_initial_pose: true
+    # initial_pose:
+    #   x: 0.0
+    #   y: 0.0
+    #   z: 0.0
+    #   yaw: 0.0
 
 map_server:
   ros__parameters:

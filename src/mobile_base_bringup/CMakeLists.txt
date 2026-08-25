@@ -16,7 +16,9 @@ install(
 )
 
 install(
-  FILES README.md
+  FILES
+    MAPPING.md
+    NAVIGATION.md
   DESTINATION share/${PROJECT_NAME}
 )
 
