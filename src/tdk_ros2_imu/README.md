@@ -12,7 +12,7 @@ publishes `sensor_msgs/msg/Imu` on `/tdk/imu`.
 | --- | --- | --- |
 | `port` | `/dev/ttyACM0` | USB serial device |
 | `baud_rate` | `115200` | Serial baud rate |
-| `frame_id` | `L_BASE_IMU` | Frame written to each IMU message |
+| `frame_id` | `base_imu_link` | Frame written to each IMU message |
 
 ## Run
 

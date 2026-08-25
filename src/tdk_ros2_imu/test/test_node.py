@@ -136,7 +136,7 @@ def test_poll_serial_publishes_valid_imu_message():
             assert node._publisher.publish.call_count == 1
             msg = node._publisher.publish.call_args[0][0]
 
-            assert msg.header.frame_id == 'L_BASE_IMU'
+            assert msg.header.frame_id == 'base_imu_link'
             assert msg.linear_acceleration.x == pytest.approx(0.1 * 9.80665)
             assert msg.linear_acceleration.y == pytest.approx(-0.2 * 9.80665)
             assert msg.linear_acceleration.z == pytest.approx(1.0 * 9.80665)

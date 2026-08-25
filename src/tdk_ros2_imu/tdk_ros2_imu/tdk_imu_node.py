@@ -44,7 +44,7 @@ class TdkImuNode(Node):
         super().__init__('tdk_imu')
         self.declare_parameter('port', '/dev/ttyACM0')
         self.declare_parameter('baud_rate', 115200)
-        self.declare_parameter('frame_id', 'L_BASE_IMU')
+        self.declare_parameter('frame_id', 'base_imu_link')
 
         self._port = self.get_parameter('port').get_parameter_value().string_value
         self._baud_rate = (
