@@ -1,62 +1,95 @@
 {
+    "type": "FeatureCollection",
     "crs": {
+        "type": "name",
         "properties": {
             "name": "urn:ogc:def:crs:EPSG::3857"
-        },
-        "type": "name"
+        }
     },
     "features": [
         {
+            "type": "Feature",
             "geometry": {
+                "type": "Point",
                 "coordinates": [
-                    0.0,
-                    0.0
-                ],
-                "type": "Point"
+                    1.122,
+                    -0.595
+                ]
             },
             "properties": {
-                "frame": "map",
                 "id": 0,
-                "metadata": {
-                    "name": "Route Entry"
-                }
-            },
-            "type": "Feature"
+                "frame": "map"
+            }
         },
         {
+            "type": "Feature",
             "geometry": {
+                "type": "Point",
                 "coordinates": [
-                    0.20,
-                    0.0
-                ],
-                "type": "Point"
+                    1.222,
+                    0.400
+                ]
             },
             "properties": {
-                "frame": "map",
                 "id": 1,
-                "metadata": {
-                    "name": "Route Exit"
-                }
-            },
-            "type": "Feature"
+                "frame": "map"
+            }
         },
         {
+            "type": "Feature",
             "geometry": {
-                "type": "MultiLineString"
+                "type": "MultiLineString",
+                "coordinates": [
+                    [
+                        [
+                            1.122,
+                            -0.595
+                        ],
+                        [
+                            1.222,
+                            0.400
+                        ]
+                    ]
+                ]
             },
             "properties": {
-                "cost": 0.20,
-                "endid": 1,
                 "id": 2,
+                "startid": 0,
+                "endid": 1,
+                "cost": 1.0,
+                "overridable": true,
                 "metadata": {
                     "speed_limit": 0.5
-                },
-                "overridable": true,
-                "startid": 0
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "MultiLineString",
+                "coordinates": [
+                    [
+                        [
+                            1.222,
+                            0.400
+                        ],
+                        [
+                            1.122,
+                            -0.595
+                        ]
+                    ]
+                ]
             },
-            "type": "Feature"
+            "properties": {
+                "id": 3,
+                "startid": 1,
+                "endid": 0,
+                "cost": 1.0,
+                "overridable": true,
+                "metadata": {
+                    "speed_limit": 0.5
+                }
+            }
         }
-    ],
-    "name": "graph",
-    "type": "FeatureCollection"
+    ]
 }

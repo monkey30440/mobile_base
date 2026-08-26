@@ -24,6 +24,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_route/nav2_route/plugins/graph_file_loaders/geojson_graph_file_loader.hpp"
 #include "nav2_route/types.hpp"
+#include "nav2_route/route_planner.hpp"
 #include "nav2_util/lifecycle_node.hpp"
 
 #ifndef BT_XML_PATH
@@ -222,5 +223,47 @@ TEST_F(BehaviorTreeRuntimeTest, RealSiteRouteGraphNativeLoader)
   for (const auto & n : graph) {
     total_edges += n.neighbors.size();
   }
-  EXPECT_EQ(total_edges, 1u);
+  EXPECT_EQ(total_edges, 2u);
+}
+
+TEST_F(BehaviorTreeRuntimeTest, RealSiteComputeRouteSearch)
+{
+  nav2_route::GeoJsonGraphFileLoader loader;
+  auto lc_node = std::make_shared<nav2_util::LifecycleNode>("test_route_search_node");
+  loader.configure(lc_node);
+
+  nav2_route::Graph graph;
+  nav2_route::GraphToIDMap map_ids;
+
+  std::string filepath = REAL_ROUTE_GRAPH_PATH;
+  ASSERT_TRUE(loader.loadGraphFromFile(graph, map_ids, filepath));
+
+  nav2_route::RoutePlanner planner;
+  planner.configure(lc_node, nullptr, nullptr);
+
+  std::vector<unsigned int> blocked_ids;
+
+  // A -> B (startid: 0, endid: 1)
+  nav2_route::RouteRequest req_ab;
+  req_ab.start_nodeid = 0;
+  req_ab.goal_nodeid = 1;
+  req_ab.use_poses = false;
+  auto route_ab = planner.findRoute(graph, map_ids[0], map_ids[1], blocked_ids, req_ab);
+  EXPECT_EQ(route_ab.edges.size(), 1u);
+  EXPECT_EQ(route_ab.edges[0]->edgeid, 2u);
+  EXPECT_EQ(route_ab.edges[0]->start->nodeid, 0u);
+  EXPECT_EQ(route_ab.edges[0]->end->nodeid, 1u);
+  EXPECT_NEAR(route_ab.route_cost, 2.0f, 1e-3);
+
+  // B -> A (startid: 1, endid: 0)
+  nav2_route::RouteRequest req_ba;
+  req_ba.start_nodeid = 1;
+  req_ba.goal_nodeid = 0;
+  req_ba.use_poses = false;
+  auto route_ba = planner.findRoute(graph, map_ids[1], map_ids[0], blocked_ids, req_ba);
+  EXPECT_EQ(route_ba.edges.size(), 1u);
+  EXPECT_EQ(route_ba.edges[0]->edgeid, 3u);
+  EXPECT_EQ(route_ba.edges[0]->start->nodeid, 1u);
+  EXPECT_EQ(route_ba.edges[0]->end->nodeid, 0u);
+  EXPECT_NEAR(route_ba.route_cost, 2.0f, 1e-3);
 }
