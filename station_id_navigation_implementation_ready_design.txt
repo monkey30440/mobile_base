@@ -1,0 +1,800 @@
+Station ID Navigation — Implementation-Ready Design
+====================================================
+
+Status: DESIGN ONLY
+Baseline: main HEAD 9028a582e99896dc14494acb9bf439f850f8ccb0
+Architecture decision: Model B — thin C++ application/client wrapper
+
+No production code, formal documentation, launch/config, or existing file was modified while
+producing this design.
+
+
+1. Final User Flow
+------------------
+
+  operator
+     |
+     | ros2 run mobile_base_navigation navigate_to_station
+     |   --station <station_id>
+     |   --catalog <stations.yaml>
+     v
+  one-shot C++ process
+     |
+     | load and validate complete catalog
+     v
+  existing TargetAdmission resolver core
+     |
+     | exact Station ID lookup
+     | valid map-frame PoseStamped OR deterministic resolver rejection
+     v
+  native nav2_msgs/action/NavigateToPose client
+     |
+     | empty behavior_tree field selects configured default
+     v
+  existing bt_navigator
+     |
+     v
+  existing route_assisted_nav.xml
+     |
+     v
+  Route Server -> planner -> controller -> collision monitor -> ros2_control
+
+The process handles exactly one station and one navigation task, then exits. It is not an
+interactive shell, daemon, queue, scheduler, mission manager, fleet adapter, or navigation
+server.
+
+Observable flow:
+
+1. Parse CLI before submitting any ROS action goal.
+2. Load and validate the entire catalog.
+3. Resolve the exact Station ID to one canonical PoseStamped.
+4. Start a small ROS action-client node.
+5. Wait a bounded period for the relative action name `navigate_to_pose`.
+6. Stamp the resolved pose with the node's current ROS time immediately before submission.
+7. Submit one NavigateToPose goal with an empty `behavior_tree` field.
+8. Display native feedback while waiting.
+9. Exit after SUCCEEDED, ABORTED, CANCELED, rejection, timeout, or Ctrl-C cancellation.
+
+
+2. CLI Contract
+---------------
+
+Recommended invocation:
+
+  ros2 run mobile_base_navigation navigate_to_station \
+      --station station_A \
+      --catalog /workspaces/mobile_base/maps/test_site/stations.yaml
+
+Executable name:
+
+  navigate_to_station
+
+This is an executable name only. It does not imply or create a NavigateToStation ROS action.
+
+Required application arguments:
+
+  --station <station_id>
+      Exact, case-sensitive Station ID. Exactly one occurrence is allowed.
+
+  --catalog <path>
+      Path to the static v0.1.0 station YAML. Exactly one occurrence is allowed.
+
+Optional application arguments:
+
+  --help
+      Print usage and exit 0 without initializing navigation or loading a catalog.
+
+No v0.1.0 options are provided for action name, frame, behavior tree, queueing, retries,
+lifecycle startup, feedback format, or timeouts. These remain fixed internal contract values,
+which keeps the CLI stable and small. Normal ROS arguments after `--ros-args` remain available
+through rclcpp for node name, namespace, logging, remapping, and ROS middleware behavior.
+
+CLI parsing rules:
+
+- Unknown application option: invalid CLI.
+- Missing value: invalid CLI.
+- Repeated --station or --catalog: invalid CLI; do not silently use first/last.
+- Positional Station ID is not accepted.
+- Empty argument value is invalid.
+- Exactly one station navigation task is accepted per process.
+- Application arguments must be separated from ROS arguments using rclcpp's ROS argument
+  removal/parsing facilities; the application must not reject valid `--ros-args` tokens.
+
+Output streams:
+
+- stdout: accepted goal, feedback summaries, successful or canceled terminal state.
+- stderr: invalid CLI, catalog/resolver failure, Nav2 unavailable, goal rejection, aborted or
+  unknown navigation result, and cancellation-not-confirmed warning.
+
+Recommended stable output vocabulary uses one line per event and key=value fields, without
+introducing a new ROS error taxonomy. Examples:
+
+  STATION_RESOLVED station=station_A frame=map x=2.5 y=1.2 yaw_rad=1.570796
+  GOAL_ACCEPTED station=station_A action=navigate_to_pose
+  NAV_FEEDBACK distance_remaining=3.21 recoveries=0 navigation_time_sec=12.4
+  NAV_SUCCEEDED station=station_A error_code=0 error_msg=""
+
+  RESOLUTION_FAILED station=unknown status=REJECTED_STATION_NOT_FOUND message="..."
+  NAV_ABORTED station=station_A error_code=<native> error_msg="<native>"
+
+Feedback is human-readable and machine-tolerable, not a versioned output protocol. Print at
+most once per second plus the terminal event; this avoids flooding while retaining current
+distance, elapsed time, ETA if available, and recovery count.
+
+
+3. Station Resolver Contract
+----------------------------
+
+Target contract:
+
+  resolve_station(station_id)
+      -> valid canonical map-frame PoseStamped
+      OR deterministic resolver rejection
+
+Wrapper responsibilities:
+
+A. Parse CLI.
+B. Load catalog once.
+C. Validate the complete catalog before any lookup or Nav2 contact.
+D. Resolve the exact Station ID.
+E. Obtain a canonical PoseStamped.
+F. Create and run the NavigateToPose action client.
+G. Wait for the action server for a bounded period.
+H. Submit exactly one goal.
+I. Display native feedback.
+J. Observe the native result.
+K. Request cancellation on Ctrl-C when a goal may be active.
+L. Exit with a deterministic process status.
+
+The wrapper does not own:
+
+- route calculation or route-graph lookup
+- path planning
+- controller logic
+- collision or obstacle policy
+- recovery policy
+- BT selection beyond leaving the goal field empty
+- Nav2 lifecycle startup/shutdown
+- map loading or AMCL initialization
+- localization or TF ownership
+- ros2_control
+- controller cancellation internals
+- a project navigation-result enum
+- retries, preemption policy, queueing, or mission state
+
+The only additional unavoidable responsibility is preserving process state long enough to
+finish or bound cancellation. This is client cleanup, not navigation ownership.
+
+Current public TargetAdmission API:
+
+- TargetAdmission()
+- TargetAdmission(catalog_path)
+- bool load_station_catalog(path, error_msg)
+- bool load_station_catalog_from_string(yaml, error_msg)
+- AdmissionResult admit_target(TargetInput)
+- AdmissionResult admit_goal_pose(x, y, yaw_deg, frame_id)
+- AdmissionResult admit_station(station_id)
+- static AdmissionResult normalize_goal_pose(x, y, yaw_deg, frame_id)
+- AdmissionResult resolve_station(station_id)
+- static AdmissionResult validate_canonical_pose(pose, expected_frame)
+- size_t station_count()
+- bool has_station(station_id)
+- optional<StationEntry> get_station(station_id)
+- const map& get_all_stations()
+- clear_stations()
+
+Can be used unchanged by Station runtime path:
+
+- default construction
+- load_station_catalog()
+- resolve_station() or admit_station()
+- validate_canonical_pose()
+- AdmissionResult and AdmissionStatus
+- to_string(AdmissionStatus)
+
+Legacy/direct-goal API not required by the Station-only wrapper:
+
+- GoalPoseTarget
+- StationTarget and TargetInput discriminator
+- admit_target()
+- admit_goal_pose()
+- normalize_goal_pose(... yaw_deg ...)
+
+They need not be removed as part of this feature. Removing or restructuring them would be
+cleanup beyond the minimal implementation gap.
+
+Small resolver convergence required for the frozen catalog contract:
+
+1. Parse root `frame_id` and require exactly `map`.
+2. Parse station key `id`, not legacy `name`.
+3. Parse `yaw_rad`, not ambiguous legacy `yaw`.
+4. Reject duplicate IDs instead of `unordered_map::operator[]` silent overwrite.
+5. Reject empty station sequences at load time.
+6. Reject unknown root/station fields for typo safety and a closed MVP schema.
+7. Ensure failed loading leaves the resolver unavailable and exposes no usable partial catalog.
+8. Ensure resolve_station() never reports success until its generated PoseStamped passes
+   canonical pose validation.
+
+Existing implementation uses a temporary map before assignment, which is a good atomic-load
+pattern. However, on load failure the old stations container can remain populated while
+catalog_loaded_ becomes false. Resolution is already blocked by catalog_loaded_, but the clean
+contract is that observable station_count/getters should not imply a usable catalog after a
+failed replacement load. Exact API treatment is an implementation detail; no runtime reload is
+required for v0.1.0.
+
+Load-time validation location:
+
+- YAML structure and all station records: TargetAdmission catalog loader.
+- Station lookup: TargetAdmission resolve_station().
+- Current timestamp: wrapper immediately before action submission.
+- Navigation feasibility, planning, route, collision, controller: Nav2 only.
+
+TargetAdmission must not create an action client or manage Nav2.
+
+
+4. Station Catalog Schema
+-------------------------
+
+Frozen v0.1.0 minimum schema:
+
+  frame_id: map
+  stations:
+    - id: station_A
+      x: 2.50
+      y: 1.20
+      yaw_rad: 0.0
+    - id: station_B
+      x: 8.00
+      y: 5.50
+      yaw_rad: 1.5707963267948966
+
+Root keys:
+
+- `frame_id`: REQUIRED string; exact value `map`.
+- `stations`: REQUIRED sequence; at least one station.
+- Any other root key: REJECT catalog.
+
+Station keys:
+
+- `id`: REQUIRED YAML string scalar.
+- `x`: REQUIRED numeric scalar convertible to finite double.
+- `y`: REQUIRED numeric scalar convertible to finite double.
+- `yaw_rad`: REQUIRED numeric scalar convertible to finite double.
+- Any other station key: REJECT catalog.
+
+Station ID rules:
+
+- Non-empty string.
+- Case-sensitive exact match.
+- Leading or trailing whitespace is rejected, not trimmed.
+- Internal whitespace is preserved and therefore allowed by the data contract, but must be
+  quoted at the shell. No additional character-pattern policy is introduced in v0.1.0.
+- Duplicate exact IDs reject the complete catalog.
+- Ordering has no semantic meaning.
+
+Numeric rules:
+
+- Integers in YAML are acceptable if convertible to double.
+- NaN, +Inf, -Inf, and any non-finite value reject the complete catalog.
+- x/y units are meters in map coordinates.
+- yaw_rad is radians.
+- No arbitrary yaw range is imposed; finite angles outside [-pi, pi] are mathematically valid
+  and produce an equivalent normalized quaternion.
+
+Frame rules:
+
+- One catalog-global frame only.
+- Exact value `map`.
+- No per-station frame.
+- Resolver output header.frame_id is always `map`.
+- No TF transform occurs in the resolver.
+
+Other rules:
+
+- Missing key: reject complete catalog.
+- Wrong YAML node type: reject complete catalog.
+- Empty stations list: reject complete catalog.
+- Empty catalog/file unavailable/malformed YAML: reject before ROS action client submission.
+- Unknown Station ID: reject lookup; no NavigateToPose goal is sent.
+- No version, description, namespace, route node, task, fleet, DB/cloud metadata, quaternion
+  components, or aliases are in the v0.1.0 schema.
+
+The schema is deliberately closed. Rejecting unknown fields is preferable for this small static
+catalog because a typo such as `yaw_rads` must fail rather than be silently ignored.
+
+
+5. Yaw Decision
+---------------
+
+Decision: RADIANS ONLY, represented by the explicit key `yaw_rad`.
+
+Comparison:
+
+Radians:
+
+- Reuses the current StationEntry and station resolver calculation directly.
+- Matches ROS/tf/navigation angular convention.
+- No degree-to-radian conversion in the Station path.
+- Existing test fixture values are radians.
+- Less intuitive for operators entering 90/180-degree headings.
+
+Degrees:
+
+- Easier for many operators to read and edit.
+- Reuses the old direct-goal `yaw_deg` convention.
+- Requires conversion before quaternion generation.
+- Diverges from common ROS angular units.
+- Risks mixing degree examples with ROS/radian configuration values.
+
+The explicit `yaw_rad` field resolves the main ergonomics/ambiguity problem without supporting
+two units. The resolver must not accept `yaw`, `yaw_deg`, unit suffix metadata, or guess by value.
+Documentation/examples can show common conversions, but the runtime contract is radians only.
+
+
+6. Nav2 Action Client Contract
+------------------------------
+
+Action type:
+
+  nav2_msgs/action/NavigateToPose
+
+Action name:
+
+  `navigate_to_pose` as a relative ROS name.
+
+In the current non-namespaced bringup this resolves to `/navigate_to_pose`. Keeping the name
+relative preserves standard ROS namespace/remapping behavior without adding a project option.
+
+Server wait:
+
+- Wait up to 10 seconds total.
+- Continue spinning/processing Ctrl-C during the wait.
+- If unavailable after 10 seconds, print NAV2_UNAVAILABLE and exit 4.
+- Do not start lifecycle nodes or retry indefinitely.
+
+Goal creation:
+
+- Copy the validated resolver PoseStamped.
+- Require frame_id `map`.
+- Replace the resolver's zero timestamp with `node->now()` immediately before async_send_goal().
+- Set NavigateToPose.goal.behavior_tree to empty string, selecting bt_navigator's configured
+  default route-assisted tree.
+- Do not precompute a path or route.
+
+Goal response:
+
+- Accepted goal handle: print GOAL_ACCEPTED and wait for feedback/result.
+- Null goal handle: print GOAL_REJECTED and exit 4.
+- Exception or inability to complete the goal-response future: print native/exception text and
+  exit 4 unless cancellation semantics below apply.
+
+Feedback:
+
+- Preserve native fields; do not calculate a new navigation status.
+- At most once per second print available navigation_time, estimated_time_remaining,
+  distance_remaining, number_of_recoveries, current_pose, and tracking errors if present in the
+  installed Jazzy interface.
+- Missing or temporarily unavailable feedback fields do not fail the process.
+
+Result:
+
+- rclcpp_action::ResultCode::SUCCEEDED: exit 0; print native error_code/error_msg.
+- ABORTED: exit 5; print native error_code/error_msg unchanged.
+- CANCELED: exit 130; print native error_code/error_msg unchanged.
+- UNKNOWN or missing result: exit 5; preserve any available native error fields.
+
+The wrapper must not map individual Nav2 error_code values to project codes. Process exit code
+only classifies the broad operator-visible phase; stdout/stderr retains native Nav2 detail.
+
+
+7. Error / Exit / Cancel Semantics
+----------------------------------
+
+Minimal exit-code contract:
+
+  0    Success; also --help.
+  2    Invalid CLI/input syntax.
+  3    Catalog load/validation or Station resolution failure.
+  4    NavigateToPose unavailable or goal rejected before execution.
+  5    Navigation aborted, unknown terminal result, or action-client runtime failure.
+  130  Navigation canceled, including operator Ctrl-C.
+
+Exit code 1 is intentionally unused by the public contract, leaving uncaught/process-internal
+failure distinguishable if it ever occurs. Implementation should still catch expected parsing,
+YAML, ROS, action-client, and standard exceptions and map them to the categories above.
+
+Pre-navigation errors:
+
+- Printed to stderr with resolver AdmissionStatus where applicable.
+- Never submit a NavigateToPose goal.
+- Exit 2 for CLI syntax, otherwise exit 3.
+
+Navigation errors:
+
+- Preserve ROS action ResultCode plus Nav2 error_code/error_msg.
+- Do not translate planning, route, controller, TF, timeout, recovery, or collision causes into
+  a new project enum.
+- Goal rejection/unavailability is exit 4; executed-but-failed is exit 5.
+
+Ctrl-C contract:
+
+  Ctrl-C
+      -> set cancellation-requested flag
+      -> keep ROS context/executor alive
+      -> if accepted goal exists, async_cancel_goal(goal_handle)
+      -> wait up to 5 seconds for cancel acknowledgement and terminal result
+      -> print confirmation or bounded-time warning
+      -> rclcpp::shutdown()
+      -> exit 130
+
+Signal design:
+
+- rclcpp's default SIGINT behavior can invalidate the context and interrupt the executor before
+  an action cancel request is delivered. The wrapper therefore needs explicit signal behavior.
+- Initialize rclcpp without its SIGINT handler, install one minimal application SIGINT handler,
+  and have that handler only set a signal-safe flag.
+- ROS calls, logging, allocation, mutexes, futures, and async_cancel_goal must not run inside the
+  signal handler.
+- The normal executor/control loop observes the flag and performs cancellation.
+
+Signal state cases:
+
+1. Before goal submission:
+   Stop without sending a goal; exit 130.
+
+2. Goal request sent but acceptance pending:
+   Continue spinning for up to the same 5-second cancellation bound. If a goal handle arrives,
+   cancel it immediately. If no response arrives, exit 130 with
+   CANCELLATION_UNCONFIRMED; do not call cancel-all-goals because that could affect a goal not
+   owned by this process.
+
+3. Goal accepted and active:
+   Call async_cancel_goal(handle), wait bounded time for acknowledgement and terminal result.
+
+4. Goal already terminal:
+   Preserve the already-received terminal outcome. Ctrl-C after terminal processing must not
+   overwrite success/failure with a cancellation result.
+
+5. Cancel acknowledgement received but terminal result not received within 5 seconds:
+   Print CANCELLATION_UNCONFIRMED and exit 130. The process must never claim confirmed cancel
+   without the native terminal CANCELED result.
+
+No async_cancel_all_goals is used.
+
+Official API basis:
+
+- rclcpp_action::Client::async_send_goal returns null handle for rejection.
+- async_cancel_goal requires the accepted goal handle and returns CancelGoal response.
+- dropping a goal handle does not cancel it.
+- ResultCode values are SUCCEEDED, CANCELED, ABORTED, UNKNOWN.
+- rclcpp supports SignalHandlerOptions::None; default signal behavior otherwise shuts down the
+  context and interrupts executor spinning.
+
+
+8. Lifecycle Assumptions
+------------------------
+
+The wrapper is a normal one-shot rclcpp node, not a LifecycleNode.
+
+It does not call:
+
+- BasicNavigator lifecycleStartup()/Shutdown()
+- lifecycle manager services
+- map_server or AMCL lifecycle transitions
+- navigation launch or process management
+
+Required operational precondition:
+
+  mobile_base_bringup navigation.launch.py is already running with autostart=true (default),
+  the selected map and route graph are valid, localization has a usable initial pose, and
+  NavigateToPose is available.
+
+Repository evidence:
+
+- mobile_base_bringup/launch/navigation.launch.py composes localization and navigation and
+  forwards autostart.
+- mobile_base_localization lifecycle manager manages map_server and amcl.
+- mobile_base_navigation lifecycle manager manages controller_server, planner_server,
+  route_server, bt_navigator, and collision_monitor.
+- bt_navigator only exposes the configured navigate_to_pose navigator.
+
+Readiness contract:
+
+- The wrapper only waits for `navigate_to_pose` availability for 10 seconds.
+- It does not independently poll map, AMCL, Route Server, planner, controller, or lifecycle state.
+- Action-server availability is necessary but does not prove AMCL has a correct initial pose;
+  that remains an operational bringup precondition and any later failure remains Nav2-native.
+- Catalog is loaded and resolved before waiting for Nav2 so invalid operator input fails fast.
+- Catalog load failure exits immediately with code 3.
+- No runtime catalog reload. One process load per invocation.
+
+
+9. Testing Strategy
+-------------------
+
+No test is implemented in this design phase.
+
+Layer 1 — Resolver unit tests
+
+Required cases:
+
+- valid minimum catalog
+- valid station_A and station_B exact lookup
+- unknown Station
+- duplicate Station ID rejects complete catalog
+- malformed YAML
+- missing frame_id
+- frame_id other than map
+- missing stations
+- empty station list
+- station missing id/x/y/yaw_rad
+- unknown root field
+- unknown station field
+- empty ID
+- leading/trailing whitespace ID
+- case-sensitive lookup
+- non-finite x, y, and yaw_rad independently
+- yaw_rad 0 conversion
+- yaw_rad pi/2 conversion
+- finite yaw outside [-pi, pi]
+- output frame map
+- output quaternion normalized
+- failed catalog load cannot produce a successful lookup
+
+Layer 2 — CLI/application software test
+
+Use a minimal fake NavigateToPose action server; this is worthwhile because pure resolver tests
+cannot prove that the wrapper sends the correct native action, handles goal rejection/result, or
+forwards cancellation.
+
+The fake is test-only and should support only scenarios needed by the contract:
+
+- capture one submitted NavigateToPose goal
+- assert frame_id map, current nonzero stamp, expected x/y/quaternion, empty behavior_tree
+- emit one feedback message
+- return SUCCEEDED
+- reject a goal
+- return ABORTED with chosen native error_code/error_msg
+- accept cancellation and return CANCELED
+- delay acceptance for Ctrl-C pending-acceptance behavior
+
+CLI test assertions:
+
+- valid Station sends exactly one goal
+- unknown Station sends zero goals
+- output and exit codes match the contract
+- native error_code/error_msg are preserved
+- Ctrl-C sends cancellation only for its own accepted handle
+- bounded cancellation does not hang indefinitely
+
+Do not invent a large reusable mock framework. A single in-process or launch-test fake action
+server is sufficient.
+
+Layer 3 — Container/runtime integration
+
+With the existing navigation stack active:
+
+- invoke station_A catalog entry
+- observe catalog resolution
+- observe NavigateToPose goal accepted by existing bt_navigator
+- verify empty behavior_tree uses configured route_assisted_nav.xml
+- verify Route Server/planner/controller/collision command chain remains unchanged
+- collect command, action, node/lifecycle, relevant TF, and result evidence
+
+This layer proves software integration and real Nav2 connectivity, not physical navigation.
+
+Layer 4 — Hardware acceptance
+
+Minimum physical cases:
+
+1. Station A: accepted, physically navigates, stops within existing goal tolerances, native
+   result SUCCEEDED, process exit 0.
+2. Station B: same observable outcome at a distinct pose/yaw.
+3. Unknown Station: rejected before Nav2; action server sees no goal; process exit 3.
+4. Cancel while moving: Ctrl-C causes native cancellation request, robot stops through existing
+   stack, native terminal result CANCELED, process exit 130.
+5. Physical final pose/orientation and stopped condition are observed under existing acceptance
+   criteria.
+
+Raw evidence must be committed with the exact HEAD/config/catalog/hardware environment identity.
+Software implementation and software tests must not be reported as hardware verification.
+
+
+10. Minimal File Impact
+-----------------------
+
+GitNexus evidence:
+
+- Current index matches HEAD.
+- TargetAdmission participates in no runtime execution process.
+- Exact upstream impact is LOW with one implementation import; tests are textual/build
+  consumers not fully represented by the graph.
+
+REQUIRED
+
+src/mobile_base_navigation/CMakeLists.txt
+  Add the executable target, link target_admission_lib, declare action dependencies, install
+  executable, and register minimal software test(s).
+
+src/mobile_base_navigation/package.xml
+  Add direct dependencies required by the C++ client, notably rclcpp_action and nav2_msgs.
+
+src/mobile_base_navigation/src/<one C++ executable source>
+  New one-shot CLI/action client implementation. Final filename is low-risk naming detail;
+  executable contract is `navigate_to_station`.
+
+src/mobile_base_navigation/include/mobile_base_navigation/target_admission.hpp
+src/mobile_base_navigation/src/target_admission.cpp
+  Converge schema to frame_id/id/yaw_rad, deterministic duplicate/unknown-field handling, and
+  clean valid-pose-or-error resolution. Do not add Nav2 logic.
+
+src/mobile_base_navigation/test/test_target_admission.cpp
+  Update old fixture expectations and add frozen schema/duplicate/frame/yaw/error cases.
+
+src/mobile_base_navigation/test/test_data/test_station_catalog.yaml
+src/mobile_base_navigation/test/test_data/malformed_station_catalog.yaml
+  Align existing fixtures to frozen schema.
+
+maps/test_site/stations.yaml
+  Add a non-template production/test-site catalog containing at least Station A and Station B.
+  Exact physical coordinates/yaws require site measurement and human confirmation.
+
+LIKELY
+
+src/mobile_base_navigation/test/<one CLI/action-client test source or launch test>
+  Minimal fake NavigateToPose server and process/goal assertions. A new test artifact is likely
+  because existing TargetAdmission unit tests cannot observe action submission/cancel.
+
+OPTIONAL
+
+maps/template/stations.yaml
+  It may be populated as a schema example only if repository policy expects usable templates.
+  It is not a substitute for the production/test-site catalog and is not required at runtime
+  when --catalog is explicit.
+
+NO CHANGE
+
+- src/mobile_base_bringup/launch/navigation.launch.py
+- src/mobile_base_navigation/launch/navigation.launch.py
+- src/mobile_base_navigation/config/nav2_params.yaml
+- src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml
+- mobile_base_route graph files
+- mobile_base_localization
+- mobile_base_state_estimation
+- mobile_base_perception
+- mobile_base_control
+- mobile_base_description
+- rf2o_laser_odometry
+- tdk_ros2_imu
+- Dockerfile and compose.yaml, assuming installed ros-jazzy-navigation2 already supplies
+  rclcpp_action/nav2_msgs as current build evidence indicates
+- custom action/service/msg packages: none
+
+Any later evidence requiring a change to the NO CHANGE set is an architecture-impact exception
+and must be reported rather than silently broadening the implementation.
+
+
+11. Definition of Done
+----------------------
+
+Implemented
+
+- `ros2 run mobile_base_navigation navigate_to_station --station <id> --catalog <path>` exists.
+- Required/invalid CLI behavior and documented exit codes are deterministic.
+- Catalog loader enforces the frozen minimum schema and rejects duplicate IDs.
+- Production/test-site catalog contains at least two human-approved Stations.
+- Valid Station resolves to finite, normalized, map-frame PoseStamped.
+- Unknown/invalid Station or catalog exits before any NavigateToPose goal is sent.
+- Wrapper waits bounded time for relative action `navigate_to_pose`.
+- Wrapper submits exactly one native NavigateToPose goal with current timestamp and empty
+  behavior_tree field.
+- Native feedback and terminal result remain observable.
+- Native Nav2 error_code/error_msg are preserved.
+- Ctrl-C requests cancellation without shutting down ROS communication first and exits bounded.
+- Existing route-assisted BT, Route Server, planner, controller, collision monitor,
+  localization, TF ownership, and ros2_control are not modified.
+
+Software validated
+
+- Resolver unit cases in Layer 1 pass in the existing container workflow.
+- CLI/fake-action cases in Layer 2 pass, including exact goal content, zero-goal rejection,
+  success, rejection, abort, and cancellation.
+- Existing mobile_base_navigation and relevant bringup tests remain passing.
+- Container integration observes Station -> PoseStamped -> goal accepted by the existing
+  NavigateToPose server.
+- Evidence confirms empty behavior_tree uses the configured route-assisted default.
+- Software test/build output is committed or linked according to repository evidence policy.
+
+Hardware verified
+
+- Human-approved Station A and Station B both physically reach their distinct catalog poses.
+- Native action result is SUCCEEDED and CLI exits 0 for both.
+- Final position/orientation and stopped behavior meet existing observable tolerances.
+- Unknown Station is rejected without robot motion or Nav2 goal submission.
+- Ctrl-C during physical motion yields a cancellation request, physical stop, native CANCELED
+  terminal result, and exit 130.
+- Raw hardware evidence is committed and identifies implementation/config/catalog, robot,
+  environment, commands, observable feedback/result, and final physical outcome.
+
+Implementation is not equivalent to hardware verification. The feature is not hardware-verified
+until every Hardware verified item above has committed evidence.
+
+
+12. Remaining Human Decisions
+-----------------------------
+
+Architecture-affecting decisions: NONE identified after the supplied human decisions and this
+contract convergence.
+
+Required site data before hardware acceptance:
+
+- Exact Station A x/y/yaw_rad.
+- Exact Station B x/y/yaw_rad.
+- Confirmation that those physical poses are safe and reachable on the selected map/route graph.
+
+Low-risk implementation parameters/naming that do not alter architecture:
+
+- Exact C++ source and software-test filenames.
+- Exact node name used internally by the executable.
+- Decimal precision used when printing feedback.
+- Exact wording of diagnostic messages while retaining stable event labels and exit categories.
+- Whether maps/template/stations.yaml is populated in addition to the required site catalog.
+
+The 10-second server wait, 5-second cancellation bound, one-Hz feedback cap, strict unknown-field
+handling, relative action name, radians, map frame, and exit-code contract are frozen candidates.
+Human may tune these low-risk values without changing the component architecture.
+
+
+Design Freeze Candidate
+-----------------------
+
+Custom boundary:
+  One-shot C++ CLI + pure Station resolver. Station ID in; validated map-frame PoseStamped out.
+
+Nav2 boundary:
+  Native nav2_msgs/action/NavigateToPose using relative `navigate_to_pose`; empty behavior_tree;
+  native feedback/result/cancel semantics.
+
+Data contract:
+  Strict static YAML with root frame_id: map and non-empty stations; each station has only
+  id:string, x:finite meters, y:finite meters, yaw_rad:finite radians; exact case-sensitive IDs;
+  duplicates and unknown fields rejected.
+
+User interface:
+  ros2 run mobile_base_navigation navigate_to_station --station <id> --catalog <path>
+
+Failure boundary:
+  CLI/catalog/resolution errors occur before Nav2; navigation errors remain native Nav2.
+  Exit codes only classify success, invalid CLI, resolver failure, Nav2 unavailable/rejected,
+  navigation failure, and canceled.
+
+Verification boundary:
+  Resolver unit tests -> fake native action integration -> container Nav2 acceptance -> two-site
+  Station hardware success plus unknown/cancel physical cases with committed raw evidence.
+
+READY FOR HUMAN DESIGN APPROVAL
+
+
+Official API evidence
+---------------------
+
+NavigateToPose Jazzy API:
+https://api.nav2.org/actions/jazzy/navigatetopose.html
+
+rclcpp_action Jazzy Client API:
+https://docs.ros.org/en/jazzy/p/rclcpp_action/generated/classrclcpp__action_1_1Client.html
+
+rclcpp_action Jazzy ResultCode:
+https://docs.ros.org/en/jazzy/p/rclcpp_action/generated/enum_namespacerclcpp__action_1ae469597b77e40287e19539b806a54619.html
+
+ROS 2 Jazzy action interface semantics:
+https://docs.ros.org/en/jazzy/How-To-Guides/Topics-Services-Actions.html
+
+ROS 2 Jazzy CancelGoal:
+https://docs.ros.org/en/jazzy/p/action_msgs/srv/CancelGoal.html
+
+rclcpp Jazzy API index including SignalHandlerOptions:
+https://docs.ros.org/en/jazzy/p/rclcpp/genindex.html
+
+Nav2 lifecycle behavior:
+https://docs.nav2.org/tutorials/docs/adding_a_nav2_task_server.html
