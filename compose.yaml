@@ -8,9 +8,13 @@ services:
     runtime: nvidia
     network_mode: host
 
+    env_file:
+      - .env
+
     environment:
       - DISPLAY=${DISPLAY}
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-44}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+      - TOPIC_NAMESPACE=${TOPIC_NAMESPACE}
 
     volumes:
       - .:/workspaces/mobile_base
