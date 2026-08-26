@@ -43,6 +43,7 @@ def generate_launch_description():
                 # ROS node configuration
                 "lidar_odom_frame": LaunchConfiguration("lidar_odom_frame"),
                 "wheel_odom_frame": LaunchConfiguration("wheel_odom_frame"),
+                "wheel_odom_topic": LaunchConfiguration("wheel_odom_topic"),
                 "base_frame": LaunchConfiguration("base_frame"),
                 "publish_odom_tf": LaunchConfiguration("publish_odom_tf"),
                 "invert_odom_tf": LaunchConfiguration("invert_odom_tf"),

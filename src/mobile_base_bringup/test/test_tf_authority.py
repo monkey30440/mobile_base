@@ -258,11 +258,15 @@ def test_kinematic_icp_frame_semantics_and_tf_authority():
     )
     assert kicp_config_path.exists()
     with open(kicp_config_path, 'r', encoding='utf-8') as f:
-        kicp_params = yaml.safe_load(f)['kinematic_icp_online_node']['ros__parameters']
+        kicp_data = yaml.safe_load(f)
+        kicp_params = (
+            kicp_data.get('/**') or kicp_data.get('kinematic_icp_online_node')
+        )['ros__parameters']
 
     assert kicp_params['lidar_odom_frame'] == 'odom'
     assert kicp_params['base_frame'] == 'base_footprint'
     assert kicp_params['publish_odom_tf'] is False
+    assert kicp_params['invert_odom_tf'] is False
 
     # 2. EKF Kinematic-ICP configuration
     ekf_kicp_config_path = (

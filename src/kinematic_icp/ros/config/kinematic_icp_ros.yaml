@@ -3,7 +3,7 @@
 # Kinematic-ICP ROS 2 Online Node Configuration for mobile_base
 # Uses /scan_front (S2 physical front LiDAR) and /diff_drive_controller/odom (S7 wheel odometry prior)
 
-kinematic_icp_online_node:
+/**:
   ros__parameters:
     # Sensor and Odometry Topics
     use_2d_lidar: true

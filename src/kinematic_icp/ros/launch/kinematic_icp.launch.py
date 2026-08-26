@@ -46,14 +46,84 @@ def generate_launch_description():
         description='Logging level for Kinematic-ICP node',
     )
 
+    lidar_topic_arg = DeclareLaunchArgument(
+        'lidar_topic',
+        default_value='/scan_front',
+        description='Sensor topic for input pointcloud/laser scan',
+    )
+
+    use_2d_lidar_arg = DeclareLaunchArgument(
+        'use_2d_lidar',
+        default_value='true',
+        description='Whether input sensor is a 2D laser scan',
+        choices=['true', 'false'],
+    )
+
+    lidar_odometry_topic_arg = DeclareLaunchArgument(
+        'lidar_odometry_topic',
+        default_value='lidar_odometry',
+        description='Output topic for estimated LiDAR odometry',
+    )
+
+    lidar_odom_frame_arg = DeclareLaunchArgument(
+        'lidar_odom_frame',
+        default_value='odom',
+        description='Odometry parent frame ID',
+    )
+
+    wheel_odom_frame_arg = DeclareLaunchArgument(
+        'wheel_odom_frame',
+        default_value='odom',
+        description='Wheel odometry frame ID',
+    )
+
+    base_frame_arg = DeclareLaunchArgument(
+        'base_frame',
+        default_value='base_footprint',
+        description='Robot base frame ID',
+    )
+
+    publish_odom_tf_arg = DeclareLaunchArgument(
+        'publish_odom_tf',
+        default_value='false',
+        description='Whether to publish odom TF',
+        choices=['true', 'false'],
+    )
+
+    invert_odom_tf_arg = DeclareLaunchArgument(
+        'invert_odom_tf',
+        default_value='false',
+        description='Whether to invert published odom TF',
+        choices=['true', 'false'],
+    )
+
+    wheel_odom_topic_arg = DeclareLaunchArgument(
+        'wheel_odom_topic',
+        default_value='/diff_drive_controller/odom',
+        description='Wheel odometry input topic',
+    )
+
     kinematic_icp_node = Node(
         package='kinematic_icp',
         executable='kinematic_icp_online_node',
         name='kinematic_icp_online_node',
         output='screen',
+        remappings=[
+            ('lidar_odometry', LaunchConfiguration('lidar_odometry_topic')),
+        ],
         parameters=[
             LaunchConfiguration('params_file'),
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                'lidar_topic': LaunchConfiguration('lidar_topic'),
+                'use_2d_lidar': LaunchConfiguration('use_2d_lidar'),
+                'wheel_odom_topic': LaunchConfiguration('wheel_odom_topic'),
+                'lidar_odom_frame': LaunchConfiguration('lidar_odom_frame'),
+                'wheel_odom_frame': LaunchConfiguration('wheel_odom_frame'),
+                'base_frame': LaunchConfiguration('base_frame'),
+                'publish_odom_tf': LaunchConfiguration('publish_odom_tf'),
+                'invert_odom_tf': LaunchConfiguration('invert_odom_tf'),
+            },
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
     )
@@ -62,5 +132,14 @@ def generate_launch_description():
         params_file_arg,
         use_sim_time_arg,
         log_level_arg,
+        lidar_topic_arg,
+        use_2d_lidar_arg,
+        lidar_odometry_topic_arg,
+        lidar_odom_frame_arg,
+        wheel_odom_frame_arg,
+        base_frame_arg,
+        publish_odom_tf_arg,
+        invert_odom_tf_arg,
+        wheel_odom_topic_arg,
         kinematic_icp_node,
     ])
