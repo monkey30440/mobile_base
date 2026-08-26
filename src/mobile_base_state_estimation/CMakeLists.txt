@@ -26,6 +26,11 @@ if(BUILD_TESTING)
     test/test_ekf_stationary_runtime.py
     TIMEOUT 90
   )
+  ament_add_pytest_test(
+    test_kinematic_icp_runtime
+    test/test_kinematic_icp_runtime.py
+    TIMEOUT 120
+  )
 endif()
 
 ament_package()
