@@ -23,6 +23,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_lidar_launch_syntax test/test_lidar_launch_syntax.py)
   ament_add_pytest_test(test_imu_launch_syntax test/test_imu_launch_syntax.py)
   ament_add_pytest_test(test_laser_merger_launch_syntax test/test_laser_merger_launch_syntax.py)
+  ament_add_pytest_test(test_collision_scan_filter test/test_collision_scan_filter.py)
 endif()
 
 ament_package()

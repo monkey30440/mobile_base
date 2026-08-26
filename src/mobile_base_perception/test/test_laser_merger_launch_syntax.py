@@ -59,11 +59,14 @@ def test_dual_laser_merger_launch_description_generation():
         action for action in ld.entities
         if isinstance(action, Node)
     ]
-    assert len(node_actions) == 1
-    merger_node = node_actions[0]
+    assert len(node_actions) == 2
+    node_names = {n._Node__node_name for n in node_actions}
+    assert 'dual_laser_merger_node' in node_names
+    assert 'collision_scan_filter' in node_names
+
+    merger_node = next(n for n in node_actions if n._Node__node_name == 'dual_laser_merger_node')
     assert merger_node._Node__package == 'dual_laser_merger'
     assert merger_node._Node__node_executable == 'dual_laser_merger_node'
-    assert merger_node._Node__node_name == 'dual_laser_merger_node'
 
 
 def test_dual_laser_merger_uses_complete_inline_parameters():

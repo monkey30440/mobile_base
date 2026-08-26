@@ -77,7 +77,7 @@ def test_nav2_params_contracts():
     assert cm_params['PolygonStop']['action_type'] == 'stop'
     assert cm_params['PolygonSlow']['action_type'] == 'slowdown'
     assert 'scan' in cm_params['observation_sources']
-    assert cm_params['scan']['topic'] == '/scan'
+    assert cm_params['scan']['topic'] == '/scan_collision'
     assert cm_params.get('enable_stamped_cmd_vel') is True
 
 
@@ -167,13 +167,13 @@ def test_real_site_route_graph_geojson():
 
     assert graph.get('type') == 'FeatureCollection'
     features = graph.get('features', [])
-    assert len(features) == 3
+    assert len(features) == 4
 
     points = [f for f in features if f['geometry']['type'] == 'Point']
     lines = [f for f in features if f['geometry']['type'] == 'MultiLineString']
 
     assert len(points) == 2
-    assert len(lines) == 1
+    assert len(lines) == 2
 
     # Verify node IDs and coordinates
     for pt in points:

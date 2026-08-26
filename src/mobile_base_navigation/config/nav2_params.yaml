@@ -261,5 +261,5 @@ collision_monitor:
     observation_sources: ["scan"]
     scan:
       type: "scan"
-      topic: "/scan"
+      topic: "/scan_collision"
       enabled: true

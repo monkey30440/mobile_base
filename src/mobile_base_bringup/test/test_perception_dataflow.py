@@ -136,9 +136,9 @@ def test_merged_scan_data_contract_and_consumers():
     )
     assert global_scan == '/scan'
 
-    # Collision monitor scan subscription
+    # Collision monitor scan subscription (filtered through collision_scan_filter)
     cm_scan = nav2_params['collision_monitor']['ros__parameters']['scan']['topic']
-    assert cm_scan == '/scan'
+    assert cm_scan == '/scan_collision'
 
 
 def test_imu_data_contract_and_ekf_consumer():

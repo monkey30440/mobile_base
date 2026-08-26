@@ -1,0 +1,14 @@
+collision_scan_filter:
+  ros__parameters:
+    filter1:
+      name: robot_self_box_filter
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_link
+        min_x: -0.36
+        max_x: 0.36
+        min_y: -0.31
+        max_y: 0.31
+        min_z: -0.50
+        max_z: 1.00
+        invert: false

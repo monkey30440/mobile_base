@@ -14,14 +14,17 @@
 
 """Launch composition for dual_laser_merger in S2 Perception."""
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    """Generate launch description for dual LiDAR scan merger."""
+    """Generate launch description for dual LiDAR scan merger and collision scan filter."""
+    perception_pkg_share = get_package_share_directory('mobile_base_perception')
+
     laser_1_topic_arg = DeclareLaunchArgument(
         'laser_1_topic',
         default_value='/scan_front',
@@ -46,10 +49,17 @@ def generate_launch_description():
         description='Output topic name for merged 360-degree LaserScan'
     )
 
+    collision_scan_topic_arg = DeclareLaunchArgument(
+        'collision_scan_topic',
+        default_value='/scan_collision',
+        description='Output topic name for collision-monitor filtered LaserScan'
+    )
+
     laser_1_topic = LaunchConfiguration('laser_1_topic')
     laser_2_topic = LaunchConfiguration('laser_2_topic')
     target_frame = LaunchConfiguration('target_frame')
     merged_scan_topic = LaunchConfiguration('merged_scan_topic')
+    collision_scan_topic = LaunchConfiguration('collision_scan_topic')
 
     merger_parameters = {
         'laser_1_topic': laser_1_topic,
@@ -79,10 +89,28 @@ def generate_launch_description():
         parameters=[merger_parameters],
     )
 
+    collision_filter_config = PathJoinSubstitution([
+        perception_pkg_share, 'config', 'collision_scan_filter.yaml'
+    ])
+
+    collision_scan_filter_node = Node(
+        package='laser_filters',
+        executable='scan_to_scan_filter_chain',
+        name='collision_scan_filter',
+        output='screen',
+        parameters=[collision_filter_config],
+        remappings=[
+            ('scan', merged_scan_topic),
+            ('scan_filtered', collision_scan_topic),
+        ],
+    )
+
     return LaunchDescription([
         laser_1_topic_arg,
         laser_2_topic_arg,
         target_frame_arg,
         merged_scan_topic_arg,
+        collision_scan_topic_arg,
         merger_node,
+        collision_scan_filter_node,
     ])
