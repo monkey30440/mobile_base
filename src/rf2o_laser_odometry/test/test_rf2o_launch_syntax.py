@@ -88,7 +88,7 @@ def test_rf2o_uses_complete_inline_parameters():
     evaluated = evaluate_parameters(LaunchContext(), rf2o_node._Node__parameters)
 
     assert evaluated == ({
-        'laser_scan_topic': '/scan',
+        'laser_scan_topic': '/scan_front',
         'odom_topic': '/rf2o/odom',
         'base_frame_id': 'base_footprint',
         'odom_frame_id': 'odom',

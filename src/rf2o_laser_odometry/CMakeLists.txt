@@ -68,7 +68,7 @@ install(TARGETS ${EXECUTABLE_NAME}
   DESTINATION lib/${PROJECT_NAME})
 
 install(
-  DIRECTORY config launch
+  DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
@@ -77,4 +77,3 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
-

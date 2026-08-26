@@ -88,7 +88,7 @@ def test_rear_lidar_data_contract():
 
 
 def test_merged_scan_data_contract_and_consumers():
-    """Verify 360° Merged Scan producer, target frame, and all registered consumers."""
+    """Verify merged scan remains wired to mapping, localization, and Nav2."""
     ws_root = get_workspace_root()
 
     # 1. Producer: dual_laser_merger
@@ -102,30 +102,21 @@ def test_merged_scan_data_contract_and_consumers():
     assert "default_value='base_link'" in merger_content
     assert "default_value='/scan'" in merger_content
 
-    # 2. Consumer: S3 RF2O laser odometry
-    rf2o_launch = (
-        ws_root / 'src' / 'rf2o_laser_odometry' / 'launch' / 'rf2o_laser_odometry.launch.py'
-    )
-    assert rf2o_launch.exists()
-    with open(rf2o_launch, 'r', encoding='utf-8') as f:
-        rf2o_content = f.read()
-    assert "'laser_scan_topic': '/scan'" in rf2o_content
-
-    # 3. Consumer: S4 slam_toolbox (Mapping Mode)
+    # 2. Consumer: S4 slam_toolbox (Mapping Mode)
     slam_config = ws_root / 'src' / 'mobile_base_mapping' / 'config' / 'slam_toolbox.yaml'
     assert slam_config.exists()
     with open(slam_config, 'r', encoding='utf-8') as f:
         slam_params = yaml.safe_load(f)['async_slam_toolbox_node']['ros__parameters']
     assert slam_params['scan_topic'] == '/scan'
 
-    # 4. Consumer: S5 AMCL (Navigation Mode)
+    # 3. Consumer: S5 AMCL (Navigation Mode)
     amcl_config = ws_root / 'src' / 'mobile_base_localization' / 'config' / 'amcl_params.yaml'
     assert amcl_config.exists()
     with open(amcl_config, 'r', encoding='utf-8') as f:
         amcl_params = yaml.safe_load(f)['amcl']['ros__parameters']
     assert amcl_params['scan_topic'] == '/scan'
 
-    # 5. Consumers: S6 Local/Global Costmaps and Collision Monitor
+    # 4. Consumers: S6 Local/Global Costmaps and Collision Monitor
     nav2_config = ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml'
     assert nav2_config.exists()
     with open(nav2_config, 'r', encoding='utf-8') as f:
@@ -182,7 +173,7 @@ def test_imu_data_contract_and_ekf_consumer():
 
 
 def test_rf2o_laser_odometry_contract_and_ekf_consumer():
-    """Verify RF2O laser odometry input, output, frame, and EKF consumer."""
+    """Verify RF2O uses the front physical scan and retains its EKF interface."""
     ws_root = get_workspace_root()
 
     # 1. RF2O Launch configuration
@@ -193,7 +184,8 @@ def test_rf2o_laser_odometry_contract_and_ekf_consumer():
     with open(rf2o_launch, 'r', encoding='utf-8') as f:
         rf2o_content = f.read()
 
-    assert "'laser_scan_topic': '/scan'" in rf2o_content
+    assert "'laser_scan_topic': '/scan_front'" in rf2o_content
+    assert "'laser_scan_topic': '/scan'" not in rf2o_content
     assert "'odom_topic': '/rf2o/odom'" in rf2o_content
     assert "'base_frame_id': 'base_footprint'" in rf2o_content
     assert "'odom_frame_id': 'odom'" in rf2o_content

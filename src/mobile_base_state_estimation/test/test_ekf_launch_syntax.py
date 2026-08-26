@@ -62,7 +62,7 @@ def test_ekf_yaml_configuration():
     expected_odom0_config = [
         False, False, False,
         False, False, False,
-        True,  False, False,
+        True,  True,  False,
         False, False, True,
         False, False, False
     ]
@@ -79,14 +79,14 @@ def test_ekf_yaml_configuration():
     ]
     assert params['odom1_config'] == expected_odom1_config
 
-    # imu0 (TDK IMU) - orientation strictly excluded
+    # imu0 (TDK IMU) - yaw rate only; orientation and acceleration excluded
     assert params['imu0'] == '/imu/data_raw'
     expected_imu0_config = [
         False, False, False,
         False, False, False,
         False, False, False,
         False, False, True,
-        True,  False, False
+        False, False, False
     ]
     assert params['imu0_config'] == expected_imu0_config
     assert params['imu0_remove_gravitational_acceleration'] is True
