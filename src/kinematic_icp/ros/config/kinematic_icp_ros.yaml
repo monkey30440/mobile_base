@@ -1,0 +1,43 @@
+# Copyright 2026 Antigravity Team.
+#
+# Kinematic-ICP ROS 2 Online Node Configuration for mobile_base
+# Uses /scan_front (S2 physical front LiDAR) and /diff_drive_controller/odom (S7 wheel odometry prior)
+
+kinematic_icp_online_node:
+  ros__parameters:
+    # Sensor and Odometry Topics
+    use_2d_lidar: true
+    lidar_topic: "/scan_front"
+    wheel_odom_topic: "/diff_drive_controller/odom"
+
+    # Frame IDs
+    base_frame: "base_footprint"
+    lidar_odom_frame: "odom_lidar"
+
+    # TF Authority Policy (EKF is sole dynamic owner of odom -> base_footprint)
+    publish_odom_tf: false
+    invert_odom_tf: false
+
+    # Wheel Odometry Buffer Tolerance
+    time_tolerance_sec: 0.05
+    tf_timeout: 0.1
+
+    # LiDAR Range & Filtering
+    max_range: 25.0
+    min_range: 0.1
+    voxel_size: 0.1
+    max_points_per_voxel: 20
+
+    # ICP Parameters
+    use_adaptive_threshold: true
+    fixed_threshold: 0.5
+    max_num_iterations: 100
+    convergence_criterion: 0.0001
+    max_num_threads: 4
+    use_adaptive_odometry_regularization: true
+    fixed_regularization: 1.0
+    deskew: false
+
+    # Output Covariances
+    position_covariance: 0.01
+    orientation_covariance: 0.01
