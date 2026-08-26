@@ -216,7 +216,7 @@ graph TD
 ## S3: State Estimation
 
 ### 1. 主要職責
-- 融合輪端量測里程（Wheel Odometry）、雷達特徵里程（RF2O）與 IMU 角速度／加速度量測，提供連續、平滑且不依賴地圖的平面里程資訊（Odometry）。
+- 以前 LiDAR `/scan_front` 與 encoder wheel odometry `/diff_drive_controller/odom` 驅動 Kinematic-ICP，並由 EKF 融合 `/lidar_odometry` 的 x、y、yaw 與 IMU yaw rate，提供不依賴地圖的平面里程資訊。
 - 作為全系統唯一權威，發布 `odom → base_footprint` 動態座標轉換。
 - 承接需求：**SYS-005**。
 
@@ -225,7 +225,7 @@ graph TD
 - **Out-of-Scope**：地圖全域對齊定位（`map → odom`）、馬達驅動回授底層有效性檢查（由 S7 負責）。
 
 ### 3. 成熟技術配置
-- `robot_localization` (`ekf_node`) + `rf2o_laser_odometry`。
+- `kinematic_icp` + `robot_localization` (`ekf_node`)；Kinematic-ICP 不發布 odom TF，EKF 為唯一 `odom → base_footprint` 發布者。
 
 ---
 
@@ -365,7 +365,8 @@ sequenceDiagram
     User->>S4: 啟動建圖 (Start Mapping)
     S4->>S4: slam_toolbox 初始化並進入 ACTIVE (SYS-001)
     S2-->>S4: 權威原始 LaserScan (SYS-003)
-    S2-->>S3: IMU 量測與雷達特徵 (RF2O) (SYS-003, SYS-004)
+    S2-->>S3: 前 LiDAR /scan_front 與 IMU yaw rate (SYS-003, SYS-004)
+    S7-->>S3: Encoder wheel odometry prior (SYS-005, SYS-029)
 
     loop 巡覽環境
         rect rgb(240, 248, 255)
@@ -714,7 +715,7 @@ $$\text{Base Status} == \text{STOPPED}$$
 | 成熟方案模組 | 配置之 Subsystem | 負責之架構責任 | 排除之非職責（維持純粹性） |
 |---|---|---|---|
 | **`robot_state_publisher`** | `S1 Robot Description` | 靜態 TF 發布、機器人幾何描述 | 動態 odom / map TF 發布 |
-| **`robot_localization` (EKF)** | `S3 State Estimation` | 融合輪端/雷達/IMU，發布 `odom→base_footprint` | 全域地圖對齊 (`map→odom`) |
+| **Kinematic-ICP + `robot_localization` (EKF)** | `S3 State Estimation` | 前 LiDAR + wheel prior 產生 `/lidar_odometry`；EKF 融合 x/y/yaw 與 IMU yaw rate，發布 `odom→base_footprint` | merged `/scan` perception、全域地圖對齊 (`map→odom`) |
 | **`slam_toolbox`** | `S4 Mapping` | Mapping Mode 下之 2D 建圖運算與 `map→odom` | 導航時之 AMCL 定位 |
 | **`nav2_map_server`** | `S4 Mapping` | Map Package 序列化寫入、讀回驗證與載入 | 導航路徑規劃與控制 |
 | **`nav2_amcl`** | `S5 Localization` | Navigation Mode 下基於地圖定位與發布 `map→odom` | 建圖與即時地圖更新 |

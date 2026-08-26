@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2026 Antigravity Team.
-# Mapping Mode + Teleop Manual Movement Integration Validation for IMP-015 / SYS-034.
+# Historical Mapping Mode + Teleop validator for the superseded RF2O baseline.
 
 import os
 import pty

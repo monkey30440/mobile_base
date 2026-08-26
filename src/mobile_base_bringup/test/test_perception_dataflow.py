@@ -167,40 +167,42 @@ def test_imu_data_contract_and_ekf_consumer():
     assert ekf_params['imu0'] == '/imu/data_raw'
     # IMU orientation strictly excluded from 2D planar fusion
     assert ekf_params['imu0_config'][3:6] == [False, False, False]
-    # IMU yaw rate (vyaw) and linear acceleration (ax) fused
+    # IMU yaw rate (vyaw) only; linear acceleration remains excluded
     assert ekf_params['imu0_config'][11] is True  # vyaw
-    assert ekf_params['imu0_config'][12] is True  # ax
+    assert ekf_params['imu0_config'][12] is False  # ax
 
 
-def test_rf2o_laser_odometry_contract_and_ekf_consumer():
-    """Verify RF2O uses the front physical scan and retains its EKF interface."""
+def test_kinematic_icp_odometry_contract_and_ekf_consumer():
+    """Verify Kinematic-ICP uses front scan and wheel prior and feeds EKF pose."""
     ws_root = get_workspace_root()
 
-    # 1. RF2O Launch configuration
-    rf2o_launch = (
-        ws_root / 'src' / 'rf2o_laser_odometry' / 'launch' / 'rf2o_laser_odometry.launch.py'
+    # 1. Kinematic-ICP configuration
+    kicp_config = (
+        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' /
+        'kinematic_icp_ros.yaml'
     )
-    assert rf2o_launch.exists()
-    with open(rf2o_launch, 'r', encoding='utf-8') as f:
-        rf2o_content = f.read()
+    assert kicp_config.exists()
+    with open(kicp_config, 'r', encoding='utf-8') as f:
+        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
 
-    assert "'laser_scan_topic': '/scan_front'" in rf2o_content
-    assert "'laser_scan_topic': '/scan'" not in rf2o_content
-    assert "'odom_topic': '/rf2o/odom'" in rf2o_content
-    assert "'base_frame_id': 'base_footprint'" in rf2o_content
-    assert "'odom_frame_id': 'odom'" in rf2o_content
-    assert "'publish_tf': False" in rf2o_content or '"publish_tf": False' in rf2o_content
+    assert kicp_params['lidar_topic'] == '/scan_front'
+    assert kicp_params['wheel_odom_topic'] == '/diff_drive_controller/odom'
+    assert kicp_params['lidar_odom_frame'] == 'odom'
+    assert kicp_params['base_frame'] == 'base_footprint'
+    assert kicp_params['publish_odom_tf'] is False
+    assert kicp_params['invert_odom_tf'] is False
 
     # 2. Consumer in S3 robot_localization EKF
     ekf_yaml = ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml'
     assert ekf_yaml.exists()
     with open(ekf_yaml, 'r', encoding='utf-8') as f:
         ekf_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
-    assert ekf_params['odom1'] == '/rf2o/odom'
-    # RF2O planar velocities fused (vx, vy, yaw_rate)
-    assert ekf_params['odom1_config'][6] is True   # vx
-    assert ekf_params['odom1_config'][7] is True   # vy
-    assert ekf_params['odom1_config'][11] is True  # vyaw
+    assert ekf_params['odom0'] == '/lidar_odometry'
+    assert ekf_params['odom0_config'][0] is True   # x
+    assert ekf_params['odom0_config'][1] is True   # y
+    assert ekf_params['odom0_config'][5] is True   # yaw
+    assert not any(ekf_params['odom0_config'][6:12])  # no Kinematic-ICP twist
+    assert 'odom1' not in ekf_params
 
 
 def test_freshness_and_timeout_configurations():
@@ -219,7 +221,7 @@ def test_freshness_and_timeout_configurations():
     assert nav2_yaml.exists()
     with open(nav2_yaml, 'r', encoding='utf-8') as f:
         nav2_params = yaml.safe_load(f)
-    cm_timeout = nav2_params['collision_monitor']['ros__parameters']['scan']['source_timeout']
+    cm_timeout = nav2_params['collision_monitor']['ros__parameters']['source_timeout']
     assert cm_timeout >= 0.5
 
     # 3. S7 diff_drive_controller command timeout (500 ms)

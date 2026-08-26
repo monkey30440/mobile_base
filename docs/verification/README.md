@@ -16,7 +16,7 @@ docs/verification/
   IMP-009/           ← S1 Robot Description
   IMP-010/           ← S2 LiDAR acquisition and scan baseline
   IMP-011/           ← S2 TDK IMU runtime integration
-  IMP-012/           ← S2 RF2O and selected scan integration
+  IMP-012/           ← historical superseded RF2O and selected-scan evidence
   IMP-013/           ← S3 State Estimation
   IMP-014/           ← S4 Mapping and MapIO
   IMP-015/           ← S5 Localization

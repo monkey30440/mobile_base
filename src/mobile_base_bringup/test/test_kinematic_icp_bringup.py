@@ -20,6 +20,7 @@ from pathlib import Path
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch_ros.actions import Node
+from launch_ros.utilities import evaluate_parameters
 import yaml
 
 
@@ -34,6 +35,12 @@ def _load_launch_module(launch_file_path: Path):
 
 def _get_workspace_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
+
+
+def _source_path(include: IncludeLaunchDescription) -> str:
+    source = include.launch_description_source
+    substitutions = source._LaunchDescriptionSource__location
+    return ''.join(getattr(part, 'text', str(part)) for part in substitutions)
 
 
 def test_common_args_default_contract():
@@ -104,22 +111,21 @@ def test_kinematic_icp_launch_effective_defaults():
     # Find the Kinematic-ICP Node entity
     node = next(
         entity for entity in ld.entities
-        if isinstance(entity, Node) and entity.node_name == 'kinematic_icp_online_node'
+        if isinstance(entity, Node) and entity._Node__node_name == 'kinematic_icp_online_node'
     )
 
     # Evaluate the parameter dictionary passed to the node
-    param_dict = {}
-    for p in node._Node__parameters:
-        if isinstance(p, dict):
-            for k, v in p.items():
-                param_dict[k] = v.perform(context) if hasattr(v, 'perform') else str(v)
+    param_dict = next(
+        item for item in evaluate_parameters(context, node._Node__parameters)
+        if isinstance(item, dict)
+    )
 
     assert param_dict['lidar_odom_frame'] == 'odom'
-    assert param_dict['publish_odom_tf'] == 'false'
-    assert param_dict['invert_odom_tf'] == 'false'
+    assert param_dict['publish_odom_tf'] is False
+    assert param_dict['invert_odom_tf'] is False
     assert param_dict['lidar_topic'] == '/scan_front'
     assert param_dict['wheel_odom_topic'] == '/diff_drive_controller/odom'
-    assert param_dict['use_2d_lidar'] == 'true'
+    assert param_dict['use_2d_lidar'] is True
     assert param_dict['wheel_odom_frame'] == 'odom'
     assert param_dict['base_frame'] == 'base_footprint'
 
@@ -134,6 +140,9 @@ def test_kinematic_icp_launch_cli_override():
 
     ld = module.generate_launch_description()
     context = LaunchContext()
+    for entity in ld.entities:
+        if isinstance(entity, DeclareLaunchArgument):
+            entity.execute(context)
     context.launch_configurations.update({
         'lidar_odom_frame': 'custom_odom',
         'publish_odom_tf': 'true',
@@ -143,26 +152,25 @@ def test_kinematic_icp_launch_cli_override():
 
     node = next(
         entity for entity in ld.entities
-        if isinstance(entity, Node) and entity.node_name == 'kinematic_icp_online_node'
+        if isinstance(entity, Node) and entity._Node__node_name == 'kinematic_icp_online_node'
     )
 
-    param_dict = {}
-    for p in node._Node__parameters:
-        if isinstance(p, dict):
-            for k, v in p.items():
-                param_dict[k] = v.perform(context) if hasattr(v, 'perform') else str(v)
+    param_dict = next(
+        item for item in evaluate_parameters(context, node._Node__parameters)
+        if isinstance(item, dict)
+    )
 
     assert param_dict['lidar_odom_frame'] == 'custom_odom'
-    assert param_dict['publish_odom_tf'] == 'true'
-    assert param_dict['invert_odom_tf'] == 'true'
+    assert param_dict['publish_odom_tf'] is True
+    assert param_dict['invert_odom_tf'] is True
     assert param_dict['lidar_topic'] == '/custom_scan'
 
 
-def test_mapping_kinematic_icp_launch_forwards_arguments(monkeypatch):
-    """Verify mapping_kinematic_icp.launch.py declares and forwards Kinematic-ICP arguments."""
+def test_canonical_mapping_launch_forwards_kinematic_icp_arguments(monkeypatch):
+    """Verify canonical mapping.launch.py forwards Kinematic-ICP arguments."""
     ws_root = _get_workspace_root()
     launch_path = (
-        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mapping_kinematic_icp.launch.py'
+        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mapping.launch.py'
     )
     module = _load_launch_module(launch_path)
     monkeypatch.setattr(
@@ -190,8 +198,7 @@ def test_mapping_kinematic_icp_launch_forwards_arguments(monkeypatch):
     ]
     kicp_include = next(
         inc for inc in includes
-        if any('kinematic_icp.launch.py' in str(part)
-               for part in inc.launch_description_source._LaunchDescriptionSource__location)
+        if _source_path(inc).endswith('kinematic_icp/launch/kinematic_icp.launch.py')
     )
     assert kicp_include.launch_arguments is not None
     forwarded = dict(kicp_include.launch_arguments)
@@ -202,11 +209,11 @@ def test_mapping_kinematic_icp_launch_forwards_arguments(monkeypatch):
     assert 'wheel_odom_topic' in forwarded
 
 
-def test_navigation_kinematic_icp_launch_forwards_arguments(monkeypatch):
-    """Verify navigation_kinematic_icp.launch.py declares and forwards Kinematic-ICP arguments."""
+def test_canonical_navigation_launch_forwards_kinematic_icp_arguments(monkeypatch):
+    """Verify canonical navigation.launch.py forwards Kinematic-ICP arguments."""
     ws_root = _get_workspace_root()
     launch_path = (
-        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'navigation_kinematic_icp.launch.py'
+        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'navigation.launch.py'
     )
     module = _load_launch_module(launch_path)
     monkeypatch.setattr(
@@ -234,8 +241,7 @@ def test_navigation_kinematic_icp_launch_forwards_arguments(monkeypatch):
     ]
     kicp_include = next(
         inc for inc in includes
-        if any('kinematic_icp.launch.py' in str(part)
-               for part in inc.launch_description_source._LaunchDescriptionSource__location)
+        if _source_path(inc).endswith('kinematic_icp/launch/kinematic_icp.launch.py')
     )
     assert kicp_include.launch_arguments is not None
     forwarded = dict(kicp_include.launch_arguments)

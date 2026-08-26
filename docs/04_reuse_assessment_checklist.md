@@ -50,11 +50,11 @@
 ### Perception and Odometry
 
 - [x] 7. SYS-003 LiDAR Perception
-  - 完成條件：完成 LiDAR 掃描供建圖、定位與導航使用之成熟方案 coverage record；維持 independent-source-first，並確認 RF2O 的單一 merged-scan dependency 由 ROS 2 Jazzy `dual_laser_merger` 0.3.1 覆蓋，其配置與實機 evidence 留待後續 closure。
+  - 完成條件：完成 LiDAR 掃描供建圖、定位與導航使用之成熟方案 coverage record；`dual_laser_merger` 0.3.1 提供 perception `/scan`，Kinematic-ICP 則直接使用 `/scan_front`。
 - [x] 8. SYS-004 IMU Perception
   - 完成條件：完成 IMU 量測供定位使用之成熟方案 coverage record。
 - [x] 9. SYS-005 System Odometry
-  - 完成條件：完成 wheel odometry、`dual_laser_merger` 0.3.1 所產生之 merged-LaserScan-derived RF2O odometry 與 IMU 產生平面里程、唯一 `odom -> base_footprint` publication，以及輸入異常或逾時時沿用 `robot_localization` 原生 fusion／prediction 行為之成熟方案 coverage record。
+  - 完成條件：完成前 LiDAR + wheel prior → Kinematic-ICP → `/lidar_odometry` 與 IMU yaw rate → EKF 的平面里程、唯一 `odom -> base_footprint` publication，以及輸入異常或逾時行為之成熟方案 coverage record。
 
 ### Motion and Drive
 

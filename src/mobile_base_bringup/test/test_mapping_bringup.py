@@ -56,7 +56,14 @@ def test_mapping_launch_composes_mapping_mode_without_duplicate_description(monk
         for entity in launch_description.entities
         if isinstance(entity, DeclareLaunchArgument)
     }
-    assert set(arguments) == {'use_foxglove'}
+    assert set(arguments) == {
+        'use_foxglove',
+        'lidar_odom_frame',
+        'publish_odom_tf',
+        'invert_odom_tf',
+        'lidar_topic',
+        'wheel_odom_topic',
+    }
     assert arguments['use_foxglove'].default_value[0].text == 'false'
 
     includes = [
@@ -69,7 +76,7 @@ def test_mapping_launch_composes_mapping_mode_without_duplicate_description(monk
         'mobile_base_perception/launch/tdk_imu.launch.py',
         'mobile_base_perception/launch/sick_dual_lidar.launch.py',
         'mobile_base_perception/launch/dual_laser_merger.launch.py',
-        'rf2o_laser_odometry/launch/rf2o_laser_odometry.launch.py',
+        'kinematic_icp/launch/kinematic_icp.launch.py',
         'mobile_base_state_estimation/launch/ekf.launch.py',
         'mobile_base_mapping/launch/mapping.launch.py',
         'foxglove_bridge/launch/foxglove_bridge_launch.xml',
@@ -80,6 +87,7 @@ def test_mapping_launch_composes_mapping_mode_without_duplicate_description(monk
     assert not any('mobile_base_description' in path for path in paths)
     assert not any('mobile_base_localization' in path for path in paths)
     assert not any('nav2_bringup' in path for path in paths)
+    assert not any('rf2o' in path.lower() for path in paths)
 
     foxglove = next(include for include, path in zip(includes, paths) if 'foxglove' in path)
     assert isinstance(foxglove.condition, IfCondition)
@@ -95,3 +103,5 @@ def test_package_declares_direct_launch_import_dependencies():
     }
     assert 'ament_index_python' in runtime_dependencies
     assert 'mobile_base_description' in runtime_dependencies
+    assert 'kinematic_icp' in runtime_dependencies
+    assert 'rf2o_laser_odometry' not in runtime_dependencies

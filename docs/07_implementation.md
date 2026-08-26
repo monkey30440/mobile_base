@@ -2,6 +2,14 @@
 
 本文件記錄 `mobile_base` v0.1 的**目前實作基線與可重現證據**。它只回答「哪個核准設計已由哪些檔案、設定與程式實現，以及驗證到哪一層」，不得重新定義 [`01_use_cases.md`](./01_use_cases.md) 至 [`06_subsystem.md`](./06_subsystem.md) 已核准的需求、責任或介面。
 
+## Current production odometry baseline (2026-08-26)
+
+Kinematic-ICP has replaced RF2O as the sole production LiDAR odometry solution. Canonical `mobile_base_bringup/launch/mapping.launch.py` and `navigation.launch.py` launch Kinematic-ICP with physical `/scan_front`, `/diff_drive_controller/odom` as encoder wheel prior, `/lidar_odometry` output, `lidar_odom_frame: odom`, `base_frame: base_footprint`, `publish_odom_tf: false`, and `invert_odom_tf: false`. Canonical `mobile_base_state_estimation/config/ekf.yaml` fuses `/lidar_odometry` x/y/yaw and `/imu/data_raw` yaw rate only; EKF remains the sole `odom → base_footprint` TF owner.
+
+The merged `/scan` remains the perception input for slam_toolbox, AMCL, Nav2 costmaps, and Collision Monitor, not Kinematic-ICP. RF2O implementation and dependency records later in this document describe superseded historical baselines and dated evidence only; they are not active architecture or fallback instructions.
+
+Selection rationale: direct physical `/scan_front` use, encoder wheel prior, validated timestamp interpolation, zero stationary Kinematic-ICP drift during the 120 s H0 observation, stable stationary Kinematic-ICP + EKF behavior, RF2O raw stationary drift, and unacceptable RF2O + EKF stationary yaw drift. This establishes stationary production selection evidence, not full moving-navigation validation.
+
 ## 1. 文件權限與狀態規則
 
 ### 1.1 Normative Inputs
@@ -106,10 +114,10 @@ Source dependencies 保留在 repository 的 `src/`，不藏入 Docker image bui
 
 | Package | Repository state | Existing evidence |
 |---|---|---|
-| `rf2o_laser_odometry` | `src/rf2o_laser_odometry`；移除 Jazzy 無效的 legacy `cmake_modules` rosdep metadata。 | 2026-08-18 `rosdep install`、`colcon build --symlink-install` 與 `ros2 pkg list` 通過。 |
+| `kinematic_icp` | `src/kinematic_icp`；維持既有核准 upstream version 與 mobile_base ROS wrapper。 | Timestamp interpolation、launch precedence、stationary Kinematic-ICP 與 EKF evidence 已建立；本次只做 canonical convergence。 |
 | `tdk_ros2_imu` | `src/tdk_ros2_imu`；`python3-serial` 已固化於 Dockerfile。 | 2026-08-18 `rosdep install`、`colcon build --symlink-install` 與 `ros2 pkg list` 通過。 |
 
-這些證據只證明 dependency/build closure，不證明 RF2O odometry、IMU message semantics 或 S2/S3 整合已通過。
+這些證據只證明 dependency/build closure；Kinematic-ICP moving-navigation validation 不因本次 canonical convergence 而自動成立。
 
 ### 2.6 Verification Evidence
 
@@ -2503,7 +2511,7 @@ src/mobile_base_navigation/
    - S7 `diff_drive_controller` (30 Hz) 依權威物理幾何（輪徑 $0.080\,\text{m}$、輪距 $0.5545\,\text{m}$）計算正向運動學，輸出 `/diff_drive_controller/odom` (`odom0`)；
    - `enable_odom_tf: false`（嚴格禁止 S7 廣播 `odom -> base_footprint` TF）。
 3. **多源融合里程計 (Fused Odometry)**:
-   - S3 `robot_localization` EKF (50 Hz) 融合 `odom0` (輪端 $v_x, \omega_z$)、`odom1` (/rf2o/odom $v_x, v_y, \omega_z$)、`imu0` (/imu/data_raw $\omega_z, a_x$)；
+   - S3 Kinematic-ICP 使用 `/scan_front` 與 `/diff_drive_controller/odom` wheel prior 發布 `/lidar_odometry`；`robot_localization` EKF (50 Hz) 融合其 x/y/yaw 與 `/imu/data_raw` yaw rate；
    - 輸出 `/odometry/filtered`，並作為全系統 `odom -> base_footprint` TF 的**唯一發布權威**；
    - S4 `slam_toolbox`、S5 `nav2_amcl`、S6 `controller_server` 與 `collision_monitor` 統一消費該權威位姿與速度。
 
@@ -2512,7 +2520,7 @@ src/mobile_base_navigation/
   - `test_m1_physical_feedback_contract`: 驗證 URDF Xacro 存在 position/velocity state interfaces，驗證 C++ 原始碼 read 實體解算、有效性標記與錯誤回傳路徑（GAP-05 / SYS-029）。
   - `test_wheel_odometry_contract`: 驗證 `diff_drive_controller` 關節綁定、輪徑 $0.080\,\text{m}$、輪距 $0.5545\,\text{m}$、`enable_odom_tf = false` 與 `position_feedback = true`。
   - `test_fused_odometry_ekf_contract`: 驗證 EKF 50 Hz 頻率、`sensor_timeout = 0.1 s`、`publish_tf = true`、`odom0`/`odom1`/`imu0` 綁定與 Frame 設定。
-  - `test_tf_authority_odometry_prohibitions`: 驗證 `diff_drive_controller` 與 `rf2o` 均未發布 `odom -> base_footprint` TF，權威唯一性完整。
+  - `test_tf_authority_odometry_prohibitions`: 驗證 `diff_drive_controller` 與 Kinematic-ICP 均未發布 `odom -> base_footprint` TF，權威唯一性完整。
   - `test_feedback_failure_and_stale_data_contract`: 驗證 EKF 100 ms 感測器逾時隔離與 S7 500 ms 命令逾時保護合約。
 
 #### 3.16.4 Verification Evidence
@@ -2547,10 +2555,10 @@ src/mobile_base_navigation/
 
 #### 3.17.2 Operational Modes & Lifecycle Architecture
 1. **Mapping Mode (建圖模式)**:
-   - **啟動編排**: `mobile_base_bringup/launch/mapping.launch.py` 依序啟動底盤控制 (`base_control`)、感測器 (`sick_dual_lidar`, `dual_laser_merger`, `tdk_imu`)、狀態估測 (`rf2o`, `ekf`) 與建圖 (`mapping`)。
+   - **啟動編排**: `mobile_base_bringup/launch/mapping.launch.py` 依序啟動底盤控制、雙 LiDAR、`dual_laser_merger`、TDK IMU、Kinematic-ICP、canonical EKF 與建圖。
    - **模式隔離**: S5 定位 (`map_server`, `amcl`) 與 S6 導航模組嚴格處於未啟動狀態；`async_slam_toolbox_node` 透過 Lifecycle Event 轉換為 `ACTIVE` (state 3) 並作為 `map -> odom` TF 的唯一發布者；外部 `teleop_twist_keyboard` 為全系統唯一運動命令生產者。
 2. **Navigation Mode (導航模式)**:
-   - **啟動編排**: `mobile_base_bringup/launch/navigation.launch.py`（統一編排 `base_control`、`tdk_imu`、`sick_dual_lidar`、`dual_laser_merger`、`rf2o`、`ekf`、`localization` 與 `navigation`）或個別子系統啟動腳本。
+   - **啟動編排**: `mobile_base_bringup/launch/navigation.launch.py` 統一編排 `base_control`、TDK IMU、雙 LiDAR、`dual_laser_merger`、Kinematic-ICP、canonical EKF、localization 與 navigation。
    - **模式隔離**: S4 建圖模組嚴格處於未啟動狀態；`lifecycle_manager_localization`（管理 `map_server`, `amcl`）與 `lifecycle_manager_navigation`（管理 `controller_server`, `planner_server`, `route_server`, `bt_navigator`, `collision_monitor`）統一控制 7 個 Lifecycle 節點轉換為 `ACTIVE [3]`；`nav2_amcl` 為 `map -> odom` TF 的唯一發布者；S6 MPPI 為全系統唯一運動命令生產者。
 3. **ros2_control / Hardware Lifecycle**:
    - `M1Hardware` 依循 ros2_control Lifecycle 流轉（`on_init` $\rightarrow$ `on_configure` $\rightarrow$ `on_activate` $\rightarrow$ `read/write` $\rightarrow$ `on_deactivate`）；Deactivate 或關機時先下發停止指令並確認 0 RPM 後釋放馬達使能（GAP-06 / SYS-030），防止未停穩自由滑行。
@@ -2602,7 +2610,7 @@ src/mobile_base_navigation/
 
 #### 3.18.2 End-to-End Acceptance Summary
 1. **啟動建圖與模式就緒**:
-   - `ros2 launch mobile_base_bringup mapping.launch.py` 啟動 S1 機器人描述、S2 雙光達感知與 IMU、S3 狀態估測（RF2O + EKF）、S7 底盤控制與 S4 `async_slam_toolbox_node`。
+   - `ros2 launch mobile_base_bringup mapping.launch.py` 啟動 S1 機器人描述、S2 雙光達感知與 IMU、S3 Kinematic-ICP + EKF、S7 底盤控制與 S4 `async_slam_toolbox_node`。
    - `slam_toolbox` 順利流轉至 `ACTIVE`，成為 `map -> odom` TF 的唯一發布者，即時於 `/map` 主題發布 2D Occupancy Grid。
 2. **手動受控移動與地圖持續更新**:
    - 操作員透過 `teleop_twist_keyboard` 發布速度命令至 `/diff_drive_controller/cmd_vel`，驅動底盤著地巡覽環境（經 `IMP-015` 實機測試）；

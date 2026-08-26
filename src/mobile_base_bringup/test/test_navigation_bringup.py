@@ -74,6 +74,11 @@ def test_navigation_launch_composes_all_subsystems_without_slam(monkeypatch):
         'baud_rate',
         'response_timeout_ms',
         'use_mock_hardware',
+        'lidar_odom_frame',
+        'publish_odom_tf',
+        'invert_odom_tf',
+        'lidar_topic',
+        'wheel_odom_topic',
     }
     assert expected_args.issubset(set(arguments))
 
@@ -88,7 +93,7 @@ def test_navigation_launch_composes_all_subsystems_without_slam(monkeypatch):
         'mobile_base_perception/launch/tdk_imu.launch.py',
         'mobile_base_perception/launch/sick_dual_lidar.launch.py',
         'mobile_base_perception/launch/dual_laser_merger.launch.py',
-        'rf2o_laser_odometry/launch/rf2o_laser_odometry.launch.py',
+        'kinematic_icp/launch/kinematic_icp.launch.py',
         'mobile_base_state_estimation/launch/ekf.launch.py',
         'mobile_base_localization/launch/localization.launch.py',
         'mobile_base_navigation/launch/navigation.launch.py',
@@ -110,6 +115,7 @@ def test_navigation_launch_composes_all_subsystems_without_slam(monkeypatch):
     assert not any('nav2_bringup' in path for path in paths), (
         'Must not include nav2_bringup directly'
     )
+    assert not any('rf2o' in path.lower() for path in paths)
 
     # Foxglove conditional launch
     foxglove = next(include for include, path in zip(includes, paths) if 'foxglove' in path)
@@ -169,7 +175,8 @@ def test_package_declares_navigation_runtime_dependencies():
     assert 'mobile_base_control' in runtime_dependencies
     assert 'mobile_base_perception' in runtime_dependencies
     assert 'mobile_base_state_estimation' in runtime_dependencies
-    assert 'rf2o_laser_odometry' in runtime_dependencies
+    assert 'kinematic_icp' in runtime_dependencies
+    assert 'rf2o_laser_odometry' not in runtime_dependencies
     assert 'nav2_map_server' in runtime_dependencies
     assert 'foxglove_bridge' in runtime_dependencies
 

@@ -24,7 +24,9 @@ ros2 launch mobile_base_bringup mapping.launch.py use_foxglove:=true
 
 - `/scan`：合併後的前、後 LiDAR 掃描資料
 - `/imu/data_raw`：原始 IMU 量測資料
-- `/rf2o/odom`：RF2O 雷射里程計，且 RF2O 的 TF 發布功能停用
+- `/scan_front`：Kinematic-ICP 的實體前 LiDAR 輸入
+- `/diff_drive_controller/odom`：Kinematic-ICP 的 encoder wheel prior
+- `/lidar_odometry`：Kinematic-ICP 平面里程，且 `publish_odom_tf=false`
 - `/odometry/filtered`：EKF 融合後的里程計資料
 - `/map`：由 `slam_toolbox` 產生的佔據柵格地圖
 - TF `odom -> base_footprint`：由 EKF 唯一負責發布

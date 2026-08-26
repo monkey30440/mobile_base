@@ -810,3 +810,5 @@ in 07 and its checklist. README was last materially updated on August 13, and
 
 
 End of read-only discovery report.
+SUPERSEDED ARCHITECTURE NOTICE (2026-08-26)
+This discovery report records the pre-convergence RF2O baseline. RF2O references below are historical only. Current production odometry is /scan_front + /diff_drive_controller/odom -> Kinematic-ICP -> /lidar_odometry -> EKF + IMU yaw rate -> /odometry/filtered, with EKF as sole odom -> base_footprint TF owner.

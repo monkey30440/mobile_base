@@ -135,17 +135,15 @@ def test_s3_odom_to_base_footprint_sole_authority():
         'diff_drive_controller must have enable_odom_tf: false to prevent duplicate TF'
     )
 
-    # 3. Check rf2o_laser_odometry launch parameters (S2 Perception) - MUST NOT publish odom TF
-    rf2o_launch_path = (
-        ws_root / 'src' / 'rf2o_laser_odometry' / 'launch' / 'rf2o_laser_odometry.launch.py'
+    # 3. Check Kinematic-ICP parameters - MUST NOT publish odom TF
+    kicp_config_path = (
+        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' /
+        'kinematic_icp_ros.yaml'
     )
-    assert rf2o_launch_path.exists()
-    with open(rf2o_launch_path, 'r', encoding='utf-8') as f:
-        rf2o_content = f.read()
-
-    assert "'publish_tf': False" in rf2o_content or '"publish_tf": False' in rf2o_content, (
-        'rf2o_laser_odometry must have publish_tf: False to prevent duplicate TF'
-    )
+    assert kicp_config_path.exists()
+    with open(kicp_config_path, 'r', encoding='utf-8') as f:
+        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
+    assert kicp_params['publish_odom_tf'] is False
 
 
 def test_s4_mapping_mode_map_to_odom_authority():
@@ -249,7 +247,7 @@ def test_sensor_and_perception_frame_ids_match_urdf():
 
 
 def test_kinematic_icp_frame_semantics_and_tf_authority():
-    """Verify Kinematic-ICP PoC frame semantics and sole EKF TF authority."""
+    """Verify canonical Kinematic-ICP frame semantics and sole EKF TF authority."""
     ws_root = get_workspace_root()
 
     # 1. Kinematic-ICP configuration
@@ -268,9 +266,9 @@ def test_kinematic_icp_frame_semantics_and_tf_authority():
     assert kicp_params['publish_odom_tf'] is False
     assert kicp_params['invert_odom_tf'] is False
 
-    # 2. EKF Kinematic-ICP configuration
+    # 2. Canonical EKF configuration
     ekf_kicp_config_path = (
-        ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf_kinematic_icp.yaml'
+        ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml'
     )
     assert ekf_kicp_config_path.exists()
     with open(ekf_kicp_config_path, 'r', encoding='utf-8') as f:
@@ -282,7 +280,7 @@ def test_kinematic_icp_frame_semantics_and_tf_authority():
     assert ekf_kicp_params['base_link_frame'] == 'base_footprint'
     assert ekf_kicp_params['odom0'] == '/lidar_odometry'
 
-    # 3. Protect that no active PoC configuration introduces odom_lidar
+    # 3. Protect that no active configuration introduces odom_lidar
     for config_file in (kicp_config_path, ekf_kicp_config_path):
         with open(config_file, 'r', encoding='utf-8') as f:
             content = f.read()

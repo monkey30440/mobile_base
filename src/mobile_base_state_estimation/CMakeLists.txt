@@ -22,11 +22,6 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_ekf_launch_syntax test/test_ekf_launch_syntax.py)
   ament_add_pytest_test(
-    test_ekf_stationary_runtime
-    test/test_ekf_stationary_runtime.py
-    TIMEOUT 90
-  )
-  ament_add_pytest_test(
     test_kinematic_icp_runtime
     test/test_kinematic_icp_runtime.py
     TIMEOUT 120

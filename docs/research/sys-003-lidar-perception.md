@@ -76,3 +76,4 @@ ROS 2 Jazzy 已有 released binary 候選 [`dual_laser_merger` 0.3.1](https://do
 ## Subsequent Approved Decision
 
 SYS-005 後續確認 RF2O 使用 merged `LaserScan`，並核准 ROS 2 Jazzy `dual_laser_merger` 0.3.1 作為 merge 套件。兩個原始 scans 仍保留；同步、TF、QoS、重採樣、遮蔽、latency、dropout 與實機 evidence 尚待 closure。
+> Historical research note: RF2O references describe the superseded candidate baseline. Current Kinematic-ICP consumes `/scan_front`; merged `/scan` remains for perception consumers.

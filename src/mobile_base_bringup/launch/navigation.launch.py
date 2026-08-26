@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compose the validated real-hardware Navigation Mode launches."""
+"""Compose the canonical real-hardware Navigation Mode launches."""
 
 import os
 
@@ -41,7 +41,7 @@ def _python_launch(package_name, launch_file, launch_arguments=None):
 
 
 def generate_launch_description():
-    """Generate the thin Navigation Mode orchestration description."""
+    """Generate the canonical Kinematic-ICP Navigation Mode description."""
     loc_pkg_share = get_package_share_directory('mobile_base_localization')
     nav_pkg_share = get_package_share_directory('mobile_base_navigation')
 
@@ -124,6 +124,27 @@ def generate_launch_description():
         description='Use mock hardware plugin instead of real M1 hardware',
     )
 
+    lidar_odom_frame_arg = DeclareLaunchArgument(
+        'lidar_odom_frame', default_value='odom',
+        description='Odometry parent frame ID for Kinematic-ICP',
+    )
+    publish_odom_tf_arg = DeclareLaunchArgument(
+        'publish_odom_tf', default_value='false',
+        description='Whether Kinematic-ICP should publish odom TF',
+    )
+    invert_odom_tf_arg = DeclareLaunchArgument(
+        'invert_odom_tf', default_value='false',
+        description='Whether Kinematic-ICP should invert published odom TF',
+    )
+    lidar_topic_arg = DeclareLaunchArgument(
+        'lidar_topic', default_value='/scan_front',
+        description='Sensor topic for Kinematic-ICP',
+    )
+    wheel_odom_topic_arg = DeclareLaunchArgument(
+        'wheel_odom_topic', default_value='/diff_drive_controller/odom',
+        description='Wheel odometry input topic for Kinematic-ICP',
+    )
+
     # Subsystem launches
     base_control = _python_launch(
         'mobile_base_control',
@@ -153,8 +174,20 @@ def generate_launch_description():
     dual_laser_merger = _python_launch(
         'mobile_base_perception', 'dual_laser_merger.launch.py'
     )
-    rf2o = _python_launch(
-        'rf2o_laser_odometry', 'rf2o_laser_odometry.launch.py'
+    kinematic_icp = _python_launch(
+        'kinematic_icp', 'kinematic_icp.launch.py',
+        launch_arguments={
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
+            'params_file': os.path.join(
+                get_package_share_directory('kinematic_icp'),
+                'config', 'kinematic_icp_ros.yaml',
+            ),
+            'lidar_odom_frame': LaunchConfiguration('lidar_odom_frame'),
+            'publish_odom_tf': LaunchConfiguration('publish_odom_tf'),
+            'invert_odom_tf': LaunchConfiguration('invert_odom_tf'),
+            'lidar_topic': LaunchConfiguration('lidar_topic'),
+            'wheel_odom_topic': LaunchConfiguration('wheel_odom_topic'),
+        },
     )
     ekf = _python_launch(
         'mobile_base_state_estimation', 'ekf.launch.py'
@@ -209,12 +242,17 @@ def generate_launch_description():
         baud_rate_arg,
         response_timeout_ms_arg,
         use_mock_hardware_arg,
+        lidar_odom_frame_arg,
+        publish_odom_tf_arg,
+        invert_odom_tf_arg,
+        lidar_topic_arg,
+        wheel_odom_topic_arg,
         # Subsystems
         base_control,
         tdk_imu,
         sick_dual_lidar,
         dual_laser_merger,
-        rf2o,
+        kinematic_icp,
         ekf,
         localization,
         navigation,

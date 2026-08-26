@@ -161,7 +161,7 @@ graph LR
 #### 3.1 發布介面 (Published Interfaces)
 | 介面名稱 | 訊息型別 | `frame_id` (來自 S1) | QoS Profile | 典型頻率 | 說明與消費者 |
 |---|---|---|---|---|---|
-| **`/scan`** | `sensor_msgs/msg/LaserScan` | `base_link` | `SensorData` / `SystemDefaults` | $15 \sim 25\,\text{Hz}$ | **360° 融合雷達資料**。<br/>供 **S3 RF2O**、**S4 slam_toolbox**、**S5 AMCL** 訂閱。 |
+| **`/scan`** | `sensor_msgs/msg/LaserScan` | `base_link` | `SensorData` / `SystemDefaults` | $15 \sim 25\,\text{Hz}$ | **360° 融合雷達資料**。<br/>供 **S4 slam_toolbox**、**S5 AMCL**、**S6 Nav2 / Collision Monitor** 訂閱；不是 Kinematic-ICP 輸入。 |
 | **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_FL_1` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 前左原始掃描（Layer 1 光學掃描面）。<br/>供 S6 Nav2 Costmap 避障及 `dual_laser_merger` 融合使用。 |
 | **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_BR_1` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 後右原始掃描（Layer 1 光學掃描面）。<br/>供 S6 Nav2 Costmap 避障及 `dual_laser_merger` 融合使用。 |
 | **`/imu/data_raw`** | `sensor_msgs/msg/Imu` | `base_imu_link` | `SensorData` | $50 \sim 100\,\text{Hz}$ | 原始 3 軸角速度與線性加速度。<br/>供 **S3 robot_localization EKF** 訂閱。 |
@@ -413,6 +413,16 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
 ---
 
 ## 3.4 S3: State Estimation Subsystem
+
+### Current canonical design (2026-08-26)
+
+Production data flow is `/scan_front` + `/diff_drive_controller/odom` → Kinematic-ICP → `/lidar_odometry` → EKF + `/imu/data_raw` yaw rate → `/odometry/filtered`. Kinematic-ICP uses `lidar_odom_frame: odom`, `base_frame: base_footprint`, `publish_odom_tf: false`, and `invert_odom_tf: false`. The EKF fuses only Kinematic-ICP x/y/yaw pose and IMU yaw rate, with `world_frame: odom`, `odom_frame: odom`, `base_link_frame: base_footprint`, and `publish_tf: true`; direct wheel odometry, Kinematic-ICP twist, and IMU linear acceleration are excluded from EKF fusion. EKF is the sole owner of `odom → base_footprint`.
+
+The `dual_laser_merger` output `/scan` remains the perception input for SLAM, AMCL, Nav2 costmaps, and Collision Monitor. It is not Kinematic-ICP input.
+
+### Superseded historical RF2O design record
+
+The remainder of this S3 section records the prior RF2O design and its original verification obligations. It is retained for decision traceability only and is non-normative; it must not be used as active launch, configuration, dependency, or fallback guidance.
 
 ### 1. Purpose & Architectural Boundary
 * **目的**：匯流多源運動學與慣性量測（S7 輪端里程、S2 RF2O 雷達里程、S2 IMU），以擴展卡爾曼濾波（EKF）推算高頻、平滑、抗打滑且連續的二維平面里程估測（System Planar Odometry），並作為**全系統唯一權威發布 `odom → base_footprint` 動態座標轉換**。
@@ -1078,7 +1088,7 @@ local_costmap:
 1. **子系統活躍狀態**：
    * **S1 Robot Description**：`robot_state_publisher` 廣播 `/tf_static` 與動態關節 TF（ACTIVE）。
    * **S2 Perception**：`sick_dual_lidar`, `dual_laser_merger`, `tdk_imu` 廣播 `/scan` 與 `/imu/data_raw`（ACTIVE）。
-   * **S3 State Estimation**：`rf2o_laser_odometry_node`, `ekf_filter_node` 融合並發布權威 `odom → base_footprint` TF（ACTIVE）。
+   * **S3 State Estimation**：`kinematic_icp_online_node` 發布 `/lidar_odometry` 且不發布 odom TF；`ekf_filter_node` 融合其 x/y/yaw 與 IMU yaw rate，發布權威 `odom → base_footprint` TF（ACTIVE）。
    * **S4 Mapping**：`mapping.launch.py` 啟動 `async_slam_toolbox_node` Lifecycle 節點並轉換至 ACTIVE，擁有建圖期 `map → odom` TF（ACTIVE）。
    * **S7 Base Control**：`controller_manager` 載入並啟用 `diff_drive_controller`、`joint_state_broadcaster` 與 `M1HardwareInterface`（ACTIVE）。
 2. **互斥非活躍子系統**：

@@ -139,3 +139,4 @@ The final approved SYS-005 requires wheel odometry, RF2O odometry, and IMU as co
 - [robot_localization ROS Index entry for Jazzy](https://index.ros.org/p/robot_localization/)
 - [robot_localization official repository](https://github.com/cra-ros-pkg/robot_localization)
 - Local evidence: `ref/rf2o_laser_odometry`, `ref/robot_localization`, `ref/base_motor_controller`, and the previously assessed `ref/tdk_ros2_imu`
+> **Superseded candidate assessment:** this research record documents the earlier RF2O selection investigation. Current production architecture uses `/scan_front` + `/diff_drive_controller/odom` → Kinematic-ICP → `/lidar_odometry` → EKF + IMU yaw rate. RF2O is not an active or fallback architecture.

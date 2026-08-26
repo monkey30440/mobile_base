@@ -168,7 +168,7 @@ v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無
 
 ## SYS-005 系統里程
 
-系統應使用 wheel odometry、RF2O odometry 與 IMU 資訊，透過成熟狀態估測方案產生可供定位、建圖與導航使用之平面里程資訊；輸入異常或逾時時，系統得依狀態估測方案的原生行為，使用其餘有效量測或 prediction 持續產生里程資訊。
+系統應以實體前 LiDAR `/scan_front` 與 encoder wheel odometry `/diff_drive_controller/odom` 供 Kinematic-ICP 產生 `/lidar_odometry`，再由 EKF 融合其平面位姿（x、y、yaw）與 `/imu/data_raw` yaw rate，產生可供定位、建圖與導航使用之 `/odometry/filtered`，並由 EKF 唯一發布 `odom → base_footprint`；輸入異常或逾時時，系統得依各成熟方案的原生行為處理有效量測或 prediction。
 
 ---
 

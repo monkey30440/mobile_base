@@ -12,6 +12,7 @@
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>kinematic_icp</exec_depend>
   <exec_depend>mobile_base_control</exec_depend>
   <exec_depend>mobile_base_description</exec_depend>
   <exec_depend>mobile_base_localization</exec_depend>
@@ -20,7 +21,6 @@
   <exec_depend>mobile_base_perception</exec_depend>
   <exec_depend>mobile_base_state_estimation</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
-  <exec_depend>rf2o_laser_odometry</exec_depend>
   <exec_depend>foxglove_bridge</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>

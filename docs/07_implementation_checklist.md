@@ -28,7 +28,7 @@
 - [x] 1. Docker development and validation baseline
   - 完成條件：`Dockerfile` 與 `compose.yaml` 的責任、binary dependencies、workspace mount、host network、NVIDIA runtime、serial passthrough、明確排除項與既有驗證證據已寫入 07。
 - [x] 2. External source dependency build closure
-  - 完成條件：`rf2o_laser_odometry` 與 `tdk_ros2_imu` 可在目前 container baseline 完成 rosdep、colcon build 並被 ROS 2 找到；相容性修正與證據邊界已記錄。
+  - 完成條件：`kinematic_icp` 與 `tdk_ros2_imu` 可在目前 container baseline 完成 dependency closure、colcon build 並被 ROS 2 找到；相容性修正與證據邊界已記錄。
 - [x] 3. Per-item implementation record template
   - 完成條件：後續每項固定記錄 requirement/subsystem trace、artifacts、mature/custom boundary、interfaces/config、failure handling、build/test/hardware evidence、known limits 與 freeze status。
 - [x] 4. Verification evidence storage convention
@@ -58,12 +58,12 @@
 - [x] 11. S2 TDK IMU runtime integration
   - 追溯：SYS-004。
   - 完成條件：現有 `tdk_ros2_imu` parser/node/test 在 target container 重跑通過，`/dev/ttyACM0`、message fields、units、frame、QoS、rate、timestamp、斷線／壞封包與實機靜態／動態量測均有證據。
-- [x] 12. S2 RF2O and selected scan integration
+- [x] 12. S3 Kinematic-ICP odometry integration
   - 追溯：SYS-003、SYS-005。
-  - 完成條件：RF2O 只消費核准的 selected/merged scan，輸出 odometry 的 frame、rate、covariance、TF ownership 與異常行為經整合和實機驗證；不得成為 `odom -> base_footprint` 第二發布者。
+  - 完成條件：Kinematic-ICP 消費 `/scan_front` 與 `/diff_drive_controller/odom` wheel prior，輸出 `/lidar_odometry`；frame、timestamp interpolation 與 TF ownership 經驗證，且不得成為 `odom -> base_footprint` 第二發布者。
 - [x] 13. S3 State Estimation
   - 追溯：SYS-005。
-  - 完成條件：EKF 融合 S7 wheel odometry、S2 IMU、S2 RF2O；唯一 `odom -> base_footprint` owner、covariance、input timeout/異常與實機 odometry 表現符合 06。
+  - 完成條件：EKF 融合 Kinematic-ICP x/y/yaw 與 S2 IMU yaw rate，不直接重複融合 wheel odometry；唯一 `odom -> base_footprint` owner、covariance、input timeout/異常與實機 odometry 表現符合 06。
 - [x] 14. S4 Mapping and MapIO
   - 追溯：SYS-001、SYS-002、SYS-006、SYS-007、SYS-024。
   - 完成條件：Mapping Mode、slam_toolbox、唯一 `map -> odom` ownership、地圖建立／更新／儲存／read-back 與失敗路徑完成整合及實機證據。
@@ -85,7 +85,7 @@
 - [x] 19. TF and frame authority closure
   - 完成條件：S1 static TF、S3 `odom -> base_footprint`、S4/S5 互斥 `map -> odom` 無斷鏈、重複 owner 或 frame mismatch。
 - [x] 20. Perception data-flow closure
-  - 完成條件：兩個 raw LiDAR、selected scan、IMU 與 RF2O 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06。
+  - 完成條件：兩個 raw LiDAR、merged `/scan` perception path、IMU、Kinematic-ICP `/scan_front` + wheel-prior path 的 producer/consumer、QoS、frame、timestamp、rate、freshness 與 failure propagation 可觀察且符合 06。
 - [x] 21. Motion-command and physical-stop closure
   - 完成條件：S6 command / Mapping teleop command→S7 safety gate→diff drive→M1，以及 Task Cancel、Manual Stop、Command Timeout、Hardware Safe Stop 分層停止均量測到實體停止結果。
 - [x] 22. Feedback and odometry closure
@@ -118,4 +118,3 @@
 - Failure、timeout、cancel、device loss 或 invalid input 等適用負向路徑已驗證。
 - `07_implementation.md` 已更新目前狀態、證據邊界、known limits 與下一個 dependency。
 - 若要提交，已執行 `gitnexus_detect_changes()`、`git diff --check` 與相關測試，確認影響範圍符合預期。
-

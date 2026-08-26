@@ -45,7 +45,7 @@
 - [x] 7. S7 Base Control Subsystem Design
   - 完成條件：定義 `ros2_control` 架構、`diff_drive_controller`（綁定 S1 關節名稱、`TwistStamped` 介面、速度極限與逾時保護）、Mapping 外部 `teleop_twist_keyboard` 配置與 CLI 規格、M1 專用 Hardware Interface、GAP-05 回授有效性檢查（禁止冒充）與 GAP-06 安全啟停邏輯（承接 SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034）。
 - [x] 8. S3 State Estimation Subsystem Design
-  - 完成條件：定義 `robot_localization` EKF 節點（匯流 S7 輪端回授 + S2 IMU + S2 RF2O）、`odom → base_footprint` 動態 TF 發布權限、協方差矩陣配置與異常容錯（承接 SYS-005）。
+  - 完成條件：定義 Kinematic-ICP（前 LiDAR + S7 wheel odometry prior）與 `robot_localization` EKF（`/lidar_odometry` x/y/yaw + IMU yaw rate）、`odom → base_footprint` 動態 TF 發布權限、協方差矩陣配置與異常容錯（承接 SYS-005）。
 - [x] 9. S4 Mapping Subsystem Design
   - 完成條件：定義 `slam_toolbox` Online Async SLAM 節點（訂閱 S2 LaserScan + S3 Odom）、Mapping Mode 下 `map → odom` TF 發布、`nav2_map_server` MapIO 服務（儲存、讀回驗證、載入地圖）（承接 SYS-001, SYS-002, SYS-006, SYS-007, SYS-024）。
 - [x] 10. S5 Localization Subsystem Design

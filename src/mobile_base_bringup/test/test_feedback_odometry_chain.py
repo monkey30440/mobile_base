@@ -83,7 +83,7 @@ def test_wheel_odometry_contract():
 
 
 def test_fused_odometry_ekf_contract():
-    """Verify EKF multi-sensor fusion bindings, rates, frames, and sole TF authority."""
+    """Verify canonical Kinematic-ICP and IMU fusion plus sole TF authority."""
     ws_root = get_workspace_root()
     ekf_yaml = (
         ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml'
@@ -93,8 +93,8 @@ def test_fused_odometry_ekf_contract():
         ekf_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
 
     # Fused streams
-    assert ekf_params['odom0'] == '/diff_drive_controller/odom'
-    assert ekf_params['odom1'] == '/rf2o/odom'
+    assert ekf_params['odom0'] == '/lidar_odometry'
+    assert 'odom1' not in ekf_params
     assert ekf_params['imu0'] == '/imu/data_raw'
 
     # Frames and TF authority
@@ -111,7 +111,7 @@ def test_fused_odometry_ekf_contract():
 
 
 def test_tf_authority_odometry_prohibitions():
-    """Verify neither diff_drive_controller nor RF2O publishes odom->base_footprint TF."""
+    """Verify neither diff-drive nor Kinematic-ICP publishes the EKF-owned TF."""
     ws_root = get_workspace_root()
 
     # 1. diff_drive_controller TF disabled
@@ -123,15 +123,16 @@ def test_tf_authority_odometry_prohibitions():
         ctrl_params = yaml.safe_load(f)['diff_drive_controller']['ros__parameters']
     assert ctrl_params['enable_odom_tf'] is False
 
-    # 2. RF2O TF disabled
-    rf2o_launch = (
-        ws_root / 'src' / 'rf2o_laser_odometry' / 'launch' /
-        'rf2o_laser_odometry.launch.py'
+    # 2. Kinematic-ICP TF disabled
+    kicp_yaml = (
+        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' /
+        'kinematic_icp_ros.yaml'
     )
-    assert rf2o_launch.exists(), f'File not found: {rf2o_launch}'
-    with open(rf2o_launch, 'r', encoding='utf-8') as f:
-        launch_content = f.read()
-    assert "'publish_tf': False" in launch_content
+    assert kicp_yaml.exists(), f'File not found: {kicp_yaml}'
+    with open(kicp_yaml, 'r', encoding='utf-8') as f:
+        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
+    assert kicp_params['publish_odom_tf'] is False
+    assert kicp_params['lidar_odom_frame'] == 'odom'
 
 
 def test_feedback_failure_and_stale_data_contract():

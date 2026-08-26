@@ -217,3 +217,4 @@ MVP Change Candidate: None
 ```
 
 完成 SYS-001 coverage record 後才進入 SYS-002；不得在此加入持續更新失敗、storage、reload validation 或完整 Mapping Result。
+> Historical research note: any RF2O references describe the superseded pre-2026-08-26 baseline. Current production odometry is Kinematic-ICP.

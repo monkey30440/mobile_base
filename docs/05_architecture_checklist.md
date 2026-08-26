@@ -27,7 +27,7 @@
 - [x] 4. S2 Perception
   - 完成條件：定義 LiDAR（LaserScan）與 IMU 標準感測資料的取得與提供責任；明確排除地圖計算、位姿推算與路徑決策責任。
 - [x] 5. S3 State Estimation
-  - 完成條件：定義平面里程估測（融合 Wheel Odometry、RF2O、IMU）與 `odom → base_footprint` TF 唯一擁有權；明確與 Localization（地圖定位）分離。
+  - 完成條件：定義前 LiDAR + encoder wheel prior → Kinematic-ICP → `/lidar_odometry` → EKF + IMU yaw rate 的平面里程估測，以及 `odom → base_footprint` TF 唯一擁有權；明確與 Localization 分離。
 - [x] 6. S4 Mapping
   - 完成條件：定義二維 Occupancy Grid 之建立、即時更新、Map Package 儲存、讀回驗證與載入責任；明確排除導航路網與站點管理。
 - [x] 7. S5 Localization

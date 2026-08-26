@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Software-only runtime verification for Kinematic-ICP PoC (Section 15)."""
+"""Software-only runtime verification for canonical Kinematic-ICP odometry."""
 
 import math
 import os
@@ -186,7 +186,7 @@ def _run_test_pipeline(scan_noise=0.0, time_offset_sec=0.0):
     ekf_config_path = (
         Path(get_package_share_directory('mobile_base_state_estimation'))
         / 'config'
-        / 'ekf_kinematic_icp.yaml'
+        / 'ekf.yaml'
     )
 
     env = os.environ.copy()
@@ -422,7 +422,7 @@ def test_runtime_d_ekf_accepts_and_fuses_kinematic_icp_pose():
     ekf_config_path = (
         Path(get_package_share_directory('mobile_base_state_estimation'))
         / 'config'
-        / 'ekf_kinematic_icp.yaml'
+        / 'ekf.yaml'
     )
     env = os.environ.copy()
     ekf_proc = subprocess.Popen(

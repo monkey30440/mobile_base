@@ -1,5 +1,7 @@
 # Reuse Assessment
 
+> **Current architecture decision (2026-08-26):** Kinematic-ICP is the selected production LiDAR odometry solution. It consumes physical front LiDAR `/scan_front` and encoder wheel odometry `/diff_drive_controller/odom`, publishes `/lidar_odometry`, and feeds the EKF together with IMU yaw rate. RF2O candidate assessments below are retained only as superseded selection history and are not current architecture authority. `dual_laser_merger` remains the `/scan` producer for SLAM, AMCL, Nav2, and Collision Monitor; it is not Kinematic-ICP input.
+
 # 1. Purpose, Scope and Authority
 
 本文件逐項評估 exact-version 成熟方案對 `mobile_base` v0.1 system requirements 的覆蓋程度，記錄其適用條件、限制、evidence 與尚未覆蓋的最小缺口，作為後續 System Architecture 的受控 feasibility evidence。
