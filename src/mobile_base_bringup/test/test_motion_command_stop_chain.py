@@ -124,3 +124,46 @@ def test_m1_hardware_safe_stop_and_timeout_contract():
     assert 'on_deactivate' in cpp_content
     assert 'driver_->stop' in cpp_content
     assert 'driver_->disable' in cpp_content
+
+
+def test_base_control_spawner_ordering_contract():
+    """Verify base_control.launch.py chains diff_drive_controller after joint_state_broadcaster."""
+    ws_root = get_workspace_root()
+    launch_file = ws_root / 'src' / 'mobile_base_control' / 'launch' / 'base_control.launch.py'
+    assert launch_file.exists()
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('base_control_launch', str(launch_file))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    ld = module.generate_launch_description()
+
+    # Verify joint_state_broadcaster spawner is in root entities
+    from launch_ros.actions import Node
+    from launch.actions import RegisterEventHandler
+    from launch.event_handlers import OnProcessExit
+
+    root_nodes = [e for e in ld.entities if isinstance(e, Node)]
+
+    # Verify diff_drive_controller spawner is NOT a parallel uncoordinated root action
+    for n in root_nodes:
+        pkg = getattr(n, '_Node__package', getattr(n, 'node_package', ''))
+        raw_args = getattr(n, '_Node__arguments', []) or []
+        args = [str(a) for a in raw_args]
+        if pkg == 'controller_manager':
+            assert 'diff_drive_controller' not in args, (
+                'diff_drive_controller spawner must not be launched '
+                'in parallel with joint_state_broadcaster'
+            )
+
+    # Verify RegisterEventHandler with OnProcessExit is registered for diff_drive_controller
+    event_handlers = [e for e in ld.entities if isinstance(e, RegisterEventHandler)]
+    assert len(event_handlers) >= 1
+
+    found_chain = False
+    for eh in event_handlers:
+        handler = eh.event_handler
+        if isinstance(handler, OnProcessExit):
+            found_chain = True
+    assert found_chain, 'Must register OnProcessExit event handler for controller spawner chaining'
