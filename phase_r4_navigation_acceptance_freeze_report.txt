@@ -1,0 +1,145 @@
+================================================================================
+Phase R4 — Navigation Acceptance Freeze Report
+================================================================================
+
+1. Baseline Decision Update
+--------------------------------------------------------------------------------
+- Station A: x: 0.0, y: 0.0, yaw_rad: 0.0
+- Station B: x: 1.0, y: 0.0, yaw_rad: 0.0 (1.0 m directly forward of Station A)
+- Dropped Candidate: (0.2, 0.0, 0.0)
+- Goal Tolerance Policy: Maintain current production Nav2 runtime tolerances
+  * xy_goal_tolerance: 0.25 m
+  * yaw_goal_tolerance: 0.5236 rad (30.0 deg)
+  * trans_stopped_velocity: 0.05 m/s
+  * rot_stopped_velocity: 0.10 rad/s
+- Execution Policy: Phase R4 read-only evaluation. No production files modified,
+  no NavigateToPose goals dispatched.
+
+2. Candidate Geometry Evaluation
+--------------------------------------------------------------------------------
+- Map Free Space:
+  * Map origin: [-13.578, -4.045, 0.0], resolution: 0.05 m
+  * Station A (0.0, 0.0) -> Pixel (271, 81), Free space (value 254)
+  * Station B (1.0, 0.0) -> Pixel (291, 81), Free space (value 254)
+  * Linear segment from (0.0, 0.0) to (1.0, 0.0) is entirely within free space.
+- Footprint Clearance:
+  * Rectangular footprint: [[0.35, 0.30], [0.35, -0.30], [-0.35, -0.30], [-0.35, 0.30]] (0.70 m x 0.60 m)
+  * Swept volume along x in [-0.35, 1.35], y in [-0.30, 0.30] is 100% obstacle-free.
+- Inflation Layer:
+  * inflation_radius: 0.45 m, cost_scaling_factor: 3.0
+  * Test corridor width is > 2.0 m, maintaining > 0.55 m margin from inflated boundaries.
+- Costmaps:
+  * Global & Local Costmaps show zero lethal cost along the travel segment.
+- Approach Geometry & Heading:
+  * Pure linear translation along +X axis (dx = +1.0 m, dy = 0.0 m).
+  * Target yaw 0.0 rad is collinear with forward motion direction; no terminal turnaround required.
+- Physical Stopping Area:
+  * Physical ground truth from Phase R3/R3.5 confirms > 1.5 m open room in front of AMR.
+  * Stopping at 1.0 m is physically safe with zero collision hazard.
+- Result: SAFE (PASS)
+
+3. Route Graph & Route-Assisted BT Evaluation
+--------------------------------------------------------------------------------
+- Current Status:
+  * maps/test_site/route_graph.geojson still references old Node 1 at [0.20, 0.0].
+- Proposed Minimal Modification:
+  * Update Node 1 coordinates to [1.0, 0.0].
+  * Update Edge 2 (0 -> 1) cost to 1.0.
+  * Add return Edge 3 (1 -> 0, cost: 1.0) to support directed graph routing for B -> A return.
+- Route-Assisted BT Behavior (route_assisted_nav.xml):
+  * ComputeRoute: Resolves topological edge 0 -> 1 (1.0 m) on graph.
+  * First Mile: ArePosesNear (tolerance 0.2 m) matches Station A (< 0.2 m) -> SkipFirstMile executed.
+  * On Route: Follows straight topological edge between (0.0, 0.0) and (1.0, 0.0).
+  * Last Mile: ArePosesNear (tolerance 0.2 m) matches Station B (< 0.2 m) -> SkipLastMile executed.
+  * FollowPath: MPPIController tracks 1.0 m straight path to goal.
+  * Symmetrical behavior is fully valid for both A -> B and B -> A directions.
+
+4. Goal Tolerance & Acceptance Architecture
+--------------------------------------------------------------------------------
+- Production Runtime Tolerance:
+  * xy_goal_tolerance = 0.25 m
+  * yaw_goal_tolerance = 0.5236 rad
+  * trans_stopped_velocity = 0.05 m/s
+  * rot_stopped_velocity = 0.10 rad/s
+- Initial Pose vs Goal Distance:
+  * distance(Station A, Station B) = 1.000 m >> 0.25 m
+  * Station A initial pose will not falsely trigger goal satisfaction.
+- Dual-Track Acceptance Distinction:
+  * Nav2 Native Result: StoppedGoalChecker runtime Action result (SUCCEEDED / ABORTED / CANCELED).
+  * Physical Acceptance: Post-run telemetry and physical ground-truth audit.
+
+5. Physical Acceptance Telemetry Recording (Phase R5)
+--------------------------------------------------------------------------------
+- Recorded Metrics:
+  * Final AMCL/map pose: (x_amcl, y_amcl, yaw_amcl)
+  * Final distance error: sqrt((x - x_goal)^2 + (y - y_goal)^2)
+  * Final yaw error: |wrap(yaw - yaw_goal)|
+  * Final linear velocity: |vx| <= 0.05 m/s
+  * Final angular velocity: |wz| <= 0.10 rad/s
+  * M1 Motor Driver Faults: 0
+  * Controller Faults: 0
+- Runtime Acceptance Threshold: Production Nav2 tolerances (0.25 m, 0.5236 rad).
+- All exact errors will be documented to inform future tolerance refinement decisions.
+
+6. Phase R5 Test Matrix
+--------------------------------------------------------------------------------
+- H1: Station A -> Station B (1.0 m forward navigation, Expected: Native SUCCEEDED, Exit 0)
+- H2: Station B -> Station A (1.0 m return navigation, Expected: Native SUCCEEDED, Exit 0)
+- H3: UNKNOWN Station (Target Admission reject, zero goal sent, zero motion, Expected: Exit 3)
+- H4: Navigation Cancellation (Ctrl-C during A -> B motion, goal canceled, Expected: Native CANCELED, Exit 130, safe stop)
+- H5: Obstacle / Collision Intervention (Evaluated only if mandated by v0.1.0 requirements; Collision Monitor active as safety net)
+
+7. Diff Plan (Pending Approval)
+--------------------------------------------------------------------------------
+File: maps/test_site/route_graph.geojson
+```diff
+--- a/maps/test_site/route_graph.geojson
++++ b/maps/test_site/route_graph.geojson
+@@ -28,7 +28,7 @@
+         {
+             "geometry": {
+                 "coordinates": [
+-                    0.20,
++                    1.0,
+                     0.0
+                 ],
+                 "type": "Point"
+@@ -47,13 +47,27 @@
+                 "type": "MultiLineString"
+             },
+             "properties": {
+-                "cost": 0.20,
++                "cost": 1.0,
+                 "endid": 1,
+                 "id": 2,
+                 "metadata": {
+                     "speed_limit": 0.5
+                 },
+                 "overridable": true,
+                 "startid": 0
++            },
++            "type": "Feature"
++        },
++        {
++            "geometry": {
++                "type": "MultiLineString"
++            },
++            "properties": {
++                "cost": 1.0,
++                "endid": 0,
++                "id": 3,
++                "metadata": {
++                    "speed_limit": 0.5
++                },
++                "overridable": true,
++                "startid": 1
+             },
+             "type": "Feature"
+         }
+```
+
+================================================================================
+Phase R4 Final Verdict
+================================================================================
+READY TO UPDATE STATION B / ROUTE GRAPH
+================================================================================

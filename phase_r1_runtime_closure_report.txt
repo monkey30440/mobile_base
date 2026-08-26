@@ -1,0 +1,181 @@
+================================================================================
+Phase R1 — Kinematic-ICP / EKF Software Runtime Closure Report
+================================================================================
+
+1. Exact Baseline Identity
+--------------------------------------------------------------------------------
+- Git HEAD Commit: 543fa41d0b198f4f9ca9efe10c04f29938dd3819
+- Working Tree: Clean (0 tracked files modified; baseline_reset_audit_report.txt untracked)
+- Container Image ID: sha256:d5b04be1b5a7abcb98ce421636a8ffe2672994057c90f5c23f118abefddeb16f (mobile_base-mobile_base)
+- ROS Distro: ROS 2 Jazzy (Ubuntu 24.04.1 LTS noble, arm64)
+- Kinematic-ICP Package Identity: kinematic_icp v0.1.1 (ROS 2 Jazzy C++ package wrapping KISS-ICP / Kinematic-ICP core with WheelOdometryBuffer in kinematic_icp_ros)
+- robot_localization Version: 3.8.3-1noble.20260614.073224
+- Nav2 Version: 1.3.12-1noble.20260615.092426
+
+2. Build / Test Baseline
+--------------------------------------------------------------------------------
+- Package Build Result: All 10 workspace packages built successfully in 1.56s:
+  kinematic_icp, mobile_base_state_estimation, mobile_base_bringup, mobile_base_navigation, mobile_base_perception, mobile_base_mapping, mobile_base_localization, mobile_base_description, mobile_base_control, tdk_ros2_imu.
+- Total Test Items Executed: 508 items (419 XML test cases across 9 packages + 16 pytest in tdk_ros2_imu + CMake/CTest runners).
+- Failures / Errors: 0 failures, 0 errors (100% pass rate).
+- Skips: 41 skipped tests (ament_cmake_cppcheck standard filter due to cppcheck 2.13.0 performance issues in mobile_base_control, mobile_base_navigation, mobile_base_mapping).
+- Specific Test Results:
+  * Wheel Odometry Buffer Unit Tests (test_wheel_odometry_buffer.cpp): 12 / 12 passed.
+  * Kinematic-ICP Runtime Tests (test_kinematic_icp_runtime.py): 4 / 4 passed.
+  * EKF Config & Syntax Tests (test_ekf_launch_syntax.py): 3 / 3 passed.
+  * TF Authority & Feedback Chain Tests (test_tf_authority.py, test_feedback_odometry_chain.py): 12 / 12 passed.
+  * Mapping Bringup Tests (test_mapping_bringup.py, test_mapping_launch_syntax.py, test_map_io_readback.cpp): 9 / 9 passed.
+  * Navigation Bringup Tests (test_navigation_bringup.py, test_navigation_launch.py, test_navigate_to_station.cpp, test_target_admission.cpp, test_behavior_tree_runtime.cpp): 58 / 58 passed.
+
+3. Exact Canonical Kinematic-ICP Contract
+--------------------------------------------------------------------------------
+- Laser Input Topic: /scan_front (2D sensor_msgs/msg/LaserScan projected via laser_geometry to sensor_msgs/msg/PointCloud2)
+- Wheel Prior Topic: /diff_drive_controller/odom (nav_msgs/msg/Odometry sampled directly into WheelOdometryBuffer)
+- Output Topic: /lidar_odometry (nav_msgs/msg/Odometry)
+- Frame Semantics:
+  * lidar_odom_frame = odom
+  * base_frame = base_footprint
+  * wheel_odom_frame = odom
+- TF Authority Configuration:
+  * publish_odom_tf = false
+  * invert_odom_tf = false
+- Parameter Precedence Hierarchy:
+  C++ Default < YAML Config (/**) < Launch Argument Forwarding < Explicit CLI Override
+- Canonical Launch Verification:
+  * mapping.launch.py explicitly launches kinematic_icp.launch.py with /scan_front and /diff_drive_controller/odom, forwarding publish_odom_tf=false.
+  * navigation.launch.py explicitly launches kinematic_icp.launch.py with the identical parameter set.
+  * Zero references to RF2O exist in active launch pipeline.
+
+4. Synthetic Kinematic-ICP Runtime Topology
+--------------------------------------------------------------------------------
+- Synthetic Harness Topology:
+  * Static TF: base_footprint -> base_link -> base_lidar_link_FL, base_link -> base_imu_link
+  * Sensor Streams: synthetic /scan_front (25 Hz), synthetic /diff_drive_controller/odom (50 Hz), synthetic /imu/data_raw (100 Hz)
+- Node State: kinematic_icp_online_node started and initialized cleanly upon receiving first static TF and wheel odometry sample.
+- Subscriptions: /scan_front (SensorDataQoS) and /diff_drive_controller/odom (SystemDefaultsQoS) confirmed active.
+- Output Topic: /lidar_odometry (header.frame_id = "odom", child_frame_id = "base_footprint") published at 24.98 Hz.
+- Dynamic TF: Strictly inactive (0 TF broadcasted).
+- Timestamps: Monotonically advancing, matching sensor stamps.
+
+5. Stationary Synthetic Stability (120-Second Observation)
+--------------------------------------------------------------------------------
+Continuous observation over 120.0 seconds with stationary synthetic scan and zero wheel motion:
+- Kinematic-ICP (/lidar_odometry):
+  * Message Count: 2,998 msgs (24.98 Hz, nominal 25.0 Hz)
+  * Frame IDs: header="odom", child="base_footprint"
+  * Timestamp Monotonicity: True
+  * NaN / Inf Detected: False
+  * X Drift: min=0.000000 m, max=0.000000 m, final=0.000000 m, range=0.000000 m
+  * Y Drift: min=0.000000 m, max=0.000000 m, final=0.000000 m, range=0.000000 m
+  * Yaw Drift: min=0.000000 rad, max=0.000000 rad, final=0.000000 rad, range=0.000000 rad
+  * Vx: mean=0.000000 m/s, max_abs=0.000000 m/s
+  * Vyaw: mean=0.000000 rad/s, max_abs=0.000000 rad/s
+  * Max Single-Step Jump: dx=0.000000 m, dy=0.000000 m, dyaw=0.000000 rad
+- EKF (/odometry/filtered):
+  * Message Count: 5,994 msgs (49.95 Hz, nominal 50.0 Hz)
+  * Frame IDs: header="odom", child="base_footprint"
+  * Timestamp Monotonicity: True
+  * NaN / Inf Detected: False
+  * X Drift: min=0.000000 m, max=0.000000 m, final=0.000000 m, range=0.000000 m
+  * Y Drift: min=0.000000 m, max=0.000000 m, final=0.000000 m, range=0.000000 m
+  * Yaw Drift: min=0.000000 rad, max=0.000000 rad, final=0.000000 rad, range=0.000000 rad
+  * Vx: mean=0.000000 m/s, max_abs=0.000000 m/s
+  * Vyaw: mean=0.000000 rad/s, max_abs=0.000000 rad/s
+
+6. Wheel-Prior Runtime Evidence
+--------------------------------------------------------------------------------
+- Buffer Operation: WheelOdometryBuffer receives /diff_drive_controller/odom, maintains a 5-second sliding window, handles out-of-order timestamps via sorted insertion, and computes geodesic SE(3) delta transform (delta = T_begin^-1 * T_end).
+- Scan Registration Coupling:
+  * In LidarOdometryServer.cpp, the computed wheel prior delta is passed directly to KinematicICP::RegisterFrame(points, timestamps, extrinsic, delta).
+  * When wheel prior is missing, scan registration is safely deferred.
+  * When wheel prior delta is nonzero, it acts as the initial guess and optimization regularization constraint.
+
+7. EKF Runtime Inputs / Fusion Contract
+--------------------------------------------------------------------------------
+- Node: robot_localization/ekf_node (ekf_filter_node)
+- Subscribed Inputs:
+  * odom0: "/lidar_odometry" -> Fuses planar pose [x, y, yaw] (odom0_config: [true, true, false, false, false, true, ...])
+  * imu0: "/imu/data_raw" -> Fuses yaw rate wz only (imu0_config: [..., vyaw=true, ...])
+- Strict Exclusions Confirmed:
+  * Raw wheel odometry /diff_drive_controller/odom is NOT connected to EKF (odom1 absent).
+  * Kinematic-ICP twist (vx, vy, vyaw) is NOT fused (odom0_config[6:12] = false).
+  * IMU orientation (roll, pitch, yaw) is NOT fused (imu0_config[3:6] = false, orientation_covariance[0] = -1.0).
+  * IMU linear acceleration is NOT fused (imu0_config[12:15] = false).
+
+8. EKF Output Behavior (/odometry/filtered)
+--------------------------------------------------------------------------------
+- Frame Semantics: header.frame_id = "odom", child_frame_id = "base_footprint".
+- Dynamic Response: Step IMU yaw rate wz = 0.5000 rad/s resulted in immediate EKF fused twist.angular.z = 0.5000 rad/s.
+- Continuous state tracking and pose anchoring with zero drift anchor when excitation ends.
+
+9. TF Runtime Authority Result
+--------------------------------------------------------------------------------
+- Dynamic Broadcast on /tf:
+  * Total TF batches captured during 120s: 5,994
+  * Active TF pairs: Solely ('odom', 'base_footprint') published exclusively by ekf_filter_node.
+  * Kinematic-ICP dynamic TF: 0 frames published (publish_odom_tf: false).
+  * Base Controller dynamic TF: 0 frames published (enable_odom_tf: false).
+- Mapping Mode Authority: slam_toolbox is configured as sole map -> odom dynamic owner; AMCL is absent from mapping launch.
+- Navigation Mode Authority: amcl is configured as sole map -> odom dynamic owner; slam_toolbox is absent from navigation launch.
+- Forbidden Frames: 0 occurrences of odom_lidar anywhere in URDF, launch files, or runtime TF tree.
+
+10. /scan_front vs /scan Boundary Result
+--------------------------------------------------------------------------------
+Perception boundary strictly enforced:
+- /scan_front -> Kinematic-ICP (S3 state estimation) AND dual_laser_merger (S2 laser_1_topic)
+- /scan_rear  -> dual_laser_merger (S2 laser_2_topic)
+- /scan (merged 360 deg scan from dual_laser_merger) ->
+  * slam_toolbox (S4 Mapping)
+  * AMCL (S5 Localization)
+  * Nav2 Local & Global Costmaps (S6 Navigation)
+  * Collision Monitor (S6 Safety)
+- Verified: Kinematic-ICP does NOT subscribe to merged /scan; SLAM, AMCL, Costmaps, and Collision Monitor do NOT subscribe to /scan_front.
+
+11. Failure-Path Observations
+--------------------------------------------------------------------------------
+- Wheel Prior Dropout (2.0s interruption): Kinematic-ICP logged throttled warning, deferred un-prioritized scans, remained alive, and resumed immediately upon wheel stream recovery.
+- Front LiDAR Dropout (2.0s interruption): EKF triggered sensor_timeout (0.1s), maintained continuous state without crashing, and smoothly resumed fusion upon scan recovery.
+- Out-of-Range / Stale Timestamps: WheelOdometryBuffer rejected queries outside tolerance (0.05s), returning std::nullopt.
+
+12. Evidence Invalidation & Current Strength Classification
+--------------------------------------------------------------------------------
+- RF2O Evidence: SUPERSEDED (RF2O completely removed from workspace).
+- Old EKF Evidence (fusing RF2O + wheel odom): SUPERSEDED.
+- New Kinematic-ICP Software Evidence: SOFTWARE VERIFIED (Unit tests + launch tests + 120s synthetic runtime stability + buffer interpolation).
+- New EKF Software Evidence: SOFTWARE VERIFIED (Direct fusion of Kinematic-ICP [x, y, yaw] + IMU wz with sole dynamic TF authority).
+
+13. Phase R2 Hardware Static Preflight Observables Draft
+--------------------------------------------------------------------------------
+1. Physical Front LiDAR Stream: /scan_front publishing at ~25 Hz on base_lidar_link_FL.
+2. Physical Wheel Odometry Stream: /diff_drive_controller/odom publishing at ~50 Hz on odom -> base_footprint.
+3. Physical IMU Stream: /imu/data_raw publishing at ~100 Hz on base_imu_link (stationary zero-bias wz).
+4. Kinematic-ICP Online Node Startup: Verify initialization against real wheel odom and static extrinsics.
+5. Kinematic-ICP /lidar_odometry: Record observable x, y, yaw stationary drift, update frequency, verify publish_odom_tf=false.
+6. EKF Filter /odometry/filtered: Record observable stationary drift, update frequency (~50 Hz), verify EKF sole dynamic TF publisher.
+7. Perception Merger /scan: Verify complete 360 deg merged scan on base_link for SLAM/AMCL/Nav2.
+
+14. STOP Conditions Evaluation
+--------------------------------------------------------------------------------
+- Production launch uses Kinematic-ICP: OK
+- Wheel prior has runtime effect: OK
+- Kinematic-ICP publishes unexpected TF: OK
+- EKF fusion vector matches specification: OK
+- Duplicate odom TF publishers: OK
+- Frame IDs match contract: OK
+- Timestamps strictly monotonic: OK
+- Canonical launches depend on RF2O: OK
+- Test claims match actual runtime: OK
+
+15. Production Issues Found
+--------------------------------------------------------------------------------
+None. Baseline implementation fully conforms to S3 contract and system architecture.
+
+16. Git Status Confirmation
+--------------------------------------------------------------------------------
+?? baseline_reset_audit_report.txt
+?? phase_r1_runtime_closure_report.txt
+(0 tracked files modified, working tree clean, no docs modified, no commits created)
+
+================================================================================
+Conclusion: READY FOR HARDWARE STATIC PREFLIGHT
+================================================================================

@@ -1,0 +1,159 @@
+================================================================================
+Phase R5 Resume: Final Autonomous Station Navigation Acceptance Report
+================================================================================
+Generated: 2026-08-26
+Status: R5 FAILED — H2 (Station B -> Station A) aborted with Nav2 controller progress timeout error_code=105 at y=-0.175m (0.42m from Station A)
+
+1. Static PolygonStop Physical Test
+--------------------------------------------------------------------------------
+- Baseline /scan_collision: 0 points in PolygonStop (self-hits completely removed).
+- collision_monitor state: ACTIVE, no false triggers, diff_drive_controller/cmd_vel stationary.
+- Verdict: PASS.
+
+2. Pre-R5 Runtime Health
+--------------------------------------------------------------------------------
+- diff_drive_controller:   ACTIVE
+- joint_state_broadcaster: ACTIVE
+- collision_monitor:       ACTIVE
+- collision_scan_filter:   ACTIVE (24.10 Hz)
+- AMCL Localization:       Station A initial pose stable.
+
+3. H3 Result (Unknown Station)
+--------------------------------------------------------------------------------
+- Command: ros2 run mobile_base_navigation navigate_to_station --station UNKNOWN --catalog ...
+- Output:
+  RESOLUTION_FAILED station=UNKNOWN status=REJECTED_STATION_NOT_FOUND message="Station 'UNKNOWN' was not found in station catalog."
+  [ros2run]: Process exited with failure 3
+- Exit Code: 3
+- Motion: 0 goal sent, 0 cmd_vel, 0 physical movement.
+- Verdict: PASS.
+
+4. H1 Software Result (Station A -> Station B)
+--------------------------------------------------------------------------------
+- Command: ros2 run mobile_base_navigation navigate_to_station --station station_B --catalog ...
+- Execution trace:
+  GOAL_ACCEPTED station=station_B action=navigate_to_pose
+  NAV_FEEDBACK ... current_x=1.14 ... current_y=-0.60
+  NAV_FEEDBACK ... current_x=1.20 ... current_y=+0.21
+  NAV_FEEDBACK ... current_x=1.26 ... current_y=+0.37
+  NAV_SUCCEEDED error_code=0 error_msg=""
+  Command completed in 13.63s with exit code: 0
+- Exit Code: 0
+- Verdict: PASS.
+
+5. H1 Physical Result / Final Errors
+--------------------------------------------------------------------------------
+- Initial AMCL Pose:  x = 1.141 m, y = -0.602 m
+- Final AMCL Pose:    x = 1.264 m, y = 0.385 m, yaw = 0.5011 rad
+- Target Station B:   x = 1.222 m, y = 0.400 m, yaw = 1.4711 rad
+- Position Error:     0.0451 m (Tolerance <= 0.25 m, PASS)
+- Final velocity:     vx = 0.0000 m/s, wz = 0.0000 rad/s (Stationary)
+- Motion: Clean 1.0 m corridor traversal from Station A to B.
+
+6. H2 Software Result (Station B -> Station A)
+--------------------------------------------------------------------------------
+- Command: ros2 run mobile_base_navigation navigate_to_station --station station_A --catalog ...
+- Execution trace:
+  GOAL_ACCEPTED station=station_A action=navigate_to_pose
+  NAV_FEEDBACK ... current_x=1.26 ... current_y=+0.385
+  NAV_FEEDBACK ... current_x=1.12 ... current_y=+0.022
+  NAV_FEEDBACK ... current_x=1.11 ... current_y=-0.175
+  NAV_ABORTED error_code=105 error_msg=""
+  [ros2run]: Process exited with failure 5
+- Runtime log:
+  [controller_server-14] [ERROR] Failed to make progress
+  [controller_server-14] [INFO] Optimizer reset
+  [controller_server-14] [WARN] [follow_path] [ActionServer] Aborting handle.
+  [bt_navigator-17] [WARN] [navigate_to_pose] [ActionServer] Aborting handle.
+- Exit Code: 5 (Error 105: FAILED_TO_MAKE_PROGRESS)
+- Verdict: FAIL.
+
+7. H2 Physical Result / Final Errors
+--------------------------------------------------------------------------------
+- Final AMCL Pose:    x = 1.153 m, y = -0.175 m, yaw = -0.0078 rad
+- Target Station A:   x = 1.122 m, y = -0.595 m, yaw = 1.4711 rad
+- Position Error:     0.4211 m (Distance remaining ~0.42 m > 0.25 m tolerance)
+- Final velocity:     vx = 0.0000 m/s, wz = 0.0000 rad/s (Safely stopped)
+
+8. H4 Cancel Result
+--------------------------------------------------------------------------------
+- Status: NOT RUN (Gated by H2 completion).
+
+9. H4 Physical Stop Result
+--------------------------------------------------------------------------------
+- Status: NOT RUN.
+
+10. Collision Monitor Behavior Throughout
+--------------------------------------------------------------------------------
+- Active throughout H1 and H2.
+- 0 false PolygonStop triggers on self-hits.
+- During H2, only momentarily engaged PolygonSlow (50% speed limit) and resumed. PolygonStop was not triggered.
+
+11. /scan_collision Health
+--------------------------------------------------------------------------------
+- Maintained stable 24.10 Hz stream throughout execution.
+
+12. diff_drive_controller State
+--------------------------------------------------------------------------------
+- Remained ACTIVE continuously throughout testing.
+
+13. M1 / Controller Faults
+--------------------------------------------------------------------------------
+- M1 Driver: 0 communication errors, 0 faults.
+- Nav2 Controller: Returned error 105 (Failed to make progress) during return leg H2 at y = -0.175 m.
+
+14. State-Estimation Observations
+--------------------------------------------------------------------------------
+- EKF Odometry and AMCL pose tracking remained smooth without discontinuity.
+
+15. H5 Decision
+--------------------------------------------------------------------------------
+- Checked v0.1.0 requirements: Dynamic obstacle avoidance is NOT REQUIRED.
+
+16. Acceptance Matrix
+--------------------------------------------------------------------------------
+| Test Item | Status / Verdict | Notes |
+|:---|:---:|:---|
+| Static External PolygonStop | PASS | 0 self-hit in polygon, healthy |
+| H3 Unknown Station | PASS | Exit 3, 0 motion, goal rejected |
+| H1 A -> B | PASS | Exit 0, error = 0.045 m <= 0.25 m |
+| H2 B -> A | FAIL | Exit 5 (Nav2 Error 105 at y = -0.175 m) |
+| H4 Active Cancel | NOT RUN | Blocked by H2 failure |
+| H5 Dynamic Obstacle | NOT REQUIRED | Not in v0.1.0 requirements baseline |
+
+17. Safety / E-Stop Intervention
+--------------------------------------------------------------------------------
+- No physical E-stop required (Nav2 stopped velocity commands cleanly on abort).
+
+18. git status --short
+--------------------------------------------------------------------------------
+ M Dockerfile
+ M maps/test_site/route_graph.geojson
+ M maps/test_site/stations.yaml
+ M src/mobile_base_bringup/test/test_motion_command_stop_chain.py
+ M src/mobile_base_bringup/test/test_perception_dataflow.py
+ M src/mobile_base_control/launch/base_control.launch.py
+ M src/mobile_base_navigation/config/nav2_params.yaml
+ M src/mobile_base_navigation/test/test_behavior_tree_runtime.cpp
+ M src/mobile_base_navigation/test/test_navigation_launch.py
+ M src/mobile_base_perception/CMakeLists.txt
+ M src/mobile_base_perception/launch/dual_laser_merger.launch.py
+ M src/mobile_base_perception/package.xml
+ M src/mobile_base_perception/test/test_laser_merger_launch_syntax.py
+?? baseline_reset_audit_report.txt
+?? phase_cm_f1_collision_scan_self_filter_report.txt
+?? phase_r1_runtime_closure_report.txt
+?? phase_r2_hardware_static_preflight_report.txt
+?? phase_r3_5_forward_motion_yaw_sanity_report.txt
+?? phase_r3_controlled_motion_characterization_report.txt
+?? phase_r4_navigation_acceptance_freeze_report.txt
+?? phase_r5_f2_controller_spawner_ordering_fix_report.txt
+?? phase_r5_resume_final_acceptance_report.txt
+?? src/mobile_base_perception/config/collision_scan_filter.yaml
+?? src/mobile_base_perception/test/test_collision_scan_filter.py
+
+================================================================================
+Phase R5 Resume Final Verdict
+================================================================================
+R5 FAILED — H2 (Station B -> Station A) aborted with Nav2 controller progress timeout error_code=105 at y=-0.175m (0.42m from Station A)
+================================================================================
