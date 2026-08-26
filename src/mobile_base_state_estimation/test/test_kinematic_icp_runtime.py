@@ -28,6 +28,7 @@ import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, LaserScan
+from tf2_msgs.msg import TFMessage
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 
@@ -77,6 +78,10 @@ class KinematicIcpTestHarness(Node):
         )
         self.create_subscription(
             Odometry, '/odometry/filtered', self.ekf_odom_messages.append, 50
+        )
+        self.tf_messages = []
+        self.create_subscription(
+            TFMessage, '/tf', self.tf_messages.append, 50
         )
 
         self.tf_broadcaster = StaticTransformBroadcaster(self)
@@ -237,7 +242,11 @@ def _run_test_pipeline(scan_noise=0.0, time_offset_sec=0.0):
         assert kicp_proc.poll() is None, 'kinematic_icp_online_node exited unexpectedly'
         assert ekf_proc.poll() is None, 'ekf_node exited unexpectedly'
 
-        return list(harness.lidar_odom_messages), list(harness.ekf_odom_messages)
+        return (
+            list(harness.lidar_odom_messages),
+            list(harness.ekf_odom_messages),
+            list(harness.tf_messages),
+        )
     finally:
         executor.remove_node(harness)
         harness.destroy_node()
@@ -255,12 +264,41 @@ def _run_test_pipeline(scan_noise=0.0, time_offset_sec=0.0):
 
 def test_runtime_a_stationary_kinematic_icp_and_ekf():
     """Test A: Stationary robot with constant wheel pose, stationary lidar, zero IMU yaw rate."""
-    lidar_msgs, ekf_msgs = _run_test_pipeline(scan_noise=0.0, time_offset_sec=0.0)
+    lidar_msgs, ekf_msgs, tf_msgs = _run_test_pipeline(scan_noise=0.0, time_offset_sec=0.0)
 
     assert len(lidar_msgs) >= 20, (
         f'Kinematic-ICP produced insufficient messages: {len(lidar_msgs)}'
     )
     assert len(ekf_msgs) >= 50, f'EKF produced insufficient messages: {len(ekf_msgs)}'
+
+    # Frame semantics verification: /lidar_odometry frame is odom, child is base_footprint
+    for msg in lidar_msgs:
+        assert msg.header.frame_id == 'odom', (
+            f"Expected lidar_odom header.frame_id 'odom', got '{msg.header.frame_id}'"
+        )
+        assert msg.child_frame_id == 'base_footprint', (
+            f"Expected lidar_odom child_frame_id 'base_footprint', got '{msg.child_frame_id}'"
+        )
+
+    # Frame semantics verification: /odometry/filtered frame is odom, child is base_footprint
+    for msg in ekf_msgs:
+        assert msg.header.frame_id == 'odom', (
+            f"Expected EKF header.frame_id 'odom', got '{msg.header.frame_id}'"
+        )
+        assert msg.child_frame_id == 'base_footprint', (
+            f"Expected EKF child_frame_id 'base_footprint', got '{msg.child_frame_id}'"
+        )
+
+    # TF authority verification: EKF is sole dynamic broadcaster for odom -> base_footprint
+    assert len(tf_msgs) > 0, 'No transforms captured on /tf'
+    for tf_batch in tf_msgs:
+        for t in tf_batch.transforms:
+            assert t.header.frame_id == 'odom', f'Unexpected TF parent frame: {t.header.frame_id}'
+            assert t.child_frame_id == 'base_footprint', (
+                f'Unexpected TF child frame: {t.child_frame_id}'
+            )
+            assert 'odom_lidar' not in t.header.frame_id
+            assert 'odom_lidar' not in t.child_frame_id
 
     # Check finite output and bounded drift for Kinematic-ICP
     for msg in lidar_msgs[len(lidar_msgs) // 2:]:
@@ -285,7 +323,7 @@ def test_runtime_a_stationary_kinematic_icp_and_ekf():
 
 def test_runtime_b_interpolation_non_identical_frequencies():
     """Test B: Wheel at 50Hz, LaserScan at 25Hz with non-identical interleaved timestamps."""
-    lidar_msgs, _ = _run_test_pipeline(scan_noise=0.0, time_offset_sec=0.005)
+    lidar_msgs, _, _ = _run_test_pipeline(scan_noise=0.0, time_offset_sec=0.005)
 
     assert len(lidar_msgs) >= 20, (
         f'Kinematic-ICP failed to process interpolated timestamps: got {len(lidar_msgs)} msgs'
@@ -297,7 +335,7 @@ def test_runtime_b_interpolation_non_identical_frequencies():
 
 def test_runtime_c_small_scan_noise_while_wheel_stationary():
     """Test C: Small scan noise perturbations while wheel is strictly stationary."""
-    lidar_msgs, ekf_msgs = _run_test_pipeline(scan_noise=0.01, time_offset_sec=0.0)
+    lidar_msgs, ekf_msgs, _ = _run_test_pipeline(scan_noise=0.01, time_offset_sec=0.0)
 
     assert len(lidar_msgs) >= 20
     assert len(ekf_msgs) >= 50
@@ -308,3 +346,154 @@ def test_runtime_c_small_scan_noise_while_wheel_stationary():
         assert math.isfinite(x) and math.isfinite(y)
         assert abs(x) < 0.10, f'Scan noise caused excessive drift in X: {x}'
         assert abs(y) < 0.10, f'Scan noise caused excessive drift in Y: {y}'
+
+
+class DeterministicEkfFusionHarness(Node):
+    """Harness to feed deterministic /lidar_odometry displacements directly into EKF."""
+
+    def __init__(self):
+        super().__init__('deterministic_ekf_fusion_harness')
+        self.ekf_odom_messages = []
+        self.tf_messages = []
+
+        self.lidar_pub = self.create_publisher(
+            Odometry, '/lidar_odometry', 10
+        )
+        self.imu_pub = self.create_publisher(
+            Imu, '/imu/data_raw', 10
+        )
+        self.create_subscription(
+            Odometry, '/odometry/filtered', self.ekf_odom_messages.append, 50
+        )
+        self.create_subscription(
+            TFMessage, '/tf', self.tf_messages.append, 50
+        )
+
+        self.tf_broadcaster = StaticTransformBroadcaster(self)
+        self._publish_static_transforms()
+
+    def _publish_static_transforms(self):
+        stamp = self.get_clock().now().to_msg()
+
+        t_base = TransformStamped()
+        t_base.header.stamp = stamp
+        t_base.header.frame_id = 'base_footprint'
+        t_base.child_frame_id = 'base_link'
+        t_base.transform.translation.z = 0.2560
+        t_base.transform.rotation.w = 1.0
+
+        t_imu = TransformStamped()
+        t_imu.header.stamp = stamp
+        t_imu.header.frame_id = 'base_link'
+        t_imu.child_frame_id = 'base_imu_link'
+        t_imu.transform.translation.x = 0.04375
+        t_imu.transform.translation.y = -0.00800
+        t_imu.transform.translation.z = -0.01459
+        t_imu.transform.rotation.z = math.sin(math.pi / 4.0)
+        t_imu.transform.rotation.w = math.cos(math.pi / 4.0)
+
+        self.tf_broadcaster.sendTransform([t_base, t_imu])
+
+    def publish_lidar_odom(self, x=0.0, y=0.0, yaw=0.0):
+        msg = Odometry()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'odom'
+        msg.child_frame_id = 'base_footprint'
+        msg.pose.pose.position.x = x
+        msg.pose.pose.position.y = y
+        msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+        msg.pose.covariance = ODOM_POSE_COVARIANCE
+        self.lidar_pub.publish(msg)
+
+    def publish_imu(self):
+        msg = Imu()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'base_imu_link'
+        msg.angular_velocity.z = 0.0
+        msg.angular_velocity_covariance = IMU_ANGULAR_VELOCITY_COVARIANCE
+        msg.linear_acceleration.z = 9.80665
+        msg.orientation_covariance[0] = -1.0
+        self.imu_pub.publish(msg)
+
+
+def test_runtime_d_ekf_accepts_and_fuses_kinematic_icp_pose():
+    """Test D: Verify EKF accepts and fuses Kinematic-ICP x/y/yaw pose displacement."""
+    ekf_config_path = (
+        Path(get_package_share_directory('mobile_base_state_estimation'))
+        / 'config'
+        / 'ekf_kinematic_icp.yaml'
+    )
+    env = os.environ.copy()
+    ekf_proc = subprocess.Popen(
+        [
+            'ros2', 'run', 'robot_localization', 'ekf_node',
+            '--ros-args', '--params-file', str(ekf_config_path),
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+
+    rclpy.init()
+    harness = DeterministicEkfFusionHarness()
+    executor = SingleThreadedExecutor()
+    executor.add_node(harness)
+
+    started = time.monotonic()
+    next_lidar = started
+    next_imu = started
+
+    target_x = 1.0
+    target_y = 0.5
+    target_yaw = 0.4
+
+    try:
+        while time.monotonic() - started < 5.0:
+            elapsed = time.monotonic() - started
+            now = time.monotonic()
+            if now >= next_lidar:
+                # Step after 1.0s to target_x, target_y, target_yaw
+                if elapsed > 1.0:
+                    harness.publish_lidar_odom(target_x, target_y, target_yaw)
+                else:
+                    harness.publish_lidar_odom(0.0, 0.0, 0.0)
+                next_lidar += LIDAR_PERIOD
+            if now >= next_imu:
+                harness.publish_imu()
+                next_imu += IMU_PERIOD
+            executor.spin_once(timeout_sec=0.005)
+
+        assert ekf_proc.poll() is None, 'ekf_node exited unexpectedly'
+        ekf_msgs = list(harness.ekf_odom_messages)
+        assert len(ekf_msgs) >= 50, f'Insufficient EKF messages: {len(ekf_msgs)}'
+
+        # Filtered output in late phase must have responded to target_x, target_y, target_yaw
+        late_msgs = ekf_msgs[len(ekf_msgs) * 3 // 4:]
+        assert len(late_msgs) > 0
+
+        latest = late_msgs[-1]
+        fused_x = latest.pose.pose.position.x
+        fused_y = latest.pose.pose.position.y
+        fused_yaw = _yaw_from_quaternion(latest.pose.pose.orientation)
+
+        assert math.isfinite(fused_x) and math.isfinite(fused_y) and math.isfinite(fused_yaw)
+        assert fused_x > 0.5, f'EKF failed to fuse /lidar_odometry X: {fused_x}'
+        assert fused_y > 0.2, f'EKF failed to fuse /lidar_odometry Y: {fused_y}'
+        assert fused_yaw > 0.15, f'EKF failed to fuse /lidar_odometry Yaw: {fused_yaw}'
+
+        assert latest.header.frame_id == 'odom'
+        assert latest.child_frame_id == 'base_footprint'
+    finally:
+        executor.remove_node(harness)
+        harness.destroy_node()
+        rclpy.shutdown()
+        if ekf_proc.poll() is None:
+            os.killpg(ekf_proc.pid, signal.SIGINT)
+        try:
+            ekf_proc.communicate(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            os.killpg(ekf_proc.pid, signal.SIGKILL)
+            ekf_proc.communicate(timeout=3.0)

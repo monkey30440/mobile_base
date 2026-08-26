@@ -12,7 +12,7 @@ kinematic_icp_online_node:
 
     # Frame IDs
     base_frame: "base_footprint"
-    lidar_odom_frame: "odom_lidar"
+    lidar_odom_frame: "odom"
 
     # TF Authority Policy (EKF is sole dynamic owner of odom -> base_footprint)
     publish_odom_tf: false

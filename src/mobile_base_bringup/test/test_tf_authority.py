@@ -71,21 +71,21 @@ def test_s1_urdf_tf_tree_structure():
     assert pytest.approx(xyz[2]) == 0.2560  # Canonical elevation 256.0mm
 
     # 2. LiDAR joints: base_link -> base_lidar_link_FL / BR
-    assert 'lidar_fl_joint' in joints
-    fl = joints['lidar_fl_joint']
+    assert 'base_lidar_joint_FL' in joints or 'lidar_fl_joint' in joints
+    fl = joints.get('base_lidar_joint_FL') or joints.get('lidar_fl_joint')
     assert fl.attrib['type'] == 'fixed'
     assert fl.find('parent').attrib['link'] == 'base_link'
     assert fl.find('child').attrib['link'] == 'base_lidar_link_FL'
 
-    assert 'lidar_br_joint' in joints
-    br = joints['lidar_br_joint']
+    assert 'base_lidar_joint_BR' in joints or 'lidar_br_joint' in joints
+    br = joints.get('base_lidar_joint_BR') or joints.get('lidar_br_joint')
     assert br.attrib['type'] == 'fixed'
     assert br.find('parent').attrib['link'] == 'base_link'
     assert br.find('child').attrib['link'] == 'base_lidar_link_BR'
 
     # 3. IMU joint: base_link -> base_imu_link
-    assert 'imu_joint' in joints
-    imu = joints['imu_joint']
+    assert 'base_imu_joint' in joints or 'imu_joint' in joints
+    imu = joints.get('base_imu_joint') or joints.get('imu_joint')
     assert imu.attrib['type'] == 'fixed'
     assert imu.find('parent').attrib['link'] == 'base_link'
     assert imu.find('child').attrib['link'] == 'base_imu_link'
@@ -238,11 +238,50 @@ def test_sensor_and_perception_frame_ids_match_urdf():
     assert 'base_lidar_link_BR' in lidar_content
 
     # 3. IMU driver frame
-    imu_launch_path = (
-        ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'tdk_imu.launch.py'
+    imu_config_path = (
+        ws_root / 'src' / 'mobile_base_perception' / 'config' / 'tdk_imu.yaml'
     )
-    assert imu_launch_path.exists()
-    with open(imu_launch_path, 'r', encoding='utf-8') as f:
+    assert imu_config_path.exists()
+    with open(imu_config_path, 'r', encoding='utf-8') as f:
         imu_content = f.read()
 
     assert 'base_imu_link' in imu_content
+
+
+def test_kinematic_icp_frame_semantics_and_tf_authority():
+    """Verify Kinematic-ICP PoC frame semantics and sole EKF TF authority."""
+    ws_root = get_workspace_root()
+
+    # 1. Kinematic-ICP configuration
+    kicp_config_path = (
+        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' / 'kinematic_icp_ros.yaml'
+    )
+    assert kicp_config_path.exists()
+    with open(kicp_config_path, 'r', encoding='utf-8') as f:
+        kicp_params = yaml.safe_load(f)['kinematic_icp_online_node']['ros__parameters']
+
+    assert kicp_params['lidar_odom_frame'] == 'odom'
+    assert kicp_params['base_frame'] == 'base_footprint'
+    assert kicp_params['publish_odom_tf'] is False
+
+    # 2. EKF Kinematic-ICP configuration
+    ekf_kicp_config_path = (
+        ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf_kinematic_icp.yaml'
+    )
+    assert ekf_kicp_config_path.exists()
+    with open(ekf_kicp_config_path, 'r', encoding='utf-8') as f:
+        ekf_kicp_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
+
+    assert ekf_kicp_params['publish_tf'] is True
+    assert ekf_kicp_params['world_frame'] == 'odom'
+    assert ekf_kicp_params['odom_frame'] == 'odom'
+    assert ekf_kicp_params['base_link_frame'] == 'base_footprint'
+    assert ekf_kicp_params['odom0'] == '/lidar_odometry'
+
+    # 3. Protect that no active PoC configuration introduces odom_lidar
+    for config_file in (kicp_config_path, ekf_kicp_config_path):
+        with open(config_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        assert 'odom_lidar' not in content, (
+            f"Found forbidden 'odom_lidar' frame in {config_file}"
+        )
