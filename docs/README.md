@@ -118,7 +118,6 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 | [`verification/traceability_matrix.md`](./verification/traceability_matrix.md) | 驗證層 | **ACTIVE / CANONICAL** | 需求追溯矩陣 |
 | [`verification/evidence_index.md`](./verification/evidence_index.md) | 驗證層 | **ACTIVE / CANONICAL** | 驗證證據索引目錄 |
 | [`XX_backlog.md`](./XX_backlog.md) | 規劃層 | **ACTIVE / CANONICAL** | 後續 Backlog 追蹤 |
-| [`06_subsystem.md`](./06_subsystem.md) | 設計層 | **SUPERSEDED** | 歷史子系統設計（由 `05_architecture.md` 取代，保留供歷史追溯） |
 | [`verification/README.md`](./verification/README.md) | 驗證層 | **SUPERSEDED** | 舊版驗證說明（由 `evidence_index.md` 取代） |
 | [`04_reuse_assessment.md`](./04_reuse_assessment.md) | 評估層 | **HISTORICAL** | 成熟方案評估記錄（非現行規格） |
 | [`07_implementation.md`](./07_implementation.md) | 過程層 | **HISTORICAL** | 歷史實作過程記錄（非現行規格） |
@@ -149,7 +148,6 @@ mobile_base/
     ├── 02_capabilities.md             # 系統能力規範
     ├── 03_requirements.md             # 系統需求規範 (SYS-001~034)
     ├── 05_architecture.md             # 系統架構單一權威
-    ├── 06_subsystem.md                # [SUPERSEDED] 歷史子系統設計
     ├── XX_backlog.md                  # 後續 Backlog 追蹤
     ├── design_baseline/               # M1 通訊與硬體介面詳細設計基準
     ├── verification/                  # 需求追溯矩陣與驗證證據索引目錄

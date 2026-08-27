@@ -45,7 +45,7 @@ def test_s1_urdf_tf_tree_structure():
     links = {elem.attrib['name'] for elem in root.findall('link')}
     joints = {elem.attrib['name']: elem for elem in root.findall('joint')}
 
-    # Expected canonical links (docs/05_architecture.md §7.1, docs/06_subsystem.md §4.1)
+    # Expected canonical links (docs/05_architecture.md §7.1)
     required_links = {
         'base_footprint',
         'base_link',

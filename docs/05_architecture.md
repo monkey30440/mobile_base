@@ -17,7 +17,7 @@
 本架構為 `mobile_base` 目前 as-built 系統架構的**單一權威來源 (Single Canonical Authority)**。
 
 ### 1.2 下游關係與文件狀態
-歷史子系統設計文件 [`docs/06_subsystem.md`](./06_subsystem.md) 已標記為 **SUPERSEDED**。本文件統籌定義全系統與子系統層級之架構責任與介面邊界，各子系統內部實作與配置以現行原始碼（`src/*`）、Launch 檔與參數 YAML 為準。
+歷史子系統設計已收斂併入本文件。本文件統籌定義全系統與子系統層級之架構責任與介面邊界，各子系統內部實作與配置以現行原始碼（`src/*`）、Launch 檔與參數 YAML 為準。
 
 ### 1.3 架構職權範圍 (Architecture Authority Boundaries)
 
