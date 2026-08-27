@@ -31,8 +31,8 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 |---|---|---|
 | **Repository 與開發環境建立** | ✅ 已完成 | Docker 容器化開發與釋出環境基線就緒 |
 | **文件規範與權威模型確立** | ✅ 已完成 | 需求、架構、追溯矩陣與權威模型收斂完成 |
-| **CAP-001 實機驗證 (UC-001)** | ✅ 已完成 | 建圖、存檔與 MapIO 回讀驗證通過（IMP-014, IMP-015） |
-| **CAP-002 實機驗證 (UC-002)** | ✅ 已完成 | 站點解析、三階段路網導航與安全防護通過（IMP-015, Phase R5） |
+| **CAP-001 實機驗證 (UC-001)** | ✅ 已完成 | 建圖、存檔與 MapIO 回讀實機驗證通過 |
+| **CAP-002 實機驗證 (UC-002)** | ✅ 已完成 | 站點解析、三階段路網導航與安全防護實機驗證通過 |
 | **v0.1.0 MVP Baseline** | ✅ **已結案 (Closed)** | 核心能力具備，底盤具備完整建圖與自主導航能力 |
 
 ---
@@ -65,19 +65,21 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
                                  [docs/README.md]
                       (Root System Overview & Document Index)
                                         │
-        ┌──────────────────────────────┼──────────────────────────────┐
-        ▼                              ▼                              ▼
-  [General / PM]              [Software Engineer]           [Verification Engineer]
-  - 01_USE_CASES.md           - 04_SYSTEMS.md               - traceability_matrix.md
-  - 02_CAPABILITIES.md        - MAPPING.md / NAVIGATION.md  - evidence_index.md
-  - 03_REQUIREMENTS.md        │                             - tests & raw evidence
-  - XX_backlog.md             │                             │
-        │                      └──────────────┬──────────────┘
-        └─────────────────────────────────────┼──────────────────────────────┐
-                                              ▼                              ▼
-                                         [Operator]                      [AI Agent]
-                                - MAPPING.md / NAVIGATION.md    - AGENTS.md
-                                - maps/test_site/
+        ┌───────────────────────────────┴──────────────────────────────┐
+        ▼                                                              ▼
+  [General / PM]                                              [Software Engineer]
+  - 01_USE_CASES.md                                           - 04_SYSTEMS.md
+  - 02_CAPABILITIES.md                                        - MAPPING.md / NAVIGATION.md
+  - 03_REQUIREMENTS.md                                        - release_guide.md
+  - XX_backlog.md                                                      │
+        │                                                              │
+        └───────────────────────────────┬──────────────────────────────┘
+                                        │
+                 ┌──────────────────────┴──────────────────────┐
+                 ▼                                             ▼
+            [Operator]                                     [AI Agent]
+   - MAPPING.md / NAVIGATION.md                           - AGENTS.md
+   - maps/test_site/
 ```
 
 ### 4.1 General / PM / 系統工程師
@@ -92,11 +94,7 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 - [`src/mobile_base_bringup/NAVIGATION.md`](../src/mobile_base_bringup/NAVIGATION.md)：導航模式啟動、初始定位、站點導航 CLI 與安全操作流程。
 - [`release_guide.md`](./release_guide.md)：客戶端二進位發布包多階段 Docker 打包、一鍵匯出腳本與部署流程。
 
-### 4.3 Verification Engineer / 測試與驗證工程師
-- [`verification/traceability_matrix.md`](./verification/traceability_matrix.md)：**系統需求追溯矩陣 (RTM)**（32 項 SYS 需求與原始碼、驗證方法、證據及狀態完整對映）。
-- [`verification/evidence_index.md`](./verification/evidence_index.md)：**驗證證據索引與目錄**（分類索引所有 committed 實機測試日誌、遙測 CSV 與階段驗收報告）。
-
-### 4.4 AI Agent / 自動化代理
+### 4.3 AI Agent / 自動化代理
 - [`AGENTS.md`](../AGENTS.md)：儲存庫協作政策、GitNexus 使用規範、單一真相原則與變更工作流。
 
 ---
@@ -112,8 +110,6 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 | [`src/mobile_base_bringup/MAPPING.md`](../src/mobile_base_bringup/MAPPING.md) | 操作層 | **ACTIVE / CANONICAL** | 建圖操作指南 |
 | [`src/mobile_base_bringup/NAVIGATION.md`](../src/mobile_base_bringup/NAVIGATION.md) | 操作層 | **ACTIVE / CANONICAL** | 導航操作指南 |
 | [`release_guide.md`](./release_guide.md) | 操作層 | **ACTIVE / CANONICAL** | 客戶端發布打包與部署指南 |
-| [`verification/traceability_matrix.md`](./verification/traceability_matrix.md) | 驗證層 | **ACTIVE / CANONICAL** | 需求追溯矩陣 |
-| [`verification/evidence_index.md`](./verification/evidence_index.md) | 驗證層 | **ACTIVE / CANONICAL** | 驗證證據索引目錄 |
 | [`XX_backlog.md`](./XX_backlog.md) | 規劃層 | **ACTIVE / CANONICAL** | 後續 Backlog 追蹤 |
 
 ---
@@ -139,7 +135,5 @@ mobile_base/
     ├── 03_REQUIREMENTS.md             # 系統需求規範 (SYS-001~034)
     ├── 04_SYSTEMS.md                  # 系統架構單一權威
     ├── XX_backlog.md                  # 後續 Backlog 追蹤
-    ├── release_guide.md               # 客戶端發布打包與部署指南
-    ├── verification/                  # 需求追溯矩陣與驗證證據索引目錄
-    └── evidence/                      # 結構化驗證階段報告
+    └── release_guide.md               # 客戶端發布打包與部署指南
 ```
