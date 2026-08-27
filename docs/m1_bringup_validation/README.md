@@ -79,5 +79,3 @@ These are design choices, not values to accept merely because the hardware curre
 
 Motor/sensor, motor poles, encoder resolution, encoder/Hall offset, rated power and protection/PID parameters
 must be selected from the actual motor/electrical system, not from this software architecture.
-
-See `RESULTS_REVIEW.md` and `CHECKLIST.md`.
