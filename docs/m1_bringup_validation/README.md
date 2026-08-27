@@ -1,81 +1,48 @@
+# M1 Hardware Diagnostic & Maintenance Toolkit
+
+This directory provides standalone diagnostic and maintenance utilities for the M1 dual-motor differential drive system over RS-485 Modbus RTU.
+
+> [!IMPORTANT]
+> **Authority & Canonical Baselines:**
+> * These scripts are diagnostic and maintenance utilities. They are **not** the normative system requirement or formal verification authority.
+> * For canonical architecture, protocol details, and motor parameters, refer to:
+>   - [`docs/design_baseline/m1_driver.md`](file:///home/jim/mobile_base/docs/design_baseline/m1_driver.md)
+>   - [`docs/design_baseline/m1_hardware.md`](file:///home/jim/mobile_base/docs/design_baseline/m1_hardware.md)
+> * Active runtime configuration is maintained in [`src/mobile_base_bringup/config/base_control.yaml`](file:///home/jim/mobile_base/src/mobile_base_bringup/config/base_control.yaml).
+
+---
+
+## Retained Diagnostic Scripts
+
+### 1. Read-Only Utilities
+
+These scripts perform passive inspection or standard Modbus read transactions (FC03). They do not alter motor state, write configuration registers, or command motion.
+
+| Script | Purpose | Example Usage |
+|---|---|---|
+| [`00_preflight.sh`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/00_preflight.sh) | OS serial port, permission (`dialout`), and USB kernel diagnostics | `bash scripts/00_preflight.sh` |
+| [`01_scan_bus.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/01_scan_bus.py) | Scan Modbus RTU baud rates and slave IDs on the bus | `python3 scripts/01_scan_bus.py --port /dev/ttyUSB0 --ids 1-8` |
+| [`02_read_config.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/02_read_config.py) | Read and display key M1 configuration registers | `python3 scripts/02_read_config.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2` |
+| [`02b_read_control_mapping.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/02b_read_control_mapping.py) | Verify speed control method (01-12) and `SERVO-EN` virtual I/O mapping | `python3 scripts/02b_read_control_mapping.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2` |
+| [`03_md2_read.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/03_md2_read.py) | Stream real-time Multi-drive 2.0 FC03 feedback (status, alarm, RPM, bus voltage, current, position steps) | `python3 scripts/03_md2_read.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --samples 20 --hz 10` |
+| [`09_audit_recommended_config.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/09_audit_recommended_config.py) | Audit driver register settings against development or deployment baselines | `python3 scripts/09_audit_recommended_config.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --profile development` |
+| [`11_read_comm_error_history.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/11_read_comm_error_history.py) | Dump driver communication error history registers (`0x4800..0x4809`) | `python3 scripts/11_read_comm_error_history.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2` |
+| [`14_multidrive2_fc03_state_test.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/14_multidrive2_fc03_state_test.py) | Compare Standard Modbus individual reads with Multi-drive 2.0 FC03 group state read | `python3 scripts/14_multidrive2_fc03_state_test.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2` |
+
+---
+
+### 2. State-Changing Utilities (Zero-Motion)
+
 > [!WARNING]
-> **HISTORICAL / NON-AUTHORITATIVE**
->
-> This document is retained for historical traceability only. It does not define the current system architecture, requirements, operational procedure, or verification authority. Use `docs/README.md` to locate the current canonical documentation.
+> **Safety Warning:**
+> State-changing scripts interact directly with drive lifecycle controls. Although they do **not** command non-zero RPM, wheels must be lifted or E-stop/STO made accessible before execution.
 
-# M1 Bring-up Validation v2
+| Script | Purpose | Operational Risk | Example Usage |
+|---|---|---|---|
+| [`15_multidrive2_lifecycle_test.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/15_multidrive2_lifecycle_test.py) | Test Multi-drive 2.0 FC17 SVON -> JG 0 -> SVOFF lifecycle transitions with simultaneous state read | **ZERO-MOTION WRITE** (Armed with `--arm I_UNDERSTAND`, explicitly commands 0 RPM) | `python3 scripts/15_multidrive2_lifecycle_test.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --arm I_UNDERSTAND` |
 
-目的：從硬體與 M1 官方通訊定義開始建立可重現證據，不把「目前實機設定」自動當成正確設計。
+---
 
-## 目前建議驗證順序
+### 3. Shared Library
 
-```bash
-cd docs/m1_bringup_validation
-
-# read-only
-bash scripts/00_preflight.sh
-python3 scripts/01_scan_bus.py --port /dev/ttyUSB0
-python3 scripts/02_read_config.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
-python3 scripts/02b_read_control_mapping.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
-python3 scripts/03_md2_read.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --samples 20 --hz 10
-
-# lifecycle only
-python3 scripts/03b_servo_enable_test.py --port /dev/ttyUSB0 --baud 230400 --id 1 --arm I_UNDERSTAND
-python3 scripts/03b_servo_enable_test.py --port /dev/ttyUSB0 --baud 230400 --id 2 --arm I_UNDERSTAND
-
-# low-speed motion
-python3 scripts/04_motor_test_safe.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --right-rpm 80 --left-rpm 0 --seconds 1 --arm I_UNDERSTAND
-python3 scripts/04_motor_test_safe.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --right-rpm 0 --left-rpm 80 --seconds 1 --arm I_UNDERSTAND
-
-# mechanical ratio
-python3 scripts/05_gear_ratio_test.py ...
-
-# target position representation
-python3 scripts/07_set_position_format1.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --arm I_UNDERSTAND
-python3 scripts/08_verify_position_format1.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --wheel right --rpm 80 --arm I_UNDERSTAND
-python3 scripts/08_verify_position_format1.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --wheel left --rpm 80 --arm I_UNDERSTAND
-python3 scripts/06_conversion_test.py
-
-# architecture config audit
-python3 scripts/09_audit_recommended_config.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
-
-# timing evidence needed before choosing communication watchdog
-python3 scripts/10_fc17_timing.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2 --samples 300 --hz 50 --arm I_UNDERSTAND
-
-# read-only error-history snapshot
-python3 scripts/11_read_comm_error_history.py --port /dev/ttyUSB0 --baud 230400 --ids 1,2
-```
-
-For phase-level timing of the production C++/libmodbus path, use the existing
-zero-speed harness with detailed capture enabled:
-
-```bash
-ros2 run mobile_base_control m1_fc17_latency_check \
-  --device /dev/ttyUSB0 --baud 230400 --samples 300 \
-  --execute --raw-output /tmp/fc17_detailed.csv
-```
-
-`--raw-output` buffers timestamps in memory during the measured FC17 loop and
-writes the CSV only after the stop/disable/post-check sequence. The test remains
-hard-bound to JG 0 RPM and retains the physical E-stop/STO requirements.
-
-## Target architecture-level M1 configuration
-
-These are design choices, not values to accept merely because the hardware currently has them:
-
-- `01-10 = 1`: lifecycle-controlled SERVO-ON.
-- `01-11 = 0`: Speed closed-loop.
-- `01-12 = 4`: Multi-drive Lite JG speed source.
-- `02-14 = 1`: signed 32-bit Step position representation.
-- `02-15 = 3`: 100 Hz RPM/monitor refresh.
-- `09-18 = 0`: Modbus RTU.
-- unique driver IDs matching deployment mapping.
-- `09-20`: baud matching host configuration.
-- `09-21 = 0`: standard RTU timing baseline.
-- `09-26 = 0`: fixed Multi-drive 2.0 mapping expected by these scripts.
-- `05-17 > 0`: communication watchdog enabled; exact value comes after timing measurement.
-- `05-18`: intentionally selected error-count policy, not left at zero by accident.
-- `05-21 = 2` is the current safety recommendation: alarm stop + clear remote virtual I/O.
-
-Motor/sensor, motor poles, encoder resolution, encoder/Hall offset, rated power and protection/PID parameters
-must be selected from the actual motor/electrical system, not from this software architecture.
+* [`m1_modbus.py`](file:///home/jim/mobile_base/docs/m1_bringup_validation/scripts/m1_modbus.py): Provides shared Modbus RTU CRC16 calculation, request framing, response checking, and helper read functions for Python diagnostic tools.
