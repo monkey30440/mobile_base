@@ -355,6 +355,138 @@ graph TD
   - Config: `src/mobile_base_control/config/base_control_params.yaml`
   - Driver & Hardware: `src/mobile_base_control/src/m1_hardware.cpp`, `src/mobile_base_control/src/m1_driver.cpp`
 
+#### 4.7.1 底盤控制分層架構與責任邊界 (Base-Control Architecture & Responsibility Boundary)
+
+底盤運動控制堆疊劃分為兩層應用層設計：
+
+```text
+diff_drive_controller
+        │
+        │ 輪端目標角速度 [rad/s]
+        ▼
+   ros2_control
+        │
+        │ Joint Command / State Interfaces
+        ▼
+   M1Hardware (Hardware Plugin)
+        │
+        │ MotorCommand / MotorState (馬達目標 RPM / 狀態資料)
+        ▼
+    M1Driver (Protocol Library)
+        │
+        │ 私有 RTU 封包 (Raw Modbus Frames)
+        ▼
+    libmodbus (C Library)
+        │
+        ▼
+      RS-485 序列匯流排 (/dev/ttyUSB0, 230400 8N1)
+        │
+   ┌────┴────┐
+   ▼         ▼
+M1 ID1    M1 ID2
+(右輪)    (左輪)
+```
+
+**責任邊界配置 (Responsibility Boundary)**：
+
+| 元件 | 專屬擁有職責 (Owned Responsibilities) | 嚴格禁止涉足 (Non-Goals / Excluded) |
+|---|---|---|
+| **`M1Hardware`** | • ROS 2 / ros2_control 生命週期管理<br/>• 左右輪語意與馬達 ID 映射 (ID1 $\rightarrow$ Right, ID2 $\rightarrow$ Left)<br/>• 輪速 [rad/s] 與馬達 [RPM] 雙向轉換<br/>• 機械減速比 ($20:1$) 與馬達方向極性 ($\text{Left}=+1, \text{Right}=-1$)<br/>• 命令有限性檢查、極限截斷 (`max_motor_rpm = 3000.0`)<br/>• 連續位置追蹤與 int32 溢位解算 (`PositionTracker`)<br/>• 裝置健康政策 (Alarm 檢驗與 `ERROR` 判定)<br/>• 安全啟動與停機序列編排<br/>• A2 同步控制模型之狀態快取 (`latest_motor_state_`) | • Modbus 協定封包與暫存器編解碼<br/>• Multi-drive 2.0 廣播定址與 Bitmap 運算<br/>• `libmodbus` context 管理與串列通訊<br/>• 機器人差速運動學 (由 `diff_drive_controller` 擁有) |
+| **`M1Driver`** | • M1 通訊協定語意與 Multi-drive 2.0 廣播定址 (Group ID `0x65`)<br/>• Multi-drive 2.0 FC03 / FC17 封包建構<br/>• JG (RPM 控制)、SVON (使能)、SVOFF (去能) 命令編碼<br/>• 有符號整數解碼 (Signed int16 RPM, Signed int32 Position)<br/>• 協定回應結構語意驗證 (FC、長度、驅動器區塊完整性)<br/>• 私有 `libmodbus` context 管理與 RTU 通訊 (`connect`, `disconnect`, `transact`)<br/>• 標準 Modbus 單一暫存器維護存取 (`read_register`, `write_register`) | • ROS 2 介面、Node 或 ros2_control 生命週期<br/>• 機器人左右輪幾何、輪徑、輪距或減速比<br/>• 輪端弧度與角速度轉換<br/>• 連續位置溢位展開 (Rollover Tracking)<br/>• 裝置健康業務政策 (如警報轉為 ROS Error) |
+
+- **封裝原則**：`M1Hardware` 專注於 ROS 與機器人領域語意，不依賴任何 Modbus 暫存器或 `libmodbus` 型別；`M1Driver` 私有擁有 `libmodbus`，不向外暴露傳輸層細節。MVP 架構中無獨立之 `SerialTransport` 抽象層，維持單一後端之最簡架構（Avoid Premature Structure）。
+
+#### 4.7.2 硬體基準與馬達參數 (Hardware Baseline & Motor Configuration)
+
+系統採用實機驗證通過之硬體與馬達參數基準：
+
+- **序列通訊參數**：RS-485 介面，固定埠位 `/dev/ttyUSB0`，鮑率 `230400` bps，格式 `8N1`（8 資料位元、無同位檢查、1 停止位元）。
+- **通訊逾時門檻**：`response_timeout_ms: 50` ms（URDF / Launch 強制指定之必要參數，系統不依賴隱式預設值）。
+- **驅動器與輪端映射**：
+  - 驅動器 ID 1：右輪馬達（Right Motor），原生安裝旋轉極性 $\text{sign}_{\text{right}} = -1$（負轉為機器人前進方向）。
+  - 驅動器 ID 2：左輪馬達（Left Motor），原生安裝旋轉極性 $\text{sign}_{\text{left}} = +1$（正轉為機器人前進方向）。
+- **機械幾何與減速比**：
+  - 輪半徑 $R = 0.080\,\text{m}$，輪間距 $L = 0.5545\,\text{m}$（由 `diff_drive_controller` 擁有）。
+  - 機械減速比 $G = 20.0$（$20:1$ 行星減速機，由 `M1Hardware` 擁有）。
+- **編碼器與位置解析度**：
+  - 馬達編碼器原生解析度 $2500\,\text{CPR}$，設定為 Format 1（`02-14 = 1`）四倍頻解碼，馬達端每圈對應 $10{,}000\,\text{steps/motor rev}$。
+  - 經 $20:1$ 減速後，輪端旋轉一圈對應 $200{,}000\,\text{steps/wheel rev}$（即 $200{,}000\,\text{steps} = 2\pi\,\text{rad}$）。
+- **運作極限與逾時**：
+  - 馬達轉速工作限制 `max_motor_rpm = 3000.0` RPM。
+  - 速度命令逾時門檻 `cmd_vel_timeout = 0.5` s。
+- **控制頻率基準**：`controller_manager` 控制迴圈基準為 **30 Hz**（週期 $33.3\,\text{ms}$）。
+
+#### 4.7.3 Multi-drive 2.0 通訊架構 (Multi-drive 2.0 Communication Design)
+
+M1 驅動器支援 Multi-drive 2.0 協定，透過廣播群組定址（Group ID `0x65` 與驅動器位元遮罩），以單一總線事務同時存取雙馬達：
+
+1. **唯讀狀態路徑 (`read_state()`)**：
+   - 使用 Multi-drive 2.0 FC03（Read Holding Registers）。
+   - 在單一總線讀取事務中同時獲取雙驅動器之運作狀態、警報碼、即時轉速與編碼器位置等關鍵狀態資料。
+2. **運行期控制路徑 (`exchange()`, `enable()`, `stop()`, `disable()`)**：
+   - 使用 Multi-drive 2.0 FC17（Read/Write Multiple Registers）。
+   - 在**單一總線事務中同步下發雙輪控制命令並回讀雙輪狀態**：
+     - `exchange()`：下發 JG（Jog 速度控制）目標轉速 RPM。
+     - `enable()`：下發 SVON（Servo-On 使能）命令。
+     - `stop()`：下發 JG 零速命令。
+     - `disable()`：下發 SVOFF（Servo-Off 去能）命令。
+   - **設計理由**：將控制命令下發與狀態回授合併於單一 FC17 事務，消除傳統 Modbus 分立讀寫的多餘總線往返，大幅減少總線延遲並支持同步控制迴圈。
+3. **標準 Modbus 維護路徑**：
+   - 支援標準單一暫存器讀寫（FC03 / FC06），專責於離線配置、參數檢查與診斷維護（如 02-14 位置格式、09-19 驅動器 ID、09-20 鮑率、09-26 Multi-drive 映射），嚴禁介入運行期即時控制迴圈。
+
+#### 4.7.4 A2 同步控制迴圈與轉換模型 (A2 Synchronous Control Model & Conversions)
+
+系統採用實機驗證通過之 **A2 同步控制模型 (Synchronous Model A2)**：
+
+```text
+M1Hardware::read()
+    │
+    ├── 消耗前一週期 write() 快取之最新馬達狀態 latest_motor_state_ (無總線通訊)
+    ├── 檢查馬達狀態健康度 (alarm == 0)
+    ├── 執行 PositionTracker 增量累加與輪端位置 [rad] 轉換
+    └── 轉換 actual_rpm 為輪端角速度 [rad/s]
+    │
+controller_manager / diff_drive_controller update() 運算
+    │
+M1Hardware::write()
+    │
+    ├── 檢驗輪端角速度命令合法性 (有限值) 與極限截斷 (max_motor_rpm)
+    ├── 轉換左/右輪角速度 [rad/s] 為馬達轉速 [RPM]
+    ├── 執行單一 M1Driver::exchange() FC17 總線事務
+    ├── 快取回傳之 ExchangeResult 作為最新狀態 latest_motor_state_
+    └── 檢驗回傳狀態之警報碼
+```
+
+- **A2 模型設計理由**：每個 30 Hz 控制週期（$33.3\,\text{ms}$）僅在 `write()` 發生一次物理總線通訊，`read()` 直接使用快取，避免重複通訊開銷，確保控制迴圈完全收斂在時限內。
+- **速度命令轉換公式 (Wheel Command to Motor RPM)**：
+  $$\text{motor\_rpm} = \text{clamp}\left( \text{round}\left( \omega_{\text{wheel}} \times \frac{60}{2\pi} \times G \times \text{sign}_{\text{motor}} \right), -\text{max\_rpm}, \text{max\_rpm} \right)$$
+  其中 $G = 20.0$；$\text{sign}_{\text{left}} = +1$，$\text{sign}_{\text{right}} = -1$；$\text{max\_rpm} = 3000.0$。
+- **速度回授轉換公式 (Motor RPM to Wheel Velocity)**：
+  $$\omega_{\text{wheel}} = \text{actual\_rpm} \times \text{sign}_{\text{motor}} \times \frac{1}{G} \times \frac{2\pi}{60}$$
+- **轉換職責劃分**：機器人線速／角速與輪速間的差速運動學轉換由 `diff_drive_controller` 擁有；輪端角速度與馬達轉速／符號間的轉換由 `M1Hardware` 擁有；馬達轉速之協定暫存器編碼由 `M1Driver` 擁有。
+
+#### 4.7.5 連續位置追蹤與溢位解算 (Position Tracking & Rollover Unwrapping)
+
+- **M1 位置回授特性**：M1 回傳之位置為 signed 32-bit 整數（`position_steps`），計數範圍在 $[-2^{31}, 2^{31}-1]$ 之間，持續運轉會發生數值溢位（Rollover）。
+- **`PositionTracker` 解算機制**：
+  - 每個馬達獨立配置一個 `PositionTracker`。
+  - 採用二補數差值（2's complement difference）計算相鄰採樣之原始增量：
+    $$\Delta_{\text{steps}} = (\text{int32\_t})\left( (\text{uint32\_t})\text{raw}_{\text{current}} - (\text{uint32\_t})\text{raw}_{\text{previous}} \right)$$
+  - 將增量累加至 64 位元累加器 $\text{accumulated\_steps} \in \text{int64\_t}$，消除溢位突變。
+- **輪端連續位置計算公式**：
+  $$\theta_{\text{wheel}}\,\text{[rad]} = \frac{\text{accumulated\_steps}}{\text{motor\_steps\_per\_rev} \times G} \times 2\pi \times \text{sign}_{\text{motor}} = \frac{\text{accumulated\_steps}}{200{,}000} \times 2\pi \times \text{sign}_{\text{motor}}$$
+- **原點重置政策 (Origin Reset Policy)**：
+  - 每次 `M1Hardware::on_activate()` 執行時，強制將左右輪 `PositionTracker` 歸零重置，將當前馬達實體位置定義為 ROS 輪端位置原點（$0.0\,\text{rad}$）。
+  - 系統在節點重啟或生命週期重新啟動後**不保留先前的絕對里程記帳**。
+
+#### 4.7.6 裝置健康政策與錯誤隔離 (Device Health Policy & Error Responsibility)
+
+- **通訊結果與裝置狀態的架構區隔**：
+  - 一次 Modbus 總線通訊在傳輸層與協定層可能完全成功（`Result::ok == true`），但馬達驅動器在狀態區塊中可能回報非零警報碼（如 `alarm = 21`）。
+  - `M1Driver` 專責判定傳輸與封包語意是否成功，不擅自解釋硬體健康狀態。
+  - `M1Hardware` 專責實施裝置健康政策：當檢測到任何驅動器 `alarm != 0` 時，判定硬體故障並使 ros2_control 進入 `ERROR` / `FAILURE` 狀態。
+- **無自動清除警報政策**：系統嚴禁在運行中靜默自動清除驅動器警報，必須將異常明確呈報上層與操作員。
+
 ---
 
 ## 5. Site Resources
@@ -614,6 +746,67 @@ sequenceDiagram
 | **Level 2: Command Timeout Stop** | 上游當機、通訊中斷或閒置超過 $0.5\,\text{s}$ | `S7 Base Control` | 控制器內部 Stale-command 逾時機制觸發，強制歸零輸出煞停（SYS-027）。 |
 | **Level 3: Hardware Safe Stop** | 底盤故障 (`ERROR`) / 系統關機 / 停用請求 | `S7 Base Control` | 主動煞車減速、確認輪端完全停轉後切斷使能 (Servo-Off, SYS-030)。 |
 
+### 8.2 底盤生命週期與安全停機序列 (Base Control Lifecycle and Safe Stop Sequencing)
+
+底盤硬體生命週期與安全煞停由 `M1Hardware` 統一編排，實施嚴格之狀態機與防護程序：
+
+#### 8.2.1 啟動序列 (Activation Sequence - `on_activate`)
+
+```text
+M1Driver.connect()
+        │
+        ▼
+M1Driver.read_state() 啟動前檢查
+        │
+        ├── 驗證通訊正常且無未解除警報 (alarm == 0)
+        └── 驗證馬達處於零速靜止狀態
+        │
+重置左右輪 PositionTracker 累加器與內部命令變數
+        │
+        ├── 標定當前實體位置為 ROS 輪端位置原點 (0 rad)
+        └── 設定命令變數 = 0.0 rad/s
+        │
+M1Driver.enable() (Multi-drive 2.0 FC17 SVON)
+        │
+        ▼
+有界狀態確認輪詢 (Bounded Status Confirmation)
+        │
+        ├── 於有限逾時視窗內週期性呼叫 read_state()
+        ├── 確認驅動器脫離 WAIT/INHIBIT (status == 6) 並進入正常就緒狀態 (status == 0)
+        └── 確認過程中無任何驅動警報產生
+        │
+轉入 ACTIVE 狀態 (開始執行即時 control loop)
+```
+
+- **硬體過渡特性**：實機證據顯示，發送 SVON 後立即回傳之狀態可能仍維持在 status 6；必須透過有界輪詢確認馬達完全進入使能狀態，超時未就緒則自動發送 SVOFF 並回報啟動失敗。
+
+#### 8.2.2 停用與安全停機序列 (Deactivation Sequence - `on_deactivate` / `on_error` / `on_shutdown`)
+
+```text
+速度命令變數即刻歸零 (hw_commands_ = 0)
+        │
+        ▼
+M1Driver.stop() (Multi-drive 2.0 FC17 JG 0) 主動煞停
+        │
+        ▼
+有界停轉確認 (Bounded Stop Confirmation)
+        │
+        ▼
+M1Driver.disable() (Multi-drive 2.0 FC17 SVOFF) 切斷伺服使能
+        │
+        ▼
+M1Driver.disconnect() 釋放序列通訊與 libmodbus 資源 (Cleanup / Shutdown 階段)
+```
+
+#### 8.2.3 核心安全與邊界原則
+
+1. **盡力而為安全原則 (Best-Effort Shutdown Invariant)**：
+   - 停機與錯誤處理流程採嚴格之 **Best-Effort** 原則：在執行 Stop、Disable 或 Disconnect 時，若前一動作發生通訊異常或逾時，系統**嚴禁提早中斷**，必須持續嘗試執行後續之安全處置動作，確保硬體盡最大可能脫離受電致動狀態。
+2. **通訊資源清理與馬達安全停機的明確區隔**：
+   - 釋放通訊資源（`disconnect()` / `modbus_close()`）僅關閉作業系統層級之序列埠與 context，**不等於馬達物理煞停**。馬達安全生命週期（Stop / Disable）屬於上層 `M1Hardware` 之專屬職責，嚴禁依賴底層通訊庫解構函數隱式承擔。
+3. **實體急停邊界 (Physical E-Stop / STO Boundary)**：
+   - 軟體層安全停機（JG 0 與 SVOFF）屬於受控減速與正常去能；實體硬體急停（Physical E-Stop）與安全轉矩關斷（Safe Torque Off, STO）屬於外部硬體電氣迴路，獨立於軟體通訊與控制架構之外。
+
 ---
 
 ## 9. Route-Assisted Navigation
@@ -684,6 +877,12 @@ navigate_to_station CLI
    - S7 底盤驅動在通訊中斷或回授無效時必須拋出異常，嚴禁使用速度命令值偽造編碼器回授。
 4. **已知受限邊界 (Bounded Operational Limitation)**：
    - 系統在特定回程軌跡（如 Station B $\rightarrow$ Station A）存在已記錄之進度逾時現象（Progress Timeout）。此現象屬於已知之受限運作邊界，不阻礙 MVP 基本架構之確立；細部參數最佳化與排查不屬於架構文件之範疇。
+5. **底盤控制架構設計決策理由 (Base Control Architectural Rationale)**：
+   - **分層責任隔離 (Layering Separation)**：區分 `M1Hardware` 與 `M1Driver`，使 ROS 2 關節介面、差速輪幾何、極性方向與連續位置追蹤等機器人領域邏輯，與 Modbus RTU 封包編碼、Multi-drive 廣播定址、暫存器映射及串列 I/O 實作完全解耦，利於獨立單元測試與未來硬體相容性維護。
+   - **通訊細節私有化 (libmodbus Encapsulation)**：`libmodbus` context 僅作為 `M1Driver` 內部私有成員，任何 `modbus_t` 指標、巨集常數或底層 `errno` 皆不向外洩漏，確保上層模組純淨。
+   - **避免過早抽象 (Avoid Premature Abstraction)**：MVP 階段僅使用單一 RS-485 串列總線，不額外設計抽象的 `SerialTransport` 介面層或複雜背景執行緒，大幅降低系統複雜度並提高單元測試穩定性（Avoid Premature Structure）。
+   - **採用 Multi-drive 2.0 FC17 同步讀寫**：運行期控制透過單一 FC17 事務同時完成雙輪速度下發與狀態回授，消除先寫後讀的兩次總線往返，大幅降低總線延遲並避免競爭。
+   - **控制頻率定為 30 Hz 之系統理由**：歷史實機時序量測顯示，單次 FC17 來回通訊延遲約落於 $20\sim 25\,\text{ms}$ 區間。50 Hz 控制週期僅有 $20\,\text{ms}$，無法為現行同步通訊模型提供可靠的時序餘裕；因此現行基準採用 30 Hz（週期 $33.3\,\text{ms}$），為同步控制迴圈提供額外時序餘裕以確保穩定運作。
 
 ---
 
