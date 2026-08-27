@@ -76,8 +76,8 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
         └─────────────────────────────────────┼──────────────────────────────┐
                                               ▼                              ▼
                                          [Operator]                      [AI Agent]
-                                 - MAPPING.md / NAVIGATION.md    - AGENTS.md
-                                 - maps/test_site/               - 02_authority_model.md
+                                - MAPPING.md / NAVIGATION.md    - AGENTS.md
+                                - maps/test_site/
 ```
 
 ### 4.1 General / PM / 系統工程師
@@ -98,8 +98,7 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 - [`verification/evidence_index.md`](./verification/evidence_index.md)：**驗證證據索引與目錄**（分類索引所有 committed 實機測試日誌、遙測 CSV 與階段驗收報告）。
 
 ### 4.4 AI Agent / 自動化代理
-- [`AGENTS.md`](../AGENTS.md)：儲存庫協作政策、GitNexus 使用規範與變更工作流。
-- [`rework/02_authority_model.md`](./rework/02_authority_model.md)：文件權威模型與單一真相原則。
+- [`AGENTS.md`](../AGENTS.md)：儲存庫協作政策、GitNexus 使用規範、單一真相原則與變更工作流。
 
 ---
 
@@ -118,10 +117,7 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 | [`verification/traceability_matrix.md`](./verification/traceability_matrix.md) | 驗證層 | **ACTIVE / CANONICAL** | 需求追溯矩陣 |
 | [`verification/evidence_index.md`](./verification/evidence_index.md) | 驗證層 | **ACTIVE / CANONICAL** | 驗證證據索引目錄 |
 | [`XX_backlog.md`](./XX_backlog.md) | 規劃層 | **ACTIVE / CANONICAL** | 後續 Backlog 追蹤 |
-| `docs/research/*.md` (32 files) | 調研層 | **HISTORICAL** | 早期技術可行性調研筆記 |
-| `docs/handoff/*.md` (5 files) | 過程層 | **HISTORICAL** | 開發交接記錄 |
-| `docs/*checklist.md` (4 files) | 過程層 | **HISTORICAL** | 歷史階段查核表 |
-| `docs/m1_bringup_validation/` | 驗證層 | **HISTORICAL** | 早期馬達 Bringup 記錄 |
+| [`m1_bringup_validation/`](./m1_bringup_validation/) | 驗證層 | **HISTORICAL** | 早期馬達 Bringup 記錄與硬體診斷工具 |
 
 ---
 
@@ -149,5 +145,6 @@ mobile_base/
     ├── design_baseline/               # M1 通訊與硬體介面詳細設計基準
     ├── verification/                  # 需求追溯矩陣與驗證證據索引目錄
     ├── evidence/                      # 結構化驗證階段報告
-    └── rework/                        # 文件收斂計畫與權威模型
+    ├── m1_bringup_validation/         # 馬達 Bringup 記錄與硬體診斷工具
+    └── rework/                        # 歷史文件收斂過渡記錄
 ```
