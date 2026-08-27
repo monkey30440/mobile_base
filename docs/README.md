@@ -53,7 +53,7 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 1. **Mapping Mode (UC-001)**：啟用 S1, S2, S3, S4, S7，由操作員透過手動遙控巡覽建圖；S5 與 S6 嚴格禁止啟動。
 2. **Navigation Mode (UC-002)**：啟用 S1, S2, S3, S5, S6, S7，由自主導航堆疊執行路網導航與安全防護；S4 嚴格禁止啟動。
 
-> **架構權威來源**：完整資料流、TF 擁有權契約、命令安全鏈與子系統邊界請參閱 [`docs/05_architecture.md`](./05_architecture.md)。
+> **架構權威來源**：完整資料流、TF 擁有權契約、命令安全鏈與子系統邊界請參閱 [`docs/04_SYSTEMS.md`](./04_SYSTEMS.md)。
 
 ---
 
@@ -68,9 +68,9 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
         ┌──────────────────────────────┼──────────────────────────────┐
         ▼                              ▼                              ▼
   [General / PM]              [Software Engineer]           [Verification Engineer]
-  - 01_use_cases.md           - 05_architecture.md          - traceability_matrix.md
-  - 02_capabilities.md        - MAPPING.md / NAVIGATION.md  - evidence_index.md
-  - 03_requirements.md        - design_baseline/m1_*.md     - tests & raw evidence
+  - 01_USE_CASES.md           - 04_SYSTEMS.md               - traceability_matrix.md
+  - 02_CAPABILITIES.md        - MAPPING.md / NAVIGATION.md  - evidence_index.md
+  - 03_REQUIREMENTS.md        - design_baseline/m1_*.md     - tests & raw evidence
   - XX_backlog.md             │                             │
         │                      └──────────────┬──────────────┘
         └─────────────────────────────────────┼──────────────────────────────┐
@@ -81,13 +81,13 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 ```
 
 ### 4.1 General / PM / 系統工程師
-- [`01_use_cases.md`](./01_use_cases.md)：使用者可操作之系統使用案例（UC-001 建圖, UC-002 導航）。
-- [`02_capabilities.md`](./02_capabilities.md)：系統對外提供之功能能力定義（CAP-001, CAP-002）。
-- [`03_requirements.md`](./03_requirements.md)：規範性系統需求與驗收標準（SYS-001 ~ SYS-034）。
+- [`01_USE_CASES.md`](./01_USE_CASES.md)：使用者可操作之系統使用案例（UC-001 建圖, UC-002 導航）。
+- [`02_CAPABILITIES.md`](./02_CAPABILITIES.md)：系統對外提供之功能能力定義（CAP-001, CAP-002）。
+- [`03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)：規範性系統需求與驗收標準（SYS-001 ~ SYS-034）。
 - [`XX_backlog.md`](./XX_backlog.md)：v0.1.0 之後規劃之延續功能與研究項目。
 
 ### 4.2 Software Engineer / 軟體工程師
-- [`05_architecture.md`](./05_architecture.md)：**系統架構單一權威來源**（子系統責任、資料流、TF 契約、安全攔截鏈）。
+- [`04_SYSTEMS.md`](./04_SYSTEMS.md)：**系統架構單一權威來源**（子系統責任、資料流、TF 契約、安全攔截鏈）。
 - [`design_baseline/m1_driver.md`](./design_baseline/m1_driver.md)：M1 馬達驅動器 Modbus RTU 通訊協定詳細設計基準。
 - [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md)：`ros2_control` `SystemInterface` 與 M1Driver 整合設計基準。
 - [`src/mobile_base_bringup/MAPPING.md`](../src/mobile_base_bringup/MAPPING.md)：建圖模式啟動、鍵盤遙控操作、地圖儲存與回讀驗證流程。
@@ -107,10 +107,10 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 
 | 文件路徑 | 文件分類 | 權威狀態 | 說明 |
 |---|---|---|---|
-| [`01_use_cases.md`](./01_use_cases.md) | 需求層 | **ACTIVE / CANONICAL** | 使用案例規範 |
-| [`02_capabilities.md`](./02_capabilities.md) | 需求層 | **ACTIVE / CANONICAL** | 系統能力規範 |
-| [`03_requirements.md`](./03_requirements.md) | 需求層 | **ACTIVE / CANONICAL** | 規範性系統需求 (SYS-001~034) |
-| [`05_architecture.md`](./05_architecture.md) | 架構層 | **ACTIVE / CANONICAL** | 全系統與子系統架構單一權威 |
+| [`01_USE_CASES.md`](./01_USE_CASES.md) | 需求層 | **ACTIVE / CANONICAL** | 使用案例規範 |
+| [`02_CAPABILITIES.md`](./02_CAPABILITIES.md) | 需求層 | **ACTIVE / CANONICAL** | 系統能力規範 |
+| [`03_REQUIREMENTS.md`](./03_REQUIREMENTS.md) | 需求層 | **ACTIVE / CANONICAL** | 規範性系統需求 (SYS-001~034) |
+| [`04_SYSTEMS.md`](./04_SYSTEMS.md) | 架構層 | **ACTIVE / CANONICAL** | 全系統與子系統架構單一權威 |
 | [`design_baseline/m1_driver.md`](./design_baseline/m1_driver.md) | 設計層 | **ACTIVE / CANONICAL** | M1 通訊協定設計基準 |
 | [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md) | 設計層 | **ACTIVE / CANONICAL** | M1 ros2_control 整合設計基準 |
 | [`src/mobile_base_bringup/MAPPING.md`](../src/mobile_base_bringup/MAPPING.md) | 操作層 | **ACTIVE / CANONICAL** | 建圖操作指南 |
@@ -139,10 +139,10 @@ mobile_base/
 ├── src/                               # ROS 2 套件原始碼與自動化測試
 └── docs/                              # 專案規範、架構、設計基準與驗證文件
     ├── README.md                      # 專案文件入口與導航索引 (本文件)
-    ├── 01_use_cases.md                # 使用案例規範
-    ├── 02_capabilities.md             # 系統能力規範
-    ├── 03_requirements.md             # 系統需求規範 (SYS-001~034)
-    ├── 05_architecture.md             # 系統架構單一權威
+    ├── 01_USE_CASES.md                # 使用案例規範
+    ├── 02_CAPABILITIES.md             # 系統能力規範
+    ├── 03_REQUIREMENTS.md             # 系統需求規範 (SYS-001~034)
+    ├── 04_SYSTEMS.md                  # 系統架構單一權威
     ├── XX_backlog.md                  # 後續 Backlog 追蹤
     ├── release_guide.md               # 客戶端發布打包與部署指南
     ├── design_baseline/               # M1 通訊與硬體介面詳細設計基準

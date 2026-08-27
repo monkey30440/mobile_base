@@ -1,6 +1,6 @@
 # S6 Navigation Configuration for mobile_base AMR
-# Reference: docs/03_requirements.md (SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025)
-# Reference: docs/05_architecture.md
+# Reference: docs/03_REQUIREMENTS.md (SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025)
+# Reference: docs/04_SYSTEMS.md
 
 bt_navigator:
   ros__parameters:

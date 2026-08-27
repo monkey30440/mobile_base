@@ -8,9 +8,9 @@
 
 ### 1.1 上游基準與可行性證據約束
 本架構文件嚴格以下列已核准文件為 **唯一 Normative Product Inputs**：
-- [`docs/01_use_cases.md`](./01_use_cases.md)
-- [`docs/02_capabilities.md`](./02_capabilities.md)
-- [`docs/03_requirements.md`](./03_requirements.md)
+- [`docs/01_USE_CASES.md`](./01_USE_CASES.md)
+- [`docs/02_CAPABILITIES.md`](./02_CAPABILITIES.md)
+- [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)
 
 本架構以成熟方案可行性評估（歷史 `04_reuse_assessment.md`）為 **Feasibility Evidence Base**。該評估記錄了 exact-version 成熟套件對需求的覆蓋能力與 6 個 minimum custom gaps。
 
@@ -702,6 +702,6 @@ navigate_to_station CLI
 | **S7** | **Base Control** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 | GAP-05, GAP-06 |
 
 ### 12.2 權威追溯與驗證文件參照
-- **系統需求定義**：參閱 [`docs/03_requirements.md`](./03_requirements.md)。
+- **系統需求定義**：參閱 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
 - **需求追溯矩陣 (RTM)**：全系統 32 項已核准需求與 2 項未分配編號（SYS-012, SYS-031）之實作檔案與驗證證據完整對映，參閱 [`docs/verification/traceability_matrix.md`](./verification/traceability_matrix.md)。
 - **驗證證據索引 (Evidence Index)**：所有實機量測數據、測試報告與日誌索引，參閱 [`docs/verification/evidence_index.md`](./verification/evidence_index.md)。

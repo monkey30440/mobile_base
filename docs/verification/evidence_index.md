@@ -6,7 +6,7 @@ This document serves as the **canonical catalog and classification index** for a
 
 > [!IMPORTANT]
 > **Authority and Verification Boundaries:**
-> * This document is an **evidence catalog and classification index**, not a normative requirement authority. Normative system requirements remain defined in [`03_requirements.md`](file:///home/jim/mobile_base/docs/03_requirements.md).
+> * This document is an **evidence catalog and classification index**, not a normative requirement authority. Normative system requirements remain defined in [`03_REQUIREMENTS.md`](file:///home/jim/mobile_base/docs/03_REQUIREMENTS.md).
 > * This document is not an as-built configuration source; active runtime parameters and topics reside in source code and configuration YAMLs.
 > * Historical records (e.g., test suite pass logs or hardware acceptance runs) reflect execution at their respective historical baseline commits. They do **not** constitute a live test claim on the current `HEAD` commit (`8f8ea23`). No automated or physical tests were re-executed during the creation of this index.
 > * Raw evidence artifacts are immutable historical records; they are cataloged and classified in place without modification, relocation, or deletion.

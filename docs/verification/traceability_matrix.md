@@ -6,8 +6,8 @@ This document serves as the **canonical Requirement Traceability Matrix (RTM)** 
 
 > [!IMPORTANT]
 > **Authority Boundaries:**
-> * **Normative Requirements:** Defined exclusively in [`03_requirements.md`](../03_requirements.md). This matrix reflects those requirements without weakening, modifying, or creating normative criteria.
-> * **Architectural Allocation:** Subsystem boundaries (S1–S7) follow [`05_architecture.md`](../05_architecture.md).
+> * **Normative Requirements:** Defined exclusively in [`03_REQUIREMENTS.md`](../03_REQUIREMENTS.md). This matrix reflects those requirements without weakening, modifying, or creating normative criteria.
+> * **Architectural Allocation:** Subsystem boundaries (S1–S7) follow [`04_SYSTEMS.md`](../04_SYSTEMS.md).
 > * **Implementation Reality:** Production source code (`src/*`), launch files, parameter YAMLs, URDF models, and Behavior Tree definitions represent as-built ground truth.
 > * **Evidence Classification:** All cited evidence artifacts resolve to [`evidence_index.md`](evidence_index.md).
 > * **Historical Evidence Boundary:** Historical execution records (e.g., test suite pass records at commit `8ab06d9` or physical runs in `IMP-007`–`015`) reflect execution at their respective historical baselines and are classified as `HISTORICALLY VERIFIED`. No runtime tests were executed during documentation convergence; historical evidence is not converted into a live `CURRENT VERIFIED` claim on `HEAD`.
@@ -112,7 +112,7 @@ The 34 requirement IDs are allocated across the system architecture as follows:
 * **Normatively Defined Requirements in Baseline:** 32 requirements (SYS-001~011, SYS-013~030, SYS-032~034).
 * **Historically Verified Rate:** $31 / 32 = 96.9\%$ of normatively defined requirements have authoritative historical verification evidence.
 * **Partial Verification Rate:** $1 / 32 = 3.1\%$ (SYS-015 due to Known Limitation B).
-* **Requirement ID Allocation Gaps:** 2 IDs (SYS-012, SYS-031) are requirement ID allocation gaps that were unallocated/omitted from [`03_requirements.md`](../03_requirements.md). They do not represent functional defects or missing capabilities in the system.
+* **Requirement ID Allocation Gaps:** 2 IDs (SYS-012, SYS-031) are requirement ID allocation gaps that were unallocated/omitted from [`03_REQUIREMENTS.md`](../03_REQUIREMENTS.md). They do not represent functional defects or missing capabilities in the system.
 
 ---
 
@@ -127,12 +127,12 @@ The 34 requirement IDs are allocated across the system architecture as follows:
   The path tracking functionality is fully implemented and historically verified in the forward direction. The progress failure abort/stop mechanism was also verified on physical hardware when the timeout occurred. However, because return-path tracking was interrupted before reaching the destination, full bidirectional path tracking verification to destination remains incomplete (**Known Limitation B**). Per the Authority Model and Migration Plan, this bounded behavior does not block the MVP baseline, but prohibits a full `HISTORICALLY VERIFIED` claim for the complete bidirectional path traversal.
 
 ### 6.2 GAP Status: SYS-012 (Requirement ID Allocation Gap)
-* **Requirement:** Not defined in [`03_requirements.md`](../03_requirements.md).
+* **Requirement:** Not defined in [`03_REQUIREMENTS.md`](../03_REQUIREMENTS.md).
 * **Context:** Audited in [`v0.1.0_as_built_as_verified_baseline.txt`](../evidence/v0.1.0_as_built_as_verified_baseline.txt) (line 567); the requirement numbering sequence skipped `SYS-012`.
 * **Rationale for GAP Classification:** Maintained as an explicit row to satisfy full 34-item matrix accounting. This is strictly a **Requirement ID allocation gap** and does not represent an implementation, software, or functional gap in `mobile_base`.
 
 ### 6.3 GAP Status: SYS-031 (Requirement ID Allocation Gap)
-* **Requirement:** Not defined in [`03_requirements.md`](../03_requirements.md).
+* **Requirement:** Not defined in [`03_REQUIREMENTS.md`](../03_REQUIREMENTS.md).
 * **Context:** Audited in [`v0.1.0_as_built_as_verified_baseline.txt`](../evidence/v0.1.0_as_built_as_verified_baseline.txt) (line 567); historically referenced in exploratory research notes but omitted from the normative baseline.
 * **Rationale for GAP Classification:** Maintained as an explicit row to satisfy full 34-item matrix accounting. This is strictly a **Requirement ID allocation gap** and does not represent an implementation, software, or functional gap in `mobile_base`.
 
@@ -143,4 +143,4 @@ The 34 requirement IDs are allocated across the system architecture as follows:
 1. **Bidirectional Linkage:** Every defined requirement must map to at least one implementation file and at least one evidence entry in [`evidence_index.md`](evidence_index.md).
 2. **No Fabricated Evidence:** Cells in this matrix must cite committed, physical artifacts. Narrative claims without artifact backing are prohibited.
 3. **No Unqualified HEAD Claims:** Verification claims on current `HEAD` require live test execution under active CI or real hardware testing. Historical evidence remains labeled `HISTORICALLY VERIFIED`.
-4. **Change Management:** Any modification to requirement definitions in [`03_requirements.md`](../03_requirements.md) or architectural responsibilities in [`05_architecture.md`](../05_architecture.md) requires a synchronized update to this matrix.
+4. **Change Management:** Any modification to requirement definitions in [`03_REQUIREMENTS.md`](../03_REQUIREMENTS.md) or architectural responsibilities in [`04_SYSTEMS.md`](../04_SYSTEMS.md) requires a synchronized update to this matrix.

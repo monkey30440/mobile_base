@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # S5 Localization: AMCL configuration for Mobile Base in Navigation Mode (SYS-010)
-# Authoritative reference: docs/05_architecture.md §4.5
+# Authoritative reference: docs/04_SYSTEMS.md §4.5
 
 amcl:
   ros__parameters:
