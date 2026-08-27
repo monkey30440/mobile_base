@@ -1,0 +1,29 @@
+services:
+  mobile_base:
+    image: mobile_base:release
+    container_name: mobile_base
+    runtime: nvidia
+    network_mode: host
+
+    env_file:
+      - .env
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - TOPIC_NAMESPACE=${TOPIC_NAMESPACE:-}
+
+    volumes:
+      # 僅掛載地圖目錄（讓客戶端能存放現場掃描出的地圖與站點檔案）
+      - ./maps:/workspaces/mobile_base/maps
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+      - /dev/ttyACM0:/dev/ttyACM0
+
+    working_dir: /workspaces/mobile_base
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    command: sleep infinity
