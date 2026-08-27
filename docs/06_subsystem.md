@@ -1,28 +1,13 @@
-# Subsystem Design
+# Subsystem Design (SUPERSEDED)
 
-本文件定義 `mobile_base` v0.1 各子系統的詳細設計，將 [`docs/05_architecture.md`](file:///home/zzz/mobile_base/docs/05_architecture.md) 已核准的 7 大子系統分解、責任配置、跨系統契約與操作流程，落實為可實作、可整合與可驗證的 ROS 2 軟體架構規格。
-
----
-
-# 1. 目的、範圍與架構邊界 (Purpose, Scope & Authority)
-
-## 1.1 Normative Input
-本文件僅以 [`docs/05_architecture.md`](file:///home/zzz/mobile_base/docs/05_architecture.md) 為 **唯一 Normative Input**。
-
-本文件負責定義：
-- 各 Subsystem 的內部 ROS 2 Node / Lifecycle Component 分解；
-- 權威 ROS 2 Interfaces（Topic, Service, Action, Message Type, Frame ID, QoS Profile）；
-- YAML 參數結構與部署配置規範；
-- 異常檢測（Failure Detection）、診斷（Diagnostics）與安全停止響應；
-- 單元測試、整合測試與實機驗收規格（Verification Obligations）；
-- 跨子系統協同契約（TF 權限、3-Tier 安全停止、三階段導航編排、6 個薄層 Custom Gaps）。
-
-## 1.2 排除責任 (Excluded Responsibilities)
-本文件不得：
-- 反向修改 01–03 需求或 05 的 7 大子系統劃分與責任配置；
-- 展開 function / class / method 內部實作演算法原始碼；
-- 定義底層硬體暫存器編碼或 Modbus 封包細節（保留至 Driver 實作）；
-- 虛構未經實機或整合驗證的運作參數。
+> [!WARNING]
+> **SUPERSEDED DOCUMENTATION — NOT SYSTEM SPECIFICATION**
+> 
+> 本文件（`docs/06_subsystem.md`）為**歷史過渡文件，現已正式廢止 (SUPERSEDED)**，僅保留供歷史追溯參考。
+> 
+> - **單一權威架構與子系統設計指引**：請參閱 [`docs/05_architecture.md`](./05_architecture.md)。
+> - **現行實作與配置基準**：系統現行 as-built 軟體結構、節點介面與參數以原始碼（`src/*`）、Launch 檔與配置 YAML 為準。
+> - **廢止內容注意**：本文件內含歷史淘汰或過時設計（例如 RF2O 雷達里程計、`dual_laser_merger` 虛擬點雲融合、自製 `NavigateToStation` Action 介面等），**嚴禁**作為目前系統規格、驗收標準或實作依據。
 
 ---
 
