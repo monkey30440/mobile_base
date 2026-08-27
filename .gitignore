@@ -1,53 +1,63 @@
-# ==========================================                                                                          
-# 1. 專案特定暫存與參考資料 (Project Specific)                                                                        
-# ==========================================                                                                          
-# 參考文檔、規格書 PDF、外部/舊版參考程式碼 (已在現有 .gitignore)                                                     
-ref/                                                                                                                  
-# GitNexus 代碼分析本地索引檔                                                                                         
-.gitnexus/                                                                                                            
-                                                                                                                        
-# ==========================================                                                                          
-# 2. ROS 2 / Colcon 編譯與執行輸出 (ROS 2 & Colcon)                                                                   
-# ==========================================                                                                          
-build/                                                                                                                
-install/                                                                                                              
-log/                                                                                                                  
-*.log                                                                                                                 
-                                                                                                                        
-# ==========================================                                                                          
-# 3. Python 快取與打包產物 (Python Artifacts)                                                                         
-# ==========================================                                                                          
-__pycache__/                                                                                                          
-*.py[cod]                                                                                                             
-*$py.class                                                                                                            
-*.egg-info/                                                                                                           
-.eggs/                                                                                                                
-dist/                                                                                                                 
-sdist/                                                                                                                
-wheels/                                                                                                               
-                                                                                                                        
-# ==========================================                                                                          
-# 4. Python 虛擬環境 (Virtual Environments)                                                                           
-# ==========================================                                                                          
-.venv/                                                                                                                
-venv/                                                                                                                 
-env/                                                                                                                  
-ENV/                                                                                                                  
-                                                                                                                        
-# ==========================================                                                                          
-# 5. IDE、編輯器與作業系統暫存檔 (IDE & OS Temp Files)                                                                
-# ==========================================                                                                          
-.vscode/                                                                                                              
-.idea/                                                                                                                
-*.swp                                                                                                                 
-*.swo                                                                                                                 
-*~                                                                                                                    
-.DS_Store                                                                                                             
-Thumbs.db
+# Project-private design and vendor reference material
+/src/mobile_base_description/ref/
+/src/mobile_base_description/meshes/
+/src/mobile_base_description/urdf/
+/src/mobile_base_control/docs/
 
-# Timestamped runtime map sessions; keep maps/template tracked.
-maps/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]/
-
+# Local environment and secrets
 .env
+.env.*
+!.env.example
 
-release/
+# ROS 2 / colcon build and runtime output
+/build/
+/install/
+/log/
+*.log
+
+# Release bundles and container image exports
+/release/
+
+# Runtime recordings and timestamped site maps
+*.bag
+*.db3
+*.mcap
+rosbag2_*/
+/maps/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]/
+
+# Local code-analysis state
+/.gitnexus/
+
+# Python caches, test state, coverage, and packaging output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.eggs/
+dist/
+sdist/
+wheels/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# CMake and compiler tooling generated outside the colcon build tree
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# IDE, editor, and operating-system files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
