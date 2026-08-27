@@ -6,29 +6,27 @@
 
 ## 1. Purpose and Authority
 
-### 1.1 上游基準與可行性證據約束
-本架構文件嚴格以下列已核准文件為 **唯一 Normative Product Inputs**：
+### 1.1 上游產品需求基準 (Normative Product Inputs)
+本架構文件嚴格以下列規範性文件為 **唯一 Normative Product Inputs**：
 - [`docs/01_USE_CASES.md`](./01_USE_CASES.md)
 - [`docs/02_CAPABILITIES.md`](./02_CAPABILITIES.md)
 - [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)
 
-本架構以成熟方案可行性評估（歷史 `04_reuse_assessment.md`）為 **Feasibility Evidence Base**。該評估記錄了 exact-version 成熟套件對需求的覆蓋能力與 6 個 minimum custom gaps。
-
 本架構為 `mobile_base` 目前 as-built 系統架構的**單一權威來源 (Single Canonical Authority)**。
 
-### 1.2 下游關係與文件狀態
-歷史子系統設計已收斂併入本文件。本文件統籌定義全系統與子系統層級之架構責任與介面邊界，各子系統內部實作與配置以現行原始碼（`src/*`）、Launch 檔與參數 YAML 為準。
+### 1.2 下游實作關係 (Downstream Implementation Authority)
+本文件統籌定義全系統與子系統層級之架構責任與介面邊界，各子系統內部實作與配置以現行原始碼（`src/*`）、Launch 檔與參數 YAML 為準。
 
 ### 1.3 架構職權範圍 (Architecture Authority Boundaries)
 
-| 05 System Architecture 決定 | 05 不應決定（保留至 Source / Config / Verification） |
+| 系統架構（docs/04_SYSTEMS.md）決定 | 不應由架構決定（保留至 Source / Config / Verification） |
 |---|---|
 | 系統分解為 S1–S7 主要 Subsystem 與責任配置 | Class / Struct / Function 內部程式碼實作細節 |
-| 32 項已核准 SYS 需求與 6 個 Custom Gaps 的責任歸屬 | 具體原始碼檔案內部行級邏輯與資料結構 |
+| 系統規範性需求（SYS Requirements）之子系統責任配置 | 具體原始碼檔案內部行級邏輯與資料結構 |
 | 跨子系統之資料流、控制流與生命週期依賴關係 | Launch 檔與 YAML 配置之細部數值與調校表格 |
 | 座標框架 TF Tree 的唯一動態與靜態發布權限契約 | 驅動程式內部暫存器編號與 Modbus 封包細部編解碼 |
-| 速度命令鏈（Command Chain）與多層停止安全架構 | 操作命令指南、歷史開發日誌與過渡實作記錄 |
-| Route-assisted 導航編排與 Station 導航架構 | 完整需求追溯矩陣（由 RTM 專責擁有）與驗證結果數據 |
+| 速度命令鏈（Command Chain）與多層停止安全架構 | 操作命令指南、開發日誌與除錯記錄 |
+| Route-assisted 導航編排與 Station 導航架構 | 測試案例執行記錄、細部除錯記錄與暫態調校數據 |
 | 場域資源（Map / Route Graph / Station Catalog）所有權與解析界線 | 導航演算法細部超參數調校與推測性根本原因分析 |
 
 ---
@@ -288,7 +286,7 @@ graph TD
 
 ### 4.6 S6: Navigation
 - **主要職責**：導航全生命週期任務編排（Navigation Task Orchestration）：
-  1. **Target Admission**：接收外部目標，執行目標判別（GAP-01）、Goal Pose 正規化（GAP-02）、Station Catalog 查表解析（GAP-03）與 Canonical 幾何合法性驗證（GAP-04）。
+  1. **Target Admission**：接收外部目標，執行目標判別（SYS-008）、Goal Pose 正規化（SYS-009）、Station Catalog 查表解析（SYS-032）與 Canonical 幾何合法性驗證（SYS-033）。
   2. **Route Strategy**：讀取 `route_graph.geojson`，由 `route_server` 運算路網拓撲路徑。
   3. **Stage Execution**：編排與監控 First Mile → On Route → Last Mile 三階段路徑拼接與追蹤。
   4. **Supervision & Collision Protection**：透過 Nav2 Costmaps 維護障礙物代價，由 `collision_monitor` 攔截自主速度命令進行安全減速與煞停。
@@ -330,8 +328,8 @@ graph TD
   2. 接收並執行建圖期間來自外部手動速度命令（SYS-034）。
   3. 實施運動命令逾時保護（Command Timeout Stop, SYS-027）。
   4. 實施直線／旋轉速度與加速度極限限制（Operational Limits, SYS-028）。
-  5. 檢核馬達驅動器編碼器回授狀態之有效性，提供可信的 Measured Wheel State（禁止偽造, GAP-05 / SYS-029）。
-  6. 實施底盤硬體安全 Enable 自檢與停機 Safe Stop / Disable 序列（GAP-06 / SYS-026, SYS-030）。
+  5. 檢核馬達驅動器編碼器回授狀態之有效性，提供可信的 Measured Wheel State（禁止偽造, SYS-029）。
+  6. 實施底盤硬體安全 Enable 自檢與停機 Safe Stop / Disable 序列（SYS-026, SYS-030）。
 - **承接需求**：`SYS-022`, `SYS-026`, `SYS-027`, `SYS-028`, `SYS-029`, `SYS-030`, `SYS-034`。
 - **核心執行元件**：
   - `ros2_control_node` (`controller_manager`)。
@@ -571,14 +569,14 @@ sequenceDiagram
     autonumber
     actor User as 操作員 / 終端客戶端
     participant App as navigate_to_station CLI
-    participant Adm as TargetAdmission (GAP-01~04)
+    participant Adm as TargetAdmission
     participant Catalog as stations.yaml
     participant BT as S6: bt_navigator (Nav2)
 
     User->>App: 提交目標 (Station ID 或 Goal Pose)
     alt 輸入為 Station ID (SYS-008)
         App->>Adm: admit_station(station_id)
-        Adm->>Catalog: 查詢 stations.yaml (GAP-03 / SYS-032)
+        Adm->>Catalog: 查詢 stations.yaml (SYS-032)
         alt 查無站點或 Catalog 格式錯誤
             Adm-->>App: 拒絕 (REJECTED_STATION_NOT_FOUND / REJECTED_CATALOG_*)
             App-->>User: 終止並回報拒絕原因 (Exit code 3)
@@ -587,10 +585,10 @@ sequenceDiagram
         end
     else 輸入為 Goal Pose (SYS-008)
         App->>Adm: admit_goal_pose(x, y, yaw_deg)
-        Adm->>Adm: GAP-02 正規化角度為 Quaternion (SYS-009)
+        Adm->>Adm: 正規化角度為 Quaternion (SYS-009)
     end
 
-    Adm->>Adm: GAP-04 驗證有限數值、Quaternion 模長與 Frame (SYS-033)
+    Adm->>Adm: 驗證有限數值、Quaternion 模長與 Frame (SYS-033)
     alt 幾何或數值無效
         Adm-->>App: 拒絕 (REJECTED_NON_FINITE / REJECTED_INVALID_*)
         App-->>User: 終止並回報拒絕原因
@@ -845,11 +843,11 @@ Station 導航由專屬輕量客戶端與 Target Admission 模組驅動，完全
 navigate_to_station CLI
          │
          ▼
-  TargetAdmission 函式庫 (GAP-01 ~ GAP-04)
-  ├── GAP-01: Target Discriminator (辨識 Station ID 或 Goal Pose)
-  ├── GAP-02: Goal Pose Normalizer (角度轉 Quaternion)
-  ├── GAP-03: Station Catalog Resolver (查詢 stations.yaml)
-  └── GAP-04: Canonical Goal Validator (驗證數值有限性與 Frame)
+  TargetAdmission 函式庫
+  ├── Target Discriminator (辨識 Station ID 或 Goal Pose, SYS-008)
+  ├── Goal Pose Normalizer (角度轉 Quaternion, SYS-009)
+  ├── Station Catalog Resolver (查詢 stations.yaml, SYS-032)
+  └── Canonical Goal Validator (驗證數值有限性與 Frame, SYS-033)
          │
          ▼ (產出 Canonical PoseStamped)
   原生 Action 調度: nav2_msgs/action/NavigateToPose
@@ -882,7 +880,7 @@ navigate_to_station CLI
    - **通訊細節私有化 (libmodbus Encapsulation)**：`libmodbus` context 僅作為 `M1Driver` 內部私有成員，任何 `modbus_t` 指標、巨集常數或底層 `errno` 皆不向外洩漏，確保上層模組純淨。
    - **避免過早抽象 (Avoid Premature Abstraction)**：MVP 階段僅使用單一 RS-485 串列總線，不額外設計抽象的 `SerialTransport` 介面層或複雜背景執行緒，大幅降低系統複雜度並提高單元測試穩定性（Avoid Premature Structure）。
    - **採用 Multi-drive 2.0 FC17 同步讀寫**：運行期控制透過單一 FC17 事務同時完成雙輪速度下發與狀態回授，消除先寫後讀的兩次總線往返，大幅降低總線延遲並避免競爭。
-   - **控制頻率定為 30 Hz 之系統理由**：歷史實機時序量測顯示，單次 FC17 來回通訊延遲約落於 $20\sim 25\,\text{ms}$ 區間。50 Hz 控制週期僅有 $20\,\text{ms}$，無法為現行同步通訊模型提供可靠的時序餘裕；因此現行基準採用 30 Hz（週期 $33.3\,\text{ms}$），為同步控制迴圈提供額外時序餘裕以確保穩定運作。
+   - **控制頻率定為 30 Hz 之系統理由**：實機時序量測顯示，單次 FC17 來回通訊延遲約落於 $20\sim 25\,\text{ms}$ 區間。50 Hz 控制週期僅有 $20\,\text{ms}$，無法為現行同步通訊模型提供可靠的時序餘裕；因此現行基準採用 30 Hz（週期 $33.3\,\text{ms}$），為同步控制迴圈提供額外時序餘裕以確保穩定運作。
 
 ---
 
@@ -890,18 +888,18 @@ navigate_to_station CLI
 
 ### 12.1 需求分配總表 (Subsystem Requirement Allocation)
 
-| 子系統 ID | 子系統名稱 | 承接之系統需求 (SYS Requirements) | 客製缺口 (Custom Gaps) |
-|---|---|---|---|
-| **S1** | **Robot Description** | SYS-023 | - |
-| **S2** | **Perception** | SYS-003, SYS-004 | - |
-| **S3** | **State Estimation** | SYS-005 | - |
-| **S4** | **Mapping** | SYS-001, SYS-002, SYS-006, SYS-024 | - |
-| **S5** | **Localization** | SYS-007, SYS-010 | - |
-| **S6** | **Navigation** | SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033 | GAP-01, GAP-02, GAP-03, GAP-04 |
-| **S7** | **Base Control** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 | GAP-05, GAP-06 |
+| 子系統 ID | 子系統名稱 | 承接之系統需求 (SYS Requirements) |
+|---|---|---|
+| **S1** | **Robot Description** | SYS-023 |
+| **S2** | **Perception** | SYS-003, SYS-004 |
+| **S3** | **State Estimation** | SYS-005 |
+| **S4** | **Mapping** | SYS-001, SYS-002, SYS-006, SYS-024 |
+| **S5** | **Localization** | SYS-007, SYS-010 |
+| **S6** | **Navigation** | SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033 |
+| **S7** | **Base Control** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 |
 
 ### 12.2 權威需求規範參照
-- **系統需求規範**：系統 32 項已核准規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
+- **系統需求規範**：系統 32 項規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
 - **系統驗證狀態**：目前 AMR 實機已驗證功能、驗證結論與已知限制彙整於本文件「[13. 系統驗證狀態與已知限制](#13-系統驗證狀態與已知限制-system-verification-status--known-limitations)」。
 
 ---
