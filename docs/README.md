@@ -145,6 +145,5 @@ mobile_base/
     ├── design_baseline/               # M1 通訊與硬體介面詳細設計基準
     ├── verification/                  # 需求追溯矩陣與驗證證據索引目錄
     ├── evidence/                      # 結構化驗證階段報告
-    ├── m1_bringup_validation/         # 馬達 Bringup 記錄與硬體診斷工具
-    └── rework/                        # 歷史文件收斂過渡記錄
+    └── m1_bringup_validation/         # 馬達 Bringup 記錄與硬體診斷工具
 ```
