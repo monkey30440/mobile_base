@@ -1,3 +1,8 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE**
+>
+> This document is retained for historical traceability only. It does not define the current system architecture, requirements, operational procedure, or verification authority. Use `docs/README.md` to locate the current canonical documentation.
+
 # SYS-023 Robot Description Reuse Assessment Evidence
 
 ## 1. Research Scope

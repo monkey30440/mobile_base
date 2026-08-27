@@ -1,3 +1,8 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE**
+>
+> This document is retained for historical traceability only. It does not define the current system architecture, requirements, operational procedure, or verification authority. Use `docs/README.md` to locate the current canonical documentation.
+
 # From Use Case to System Architecture
 
 本文件定義 `mobile_base` 從新增或修改 Use Case，到完成 System Architecture 的唯一撰寫與收斂規範。

@@ -1,3 +1,8 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE**
+>
+> This document is retained for historical traceability only. It does not define the current system architecture, requirements, operational procedure, or verification authority. Use `docs/README.md` to locate the current canonical documentation.
+
 # 04 Reuse Assessment Checklist
 
 本清單只用於追蹤 `04_reuse_assessment.md` 的討論、盤點與稽核進度，不是 requirement、reuse coverage 或 architecture 的 normative source。

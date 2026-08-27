@@ -1,3 +1,8 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE**
+>
+> This document is retained for historical traceability only. It does not define the current system architecture, requirements, operational procedure, or verification authority. Use `docs/README.md` to locate the current canonical documentation.
+
 # 05 Architecture Checklist
 
 本清單用於追蹤並確認 `mobile_base` v0.1 系統架構（`05_architecture.md`）之決策完整性、跨系統契約閉合性與需求追溯性。

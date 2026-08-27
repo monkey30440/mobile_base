@@ -1,3 +1,8 @@
+> [!WARNING]
+> **SUPERSEDED**
+>
+> This verification entrypoint is no longer authoritative. Use [`evidence_index.md`](evidence_index.md) for the canonical verification evidence catalog and [`traceability_matrix.md`](traceability_matrix.md) for requirement-to-verification traceability.
+
 # Verification Evidence Storage
 
 本目錄保存 `mobile_base` v0.1 checklist #7–#27 每個 implementation item 的原始 verification evidence。

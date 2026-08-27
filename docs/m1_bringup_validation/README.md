@@ -1,3 +1,8 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE**
+>
+> This document is retained for historical traceability only. It does not define the current system architecture, requirements, operational procedure, or verification authority. Use `docs/README.md` to locate the current canonical documentation.
+
 # M1 Bring-up Validation v2
 
 目的：從硬體與 M1 官方通訊定義開始建立可重現證據，不把「目前實機設定」自動當成正確設計。

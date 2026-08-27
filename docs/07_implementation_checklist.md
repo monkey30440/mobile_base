@@ -1,3 +1,8 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE**
+>
+> This document is retained for historical traceability only. It does not define the current system architecture, requirements, operational procedure, or verification authority. Use `docs/README.md` to locate the current canonical documentation.
+
 # 07 Implementation Checklist
 
 本清單追蹤 `mobile_base` v0.1 從 [`06_subsystem.md`](./06_subsystem.md) Design Baseline 到實作、漸進驗證與 Feature Freeze 的進度。它不是新的需求或架構來源；若實作發現 01–06 矛盾，必須停止受影響項目並回到最早的權威層修正。
