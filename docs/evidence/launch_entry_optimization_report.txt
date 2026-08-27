@@ -1,7 +1,7 @@
 ================================================================================
 mobile_base Launch Entry Optimization Report
 Date: 2026-08-27
-Status: Software Validated (Hardware Validation Pending)
+Status: Hardware Validated (Real AMR Baseline)
 ================================================================================
 
 1. Summary
@@ -159,18 +159,51 @@ Results:
 7. Hardware Verification Status
 --------------------------------------------------------------------------------
 Reusable Existing Hardware Evidence:
-  - M1 motor driver communication protocol and latency baseline (50ms response timeout).
-  - ros2_control SystemInterface and diff_drive_controller configuration.
-  - TDK IIM-42652 IMU and dual SICK picoScan150 LiDAR drivers.
-  - Kinematic-ICP planar odometry + EKF 2D sensor fusion (publish_odom_tf=false).
-  - Nav2 MPPI controller + Collision Monitor speed reduction and stop layers.
+  - S7 Base Control: M1 motor driver communication protocol, 50ms response timeout,
+    ros2_control SystemInterface, diff_drive_controller configuration, and sequential
+    spawner chaining (IMP-007, IMP-008, Phase R1/R2 preflight, Phase R5-F2 report).
+  - S2 Perception: TDK IIM-42652 IMU and dual SICK picoScan150 LiDAR drivers with
+    decoupled raw scan topics (/scan_front, /scan_rear) (IMP-010, IMP-011, Scan Decoupling report).
+  - S3 State Estimation: Kinematic-ICP planar odometry + EKF 2D sensor fusion
+    (publish_odom_tf=false, EKF sole odom->base_footprint TF owner) (IMP-013, Phase R3/R3.5).
+  - S5 Localization: Map Server & AMCL map->odom TF ownership (IMP-015, Phase R1/R2).
+  - S6 Navigation: Nav2 MPPI controller + Collision Monitor dual-scan speed reduction
+    and stop layers (Phase R4, Phase R5, Scan Decoupling report).
 
-Pending Hardware Verification (To be executed on physical AMR):
-  - Physical bringup run with canonical CLI:
-      ros2 launch mobile_base_bringup mobile_base.launch.py mode:=mapping
-  - Physical bringup run with canonical navigation CLI:
-      ros2 launch mobile_base_bringup mobile_base.launch.py mode:=navigation site:=test_site
-  - Verification of physical teleop in mapping and physical goal dispatch in navigation.
+Completed Real-Hardware Regression Verification:
+  1. Mapping Mode Physical Bringup & Operation:
+     - Command:
+         ros2 launch mobile_base_bringup mobile_base.launch.py \
+           mode:=mapping
+     - Result:
+         * Physical AMR bringup succeeded.
+         * Mapping mode operated correctly on physical AMR (sensors, Kinematic-ICP,
+           EKF, slam_toolbox active, map->odom and odom->base_footprint TF published).
+         * Verdict: PASS.
+
+  2. Navigation Mode Physical Bringup & Operation:
+     - Command:
+         ros2 launch mobile_base_bringup mobile_base.launch.py \
+           mode:=navigation \
+           site:=test_site
+     - Result:
+         * Physical AMR bringup succeeded.
+         * Canonical site-based navigation entry worked correctly (site:=test_site
+           successfully resolved maps/test_site/map.yaml & route_graph.geojson).
+         * Localization and navigation stacks operated correctly on physical AMR.
+         * Verdict: PASS.
+
+Verification Invariant & Boundary Distinction:
+  - Software Verification: Workspace build (10 packages), unit/composition test suite
+    (515 tests pass), syntax validation, and GitNexus change impact analysis.
+  - Reused Historical Hardware Evidence: Lower-level subsystem drivers, control loops,
+    filtering, and safety chains established in previous physical verification phases.
+  - Newly Performed Hardware Regression Verification: Demonstrates that the new canonical
+    launch composition (mobile_base.launch.py) successfully preserves already-verified
+    Mapping and Navigation runtime behavior on the real AMR.
+  - Non-Claims / Explicit Boundaries: No claim is made that unrelated functionality
+    (e.g., Isaac Sim runtime bridges, multiple AMR hardware variants, or station ID
+    catalog runtime interface) was newly hardware-verified.
 
 
 8. Deferred Scope
