@@ -20,11 +20,9 @@ RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
         ros-jazzy-robot-localization \
         ros-jazzy-ros2-control \
         ros-jazzy-ros2-controllers \
-        ros-jazzy-dual-laser-merger \
         ros-jazzy-sick-scan-xd \
         ros-jazzy-foxglove-bridge \
         ros-jazzy-teleop-twist-keyboard \
-        ros-jazzy-laser-filters \
         ros-jazzy-rviz2 \
         python3-serial \
         iputils-ping \
