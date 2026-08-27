@@ -35,7 +35,7 @@ Verification evidence in the `mobile_base` repository is organized across three 
 1. **Phase & Architecture Evidence Reports ([`docs/evidence/`](file:///home/jim/mobile_base/docs/evidence/)):** 11 structured technical reports covering runtime closures, hardware preflight, controlled motion characterization, scan decoupling, launch entry optimization, and baseline investigations.
 2. **Raw Implementation Artifacts ([`docs/verification/`](file:///home/jim/mobile_base/docs/verification/)):** 69 raw execution logs, telemetry CSV datasets, and validation scripts under [`IMP-007`](file:///home/jim/mobile_base/docs/verification/IMP-007/) through [`IMP-015`](file:///home/jim/mobile_base/docs/verification/IMP-015/).
 3. **Historical Automated-Test Records:** Repository records documenting the expansion and pass status of the automated test suite across milestones (425 → 508 → 505 → 515 tests).
-4. **Historical Pre-IMP Logs ([`docs/m1_bringup_validation/logs/manual/`](file:///home/jim/mobile_base/docs/m1_bringup_validation/logs/manual/)):** Low-level Modbus register exploration logs collected prior to the formal IMP verification convention.
+4. **Historical Pre-IMP Logs (`docs/m1_bringup_validation/logs/manual/`):** Low-level Modbus register exploration logs collected prior to the formal IMP verification convention.
 
 All evidence files remain strictly in their current filesystem locations. No files are renamed, moved, or deleted in this batch.
 
@@ -259,18 +259,18 @@ The following directories in `docs/verification/` contain only a `.gitkeep` plac
 
 | Directory Path | Classification | Physical Disposition | Rationale / Status |
 |---|---|---|---|
-| [`IMP-016/`](file:///home/jim/mobile_base/docs/verification/IMP-016/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | S6 Target Admission thin gaps verified at system level in Phase R5 report and unit test suites |
-| [`IMP-017/`](file:///home/jim/mobile_base/docs/verification/IMP-017/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | S6 Route-assisted Navigation execution verified at system level in Phase R5 report |
-| [`IMP-018/`](file:///home/jim/mobile_base/docs/verification/IMP-018/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | TF and frame authority closure verified in `test_tf_authority.py` and Phase R1 report |
-| [`IMP-019/`](file:///home/jim/mobile_base/docs/verification/IMP-019/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Perception data-flow closure verified in `test_perception_dataflow.py` and Scan Decoupling report |
-| [`IMP-020/`](file:///home/jim/mobile_base/docs/verification/IMP-020/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Motion-command and physical-stop closure verified in `test_motion_command_stop_chain.py` and Phase R5 report |
-| [`IMP-021/`](file:///home/jim/mobile_base/docs/verification/IMP-021/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Feedback and odometry closure verified in `test_feedback_odometry_chain.py` and Phase R1 report |
-| [`IMP-022/`](file:///home/jim/mobile_base/docs/verification/IMP-022/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Operational-mode and lifecycle closure verified in Phase R1~R5 reports |
-| [`IMP-023/`](file:///home/jim/mobile_base/docs/verification/IMP-023/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | UC-001 Mapping end-to-end acceptance verified in Phase R1 and Launch Entry Optimization reports |
-| [`IMP-024/`](file:///home/jim/mobile_base/docs/verification/IMP-024/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | UC-002 Navigation end-to-end acceptance verified in Phase R5 report |
-| [`IMP-025/`](file:///home/jim/mobile_base/docs/verification/IMP-025/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Requirement and custom-gap traceability audit addressed via Migration Batch 2 |
-| [`IMP-026/`](file:///home/jim/mobile_base/docs/verification/IMP-026/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Reproducibility and clean-environment audit documented in Phase R1~R5 reports |
-| [`IMP-027/`](file:///home/jim/mobile_base/docs/verification/IMP-027/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | v0.1 Feature Freeze review documented in Phase 1 audit and baseline documentation |
+| `IMP-016/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | S6 Target Admission thin gaps verified at system level in Phase R5 report and unit test suites |
+| `IMP-017/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | S6 Route-assisted Navigation execution verified at system level in Phase R5 report |
+| `IMP-018/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | TF and frame authority closure verified in `test_tf_authority.py` and Phase R1 report |
+| `IMP-019/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Perception data-flow closure verified in `test_perception_dataflow.py` and Scan Decoupling report |
+| `IMP-020/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Motion-command and physical-stop closure verified in `test_motion_command_stop_chain.py` and Phase R5 report |
+| `IMP-021/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Feedback and odometry closure verified in `test_feedback_odometry_chain.py` and Phase R1 report |
+| `IMP-022/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Operational-mode and lifecycle closure verified in Phase R1~R5 reports |
+| `IMP-023/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | UC-001 Mapping end-to-end acceptance verified in Phase R1 and Launch Entry Optimization reports |
+| `IMP-024/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | UC-002 Navigation end-to-end acceptance verified in Phase R5 report |
+| `IMP-025/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Requirement and custom-gap traceability audit addressed via Migration Batch 2 |
+| `IMP-026/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | Reproducibility and clean-environment audit documented in Phase R1~R5 reports |
+| `IMP-027/` | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | v0.1 Feature Freeze review documented in Phase 1 audit and baseline documentation |
 
 > [!NOTE]
 > Empty placeholder directories `IMP-016` through `IMP-027` were retired after verification confirmed that they contained no evidence artifacts.
