@@ -51,7 +51,7 @@ def test_amcl_params_yaml_configuration():
     assert params['global_frame_id'] == 'map', 'global_frame_id must be map'
     assert params['odom_frame_id'] == 'odom', 'odom_frame_id must be odom'
     assert params['base_frame_id'] == 'base_footprint', 'base_frame_id must be base_footprint'
-    assert params['scan_topic'] == '/scan', 'scan_topic must be /scan'
+    assert params['scan_topic'] == '/scan_front', 'scan_topic must be /scan_front'
     assert params['tf_broadcast'] is True, 'tf_broadcast must be true in Navigation Mode'
 
     # 2. Particle Filter Settings

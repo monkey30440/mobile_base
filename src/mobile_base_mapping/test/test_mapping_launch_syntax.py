@@ -50,7 +50,7 @@ def test_slam_toolbox_yaml_configuration():
     assert params['map_frame'] == 'map'
     assert params['odom_frame'] == 'odom'
     assert params['base_frame'] == 'base_footprint'
-    assert params['scan_topic'] == '/scan'
+    assert params['scan_topic'] == '/scan_front'
 
     # Core resolution and TF rate
     assert params['resolution'] == 0.05

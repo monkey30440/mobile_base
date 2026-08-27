@@ -1,7 +1,7 @@
 # Copyright 2026 Antigravity Team.
 #
 # S4 Mapping Subsystem configuration using slam_toolbox async_slam_toolbox_node.
-# Fuses S2 merged LaserScan (/scan) and S3 dynamic odometry TF (odom -> base_footprint).
+# Uses S2 physical front LiDAR (/scan_front) and S3 dynamic odometry TF (odom -> base_footprint).
 # Publishes /map (0.05m resolution OccupancyGrid) and acts as the sole authority for map -> odom TF in Mapping Mode.
 
 async_slam_toolbox_node:
@@ -19,7 +19,7 @@ async_slam_toolbox_node:
     map_frame: "map"
     odom_frame: "odom"
     base_frame: "base_footprint"
-    scan_topic: "/scan"
+    scan_topic: "/scan_front"
 
     # Grid resolution and LiDAR limits (SYS-001)
     resolution: 0.05

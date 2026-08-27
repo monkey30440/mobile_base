@@ -21,7 +21,7 @@ amcl:
     global_frame_id: "map"
     odom_frame_id: "odom"
     base_frame_id: "base_footprint"
-    scan_topic: "/scan"
+    scan_topic: "/scan_front"
     tf_broadcast: true # 導航期發布 map -> odom
 
     # 粒子濾波器配置 (Particle Filter Configuration)
