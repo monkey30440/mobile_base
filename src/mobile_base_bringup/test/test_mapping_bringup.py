@@ -75,7 +75,6 @@ def test_mapping_launch_composes_mapping_mode_without_duplicate_description(monk
         'mobile_base_control/launch/base_control.launch.py',
         'mobile_base_perception/launch/tdk_imu.launch.py',
         'mobile_base_perception/launch/sick_dual_lidar.launch.py',
-        'mobile_base_perception/launch/dual_laser_merger.launch.py',
         'kinematic_icp/launch/kinematic_icp.launch.py',
         'mobile_base_state_estimation/launch/ekf.launch.py',
         'mobile_base_mapping/launch/mapping.launch.py',

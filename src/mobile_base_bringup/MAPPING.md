@@ -22,9 +22,9 @@ ros2 launch mobile_base_bringup mapping.launch.py use_foxglove:=true
 
 建圖模式正常運作時，會提供下列主要執行期契約：
 
-- `/scan`：合併後的前、後 LiDAR 掃描資料
+- `/scan_front`：實體前 LiDAR 原始掃描資料（供 Kinematic-ICP 與 `slam_toolbox` 使用）
+- `/scan_rear`：實體後 LiDAR 原始掃描資料
 - `/imu/data_raw`：原始 IMU 量測資料
-- `/scan_front`：Kinematic-ICP 的實體前 LiDAR 輸入
 - `/diff_drive_controller/odom`：Kinematic-ICP 的 encoder wheel prior
 - `/lidar_odometry`：Kinematic-ICP 平面里程，且 `publish_odom_tf=false`
 - `/odometry/filtered`：EKF 融合後的里程計資料
@@ -118,22 +118,22 @@ Git 預設會忽略依時間戳記建立的執行期地圖。`maps/template/` �
 ```bash
 ros2 topic list | grep '^/map$'
 ros2 lifecycle get /async_slam_toolbox_node
-ros2 topic hz /scan
+ros2 topic hz /scan_front
 ros2 run tf2_ros tf2_echo odom base_footprint
 ```
 
-確認 `slam_toolbox` 處於 Active 狀態，且 `/scan` 與里程計 TF 均可用。
+確認 `slam_toolbox` 處於 Active 狀態，且 `/scan_front` 與里程計 TF 均可用。
 
-### 找不到 `/scan`
+### 找不到 `/scan_front` 或 `/scan_rear`
 
 ```bash
-ros2 topic list | grep -E '^/scan(_front|_rear)?$'
+ros2 topic list | grep -E '^/scan(_front|_rear)$'
 ros2 topic hz /scan_front
 ros2 topic hz /scan_rear
-ros2 node list | grep -E 'lidar|laser_merger'
+ros2 node list | grep -E 'lidar'
 ```
 
-檢查兩台 SICK 裝置、各自的網路設定，以及合併節點的輸出。
+檢查兩台 SICK 裝置與各自的網路連線設定。
 
 ### AMR 未回應鍵盤遙控
 

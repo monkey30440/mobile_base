@@ -207,24 +207,7 @@ def test_sensor_and_perception_frame_ids_match_urdf():
     """Verify S2 sensor frame IDs in launch/configs match authoritative S1 URDF frames."""
     ws_root = get_workspace_root()
 
-    # 1. Dual laser merger target frame
-    merger_launch_path = (
-        ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'dual_laser_merger.launch.py'
-    )
-    assert merger_launch_path.exists()
-    with open(merger_launch_path, 'r', encoding='utf-8') as f:
-        merger_content = f.read()
-
-    assert (
-        "'target_frame', default_value='base_link'" in merger_content or
-        "default_value='base_link'" in merger_content
-    )
-    assert (
-        "'merged_scan_topic', default_value='/scan'" in merger_content or
-        "default_value='/scan'" in merger_content
-    )
-
-    # 2. Dual LiDAR driver frames
+    # 1. Dual LiDAR driver frames
     lidar_launch_path = (
         ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'sick_dual_lidar.launch.py'
     )
@@ -235,7 +218,7 @@ def test_sensor_and_perception_frame_ids_match_urdf():
     assert 'base_lidar_link_FL' in lidar_content
     assert 'base_lidar_link_BR' in lidar_content
 
-    # 3. IMU driver frame
+    # 2. IMU driver frame
     imu_config_path = (
         ws_root / 'src' / 'mobile_base_perception' / 'config' / 'tdk_imu.yaml'
     )

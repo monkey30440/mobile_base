@@ -6,7 +6,7 @@
 
 - S7 Base Control
 - S1 Robot Description
-- S2 Perception：IMU、雙 LiDAR 與供 SLAM/AMCL/Nav2 使用的雷射掃描合併
+- S2 Perception：IMU 與雙實體 LiDAR（/scan_front, /scan_rear）
 - S3 State Estimation：Kinematic-ICP（前 LiDAR + wheel prior）與 EKF
 - S5 Localization：Map Server 與 AMCL
 - S6 Navigation：Nav2 路線輔助導航堆疊與 Collision Monitor
@@ -36,9 +36,9 @@ ros2 launch mobile_base_bringup navigation.launch.py \
 
 導航模式正常運作時，會提供下列主要執行期契約：
 
-- `/scan`：合併後的前、後 LiDAR 掃描資料
+- `/scan_front`：實體前 LiDAR 原始掃描資料（供 Kinematic-ICP、AMCL、Nav2 成本地圖與 Collision Monitor 使用）
+- `/scan_rear`：實體後 LiDAR 原始掃描資料（供 Nav2 成本地圖與 Collision Monitor 使用）
 - `/imu/data_raw`：原始 IMU 量測資料
-- `/scan_front`：Kinematic-ICP 的實體前 LiDAR 輸入
 - `/diff_drive_controller/odom`：Kinematic-ICP 的 encoder wheel prior
 - `/lidar_odometry`：Kinematic-ICP 平面里程，且 `publish_odom_tf=false`
 - `/odometry/filtered`：EKF 融合後的里程計資料

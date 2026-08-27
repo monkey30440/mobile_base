@@ -53,7 +53,10 @@ def test_navigation_motion_command_chain_contract():
     assert cm_params['cmd_vel_in_topic'] == 'cmd_vel_nav'
     assert cm_params['cmd_vel_out_topic'] == 'cmd_vel'
     assert cm_params['enable_stamped_cmd_vel'] is True
-    assert cm_params['scan']['topic'] == '/scan'
+    assert 'scan_front' in cm_params['observation_sources']
+    assert 'scan_rear' in cm_params['observation_sources']
+    assert cm_params['scan_front']['topic'] == '/scan_front'
+    assert cm_params['scan_rear']['topic'] == '/scan_rear'
     assert cm_params['source_timeout'] >= 0.5
 
 

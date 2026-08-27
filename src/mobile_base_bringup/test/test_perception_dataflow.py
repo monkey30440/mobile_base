@@ -25,7 +25,7 @@ def get_workspace_root() -> Path:
 
 
 def test_front_lidar_data_contract():
-    """Verify Front LiDAR driver launch parameters, topic, frame, and consumer."""
+    """Verify Front LiDAR driver launch parameters, topic, frame, and consumers."""
     ws_root = get_workspace_root()
     launch_path = (
         ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'sick_dual_lidar.launch.py'
@@ -42,22 +42,9 @@ def test_front_lidar_data_contract():
     assert "default_value='/scan_front'" in content
     assert "default_value='base_lidar_link_FL'" in content
 
-    # Verify Consumer in dual_laser_merger
-    merger_launch = (
-        ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'dual_laser_merger.launch.py'
-    )
-    assert merger_launch.exists()
-    with open(merger_launch, 'r', encoding='utf-8') as f:
-        merger_content = f.read()
-
-    assert (
-        "'laser_1_topic', default_value='/scan_front'" in merger_content or
-        "default_value='/scan_front'" in merger_content
-    )
-
 
 def test_rear_lidar_data_contract():
-    """Verify Rear LiDAR driver launch parameters, topic, frame, and consumer."""
+    """Verify Rear LiDAR driver launch parameters, topic, frame, and consumers."""
     ws_root = get_workspace_root()
     launch_path = (
         ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'sick_dual_lidar.launch.py'
@@ -73,72 +60,134 @@ def test_rear_lidar_data_contract():
     assert "default_value='/scan_rear'" in content
     assert "default_value='base_lidar_link_BR'" in content
 
-    # Verify Consumer in dual_laser_merger
-    merger_launch = (
-        ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'dual_laser_merger.launch.py'
-    )
-    assert merger_launch.exists()
-    with open(merger_launch, 'r', encoding='utf-8') as f:
-        merger_content = f.read()
 
-    assert (
-        "'laser_2_topic', default_value='/scan_rear'" in merger_content or
-        "default_value='/scan_rear'" in merger_content
-    )
-
-
-def test_merged_scan_data_contract_and_consumers():
-    """Verify merged scan remains wired to mapping, localization, and Nav2."""
+def test_lidar_routing_contracts_a_through_e():
+    """Verify independent LiDAR routing contracts A through E."""
     ws_root = get_workspace_root()
 
-    # 1. Producer: dual_laser_merger
-    merger_launch = (
-        ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'dual_laser_merger.launch.py'
-    )
-    assert merger_launch.exists()
-    with open(merger_launch, 'r', encoding='utf-8') as f:
-        merger_content = f.read()
-
-    assert "default_value='base_link'" in merger_content
-    assert "default_value='/scan'" in merger_content
-
-    # 2. Consumer: S4 slam_toolbox (Mapping Mode)
+    # Requirement A: slam_toolbox scan_topic == /scan_front
     slam_config = ws_root / 'src' / 'mobile_base_mapping' / 'config' / 'slam_toolbox.yaml'
     assert slam_config.exists()
     with open(slam_config, 'r', encoding='utf-8') as f:
         slam_params = yaml.safe_load(f)['async_slam_toolbox_node']['ros__parameters']
-    assert slam_params['scan_topic'] == '/scan'
+    assert slam_params['scan_topic'] == '/scan_front'
 
-    # 3. Consumer: S5 AMCL (Navigation Mode)
-    amcl_config = ws_root / 'src' / 'mobile_base_localization' / 'config' / 'amcl_params.yaml'
-    assert amcl_config.exists()
-    with open(amcl_config, 'r', encoding='utf-8') as f:
-        amcl_params = yaml.safe_load(f)['amcl']['ros__parameters']
-    assert amcl_params['scan_topic'] == '/scan'
+    # Requirement B: kinematic_icp lidar_topic == /scan_front
+    kicp_config = (
+        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' / 'kinematic_icp_ros.yaml'
+    )
+    assert kicp_config.exists()
+    with open(kicp_config, 'r', encoding='utf-8') as f:
+        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
+    assert kicp_params['lidar_topic'] == '/scan_front'
 
-    # 4. Consumers: S6 Local/Global Costmaps and Collision Monitor
+    # Requirements C, D, E: Nav2 local/global costmaps and collision_monitor
     nav2_config = ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml'
     assert nav2_config.exists()
     with open(nav2_config, 'r', encoding='utf-8') as f:
         nav2_params = yaml.safe_load(f)
 
-    # Local costmap scan subscription
-    local_scan = (
+    # Requirement C: Nav2 local costmap observation_sources contains scan_front and scan_rear
+    lc_obstacle = (
         nav2_params['local_costmap']['local_costmap']['ros__parameters']
-        ['obstacle_layer']['scan']['topic']
+        ['obstacle_layer']
     )
-    assert local_scan == '/scan'
+    assert 'scan_front' in lc_obstacle['observation_sources']
+    assert 'scan_rear' in lc_obstacle['observation_sources']
+    assert lc_obstacle['scan_front']['topic'] == '/scan_front'
+    assert lc_obstacle['scan_rear']['topic'] == '/scan_rear'
 
-    # Global costmap scan subscription
-    global_scan = (
+    # Requirement D: Nav2 global costmap observation_sources contains scan_front and scan_rear
+    gc_obstacle = (
         nav2_params['global_costmap']['global_costmap']['ros__parameters']
-        ['obstacle_layer']['scan']['topic']
+        ['obstacle_layer']
     )
-    assert global_scan == '/scan'
+    assert 'scan_front' in gc_obstacle['observation_sources']
+    assert 'scan_rear' in gc_obstacle['observation_sources']
+    assert gc_obstacle['scan_front']['topic'] == '/scan_front'
+    assert gc_obstacle['scan_rear']['topic'] == '/scan_rear'
 
-    # Collision monitor scan subscription (filtered through collision_scan_filter)
-    cm_scan = nav2_params['collision_monitor']['ros__parameters']['scan']['topic']
-    assert cm_scan == '/scan_collision'
+    # Requirement E: collision_monitor observation_sources contains scan_front and scan_rear
+    cm_params = nav2_params['collision_monitor']['ros__parameters']
+    assert 'scan_front' in cm_params['observation_sources']
+    assert 'scan_rear' in cm_params['observation_sources']
+    assert cm_params['scan_front']['topic'] == '/scan_front'
+    assert cm_params['scan_rear']['topic'] == '/scan_rear'
+    assert cm_params['scan_front']['type'] == 'scan'
+    assert cm_params['scan_rear']['type'] == 'scan'
+
+    # S5 AMCL scan_topic == /scan_front
+    amcl_config = ws_root / 'src' / 'mobile_base_localization' / 'config' / 'amcl_params.yaml'
+    assert amcl_config.exists()
+    with open(amcl_config, 'r', encoding='utf-8') as f:
+        amcl_params = yaml.safe_load(f)['amcl']['ros__parameters']
+    assert amcl_params['scan_topic'] == '/scan_front'
+
+
+def test_no_production_runtime_reliance_on_merged_or_filtered_scan():
+    """Verify production launch and configs do not rely on /scan or /scan_collision (Req F)."""
+    ws_root = get_workspace_root()
+
+    production_yaml_files = [
+        ws_root / 'src' / 'mobile_base_mapping' / 'config' / 'slam_toolbox.yaml',
+        ws_root / 'src' / 'mobile_base_localization' / 'config' / 'amcl_params.yaml',
+        ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml',
+        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' / 'kinematic_icp_ros.yaml',
+        ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml',
+        ws_root / 'src' / 'mobile_base_perception' / 'config' / 'tdk_imu.yaml',
+        ws_root / 'src' / 'mobile_base_control' / 'config' / 'base_control_params.yaml',
+    ]
+
+    def _find_exact_topic_values(obj):
+        """Recursively collect string values from nested dicts/lists."""
+        values = []
+        if isinstance(obj, dict):
+            for v in obj.values():
+                values.extend(_find_exact_topic_values(v))
+        elif isinstance(obj, list):
+            for v in obj:
+                values.extend(_find_exact_topic_values(v))
+        elif isinstance(obj, str):
+            values.append(obj)
+        return values
+
+    for ypath in production_yaml_files:
+        assert ypath.exists(), f'Production config file missing: {ypath}'
+        with open(ypath, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        all_values = _find_exact_topic_values(data)
+        assert '/scan' not in all_values, f'Forbidden exact topic /scan found in {ypath}'
+        assert '/scan_collision' not in all_values, (
+            f'Forbidden exact topic /scan_collision found in {ypath}'
+        )
+
+    # Check production launch files
+    production_launch_files = [
+        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mapping.launch.py',
+        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'navigation.launch.py',
+        ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'sick_dual_lidar.launch.py',
+        ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'tdk_imu.launch.py',
+        ws_root / 'src' / 'mobile_base_mapping' / 'launch' / 'mapping.launch.py',
+        ws_root / 'src' / 'mobile_base_localization' / 'launch' / 'localization.launch.py',
+        ws_root / 'src' / 'mobile_base_navigation' / 'launch' / 'navigation.launch.py',
+    ]
+
+    for lpath in production_launch_files:
+        assert lpath.exists(), f'Production launch file missing: {lpath}'
+        with open(lpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        assert 'dual_laser_merger' not in content, (
+            f'dual_laser_merger reference found in {lpath}'
+        )
+        assert 'collision_scan_filter' not in content, (
+            f'collision_scan_filter reference found in {lpath}'
+        )
+        assert "'/scan'" not in content and '"/scan"' not in content, (
+            f'Exact topic /scan literal found in {lpath}'
+        )
+        assert "'/scan_collision'" not in content and '"/scan_collision"' not in content, (
+            f'Exact topic /scan_collision literal found in {lpath}'
+        )
 
 
 def test_imu_data_contract_and_ekf_consumer():

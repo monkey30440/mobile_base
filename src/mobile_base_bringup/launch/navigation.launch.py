@@ -171,9 +171,6 @@ def generate_launch_description():
     sick_dual_lidar = _python_launch(
         'mobile_base_perception', 'sick_dual_lidar.launch.py'
     )
-    dual_laser_merger = _python_launch(
-        'mobile_base_perception', 'dual_laser_merger.launch.py'
-    )
     kinematic_icp = _python_launch(
         'kinematic_icp', 'kinematic_icp.launch.py',
         launch_arguments={
@@ -251,7 +248,6 @@ def generate_launch_description():
         base_control,
         tdk_imu,
         sick_dual_lidar,
-        dual_laser_merger,
         kinematic_icp,
         ekf,
         localization,

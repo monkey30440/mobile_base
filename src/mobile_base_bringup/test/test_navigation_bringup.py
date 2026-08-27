@@ -92,7 +92,6 @@ def test_navigation_launch_composes_all_subsystems_without_slam(monkeypatch):
         'mobile_base_control/launch/base_control.launch.py',
         'mobile_base_perception/launch/tdk_imu.launch.py',
         'mobile_base_perception/launch/sick_dual_lidar.launch.py',
-        'mobile_base_perception/launch/dual_laser_merger.launch.py',
         'kinematic_icp/launch/kinematic_icp.launch.py',
         'mobile_base_state_estimation/launch/ekf.launch.py',
         'mobile_base_localization/launch/localization.launch.py',
