@@ -279,7 +279,7 @@ The following directories in `docs/verification/` contain only a `.gitkeep` plac
 | [`IMP-027/`](file:///home/jim/mobile_base/docs/verification/IMP-027/) | **EMPTY PLACEHOLDER** | Deferred — Migration Gate 3 | v0.1 Feature Freeze review documented in Phase 1 audit and baseline documentation |
 
 > [!NOTE]
-> In accordance with [`04_migration_plan.md`](file:///home/jim/mobile_base/docs/rework/04_migration_plan.md), the physical retirement or cleanup of empty placeholder directories `IMP-016` through `IMP-027` is deferred to **Decision Gate 3 / Batch 9**.
+> Empty placeholder directories `IMP-016` through `IMP-027` were retired after verification confirmed that they contained no evidence artifacts.
 
 ---
 
