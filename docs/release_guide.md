@@ -1,11 +1,11 @@
-================================================================================
-                    mobile_base 客戶端 Release 打包與部署指南
-================================================================================
+# mobile_base 客戶端 Release 打包與部署指南
 
 本指南說明如何產出交付給客戶的二進位發布包。
 所有原始碼均透過多階段編譯被封裝為二進位檔，客戶端完全無法存取源碼與 Dockerfile。
 
 目錄結構規範：
+
+```text
 release/
 └── YYYYMMDD_HHMMSS/
     ├── mobile_base_release_YYYYMMDD_HHMMSS/       (交付資料夾)
@@ -15,21 +15,23 @@ release/
     │   ├── maps/                                  (地圖與站點範本)
     │   └── start.sh                               (客戶端一鍵啟動腳本)
     └── mobile_base_release_YYYYMMDD_HHMMSS.tar.gz (單一交付壓縮檔)
+```
 
+---
 
---------------------------------------------------------------------------------
-【開發端核心檔案（保留於本機專案庫，不交付給客戶）】
---------------------------------------------------------------------------------
-1. `Dockerfile.release`          - 多階段編譯 Dockerfile（只留二進位檔 install/）
-2. `compose.release.yaml`        - 客戶端 Compose 設定範本
-3. `scripts/export_release.sh`   - 一鍵打包與產出發布包腳本
+## 開發端核心檔案（保留於本機專案庫，不交付給客戶）
 
+1. [`Dockerfile.release`](../Dockerfile.release) - 多階段編譯 Dockerfile（只留二進位檔 install/）
+2. [`compose.release.yaml`](../compose.release.yaml) - 客戶端 Compose 設定範本
+3. [`scripts/export_release.sh`](../scripts/export_release.sh) - 一鍵打包與產出發布包腳本
 
---------------------------------------------------------------------------------
-【檔案 1】Dockerfile.release
---------------------------------------------------------------------------------
-位於專案根目錄 `Dockerfile.release`：
+---
 
+## 檔案 1：Dockerfile.release
+
+位於專案根目錄 [`Dockerfile.release`](../Dockerfile.release)：
+
+```dockerfile
 # ==========================================
 # 階段 1：編譯建置環境 (Builder Stage)
 # ==========================================
@@ -61,13 +63,15 @@ RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc \
     && echo "source /workspaces/mobile_base/install/setup.bash" >> ~/.bashrc
 
 CMD ["bash"]
+```
 
+---
 
---------------------------------------------------------------------------------
-【檔案 2】compose.release.yaml
---------------------------------------------------------------------------------
-位於專案根目錄 `compose.release.yaml`：
+## 檔案 2：compose.release.yaml
 
+位於專案根目錄 [`compose.release.yaml`](../compose.release.yaml)：
+
+```yaml
 services:
   mobile_base:
     image: mobile_base:release
@@ -97,13 +101,15 @@ services:
     tty: true
     restart: unless-stopped
     command: sleep infinity
+```
 
+---
 
---------------------------------------------------------------------------------
-【檔案 3】scripts/export_release.sh (一鍵打包腳本)
---------------------------------------------------------------------------------
-位於 `scripts/export_release.sh`：
+## 檔案 3：scripts/export_release.sh (一鍵打包腳本)
 
+位於 [`scripts/export_release.sh`](../scripts/export_release.sh)：
+
+```bash
 #!/bin/bash
 set -e
 
@@ -185,21 +191,27 @@ echo "🎉 打包完成！"
 echo "交付資料夾：${OUTPUT_DIR}"
 echo "交付壓縮檔：${RELEASE_BASE}/${PKG_NAME}.tar.gz"
 echo "=================================================="
+```
 
+---
 
---------------------------------------------------------------------------------
-【客戶端使用流程】
---------------------------------------------------------------------------------
+## 客戶端使用流程
+
 將 `release/YYYYMMDD_HHMMSS/mobile_base_release_YYYYMMDD_HHMMSS.tar.gz` 交付給客戶：
 
 1. 解壓縮：
+   ```bash
    tar -xzvf mobile_base_release_*.tar.gz
    cd mobile_base_release_*
+   ```
 
 2. 一鍵啟動：
+   ```bash
    ./start.sh
+   ```
 
 3. 操作建圖與導航：
+   ```bash
    docker exec -it mobile_base bash
-   # 進入後即可依 MAPPING.md / NAVIGATION.md 操作
-================================================================================
+   # 進入後即可依 src/mobile_base_bringup/MAPPING.md / src/mobile_base_bringup/NAVIGATION.md 操作
+   ```

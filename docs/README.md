@@ -92,6 +92,7 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 - [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md)：`ros2_control` `SystemInterface` 與 M1Driver 整合設計基準。
 - [`src/mobile_base_bringup/MAPPING.md`](../src/mobile_base_bringup/MAPPING.md)：建圖模式啟動、鍵盤遙控操作、地圖儲存與回讀驗證流程。
 - [`src/mobile_base_bringup/NAVIGATION.md`](../src/mobile_base_bringup/NAVIGATION.md)：導航模式啟動、初始定位、站點導航 CLI 與安全操作流程。
+- [`release_guide.md`](./release_guide.md)：客戶端二進位發布包多階段 Docker 打包、一鍵匯出腳本與部署流程。
 
 ### 4.3 Verification Engineer / 測試與驗證工程師
 - [`verification/traceability_matrix.md`](./verification/traceability_matrix.md)：**系統需求追溯矩陣 (RTM)**（32 項 SYS 需求與原始碼、驗證方法、證據及狀態完整對映）。
@@ -114,6 +115,7 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 | [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md) | 設計層 | **ACTIVE / CANONICAL** | M1 ros2_control 整合設計基準 |
 | [`src/mobile_base_bringup/MAPPING.md`](../src/mobile_base_bringup/MAPPING.md) | 操作層 | **ACTIVE / CANONICAL** | 建圖操作指南 |
 | [`src/mobile_base_bringup/NAVIGATION.md`](../src/mobile_base_bringup/NAVIGATION.md) | 操作層 | **ACTIVE / CANONICAL** | 導航操作指南 |
+| [`release_guide.md`](./release_guide.md) | 操作層 | **ACTIVE / CANONICAL** | 客戶端發布打包與部署指南 |
 | [`verification/traceability_matrix.md`](./verification/traceability_matrix.md) | 驗證層 | **ACTIVE / CANONICAL** | 需求追溯矩陣 |
 | [`verification/evidence_index.md`](./verification/evidence_index.md) | 驗證層 | **ACTIVE / CANONICAL** | 驗證證據索引目錄 |
 | [`XX_backlog.md`](./XX_backlog.md) | 規劃層 | **ACTIVE / CANONICAL** | 後續 Backlog 追蹤 |
@@ -142,6 +144,7 @@ mobile_base/
     ├── 03_requirements.md             # 系統需求規範 (SYS-001~034)
     ├── 05_architecture.md             # 系統架構單一權威
     ├── XX_backlog.md                  # 後續 Backlog 追蹤
+    ├── release_guide.md               # 客戶端發布打包與部署指南
     ├── design_baseline/               # M1 通訊與硬體介面詳細設計基準
     ├── verification/                  # 需求追溯矩陣與驗證證據索引目錄
     ├── evidence/                      # 結構化驗證階段報告
