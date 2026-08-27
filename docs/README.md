@@ -115,7 +115,6 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 | [`verification/traceability_matrix.md`](./verification/traceability_matrix.md) | 驗證層 | **ACTIVE / CANONICAL** | 需求追溯矩陣 |
 | [`verification/evidence_index.md`](./verification/evidence_index.md) | 驗證層 | **ACTIVE / CANONICAL** | 驗證證據索引目錄 |
 | [`XX_backlog.md`](./XX_backlog.md) | 規劃層 | **ACTIVE / CANONICAL** | 後續 Backlog 追蹤 |
-| [`m1_bringup_validation/`](./m1_bringup_validation/) | 驗證層 | **HISTORICAL** | 早期馬達 Bringup 記錄與硬體診斷工具 |
 
 ---
 
@@ -142,6 +141,5 @@ mobile_base/
     ├── XX_backlog.md                  # 後續 Backlog 追蹤
     ├── release_guide.md               # 客戶端發布打包與部署指南
     ├── verification/                  # 需求追溯矩陣與驗證證據索引目錄
-    ├── evidence/                      # 結構化驗證階段報告
-    └── m1_bringup_validation/         # 馬達 Bringup 記錄與硬體診斷工具
+    └── evidence/                      # 結構化驗證階段報告
 ```
