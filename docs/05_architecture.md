@@ -364,7 +364,7 @@ sequenceDiagram
 
     User->>S4: 啟動建圖 (Start Mapping)
     S4->>S4: slam_toolbox 初始化並進入 ACTIVE (SYS-001)
-    S2-->>S4: 權威原始 LaserScan (SYS-003)
+    S2-->>S4: 前 LiDAR /scan_front (SYS-003)
     S2-->>S3: 前 LiDAR /scan_front 與 IMU yaw rate (SYS-003, SYS-004)
     S7-->>S3: Encoder wheel odometry prior (SYS-005, SYS-029)
 
@@ -715,7 +715,7 @@ $$\text{Base Status} == \text{STOPPED}$$
 | 成熟方案模組 | 配置之 Subsystem | 負責之架構責任 | 排除之非職責（維持純粹性） |
 |---|---|---|---|
 | **`robot_state_publisher`** | `S1 Robot Description` | 靜態 TF 發布、機器人幾何描述 | 動態 odom / map TF 發布 |
-| **Kinematic-ICP + `robot_localization` (EKF)** | `S3 State Estimation` | 前 LiDAR + wheel prior 產生 `/lidar_odometry`；EKF 融合 x/y/yaw 與 IMU yaw rate，發布 `odom→base_footprint` | merged `/scan` perception、全域地圖對齊 (`map→odom`) |
+| **Kinematic-ICP + `robot_localization` (EKF)** | `S3 State Estimation` | 前 LiDAR + wheel prior 產生 `/lidar_odometry`；EKF 融合 x/y/yaw 與 IMU yaw rate，發布 `odom→base_footprint` | 全域地圖對齊 (`map→odom`) |
 | **`slam_toolbox`** | `S4 Mapping` | Mapping Mode 下之 2D 建圖運算與 `map→odom` | 導航時之 AMCL 定位 |
 | **`nav2_map_server`** | `S4 Mapping` | Map Package 序列化寫入、讀回驗證與載入 | 導航路徑規劃與控制 |
 | **`nav2_amcl`** | `S5 Localization` | Navigation Mode 下基於地圖定位與發布 `map→odom` | 建圖與即時地圖更新 |

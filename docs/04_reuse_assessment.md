@@ -1,6 +1,6 @@
 # Reuse Assessment
 
-> **Current architecture decision (2026-08-26):** Kinematic-ICP is the selected production LiDAR odometry solution. It consumes physical front LiDAR `/scan_front` and encoder wheel odometry `/diff_drive_controller/odom`, publishes `/lidar_odometry`, and feeds the EKF together with IMU yaw rate. RF2O candidate assessments below are retained only as superseded selection history and are not current architecture authority. `dual_laser_merger` remains the `/scan` producer for SLAM, AMCL, Nav2, and Collision Monitor; it is not Kinematic-ICP input.
+> **Current architecture decision (2026-08-27):** Kinematic-ICP is the selected production LiDAR odometry solution. It consumes physical front LiDAR `/scan_front` and encoder wheel odometry `/diff_drive_controller/odom`, publishes `/lidar_odometry`, and feeds the EKF together with IMU yaw rate. SLAM (`slam_toolbox`) and AMCL consume physical front LiDAR `/scan_front`. Nav2 costmaps and Collision Monitor consume independent `/scan_front` and `/scan_rear` directly. `dual_laser_merger` and merged `/scan` are completely removed from production runtime. RF2O candidate assessments below are retained only as superseded selection history and are not current architecture authority.
 
 # 1. Purpose, Scope and Authority
 

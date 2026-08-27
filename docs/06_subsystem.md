@@ -131,7 +131,7 @@ robot_state_publisher:
   * **SYS-003 LiDAR 感知**：提供掃描資料供建圖（S4）、定位（S5）與導航（S6）使用。
   * **SYS-004 IMU 感知**：提供 IMU 數據供狀態估測（S3）使用。
 * **邊界與排除**：
-  * **In-Scope**：感測器驅動通訊、標準訊息封裝、Frame ID 標記、`dual_laser_merger` 雙雷達融合、感測器斷線與逾時偵測。
+  * **In-Scope**：感測器驅動通訊、標準訊息封裝、Frame ID 標記（`base_lidar_link_FL`, `base_lidar_link_BR`, `base_imu_link`）、感測器斷線與逾時偵測。
   * **Out-of-Scope**：TF 發布（由 S1 統一發布）、狀態估測融合（S3 負責）、建圖（S4 負責）、導航代價地圖解讀（S6 負責）。
 
 ### 2. Internal Component Decomposition
@@ -141,29 +141,21 @@ graph LR
         FL_DRIVER[front_lidar_node<br/>前左光達驅動] --> SCAN_FL["/scan_front<br/>(LaserScan, frame: base_lidar_link_FL)"]
         BR_DRIVER[rear_lidar_node<br/>後右光達驅動] --> SCAN_BR["/scan_rear<br/>(LaserScan, frame: base_lidar_link_BR)"]
         
-        SCAN_FL --> MERGER[dual_laser_merger_node<br/>dual_laser_merger 0.3.1]
-        SCAN_BR --> MERGER
-        
-        MERGER --> SCAN_MERGED["/scan<br/>(360° LaserScan, frame: base_link)"]
-        
         IMU_DRIVER[imu_driver_node<br/>TDK IIM-42652 驅動] --> IMU_DATA["/imu/data_raw<br/>(Imu, frame: base_imu_link)"]
     end
 ```
 
 1. **`front_lidar_node` (Driver Node)**：通訊讀取前左 2D 光達，發布原始 `/scan_front`。
 2. **`rear_lidar_node` (Driver Node)**：通訊讀取後右 2D 光達，發布原始 `/scan_rear`。
-3. **`dual_laser_merger_node` (ROS 2 Jazzy `dual_laser_merger` 0.3.1 成熟元件)**：
-   * 訂閱 `/scan_front` 與 `/scan_rear`，透過 S1 `/tf_static` 空間幾何將兩路掃描在 `base_link` 坐標系下合成為單一 360° `/scan`。
-4. **`imu_driver_node` (Driver Node - TDK IIM-42652)**：讀取 3 軸角速度與 3 軸線性加速度，發布 `/imu/data_raw`。
+3. **`imu_driver_node` (Driver Node - TDK IIM-42652)**：讀取 3 軸角速度與 3 軸線性加速度，發布 `/imu/data_raw`。
 
 ### 3. ROS 2 Authoritative Interfaces
 
 #### 3.1 發布介面 (Published Interfaces)
 | 介面名稱 | 訊息型別 | `frame_id` (來自 S1) | QoS Profile | 典型頻率 | 說明與消費者 |
 |---|---|---|---|---|---|
-| **`/scan`** | `sensor_msgs/msg/LaserScan` | `base_link` | `SensorData` / `SystemDefaults` | $15 \sim 25\,\text{Hz}$ | **360° 融合雷達資料**。<br/>供 **S4 slam_toolbox**、**S5 AMCL**、**S6 Nav2 / Collision Monitor** 訂閱；不是 Kinematic-ICP 輸入。 |
-| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_FL_1` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 前左原始掃描（Layer 1 光學掃描面）。<br/>供 S6 Nav2 Costmap 避障及 `dual_laser_merger` 融合使用。 |
-| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_BR_1` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 後右原始掃描（Layer 1 光學掃描面）。<br/>供 S6 Nav2 Costmap 避障及 `dual_laser_merger` 融合使用。 |
+| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_FL` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 前左原始掃描（Layer 1 光學掃描面）。<br/>供 **S3 Kinematic-ICP**、**S4 slam_toolbox**、**S5 AMCL**、**S6 Nav2 Costmaps / Collision Monitor** 使用。 |
+| **`/scan_rear`** | `sensor_msgs/msg/LaserScan` | `base_lidar_link_BR` | `Reliable / TransientLocal` (Driver Default) | $25\,\text{Hz}$ | 後右原始掃描（Layer 1 光學掃描面）。<br/>供 **S6 Nav2 Costmaps / Collision Monitor** 使用。 |
 | **`/imu/data_raw`** | `sensor_msgs/msg/Imu` | `base_imu_link` | `SensorData` | $50 \sim 100\,\text{Hz}$ | 原始 3 軸角速度與線性加速度。<br/>供 **S3 robot_localization EKF** 訂閱。 |
 
 ### 4. Parameters & Configurations
@@ -182,18 +174,6 @@ rear_lidar_node:
     frame_id: "base_lidar_link_BR"
     scan_frequency: 15.0
 
-dual_laser_merger_node:
-  ros__parameters:
-    laser_1_topic: "/scan_front"
-    laser_2_topic: "/scan_rear"
-    target_frame: "base_link"
-    merged_scan_topic: "/scan"
-    angle_min: -3.14159265
-    angle_max: 3.14159265
-    scan_time: 0.0666667
-    range_min: 0.05
-    range_max: 25.0
-
 imu_driver_node:
   ros__parameters:
     frame_id: "base_imu_link"
@@ -203,14 +183,11 @@ imu_driver_node:
 ### 5. Failure Detection & Diagnostics
 1. **感測器通訊逾時**：驅動節點若超過 $0.5\,\text{秒}$ 未收到硬體數據，透過 `/diagnostics` 發布 `ERROR` 狀態。
 2. **點雲遮擋與無效點處理**：小於 `range_min` 或大於 `range_max` 者填充為 `+Inf`，嚴禁填充為 `NaN`。
-3. **融合節點 TF 依賴防護**：若 `dual_laser_merger` 無法取得 `base_lidar_link_FL/BR → base_link` 之 TF 轉換，停止發布 `/scan` 並輸出警告，防止發布畸變點雲。
 
 ### 6. Verification Obligations
 1. **介面與 Frame 驗證 (Interface Test)**：
-   * 確認 `/scan_front` (`base_lidar_link_FL`)、`/scan_rear` (`base_lidar_link_BR`)、`/scan` (`base_link`) 與 `/imu/data_raw` (`base_imu_link`) 之 Header Frame ID 與 QoS 正確。
-2. **雷達 360° 融合完整性檢驗 (Integration Test)**：
-   * 在 RViz2 中以 `base_link` 為 Fixed Frame 同時可視化 `/scan_front`、`/scan_rear` 與 `/scan`，確認重疊區域點雲平滑對齊無雙重重影。
-3. **IMU 靜態重力檢驗 (Unit Test)**：
+   * 確認 `/scan_front` (`base_lidar_link_FL`)、`/scan_rear` (`base_lidar_link_BR`) 與 `/imu/data_raw` (`base_imu_link`) 之 Header Frame ID 與 QoS 正確。
+2. **IMU 靜態重力檢驗 (Unit Test)**：
    * 機器人靜止時，`/imu/data_raw` 經 S1 TF 轉換後之車體 $Z$ 軸加速度應為 $+9.81 \pm 0.2\,\text{m/s}^2$。
 
 ---
@@ -418,7 +395,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
 
 Production data flow is `/scan_front` + `/diff_drive_controller/odom` → Kinematic-ICP → `/lidar_odometry` → EKF + `/imu/data_raw` yaw rate → `/odometry/filtered`. Kinematic-ICP uses `lidar_odom_frame: odom`, `base_frame: base_footprint`, `publish_odom_tf: false`, and `invert_odom_tf: false`. The EKF fuses only Kinematic-ICP x/y/yaw pose and IMU yaw rate, with `world_frame: odom`, `odom_frame: odom`, `base_link_frame: base_footprint`, and `publish_tf: true`; direct wheel odometry, Kinematic-ICP twist, and IMU linear acceleration are excluded from EKF fusion. EKF is the sole owner of `odom → base_footprint`.
 
-The `dual_laser_merger` output `/scan` remains the perception input for SLAM, AMCL, Nav2 costmaps, and Collision Monitor. It is not Kinematic-ICP input.
+SLAM and AMCL consume physical front LiDAR `/scan_front`; Nav2 costmaps and Collision Monitor consume `/scan_front` and `/scan_rear` directly. `dual_laser_merger` and `/scan` are removed from production runtime.
 
 ### Superseded historical RF2O design record
 
@@ -604,7 +581,7 @@ graph TD
         MAP_IO[nav2_map_server / map_saver<br/>地圖生命週期與 MapIO]
     end
     
-    SCAN["/scan<br/>(來自 S2 dual_laser_merger)"] --> SLAM
+    SCAN["/scan_front<br/>(來自 S2 Perception)"] --> SLAM
     TF_ODOM["TF: odom → base_footprint<br/>(來自 S3 EKF)"] --> SLAM
     
     SLAM --> MAP_TOPIC["/map<br/>(OccupancyGrid, 0.05m)"]
@@ -616,7 +593,7 @@ graph TD
 
 1. **`async_slam_toolbox_node` (ROS 2 Jazzy `slam_toolbox` 成熟元件)**：
    * 僅於建圖模式（Mapping Mode）啟動。
-   * 訂閱 S2 的 `/scan` 與 S3 的 `odom → base_footprint` TF，執行掃描匹配與回環檢測（Loop Closure）。
+   * 訂閱 S2 的 `/scan_front` 與 S3 的 `odom → base_footprint` TF，執行掃描匹配與回環檢測（Loop Closure）。
    * 即時產出 `/map`，並作為**建圖模式下唯一發布 `map → odom` TF 的節點**。
 2. **`nav2_map_server` & `map_saver` (ROS 2 Jazzy 成熟 MapIO 元件)**：
    * 負責地圖生命週期管理（Lifecycle Node）。
@@ -628,7 +605,7 @@ graph TD
 #### 3.1 訂閱介面 (Subscribed Interfaces)
 | 介面名稱 | 訊息型別 | 提供者 (Producer) | QoS Profile | 說明 |
 |---|---|---|---|---|
-| **`/scan`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 360° 融合雷達掃描資料。 |
+| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 前左雷達原始掃描資料。 |
 | **`/tf`** | `tf2_msgs/msg/TFMessage` | `S3 State Estimation` | Dynamic, SystemDefault | 訂閱 `odom → base_footprint` 動態座標轉換。 |
 
 #### 3.2 發布介面 (Published Interfaces)
@@ -656,7 +633,7 @@ async_slam_toolbox_node:
     map_frame: "map"
     odom_frame: "odom"
     base_frame: "base_footprint"
-    scan_topic: "/scan"
+    scan_topic: "/scan_front"
 
     # 柵格解析度 (SYS-001)
     resolution: 0.05 # 5cm 佔據柵格
@@ -716,7 +693,7 @@ graph TD
     end
     
     MAP["/map<br/>(來自 S4 nav2_map_server)"] --> AMCL
-    SCAN["/scan<br/>(來自 S2 dual_laser_merger)"] --> AMCL
+    SCAN["/scan_front<br/>(來自 S2 Perception)"] --> AMCL
     TF_ODOM["TF: odom → base_footprint<br/>(來自 S3 EKF)"] --> AMCL
     INIT_POSE["/initialpose<br/>(來自 RViz2 或 操作工具)"] --> AMCL
     
@@ -727,7 +704,7 @@ graph TD
 
 1. **`amcl` (ROS 2 Jazzy `nav2_amcl` 成熟生命週期節點)**：
    * 僅於導航模式（Navigation Mode）進入 Active 狀態。
-   * 訂閱 S4 已載入的 `/map`、S2 的 360° `/scan` 與 S3 的 `odom → base_footprint` TF。
+   * 訂閱 S4 已載入的 `/map`、S2 的 `/scan_front` 與 S3 的 `odom → base_footprint` TF。
    * 依據觀測雷達與地圖似然場（Likelihood Field）權重更新粒子群，估計車體全域位姿。
    * **導航模式下唯一授權發布 `map → odom` 動態 TF**。
    * 支援接收 `/initialpose`（SYS-010），立即以該位姿與初始協方差重新分佈粒子群。
@@ -739,7 +716,7 @@ graph TD
 |---|---|---|---|---|
 | **`/initialpose`** | `geometry_msgs/msg/PoseWithCovarianceStamped` | RViz2 / 外部工具 | SystemDefault / Reliable | **SYS-010 初始位姿輸入**（含 $(x, y, \text{yaw})$ 及協方差）。 |
 | **`/map`** | `nav_msgs/msg/OccupancyGrid` | `S4 Mapping` (`map_server`) | TransientLocal, Reliable | 已載入之靜態佔據柵格地圖。 |
-| **`/scan`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 360° 融合雷達掃描資料。 |
+| **`/scan_front`** | `sensor_msgs/msg/LaserScan` | `S2 Perception` | SensorData | 前左雷達原始掃描資料。 |
 | **`/tf`** | `tf2_msgs/msg/TFMessage` | `S3 State Estimation` | Dynamic, SystemDefault | 訂閱 `odom → base_footprint` 動態座標轉換。 |
 
 #### 3.2 發布介面 (Published Interfaces)
@@ -759,7 +736,7 @@ amcl:
     global_frame_id: "map"
     odom_frame_id: "odom"
     base_frame_id: "base_footprint"
-    scan_topic: "/scan"
+    scan_topic: "/scan_front"
     tf_broadcast: true # 導航期發布 map -> odom
 
     # 粒子濾波器配置
@@ -864,7 +841,7 @@ graph TD
     CONTROLLER --> CHECKER
     CONTROLLER --> CMD_VEL["/diff_drive_controller/cmd_vel<br/>(TwistStamped 發布至 S7)"]
     
-    SCANS["/scan_front, /scan_rear, /scan<br/>(來自 S2 Perception)"] --> COSTMAP
+    SCANS["/scan_front, /scan_rear<br/>(來自 S2 Perception)"] --> COSTMAP
 ```
 
 ### 2.1 Target Admission 輕量薄層模組（GAP-01 ~ GAP-04）
@@ -890,7 +867,7 @@ graph TD
    * 使用 `nav2_mppi_controller::MPPIController`，透過 Navigation2 `FollowPath` 追蹤 active stage 路徑並輸出 `/cmd_vel` 至 S7（SYS-015）。
    * 抵達目標容差半徑後，由 `stopped_goal_checker` 檢驗實際線速度 $< 0.01\,\text{m/s}$ 且角速度 $< 0.02\,\text{rad/s}$，確認位置、朝向與底盤停止皆滿足後方判定成功（SYS-016）；最終結果透過 Navigation2 原生結果回報（SYS-017）。
 5. **`nav2_costmap_2d` (全域與局部代價地圖)**：
-   * 訂閱 S2 的 `/scan_front` 與 `/scan_rear`（或融合 `/scan`），進行光線投射（Ray-tracing）、障礙物標記與膨脹層計算，避免規劃或執行穿越占用區域（SYS-014）。
+   * 訂閱 S2 的 `/scan_front` 與 `/scan_rear`，進行光線投射（Ray-tracing）、障礙物標記與膨脹層計算，避免規劃或執行穿越占用區域（SYS-014）。
 
 ---
 
@@ -1087,7 +1064,7 @@ local_costmap:
 
 1. **子系統活躍狀態**：
    * **S1 Robot Description**：`robot_state_publisher` 廣播 `/tf_static` 與動態關節 TF（ACTIVE）。
-   * **S2 Perception**：`sick_dual_lidar`, `dual_laser_merger`, `tdk_imu` 廣播 `/scan` 與 `/imu/data_raw`（ACTIVE）。
+   * **S2 Perception**：`sick_dual_lidar` 與 `tdk_imu` 廣播 `/scan_front`, `/scan_rear` 與 `/imu/data_raw`（ACTIVE）。
    * **S3 State Estimation**：`kinematic_icp_online_node` 發布 `/lidar_odometry` 且不發布 odom TF；`ekf_filter_node` 融合其 x/y/yaw 與 IMU yaw rate，發布權威 `odom → base_footprint` TF（ACTIVE）。
    * **S4 Mapping**：`mapping.launch.py` 啟動 `async_slam_toolbox_node` Lifecycle 節點並轉換至 ACTIVE，擁有建圖期 `map → odom` TF（ACTIVE）。
    * **S7 Base Control**：`controller_manager` 載入並啟用 `diff_drive_controller`、`joint_state_broadcaster` 與 `M1HardwareInterface`（ACTIVE）。
@@ -1106,7 +1083,7 @@ local_costmap:
 |---|---|---|---|---|
 | **SYS-001** | 2D 佔據柵格地圖生成 | S4 Mapping | `async_slam_toolbox_node` (`/map`, 0.05m) | 3.5 |
 | **SYS-002** | 地圖儲存與載入 | S4 Mapping | `nav2_map_server` (`.yaml` / `.pgm`) | 3.5 |
-| **SYS-003** | LiDAR 感知 | S2 Perception | `front/rear_lidar_node`, `dual_laser_merger` | 3.2 |
+| **SYS-003** | LiDAR 感知 | S2 Perception | `front/rear_lidar_node` (`/scan_front`, `/scan_rear`) | 3.2 |
 | **SYS-004** | IMU 感知 | S2 Perception | `imu_driver_node` (`/imu/data_raw`) | 3.2 |
 | **SYS-005** | 系統里程 | S3 State Estimation | `ekf_filter_node` (`/odometry/filtered`, TF) | 3.4 |
 | **SYS-006** | SLAM / 定位模式互斥 | S4 Mapping / S5 Loc | Launch Manager / Mutex lifecycle | 3.5, 3.6, 4.1 |
