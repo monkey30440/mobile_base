@@ -76,9 +76,34 @@ def test_nav2_params_contracts():
     assert 'PolygonSlow' in cm_params['polygons']
     assert cm_params['PolygonStop']['action_type'] == 'stop'
     assert cm_params['PolygonSlow']['action_type'] == 'slowdown'
-    assert 'scan' in cm_params['observation_sources']
-    assert cm_params['scan']['topic'] == '/scan_collision'
+    assert 'scan_front' in cm_params['observation_sources']
+    assert 'scan_rear' in cm_params['observation_sources']
+    assert cm_params['scan_front']['topic'] == '/scan_front'
+    assert cm_params['scan_rear']['topic'] == '/scan_rear'
+    assert cm_params['scan_front']['type'] == 'scan'
+    assert cm_params['scan_rear']['type'] == 'scan'
     assert cm_params.get('enable_stamped_cmd_vel') is True
+
+    # 6. Costmaps observation sources contract
+    assert 'local_costmap' in params
+    lc_obs = (
+        params['local_costmap']['local_costmap']['ros__parameters']
+        ['obstacle_layer']
+    )
+    assert 'scan_front' in lc_obs['observation_sources']
+    assert 'scan_rear' in lc_obs['observation_sources']
+    assert lc_obs['scan_front']['topic'] == '/scan_front'
+    assert lc_obs['scan_rear']['topic'] == '/scan_rear'
+
+    assert 'global_costmap' in params
+    gc_obs = (
+        params['global_costmap']['global_costmap']['ros__parameters']
+        ['obstacle_layer']
+    )
+    assert 'scan_front' in gc_obs['observation_sources']
+    assert 'scan_rear' in gc_obs['observation_sources']
+    assert gc_obs['scan_front']['topic'] == '/scan_front'
+    assert gc_obs['scan_rear']['topic'] == '/scan_rear'
 
 
 def test_bt_xml_structure_and_fallback_policy():
