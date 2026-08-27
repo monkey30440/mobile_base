@@ -163,6 +163,7 @@ def test_no_production_runtime_reliance_on_merged_or_filtered_scan():
 
     # Check production launch files
     production_launch_files = [
+        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mobile_base.launch.py',
         ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mapping.launch.py',
         ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'navigation.launch.py',
         ws_root / 'src' / 'mobile_base_perception' / 'launch' / 'sick_dual_lidar.launch.py',

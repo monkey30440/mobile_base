@@ -17,21 +17,49 @@
 
 ## 啟動導航模式
 
+### 正式標準入口 (Canonical Entry Point)
+
+使用高階 `site` 參數自動解析場域資源（地圖與拓撲路網）：
+
 不啟用 Foxglove：
 
 ```bash
-ros2 launch mobile_base_bringup navigation.launch.py \
-  map:=$(pwd)/maps/test_site/map.yaml \
-  route_graph:=$(pwd)/maps/test_site/route_graph.geojson
+ros2 launch mobile_base_bringup mobile_base.launch.py \
+  mode:=navigation \
+  site:=test_site
 ```
 
 啟用選用的 Foxglove 視覺化工具：
 
 ```bash
+ros2 launch mobile_base_bringup mobile_base.launch.py \
+  mode:=navigation \
+  site:=test_site \
+  use_foxglove:=true
+```
+
+若需低階手動覆寫個別資源檔案：
+
+```bash
+ros2 launch mobile_base_bringup mobile_base.launch.py \
+  mode:=navigation \
+  map:=$(pwd)/maps/test_site/map.yaml \
+  route_graph:=$(pwd)/maps/test_site/route_graph.geojson
+```
+
+### 向下相容入口 (Compatibility Wrapper)
+
+```bash
+ros2 launch mobile_base_bringup navigation.launch.py \
+  site:=test_site
+```
+
+或使用舊版低階參數：
+
+```bash
 ros2 launch mobile_base_bringup navigation.launch.py \
   map:=$(pwd)/maps/test_site/map.yaml \
-  route_graph:=$(pwd)/maps/test_site/route_graph.geojson \
-  use_foxglove:=true
+  route_graph:=$(pwd)/maps/test_site/route_graph.geojson
 ```
 
 導航模式正常運作時，會提供下列主要執行期契約：

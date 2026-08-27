@@ -166,8 +166,58 @@ def test_kinematic_icp_launch_cli_override():
     assert param_dict['lidar_topic'] == '/custom_scan'
 
 
-def test_canonical_mapping_launch_forwards_kinematic_icp_arguments(monkeypatch):
-    """Verify canonical mapping.launch.py forwards Kinematic-ICP arguments."""
+def test_canonical_mobile_base_launch_forwards_kinematic_icp_arguments(monkeypatch):
+    """Verify canonical mobile_base.launch.py forwards Kinematic-ICP arguments."""
+    ws_root = _get_workspace_root()
+    launch_path = (
+        ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mobile_base.launch.py'
+    )
+    module = _load_launch_module(launch_path)
+    monkeypatch.setattr(
+        module,
+        'get_package_share_directory',
+        lambda package: f'/opt/ros/share/{package}',
+    )
+
+    context = LaunchContext()
+    context.launch_configurations.update({
+        'variant': 'default',
+        'platform': 'real',
+        'mode': 'mapping',
+        'site': '',
+        'map': '',
+        'route_graph': '',
+        'use_sim_time': 'false',
+        'use_mock_hardware': 'false',
+        'serial_port': '/dev/ttyUSB0',
+        'baud_rate': '230400',
+        'response_timeout_ms': '50',
+        'lidar_odom_frame': 'odom',
+        'publish_odom_tf': 'false',
+        'invert_odom_tf': 'false',
+        'lidar_topic': '/scan_front',
+        'wheel_odom_topic': '/diff_drive_controller/odom',
+        'mapping_params_file': '/opt/ros/share/mobile_base_mapping/config/slam_toolbox.yaml',
+        'use_foxglove': 'false',
+    })
+
+    entities = module.launch_setup(context)
+    includes = [e for e in entities if isinstance(e, IncludeLaunchDescription)]
+    kicp_include = next(
+        inc for inc in includes
+        if _source_path(inc).endswith('kinematic_icp/launch/kinematic_icp.launch.py')
+    )
+    assert kicp_include.launch_arguments is not None
+    forwarded = dict(kicp_include.launch_arguments)
+    assert 'lidar_odom_frame' in forwarded
+    assert 'publish_odom_tf' in forwarded
+    assert 'invert_odom_tf' in forwarded
+    assert 'lidar_topic' in forwarded
+    assert 'wheel_odom_topic' in forwarded
+
+
+def test_wrapper_mapping_launch_forwards_kinematic_icp_arguments(monkeypatch):
+    """Verify wrapper mapping.launch.py forwards Kinematic-ICP arguments."""
     ws_root = _get_workspace_root()
     launch_path = (
         ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mapping.launch.py'
@@ -196,12 +246,10 @@ def test_canonical_mapping_launch_forwards_kinematic_icp_arguments(monkeypatch):
         entity for entity in ld.entities
         if isinstance(entity, IncludeLaunchDescription)
     ]
-    kicp_include = next(
-        inc for inc in includes
-        if _source_path(inc).endswith('kinematic_icp/launch/kinematic_icp.launch.py')
-    )
-    assert kicp_include.launch_arguments is not None
-    forwarded = dict(kicp_include.launch_arguments)
+    assert len(includes) == 1
+    canonical_include = includes[0]
+    assert canonical_include.launch_arguments is not None
+    forwarded = dict(canonical_include.launch_arguments)
     assert 'lidar_odom_frame' in forwarded
     assert 'publish_odom_tf' in forwarded
     assert 'invert_odom_tf' in forwarded
@@ -209,8 +257,8 @@ def test_canonical_mapping_launch_forwards_kinematic_icp_arguments(monkeypatch):
     assert 'wheel_odom_topic' in forwarded
 
 
-def test_canonical_navigation_launch_forwards_kinematic_icp_arguments(monkeypatch):
-    """Verify canonical navigation.launch.py forwards Kinematic-ICP arguments."""
+def test_wrapper_navigation_launch_forwards_kinematic_icp_arguments(monkeypatch):
+    """Verify wrapper navigation.launch.py forwards Kinematic-ICP arguments."""
     ws_root = _get_workspace_root()
     launch_path = (
         ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'navigation.launch.py'
@@ -239,12 +287,10 @@ def test_canonical_navigation_launch_forwards_kinematic_icp_arguments(monkeypatc
         entity for entity in ld.entities
         if isinstance(entity, IncludeLaunchDescription)
     ]
-    kicp_include = next(
-        inc for inc in includes
-        if _source_path(inc).endswith('kinematic_icp/launch/kinematic_icp.launch.py')
-    )
-    assert kicp_include.launch_arguments is not None
-    forwarded = dict(kicp_include.launch_arguments)
+    assert len(includes) == 1
+    canonical_include = includes[0]
+    assert canonical_include.launch_arguments is not None
+    forwarded = dict(canonical_include.launch_arguments)
     assert 'lidar_odom_frame' in forwarded
     assert 'publish_odom_tf' in forwarded
     assert 'invert_odom_tf' in forwarded

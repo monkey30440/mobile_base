@@ -12,36 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compose the canonical real-hardware Navigation Mode launches."""
+"""
+Compatibility wrapper for Navigation Mode bringup.
+
+Delegates to canonical mobile_base.launch.py with mode:=navigation.
+"""
 
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
-from launch.launch_description_sources import (
-    AnyLaunchDescriptionSource,
-    PythonLaunchDescriptionSource,
-)
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
 
-def _python_launch(package_name, launch_file, launch_arguments=None):
-    return IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory(package_name),
-                'launch',
-                launch_file,
-            )
-        ),
-        launch_arguments=launch_arguments.items() if launch_arguments else None,
-    )
-
-
 def generate_launch_description():
-    """Generate the canonical Kinematic-ICP Navigation Mode description."""
+    """Generate navigation launch description via canonical mobile_base.launch.py."""
+    pkg_share = get_package_share_directory('mobile_base_bringup')
+    canonical_launch = os.path.join(pkg_share, 'launch', 'mobile_base.launch.py')
+
     loc_pkg_share = get_package_share_directory('mobile_base_localization')
     nav_pkg_share = get_package_share_directory('mobile_base_navigation')
 
@@ -55,7 +45,11 @@ def generate_launch_description():
         nav_pkg_share, 'behavior_trees', 'route_assisted_nav.xml'
     )
 
-    # Declare Launch Arguments
+    site_arg = DeclareLaunchArgument(
+        'site',
+        default_value='',
+        description='Site name for navigation resources (e.g. test_site)',
+    )
     map_arg = DeclareLaunchArgument(
         'map',
         default_value='',
@@ -125,107 +119,61 @@ def generate_launch_description():
     )
 
     lidar_odom_frame_arg = DeclareLaunchArgument(
-        'lidar_odom_frame', default_value='odom',
+        'lidar_odom_frame',
+        default_value='odom',
         description='Odometry parent frame ID for Kinematic-ICP',
     )
     publish_odom_tf_arg = DeclareLaunchArgument(
-        'publish_odom_tf', default_value='false',
+        'publish_odom_tf',
+        default_value='false',
         description='Whether Kinematic-ICP should publish odom TF',
     )
     invert_odom_tf_arg = DeclareLaunchArgument(
-        'invert_odom_tf', default_value='false',
+        'invert_odom_tf',
+        default_value='false',
         description='Whether Kinematic-ICP should invert published odom TF',
     )
     lidar_topic_arg = DeclareLaunchArgument(
-        'lidar_topic', default_value='/scan_front',
+        'lidar_topic',
+        default_value='/scan_front',
         description='Sensor topic for Kinematic-ICP',
     )
     wheel_odom_topic_arg = DeclareLaunchArgument(
-        'wheel_odom_topic', default_value='/diff_drive_controller/odom',
+        'wheel_odom_topic',
+        default_value='/diff_drive_controller/odom',
         description='Wheel odometry input topic for Kinematic-ICP',
     )
 
-    # Subsystem launches
-    base_control = _python_launch(
-        'mobile_base_control',
-        'base_control.launch.py',
+    include_canonical = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(canonical_launch),
         launch_arguments={
+            'mode': 'navigation',
+            'platform': 'real',
+            'variant': 'default',
+            'site': LaunchConfiguration('site'),
+            'map': LaunchConfiguration('map'),
+            'route_graph': LaunchConfiguration('route_graph'),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'use_mock_hardware': LaunchConfiguration('use_mock_hardware'),
+            'autostart': LaunchConfiguration('autostart'),
+            'localization_params_file': LaunchConfiguration('localization_params_file'),
+            'nav2_params_file': LaunchConfiguration('nav2_params_file'),
+            'bt_xml': LaunchConfiguration('bt_xml'),
+            'use_foxglove': LaunchConfiguration('use_foxglove'),
+            'log_level': LaunchConfiguration('log_level'),
             'serial_port': LaunchConfiguration('serial_port'),
             'baud_rate': LaunchConfiguration('baud_rate'),
             'response_timeout_ms': LaunchConfiguration('response_timeout_ms'),
-        },
-    )
-    tdk_imu = _python_launch(
-        'mobile_base_perception',
-        'tdk_imu.launch.py',
-        launch_arguments={
-            'params_file': os.path.join(
-                get_package_share_directory('mobile_base_perception'),
-                'config',
-                'tdk_imu.yaml',
-            )
-        },
-    )
-    sick_dual_lidar = _python_launch(
-        'mobile_base_perception', 'sick_dual_lidar.launch.py'
-    )
-    kinematic_icp = _python_launch(
-        'kinematic_icp', 'kinematic_icp.launch.py',
-        launch_arguments={
-            'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'params_file': os.path.join(
-                get_package_share_directory('kinematic_icp'),
-                'config', 'kinematic_icp_ros.yaml',
-            ),
+            'use_mock_hardware': LaunchConfiguration('use_mock_hardware'),
             'lidar_odom_frame': LaunchConfiguration('lidar_odom_frame'),
             'publish_odom_tf': LaunchConfiguration('publish_odom_tf'),
             'invert_odom_tf': LaunchConfiguration('invert_odom_tf'),
             'lidar_topic': LaunchConfiguration('lidar_topic'),
             'wheel_odom_topic': LaunchConfiguration('wheel_odom_topic'),
-        },
-    )
-    ekf = _python_launch(
-        'mobile_base_state_estimation', 'ekf.launch.py'
-    )
-    localization = _python_launch(
-        'mobile_base_localization',
-        'localization.launch.py',
-        launch_arguments={
-            'map': LaunchConfiguration('map'),
-            'params_file': LaunchConfiguration('localization_params_file'),
-            'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'autostart': LaunchConfiguration('autostart'),
-            'log_level': LaunchConfiguration('log_level'),
-        },
-    )
-    navigation = _python_launch(
-        'mobile_base_navigation',
-        'navigation.launch.py',
-        launch_arguments={
-            'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'autostart': LaunchConfiguration('autostart'),
-            'params_file': LaunchConfiguration('nav2_params_file'),
-            'bt_xml': LaunchConfiguration('bt_xml'),
-            'route_graph': LaunchConfiguration('route_graph'),
-            'log_level': LaunchConfiguration('log_level'),
-        },
-    )
-
-    foxglove = IncludeLaunchDescription(
-        AnyLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('foxglove_bridge'),
-                'launch',
-                'foxglove_bridge_launch.xml',
-            )
-        ),
-        condition=IfCondition(LaunchConfiguration('use_foxglove')),
+        }.items(),
     )
 
     return LaunchDescription([
-        # Arguments
+        site_arg,
         map_arg,
         route_graph_arg,
         use_sim_time_arg,
@@ -244,13 +192,5 @@ def generate_launch_description():
         invert_odom_tf_arg,
         lidar_topic_arg,
         wheel_odom_topic_arg,
-        # Subsystems
-        base_control,
-        tdk_imu,
-        sick_dual_lidar,
-        kinematic_icp,
-        ekf,
-        localization,
-        navigation,
-        foxglove,
+        include_canonical,
     ])

@@ -8,16 +8,24 @@
 
 ## 啟動建圖模式
 
+### 正式標準入口 (Canonical Entry Point)
+
 不啟用 Foxglove：
 
 ```bash
-ros2 launch mobile_base_bringup mapping.launch.py
+ros2 launch mobile_base_bringup mobile_base.launch.py mode:=mapping
 ```
 
 啟用選用的 Foxglove 視覺化工具：
 
 ```bash
-ros2 launch mobile_base_bringup mapping.launch.py use_foxglove:=true
+ros2 launch mobile_base_bringup mobile_base.launch.py mode:=mapping use_foxglove:=true
+```
+
+### 向下相容入口 (Compatibility Wrapper)
+
+```bash
+ros2 launch mobile_base_bringup mapping.launch.py
 ```
 
 建圖模式正常運作時，會提供下列主要執行期契約：

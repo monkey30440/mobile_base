@@ -169,7 +169,7 @@ def test_s4_mapping_mode_map_to_odom_authority():
         mapping_launch_content = f.read()
 
     assert (
-        'slam_toolbox' in mapping_launch_content or
+        'mobile_base.launch.py' in mapping_launch_content or
         'mobile_base_mapping' in mapping_launch_content
     )
     assert 'amcl' not in mapping_launch_content, 'Mapping Mode must not launch AMCL'

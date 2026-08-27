@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Narrow structural tests for the project-owned Mapping bringup."""
+"""Narrow structural tests for the project-owned Mapping bringup and wrapper."""
 
 import importlib.util
 from pathlib import Path
@@ -20,7 +20,6 @@ import xml.etree.ElementTree as ET
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
 
 
 def _load_launch_module(launch_file_path: Path):
@@ -38,8 +37,8 @@ def _source_path(include: IncludeLaunchDescription) -> str:
     return ''.join(getattr(part, 'text', str(part)) for part in substitutions)
 
 
-def test_mapping_launch_composes_mapping_mode_without_duplicate_description(monkeypatch):
-    """Catch missing child launches or duplicate/prohibited mode composition."""
+def test_mapping_launch_delegates_to_canonical_mobile_base_launch(monkeypatch):
+    """Verify mapping.launch.py acts as a thin wrapper forwarding to canonical launch."""
     pkg_dir = Path(__file__).resolve().parent.parent
     module = _load_launch_module(pkg_dir / 'launch' / 'mapping.launch.py')
     monkeypatch.setattr(
@@ -70,27 +69,21 @@ def test_mapping_launch_composes_mapping_mode_without_duplicate_description(monk
         entity for entity in launch_description.entities
         if isinstance(entity, IncludeLaunchDescription)
     ]
-    paths = [_source_path(include) for include in includes]
-    expected_suffixes = {
-        'mobile_base_control/launch/base_control.launch.py',
-        'mobile_base_perception/launch/tdk_imu.launch.py',
-        'mobile_base_perception/launch/sick_dual_lidar.launch.py',
-        'kinematic_icp/launch/kinematic_icp.launch.py',
-        'mobile_base_state_estimation/launch/ekf.launch.py',
-        'mobile_base_mapping/launch/mapping.launch.py',
-        'foxglove_bridge/launch/foxglove_bridge_launch.xml',
-    }
-    assert len(includes) == len(expected_suffixes)
-    assert all(any(path.endswith(suffix) for path in paths) for suffix in expected_suffixes)
+    assert len(includes) == 1
+    canonical_include = includes[0]
+    path = _source_path(canonical_include)
+    assert path.endswith('mobile_base_bringup/launch/mobile_base.launch.py')
 
-    assert not any('mobile_base_description' in path for path in paths)
-    assert not any('mobile_base_localization' in path for path in paths)
-    assert not any('nav2_bringup' in path for path in paths)
-    assert not any('rf2o' in path.lower() for path in paths)
-
-    foxglove = next(include for include, path in zip(includes, paths) if 'foxglove' in path)
-    assert isinstance(foxglove.condition, IfCondition)
-    assert all(include.condition is None for include in includes if include is not foxglove)
+    forwarded_args = dict(canonical_include.launch_arguments)
+    assert forwarded_args['mode'] == 'mapping'
+    assert forwarded_args['platform'] == 'real'
+    assert forwarded_args['variant'] == 'default'
+    assert 'use_foxglove' in forwarded_args
+    assert 'lidar_odom_frame' in forwarded_args
+    assert 'publish_odom_tf' in forwarded_args
+    assert 'invert_odom_tf' in forwarded_args
+    assert 'lidar_topic' in forwarded_args
+    assert 'wheel_odom_topic' in forwarded_args
 
 
 def test_package_declares_direct_launch_import_dependencies():
