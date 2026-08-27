@@ -900,7 +900,62 @@ navigate_to_station CLI
 | **S6** | **Navigation** | SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033 | GAP-01, GAP-02, GAP-03, GAP-04 |
 | **S7** | **Base Control** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 | GAP-05, GAP-06 |
 
-### 12.2 權威追溯與驗證文件參照
-- **系統需求定義**：參閱 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
-- **需求追溯矩陣 (RTM)**：全系統 32 項已核准需求與 2 項未分配編號（SYS-012, SYS-031）之實作檔案與驗證證據完整對映，參閱 [`docs/verification/traceability_matrix.md`](./verification/traceability_matrix.md)。
-- **驗證證據索引 (Evidence Index)**：所有實機量測數據、測試報告與日誌索引，參閱 [`docs/verification/evidence_index.md`](./verification/evidence_index.md)。
+### 12.2 權威需求規範參照
+- **系統需求規範**：系統 32 項已核准規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
+- **系統驗證狀態**：目前 AMR 實機已驗證功能、驗證結論與已知限制彙整於本文件「[13. 系統驗證狀態與已知限制](#13-系統驗證狀態與已知限制-system-verification-status--known-limitations)」。
+
+---
+
+## 13. 系統驗證狀態與已知限制 (System Verification Status & Known Limitations)
+
+### 13.1 已實機驗證之系統功能與結論 (Demonstrated Runtime Capabilities)
+
+`mobile_base` v0.1.0 AMR 已經由實機運行與自動化整合測試驗證下列核心功能與行為結論（細部架構請參閱各對應章節）：
+
+1. **底盤控制與硬體生命週期 (S7 Base Control)**：
+   - 經由 RS-485 Modbus RTU 與實體 M1 雙驅動器通訊，驗證 30 Hz 同步控制迴圈（A2 模型）與生命週期啟動／停機序列（[§4.7](#47-s7-base-control)、[§8.2](#82-底盤生命週期與安全停機序列-base-control-lifecycle-and-safe-stop-sequencing)）。
+   - 實機驗證差速輪連續編碼器位置追蹤、溢位解算與零速使能原點標定（[§4.7.5](#475-連續位置追蹤與溢位解算-position-tracking--rollover-unwrapping)）。
+   - 實機驗證平地受控前進、後退、原地旋轉與主動煞停運動。
+   - 實機驗證速度命令逾時安全煞停（Command Timeout Stop, SYS-027）：當速度命令中斷超過 $0.5\,\text{s}$ 時，底盤自主強制歸零煞停（[§8.1](#81-多層停止安全架構-multi-tier-stop-architecture)）。
+
+2. **感測感知與獨立雙光達架構 (S2 Perception)**：
+   - 實機驗證前左與後右雙 SICK picoScan150 光達以獨立 2D LaserScan 串流運作，無需亦不使用虛擬融合節點（[§4.2](#42-s2-perception)）。
+   - 實機驗證 TDK IIM-42652 6 軸 IMU 串列資料擷取與動態角速度響應（[§4.2](#42-s2-perception)）。
+
+3. **狀態估測與 TF 擁有權 (S3 State Estimation & TF Tree)**：
+   - 實機驗證 Kinematic-ICP 以前光達結合輪速里程先驗輸出平面雷達里程（`/lidar_odometry`）（[§4.3](#43-s3-state-estimation)）。
+   - 實機驗證 EKF 融合雷達里程與 IMU 角速度，作為唯一權威發布動態 `odom -> base_footprint` TF（[§4.3](#43-s3-state-estimation)、[§7](#7-tf-ownership)）。
+   - 驗證全系統座標框架拓撲與 TF 唯一發布權限契約完全分離，無重複廣播或跳動競爭。
+
+4. **二維建圖與 MapIO 讀回驗證 (S4 Mapping)**：
+   - 實機驗證 Mapping Mode 下 SLAM Toolbox 即時佔據網格建圖與動態 `map -> odom` TF 發布（[§4.4](#44-s4-mapping)、[§6.1](#61-建圖資料流-mapping-flow---uc-001)）。
+   - 驗證 Map Package 地圖儲存腳本（`save_map.sh`）與儲存後自動 MapIO 反序列化讀回檢驗（`validate_map_readback`）。
+
+5. **全域地圖定位 (S5 Localization)**：
+   - 實機驗證 Navigation Mode 下 `map_server` 載入 Map Package 與 AMCL 粒子濾波定位，並由 AMCL 唯一發布動態 `map -> odom` TF（[§4.5](#45-s5-localization)、[§7](#7-tf-ownership)）。
+
+6. **目標解析、路線編排與自主導航 (S6 Navigation)**：
+   - 驗證客戶端 Target Admission 模組：正確解析 `stations.yaml` 站點 ID 或正規化 Goal Pose 為標準 `PoseStamped`，並由原生 `NavigateToPose` 調度（[§4.6](#46-s6-navigation)、[§6.2](#62-導航目標接收與驗證流程-target-admission-flow)、[§10](#10-station-navigation)）。
+   - 驗證未知或無效 Station ID 目標之阻斷拒絕，且不發送任何底盤運動命令。
+   - 驗證三階段路網導航編排（First Mile $\rightarrow$ On Route $\rightarrow$ Last Mile）與 MPPI 控制器路徑追蹤（[§6.3](#63-路網導航執行流程-route-assisted-navigation-flow---uc-002)、[§9](#9-route-assisted-navigation)）。
+   - 實機驗證 Station A $\rightarrow$ Station B 自主路網導航成功抵達並通過 StoppedGoalChecker 到站停妥判定。
+
+7. **安全攔截與碰撞監控 (S6 Collision Monitor & S7 Base Gate)**：
+   - 實機驗證 `collision_monitor` 多邊形安全攔截機制與靜態防護閘門，且無誤觸發（[§4.6](#46-s6-navigation)、[§8.1](#81-多層停止安全架構-multi-tier-stop-architecture)）。
+
+---
+
+### 13.2 已知限制邊界 (Known Operational Limitations)
+
+1. **Known Limitation B — 回程導航進度逾時 (Station B $\rightarrow$ Station A)**：
+   - **觀察現象**：在 `test_site` 場域實機驗證中，Station A 前往 Station B 導航已通過驗收；反向由 Station B 前往 Station A 於接近目標時，因 Nav2 控制器進度檢查器判定進度逾時（`error_code=105`）而終止任務。
+   - **安全處置**：任務終止後，系統依多層停止架構安全煞停底盤，未發生失控或碰撞。
+   - **目前狀態**：根本原因尚未確定（root cause undetermined）。此現象為 v0.1.0 基線之已知受限運作邊界，不影響單向自主導航能力、目標解析與安全攔截機制之確立。
+
+---
+
+### 13.3 需求驗證現況摘要 (Requirement Verification Accounting)
+
+- **規範性需求總數**：`03_REQUIREMENTS.md` 共定義 32 項規範性系統需求（SYS-001 ~ SYS-011, SYS-013 ~ SYS-030, SYS-032 ~ SYS-034）。
+- **編號保留缺口**：SYS-012 與 SYS-031 為需求編號分配缺口（未定義於基準中，非系統功能或實作缺口）。
+- **驗證狀態統計**：31 項需求已完成實機或自動化整合驗證；1 項需求（SYS-015 路徑追蹤）因 Known Limitation B 被評定為部分驗證（Partial）。
