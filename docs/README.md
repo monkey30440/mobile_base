@@ -70,7 +70,7 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
   [General / PM]              [Software Engineer]           [Verification Engineer]
   - 01_USE_CASES.md           - 04_SYSTEMS.md               - traceability_matrix.md
   - 02_CAPABILITIES.md        - MAPPING.md / NAVIGATION.md  - evidence_index.md
-  - 03_REQUIREMENTS.md        - design_baseline/m1_*.md     - tests & raw evidence
+  - 03_REQUIREMENTS.md        │                             - tests & raw evidence
   - XX_backlog.md             │                             │
         │                      └──────────────┬──────────────┘
         └─────────────────────────────────────┼──────────────────────────────┐
@@ -88,8 +88,6 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 
 ### 4.2 Software Engineer / 軟體工程師
 - [`04_SYSTEMS.md`](./04_SYSTEMS.md)：**系統架構單一權威來源**（子系統責任、資料流、TF 契約、安全攔截鏈）。
-- [`design_baseline/m1_driver.md`](./design_baseline/m1_driver.md)：M1 馬達驅動器 Modbus RTU 通訊協定詳細設計基準。
-- [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md)：`ros2_control` `SystemInterface` 與 M1Driver 整合設計基準。
 - [`src/mobile_base_bringup/MAPPING.md`](../src/mobile_base_bringup/MAPPING.md)：建圖模式啟動、鍵盤遙控操作、地圖儲存與回讀驗證流程。
 - [`src/mobile_base_bringup/NAVIGATION.md`](../src/mobile_base_bringup/NAVIGATION.md)：導航模式啟動、初始定位、站點導航 CLI 與安全操作流程。
 - [`release_guide.md`](./release_guide.md)：客戶端二進位發布包多階段 Docker 打包、一鍵匯出腳本與部署流程。
@@ -111,8 +109,6 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 | [`02_CAPABILITIES.md`](./02_CAPABILITIES.md) | 需求層 | **ACTIVE / CANONICAL** | 系統能力規範 |
 | [`03_REQUIREMENTS.md`](./03_REQUIREMENTS.md) | 需求層 | **ACTIVE / CANONICAL** | 規範性系統需求 (SYS-001~034) |
 | [`04_SYSTEMS.md`](./04_SYSTEMS.md) | 架構層 | **ACTIVE / CANONICAL** | 全系統與子系統架構單一權威 |
-| [`design_baseline/m1_driver.md`](./design_baseline/m1_driver.md) | 設計層 | **ACTIVE / CANONICAL** | M1 通訊協定設計基準 |
-| [`design_baseline/m1_hardware.md`](./design_baseline/m1_hardware.md) | 設計層 | **ACTIVE / CANONICAL** | M1 ros2_control 整合設計基準 |
 | [`src/mobile_base_bringup/MAPPING.md`](../src/mobile_base_bringup/MAPPING.md) | 操作層 | **ACTIVE / CANONICAL** | 建圖操作指南 |
 | [`src/mobile_base_bringup/NAVIGATION.md`](../src/mobile_base_bringup/NAVIGATION.md) | 操作層 | **ACTIVE / CANONICAL** | 導航操作指南 |
 | [`release_guide.md`](./release_guide.md) | 操作層 | **ACTIVE / CANONICAL** | 客戶端發布打包與部署指南 |
@@ -145,7 +141,6 @@ mobile_base/
     ├── 04_SYSTEMS.md                  # 系統架構單一權威
     ├── XX_backlog.md                  # 後續 Backlog 追蹤
     ├── release_guide.md               # 客戶端發布打包與部署指南
-    ├── design_baseline/               # M1 通訊與硬體介面詳細設計基準
     ├── verification/                  # 需求追溯矩陣與驗證證據索引目錄
     ├── evidence/                      # 結構化驗證階段報告
     └── m1_bringup_validation/         # 馬達 Bringup 記錄與硬體診斷工具

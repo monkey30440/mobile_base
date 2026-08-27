@@ -5,9 +5,7 @@ This directory provides standalone diagnostic and maintenance utilities for the 
 > [!IMPORTANT]
 > **Authority & Canonical Baselines:**
 > * These scripts are diagnostic and maintenance utilities. They are **not** the normative system requirement or formal verification authority.
-> * For canonical architecture, protocol details, and motor parameters, refer to:
->   - [`docs/design_baseline/m1_driver.md`](file:///home/jim/mobile_base/docs/design_baseline/m1_driver.md)
->   - [`docs/design_baseline/m1_hardware.md`](file:///home/jim/mobile_base/docs/design_baseline/m1_hardware.md)
+> * For canonical architecture, protocol details, and motor parameters, refer to [`docs/04_SYSTEMS.md`](file:///home/jim/mobile_base/docs/04_SYSTEMS.md).
 > * Active runtime configuration is maintained in [`src/mobile_base_control/config/base_control_params.yaml`](file:///home/jim/mobile_base/src/mobile_base_control/config/base_control_params.yaml).
 
 ---
