@@ -118,9 +118,6 @@ v0.1.0 目標完成下列兩項核心系統能力（Capability）：
 | [`verification/traceability_matrix.md`](./verification/traceability_matrix.md) | 驗證層 | **ACTIVE / CANONICAL** | 需求追溯矩陣 |
 | [`verification/evidence_index.md`](./verification/evidence_index.md) | 驗證層 | **ACTIVE / CANONICAL** | 驗證證據索引目錄 |
 | [`XX_backlog.md`](./XX_backlog.md) | 規劃層 | **ACTIVE / CANONICAL** | 後續 Backlog 追蹤 |
-| [`verification/README.md`](./verification/README.md) | 驗證層 | **SUPERSEDED** | 舊版驗證說明（由 `evidence_index.md` 取代） |
-| [`04_reuse_assessment.md`](./04_reuse_assessment.md) | 評估層 | **HISTORICAL** | 成熟方案評估記錄（非現行規格） |
-| [`07_implementation.md`](./07_implementation.md) | 過程層 | **HISTORICAL** | 歷史實作過程記錄（非現行規格） |
 | `docs/research/*.md` (32 files) | 調研層 | **HISTORICAL** | 早期技術可行性調研筆記 |
 | `docs/handoff/*.md` (5 files) | 過程層 | **HISTORICAL** | 開發交接記錄 |
 | `docs/*checklist.md` (4 files) | 過程層 | **HISTORICAL** | 歷史階段查核表 |

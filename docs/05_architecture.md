@@ -12,7 +12,7 @@
 - [`docs/02_capabilities.md`](./02_capabilities.md)
 - [`docs/03_requirements.md`](./03_requirements.md)
 
-本架構以 [`docs/04_reuse_assessment.md`](./04_reuse_assessment.md) 為 **Feasibility Evidence Base**。04 記錄了 exact-version 成熟套件對需求的覆蓋能力與 6 個 minimum custom gaps。
+本架構以成熟方案可行性評估（歷史 `04_reuse_assessment.md`）為 **Feasibility Evidence Base**。該評估記錄了 exact-version 成熟套件對需求的覆蓋能力與 6 個 minimum custom gaps。
 
 本架構為 `mobile_base` 目前 as-built 系統架構的**單一權威來源 (Single Canonical Authority)**。
 
