@@ -1,7 +1,9 @@
 # Project-private design and vendor reference material
 /src/mobile_base_description/ref/
-/src/mobile_base_description/meshes/
-/src/mobile_base_description/urdf/
+/src/mobile_base_description/meshes/*
+!/src/mobile_base_description/meshes/README.md
+/src/mobile_base_description/urdf/*
+!/src/mobile_base_description/urdf/README.md
 /src/mobile_base_control/docs/
 
 # Local environment and secrets
