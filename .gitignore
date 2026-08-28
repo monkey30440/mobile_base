@@ -18,7 +18,8 @@
 *.log
 
 # Release bundles and container image exports
-/release/
+release/*
+!release/release_guide.md
 
 # Runtime recordings and timestamped site maps
 *.bag
