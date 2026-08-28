@@ -26,7 +26,8 @@ release/*
 *.db3
 *.mcap
 rosbag2_*/
-/maps/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]/
+maps/
+!maps/test_site
 
 # Local code-analysis state
 /.gitnexus/
