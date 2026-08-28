@@ -27,7 +27,7 @@ release/*
 *.mcap
 rosbag2_*/
 maps/
-!maps/test_site
+!maps/template
 
 # Local code-analysis state
 /.gitnexus/
