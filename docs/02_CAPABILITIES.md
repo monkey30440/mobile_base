@@ -193,3 +193,82 @@ Navigation Result：
 | Use Case |
 |---|
 | UC-002 |
+
+---
+
+# CAP-003 觀察與診斷 AMR 運行
+
+## 目的
+
+提供 AMR 當前與歷史運行資訊，使操作員或維護／開發人員能依共同時間軸查看與關聯主要子系統狀態、Logs、Events 與 Telemetry，縮小異常可能涉及的子系統範圍，並了解資料完整性與診斷限制。
+
+---
+
+## 系統能力
+
+系統應提供下列能力：
+
+- 提供 AMR 與主要 ROS Subsystem 的當前及歷史運行狀態。
+- 提供 ROS Logs 與 Events 的歷史查詢。
+- 提供關鍵 Telemetry 的時間序列觀察。
+- 依共同時間軸關聯 Navigation、Localization、Perception、Control、Hardware 與 Host 資訊。
+- 保存支援歷史診斷所需的運行資料。
+- 標示資料來源、可用時間範圍、完整性、資料缺口與時間對齊限制。
+- 實際 AMR 無法連接時，使用已保存的真實運行資料進行 best-effort 離線診斷。
+- 資料允許時，支援有限 Replay，並標示其與實機運行之差異及限制。
+
+---
+
+## 能力邊界
+
+- 不建立地圖；Map Creation 屬於 CAP-001。
+- 不接受或執行 Navigation Target；Navigation Execution 屬於 CAP-002。
+- 不控制 Navigation、Localization、Control 或 Safety 行為。
+- 不進行 Autonomous Recovery。
+- 不輸出自動 Root-cause Conclusion。
+- 不承諾 hardware-equivalent 或 real-time-equivalent Replay。
+- Replay 為離線診斷手段，不是獨立 Capability。
+- 共同時間軸 Correlation 與資料完整性為本 Capability 的必要性質，不構成其他獨立 Capability。
+
+---
+
+## 輸入
+
+- Actor 選定的目前運行期間或歷史時間範圍。
+- AMR 與主要 ROS Subsystem 運行狀態。
+- Logs 與 Events。
+- Telemetry。
+- Hardware 與 Host 運行狀態。
+- 已保存的真實運行資料。
+- 支援時間關聯與資料來源識別的必要資訊。
+
+---
+
+## 輸出
+
+- 指定時間範圍內的 AMR 與主要 ROS Subsystem 運行狀態。
+- 可查詢的 Logs 與 Events。
+- 關鍵 Telemetry 時間序列。
+- 跨來源共同時間軸資訊。
+- 協助 Actor 縮小問題可能所屬子系統範圍的診斷資訊。
+- 資料完整性、資料缺口、時間對齊限制及離線分析限制。
+- Best-effort Offline Diagnosis Result（具備可用的已保存真實運行資料時）。
+
+---
+
+## 使用情境
+
+適用於：
+
+- 確認 AMR 是否正常運行。
+- 調查 Mapping、Localization、Navigation、Control 或 Hardware Communication 異常。
+- 查詢與分析過去已發生的運行事件。
+- 實際 AMR 無法連接時，使用已保存的真實運行資料進行離線診斷。
+
+---
+
+## 對應 Use Case
+
+| Use Case |
+|---|
+| UC-003 |

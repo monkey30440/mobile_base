@@ -185,3 +185,93 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 | Capability |
 |---|
 | CAP-002 |
+
+---
+
+# UC-003 觀察與診斷 AMR 運行
+
+## 目的
+
+使 AMR 操作員或維護／開發人員能查看 AMR 當前或歷史運行資訊，將 Logs、系統狀態與 Telemetry 依共同時間軸關聯，以判斷異常發生時間、影響範圍及可能涉及的子系統。
+
+---
+
+## 參與者
+
+- 主要參與者：AMR 操作員
+- 次要參與者：維護／開發人員
+
+---
+
+## 前置條件
+
+- Actor 已選定目前運行期間或欲調查之歷史時間範圍。
+- 系統具有該時間範圍內可供觀察或查詢之運行資料。
+
+---
+
+## 觸發條件
+
+- Actor 需要確認 AMR 是否正常運行。
+- Mapping、Localization、Navigation、Control 或 Hardware Communication 發生異常。
+- Actor 需要調查過去已發生之事件。
+
+---
+
+## 基本流程
+
+1. Actor 選擇目前運行期間或歷史時間範圍。
+2. 系統提供該時間範圍內 AMR 與主要 ROS Subsystem 之運行狀態。
+3. Actor 查看相關 Logs、Events 與 Telemetry。
+4. Actor 依共同時間軸關聯 Navigation、Localization、Perception、Control、Hardware 與 Host 狀態。
+5. Actor 根據關聯資訊縮小問題可能所屬之子系統範圍。
+6. 系統清楚標示所提供資料之完整性與資料缺口。
+
+---
+
+## Alternative Flow
+
+### Offline Diagnosis Using Preserved Real-world Data
+
+實際 AMR 無法連接時，若已有保存之真實運行資料，維護／開發人員可利用該資料進行 best-effort 離線分析或 Replay。
+
+離線 Replay 不等同實機重現，且不承諾 hardware-equivalent 或 real-time-equivalent Replay。資料或 Replay 不完整時，系統應清楚標示其限制；Actor 不得據此形成無依據之診斷結論。
+
+---
+
+## Failure Flow
+
+- 指定時間範圍沒有可用資料時，系統回報該時間範圍無資料可供觀察或查詢。
+- 部分資料缺失、損毀或無法依共同時間軸可靠關聯時，系統標示受影響之資料與診斷範圍。
+- 系統無法取得部分子系統狀態時，應將該狀態標示為不可用，不得將缺少資料視為該子系統正常。
+- 離線資料不足以支持分析或 Replay 時，系統回報其限制，不得回報已完成等同實機之重現。
+
+---
+
+## MVP Scope
+
+- 觀察 AMR 與主要 ROS Subsystem 之運行狀態。
+- 查詢 ROS Logs 與 Events 之歷史資訊。
+- 觀察關鍵 Telemetry 之時間序列。
+- 依共同時間軸關聯 Navigation、Localization、Perception、Control、Hardware 與 Host 狀態。
+- 標示資料完整性與資料缺口。
+- 必要時使用已保存之真實運行資料進行 best-effort 離線診斷。
+
+---
+
+## Non-goals
+
+- 不在本 Use Case 指定 Fluent Bit、OpenSearch、InfluxDB 或其他特定技術方案。
+- 不定義 Storage Schema、Retention Policy 或 Deployment Topology。
+- 不建立自動 Root-cause Analysis、Predictive Maintenance 或 Autonomous Recovery。
+- 不改變 Navigation、Localization、Control 或 Safety 行為。
+- Observability 資訊不作為 Safety Control Loop 之唯一輸入。
+- 不承諾 hardware-equivalent 或 real-time-equivalent 離線 Replay。
+
+---
+
+## 完成條件
+
+- Actor 已取得所選時間範圍內可用之 AMR 運行資訊，並能依共同時間軸進行關聯。
+- Actor 能縮小異常可能所屬之子系統範圍。
+- 系統已清楚標示資料完整性、資料缺口及其對診斷結論之限制。
