@@ -154,57 +154,33 @@ v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無
 
 # UC-003 觀察與診斷 AMR 運行
 
-## SYS-035 AMR 運行狀態觀察
+## SYS-035 AMR 運行資訊觀察
 
-系統應提供 AMR 及主要 logical subsystem 的當前與可用歷史運行狀態；主要 logical subsystem 至少應涵蓋 Perception、State Estimation / Localization、Mapping / Navigation、Control、Hardware Communication 與 Host / Runtime。無法取得任一狀態時，系統應將該狀態標示為 Unknown 或 Unavailable，不得將資料缺失解讀為 Healthy。
+系統應提供主要 AMR 與 ROS Runtime Information，供 Actor 查看及人工診斷；可提供的資訊應涵蓋與 Perception、State Estimation / Localization、Mapping / Navigation、Control、Hardware Communication 及 Host / Runtime 相關的選定運行資訊。缺少任一資訊時，系統不得據此推論相關 subsystem 正常。
 
 ---
 
 ## SYS-036 Logs 與運行事件歷史
 
-系統應保存並支援依歷史時間範圍查詢診斷所需的 Logs 與運行 Events，並保留其資料來源與時間資訊。運行 Events 至少應涵蓋適用元件的 Start、Stop、Unexpected Termination、Restart 與 Lifecycle Transition Failure；資料保存失敗時，系統應揭露受影響的資料來源與時間範圍。
+系統應將 AMR 產生之選定診斷 Logs 與運行 Events 傳送至 Server；Server 應保存所收到的 Logs 與 Events，並支援依基本時間範圍及來源查詢。
 
 ---
 
 ## SYS-037 關鍵時間序列 Telemetry
 
-系統應保存並支援依歷史時間範圍查詢診斷所需的關鍵時間序列 Telemetry。Telemetry categories 至少應涵蓋 Perception Availability、Localization / Odometry State、Navigation Execution State、Motion Command / Measured Feedback、Hardware Communication Health、Host CPU / Memory / Disk / Network，以及 Process / Container State，並應保留其資料來源與時間資訊。各 category 的採樣頻率與接受條件應經後續量測、整合及實機驗證後選定。
+系統應將選定的關鍵時間序列 Telemetry 由 AMR 傳送至 Server；Server 應保存所收到的關鍵 Telemetry，並支援依時間範圍查詢。Telemetry profile 由後續設計與實作配置決定，本需求不要求保存所有 ROS Topics 或完整高頻 Raw Payload。
 
 ---
 
-## SYS-038 跨來源時間關聯
+## SYS-038 基本時間關聯
 
-系統應為 Logs、Events、Telemetry、ROS State、Hardware State 與 Host State 保留足以建立共同時間脈絡的時間資訊，使不同來源能在核准的時間對齊接受條件內進行關聯。資料無法可靠對齊、發生 Clock Discontinuity、Timestamp 不明或不符合接受條件時，系統應揭露受影響資料及限制。時間對齊接受條件應依代表性實機 baseline 與 integration evidence 建立，不得在無實機證據下任意指定。
-
----
-
-## SYS-039 診斷資料完整性與歷史可用性
-
-系統應對可查詢的診斷資料揭露資料來源、實際可用起訖時間、資料完整性及已辨識的資料缺口，並區分 No Data、Partial Data、Unavailable 與 Known State。依核准的 Preservation / Retention Policy 無法提供全部指定歷史時間範圍時，系統應回報實際可用範圍與受影響來源；缺少資料不得被解讀為 subsystem 正常。Preservation / Retention Policy 的具體期間應由後續產品決策確立，不得在無產品依據下任意指定。
-
----
-
-## SYS-040 原始診斷資料保存
-
-除可直接查詢的 Structured Observability Data 外，系統應能依核准的診斷情境保存後續分析所需的真實 Raw / Replay-capable Diagnostic Data 及必要脈絡。保存結果應包含足以識別 Source、Operation Mode、Collection Time Range、Completeness 與 Software / Configuration Identity 的資訊，並應能辨識未保存或保存失敗的資料範圍。
-
----
-
-## SYS-041 Best-effort 離線診斷
-
-實際 AMR 無法連接時，系統應能使用已保存且可用的真實運行資料進行 Best-effort Offline Diagnosis；資料允許時得支援有限 Replay。系統應揭露可使用資料、資料缺口、未重現行為及分析限制，不得將 Offline Diagnosis 或 Replay 表示為 Hardware-equivalent 或 Real-time-equivalent，且資料不足時不得形成無依據的診斷結論。
+系統應為傳送至 Server 的 Logs、Events 與關鍵 Telemetry 保留可用 timestamp 及 source identity；Server 應支援 Actor 依共同時間範圍進行基本關聯。
 
 ---
 
 ## SYS-042 Observability Failure Isolation
 
-Observability / Diagnostic Components 不得成為 Navigation、Localization、Control 或 Safety 運行的必要依賴。Collector Crash、Backend Unavailable、Storage Failure、Disk-full 或其他資料收集、保存及查詢失效不得阻塞既有 Control / Safety Chain；系統應限制故障擴散，維持既有安全控制行為，並在可行範圍內揭露 Observability Degraded 或 Unavailable 狀態。
-
----
-
-## SYS-043 Observability Resource Impact
-
-系統應於代表性 AMR 運行情境下量測 Observability / Diagnostic 功能的 CPU、Memory、Disk I/O、Storage Growth、Network 與 Process / Container Resource Usage，以及其對 Perception、Localization、Navigation 與 Control Timing 的影響。相關資源使用與 Timing 影響應於部署前符合核准的 Acceptance Thresholds；Thresholds 應依代表性實機 baseline 與 integration evidence 建立，在 Thresholds 尚未建立或未符合時，不得宣稱該 Observability 配置適用於 Production 運行。
+Observability Component Failure、Network Unavailable 或 Server Unavailable 不得成為 Navigation、Localization、Control 或 Safety 運行的必要依賴。AMR 端 Observability Buffer 應為 bounded；Buffer 容量耗盡時，系統應丟棄最舊的 Observability Data、保留較新的 Observability Data，並維持既有 AMR 核心功能運行。
 
 ---
 
@@ -320,15 +296,4 @@ Observability / Diagnostic Components 不得成為 Navigation、Localization、C
 | SYS-036 | UC-003 | CAP-003 |
 | SYS-037 | UC-003 | CAP-003 |
 | SYS-038 | UC-003 | CAP-003 |
-| SYS-039 | UC-003 | CAP-003 |
-| SYS-040 | UC-003 | CAP-003 |
-| SYS-041 | UC-003 | CAP-003 |
 | SYS-042 | UC-003 | CAP-003 |
-| SYS-043 | UC-003 | CAP-003 |
-| SYS-003 | UC-003 | CAP-003 |
-| SYS-004 | UC-003 | CAP-003 |
-| SYS-005 | UC-003 | CAP-003 |
-| SYS-017 | UC-003 | CAP-003 |
-| SYS-026 | UC-003 | CAP-003 |
-| SYS-029 | UC-003 | CAP-003 |
-| SYS-030 | UC-003 | CAP-003 |

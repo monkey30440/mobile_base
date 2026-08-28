@@ -33,7 +33,7 @@
 
 ## 2. System Context
 
-`mobile_base` 為基於 ROS 2 Jazzy 開發的自主移動機器人（AMR）底盤系統。系統邊界涵蓋 7 大核心子系統及其運行的軟體責任。
+`mobile_base` 為基於 ROS 2 Jazzy 開發的自主移動機器人（AMR）底盤系統。系統邊界涵蓋 8 大核心子系統及其運行的軟體責任。
 
 ### 2.1 外部實體 (External Entities)
 - **使用者 / 操作員 (Operator / User)**：提交建圖與儲存命令、操作鍵盤手動移動巡覽（透過外部 `teleop_twist_keyboard`）、提交導航目標（Station ID 或 Goal Pose）或發出取消請求。
@@ -44,6 +44,7 @@
   - M1 雙驅動器差速動力總成，透過 RS-485 Modbus RTU 接收輪速控制命令並回傳實體編碼器量測狀態。
 - **場域資源資料夾 (Site Artifacts)**：
   - 存放於 `maps/<site_name>/` 之二維佔據網格地圖（`map.pgm`, `map.yaml`）、路網圖（`route_graph.geojson`）與站點目錄（`stations.yaml`）。
+- **Observability Server**：位於 AMR 外部，接收並保存 Logs / Events 與 Key Telemetry，提供歷史時間範圍與來源查詢；不參與 Navigation、Localization、Control 或 Safety 執行路徑。
 
 ### 2.2 系統脈絡圖 (System Context Diagram)
 
@@ -76,12 +77,16 @@
     │                                  │
     │                                  ▼
     │                                  底盤動力硬體 (M1 Motors)
+    │                                                             │
+    │  S1–S7 Runtime Information / Logs / Events ──► S8 Observability
     └─────────────────────────────────────────────────────────────┘
                         ▲
                         │ 載入 Map Package / Route Graph / Station Catalog
            ┌────────────┴───────────┐
            │ 場域資源 (Site Artifacts)│
            └────────────────────────┘
+
+    S8 Observability ── Logs / Events / Key Telemetry ──► Observability Server
 ```
 
 ---
@@ -111,6 +116,8 @@
       └─────────────────────┘           └─────────────────────┘
 ```
 
+S8 為兩種模式共用、與核心功能隔離的觀察旁路；其啟動、停止或故障不改變 Mapping Mode 或 Navigation Mode 的成立條件。
+
 ### 3.1 Mapping Mode (UC-001)
 - **目的**：巡覽未知環境，即時建立二維佔據網格地圖，並持久化儲存為 Map Package。
 - **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S4 Mapping`, `S7 Base Control`。
@@ -129,7 +136,7 @@
 
 ## 4. Subsystem Architecture
 
-系統劃分為 7 個高內聚、低耦合的子系統（S1–S7）：
+系統劃分為 8 個高內聚、低耦合的子系統（S1–S8）：
 
 ```mermaid
 graph TD
@@ -140,6 +147,7 @@ graph TD
     S5["S5: Localization<br/>(地圖載入 / AMCL 定位 / map→odom TF)"]
     S6["S6: Navigation<br/>(目標接收 / 三階段導航 / 碰撞監控)"]
     S7["S7: Base Control<br/>(差速控制 / 命令安全閘 / 停用)"]
+    S8["S8: Observability and Diagnostics<br/>(Logs / Events / Key Telemetry)"]
 
     S1 --> S2
     S1 --> S3
@@ -163,6 +171,14 @@ graph TD
     S5 -->|Current Pose & TF| S6
     S6 -->|cmd_vel_nav → Interception| S7
     S7 -->|Encoder Odom Prior| S3
+
+    S1 -. Runtime Information .-> S8
+    S2 -. Runtime Information .-> S8
+    S3 -. Runtime Information .-> S8
+    S4 -. Runtime Information .-> S8
+    S5 -. Runtime Information .-> S8
+    S6 -. Runtime Information .-> S8
+    S7 -. Runtime Information .-> S8
 ```
 
 ---
@@ -487,6 +503,103 @@ M1Hardware::write()
 
 ---
 
+### 4.8 S8: Observability and Diagnostics
+
+- **主要職責**：提供 AMR runtime information 觀察，將選定的 Logs / Events 與少量 Key Telemetry 傳送至 Server 保存及歷史查詢，並以 timestamp、source identity 與共同時間範圍支援人工關聯與診斷。
+- **承接需求**：`SYS-035`, `SYS-036`, `SYS-037`, `SYS-038`, `SYS-042`。
+- **核心執行元件**：
+  - **AMR onboard**：ROS Observability Adapter、Fluent Bit、bounded volatile RAM buffering。
+  - **Server**：OpenSearch、InfluxDB。
+- **重要輸入**：選定的 ROS runtime information、AMR / ROS Logs 與 selected runtime Events。
+- **重要輸出**：可依時間與來源查詢的 Logs / Events，以及可依時間範圍查詢的 Key Telemetry。
+- **控制權限**：S8 不擁有亦不介入 Navigation、Localization、Control 或 Safety 的控制、參數、生命週期轉換或 recovery。
+
+#### 4.8.1 MVP 資料流與產品責任
+
+**Logs / Events path**：
+
+```text
+Selected AMR / ROS Logs and Runtime Events
+                    │
+                    ▼
+                Fluent Bit
+                    │
+                    ▼
+        Bounded Volatile RAM Buffer
+                    │
+                    ▼
+                  Network
+                    │
+                    ▼
+       OpenSearch on Observability Server
+```
+
+**Key Telemetry path**：
+
+```text
+Selected ROS Runtime Information
+                    │
+                    ▼
+        ROS Observability Adapter
+                    │
+                    ▼
+ Simple Structured Time-series Data
+                    │
+                    ▼
+        Bounded Volatile RAM Buffer
+                    │
+                    ▼
+                  Network
+                    │
+                    ▼
+         InfluxDB on Observability Server
+```
+
+#### 4.8.2 ROS Observability Adapter
+
+- 只讀取選定的 ROS runtime information，產生少量 Key Telemetry，並轉換為適合 Server time-series storage 的簡單結構化資料。
+- 每筆概念資料僅要求：`timestamp`、`robot/source identity`、`metric`、`value`。
+- exact topic profile、sampling frequency，以及 InfluxDB measurement、tags、fields schema 由 Implementation Design 決定，本層不固定。
+- Adapter 不得控制 Navigation、Localization、Control 或 Safety，不得修改 parameter、觸發 lifecycle transition、執行 recovery、推導 composite health，亦不得錄製 raw ROS data。
+
+#### 4.8.3 Fluent Bit
+
+- Fluent Bit 為 MVP Log / Event forwarder，負責收集 selected AMR / ROS Logs 與 selected runtime Events，並傳送至 Server OpenSearch。
+- Fluent Bit 不理解 ROS topic semantics，不解讀 Key Telemetry，不判定 subsystem health，亦不錄製 raw ROS data。
+
+#### 4.8.4 Server Storage and Query
+
+- **OpenSearch**：部署於 Server，只負責 Logs / Events persistence、historical query、basic time-range filtering 與 basic source filtering；不得用於保存完整高頻 ROS telemetry 或 raw payload。
+- **InfluxDB**：部署於 Server，只負責 Key Telemetry persistence 與 time-range query。
+- InfluxDB MVP 不包含 alerting、anomaly detection、dashboard、downsampling、advanced aggregation、fleet analytics、composite health 或 retention optimization。
+
+#### 4.8.5 Bounded RAM Buffer
+
+- AMR 不長期保存 Observability Data；Logs / Events 與 Key Telemetry 傳送路徑只使用 bounded volatile RAM buffering。
+- Network 或 Server unavailable 時，尚未送出的 Observability Data 可暫存於對應的 bounded RAM buffer。
+- Buffer capacity exhausted 時必須 drop oldest、保留較新的 Observability Data，且 AMR 核心功能持續運行。
+- 具體 buffer size 由 Implementation Design 決定。
+- Buffer 不提供 dropped count、gap accounting、priority queue、filesystem spool、persistent local storage、guaranteed resend 或 guaranteed backfill。
+
+#### 4.8.6 Basic Time Correlation
+
+- Logs / Events / Key Telemetry 至少保留可用的 `timestamp` 與 `source identity`。
+- OpenSearch 與 InfluxDB 各自支援依共同 time range 查詢，使 Actor 可人工關聯兩條資料路徑。
+- S8 不建立 clock normalization subsystem、clock drift model、clock discontinuity model、alignment quality engine、precision alignment threshold 或 completeness inference。
+
+#### 4.8.7 Failure Isolation and Deployment Boundary
+
+- ROS Observability Adapter、Fluent Bit、Network、OpenSearch、InfluxDB 或 bounded RAM buffer 的故障或不可用，不得成為 Navigation、Localization、Control 或 Safety 的必要依賴。
+- Observability failure 可造成資料遺失，但不得對核心 ROS 執行路徑施加阻塞、無界重試或 backpressure。
+- AMR onboard 僅部署 ROS Observability Adapter、Fluent Bit 與 bounded RAM buffers。
+- Server 部署 OpenSearch 與 InfluxDB；AMR 不部署 OpenSearch、InfluxDB 或任何 long-term observability database。
+
+#### 4.8.8 Explicit Out of Scope
+
+S8 目前產品範圍明確不提供：`SYS-039`、`SYS-040`、`SYS-041`、`SYS-043`、Raw MCAP production integration、offline replay、Dataset Catalog、completeness / gap accounting、dropped count、priority queue、persistent local spool、guaranteed resend / backfill、composite subsystem health、automatic root cause、alerting、anomaly detection、dashboard requirement、continuous raw recording、rolling raw buffer，以及任何 Phase 2 範圍。
+
+---
+
 ## 5. Site Resources
 
 ### 5.1 場域資源模型 (Site Resource Artifacts)
@@ -643,6 +756,23 @@ sequenceDiagram
     Ctrl-->>BT: 到站條件滿足
     BT-->>User: 回報 NavigateToPose 成功 (SUCCESS)
 ```
+
+### 6.4 觀察與診斷資料流 (Observability and Diagnostics Flow - UC-003)
+
+```mermaid
+flowchart LR
+    Runtime["S1–S7 Selected ROS Runtime Information"] --> Adapter["ROS Observability Adapter"]
+    Adapter --> TelemetryBuffer["Bounded Volatile RAM Buffer<br/>full: drop oldest"]
+    TelemetryBuffer --> NetworkA["Network"]
+    NetworkA --> InfluxDB["Server InfluxDB<br/>Key Telemetry Persistence / Time-range Query"]
+
+    Logs["Selected AMR / ROS Logs and Runtime Events"] --> FluentBit["Fluent Bit"]
+    FluentBit --> LogBuffer["Bounded Volatile RAM Buffer<br/>full: drop oldest"]
+    LogBuffer --> NetworkB["Network"]
+    NetworkB --> OpenSearch["Server OpenSearch<br/>Logs / Events Persistence / Historical Query"]
+```
+
+兩條路徑皆為 S1–S7 的單向觀察旁路。Server、Network 或 S8 onboard component 不可用時允許 Observability Data 遺失，但不得形成返回 Navigation、Localization、Control 或 Safety 的控制或阻塞依賴。
 
 ---
 
@@ -881,6 +1011,9 @@ navigate_to_station CLI
    - **避免過早抽象 (Avoid Premature Abstraction)**：MVP 階段僅使用單一 RS-485 串列總線，不額外設計抽象的 `SerialTransport` 介面層或複雜背景執行緒，大幅降低系統複雜度並提高單元測試穩定性（Avoid Premature Structure）。
    - **採用 Multi-drive 2.0 FC17 同步讀寫**：運行期控制透過單一 FC17 事務同時完成雙輪速度下發與狀態回授，消除先寫後讀的兩次總線往返，大幅降低總線延遲並避免競爭。
    - **控制頻率定為 30 Hz 之系統理由**：實機時序量測顯示，單次 FC17 來回通訊延遲約落於 $20\sim 25\,\text{ms}$ 區間。50 Hz 控制週期僅有 $20\,\text{ms}$，無法為現行同步通訊模型提供可靠的時序餘裕；因此現行基準採用 30 Hz（週期 $33.3\,\text{ms}$），為同步控制迴圈提供額外時序餘裕以確保穩定運作。
+6. **Observability Failure Isolation**：
+   - S8 僅能以單向、非必要依賴觀察 S1–S7。Adapter、forwarder、Network、Server stores 或 bounded buffers 的故障與壅塞均不得阻塞或改變 Navigation、Localization、Control 或 Safety。
+   - AMR 端 Observability buffering 必須為 volatile 且 bounded；容量耗盡時 drop oldest 並保留較新資料，核心功能持續運行。
 
 ---
 
@@ -897,9 +1030,10 @@ navigate_to_station CLI
 | **S5** | **Localization** | SYS-007, SYS-010 |
 | **S6** | **Navigation** | SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033 |
 | **S7** | **Base Control** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 |
+| **S8** | **Observability and Diagnostics** | SYS-035, SYS-036, SYS-037, SYS-038, SYS-042 |
 
 ### 12.2 權威需求規範參照
-- **系統需求規範**：系統 32 項規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
+- **系統需求規範**：系統 37 項規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
 - **系統驗證狀態**：目前 AMR 實機已驗證功能、驗證結論與已知限制彙整於本文件「[13. 系統驗證狀態與已知限制](#13-系統驗證狀態與已知限制-system-verification-status--known-limitations)」。
 
 ---
@@ -954,6 +1088,6 @@ navigate_to_station CLI
 
 ### 13.3 需求驗證現況摘要 (Requirement Verification Accounting)
 
-- **規範性需求總數**：`03_REQUIREMENTS.md` 共定義 32 項規範性系統需求（SYS-001 ~ SYS-011, SYS-013 ~ SYS-030, SYS-032 ~ SYS-034）。
+- **規範性需求總數**：`03_REQUIREMENTS.md` 共定義 37 項規範性系統需求（SYS-001 ~ SYS-011, SYS-013 ~ SYS-030, SYS-032 ~ SYS-038, SYS-042）。
 - **編號保留缺口**：SYS-012 與 SYS-031 為需求編號分配缺口（未定義於基準中，非系統功能或實作缺口）。
-- **驗證狀態統計**：31 項需求已完成實機或自動化整合驗證；1 項需求（SYS-015 路徑追蹤）因 Known Limitation B 被評定為部分驗證（Partial）。
+- **驗證狀態統計**：31 項需求已完成實機或自動化整合驗證；1 項需求（SYS-015 路徑追蹤）因 Known Limitation B 被評定為部分驗證（Partial）；S8 承接的 5 項需求目前僅完成 System Design，尚未實作或驗證。
