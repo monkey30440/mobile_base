@@ -79,7 +79,7 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 - 將 Navigation Target 解析為 Canonical Goal Pose。
 - 使用使用者從場域資料夾選定之 Map Package（建圖產物）與人工建立之 Route Graph。
 - 使用 Station Target 時，使用同一場域資料夾中人工建立之 Station Catalog。
-- 在開機位置無法可靠得知時，接受使用者提供的 approximate initial pose，供地圖定位初始化。
+- 使用 AMCL 部署設定的預設初始位姿（`x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）啟動地圖定位；當實際開機位置不符合該預設時，接受使用者提供的 approximate initial pose 覆寫初始化。
 - 透過標準定位 pose 與 `map → odom` transform 提供地圖定位結果。
 - 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
 - 執行 First Mile，將 AMR 由目前位姿銜接至適用的 route entry。
@@ -130,13 +130,19 @@ v0.1 由使用者選定場域資料夾，並確認其中的 Map Package（建圖
 Localization Initialization：
 
 ```text
-Approximate Initial Pose, when required
+Default AMCL Initial Pose
+├── x = 0.0
+├── y = 0.0
+├── z = 0.0
+└── yaw = 0.0
+
+Approximate Initial Pose Override, when required
 ├── x
 ├── y
 └── yaw
 ```
 
-Approximate Initial Pose 只用於啟動地圖定位，不是 Navigation Target；v0.1 透過 RViz `2D Pose Estimate` 提供，系統不另行定義 localization-valid 或收斂 gate。
+預設 AMCL Initial Pose 只用於啟動地圖定位，不是 Navigation Target。當此預設不適用時，v0.1 由使用者透過 RViz `2D Pose Estimate` 提供 Approximate Initial Pose Override；系統不另行定義 localization-valid 或收斂 gate。
 
 ---
 

@@ -79,7 +79,13 @@ def test_amcl_params_yaml_configuration():
     assert params['alpha4'] == 0.2
 
     # 5. Initial Pose Policy (SYS-010)
-    assert params['set_initial_pose'] is False, 'set_initial_pose must be false'
+    assert params['set_initial_pose'] is True, 'set_initial_pose must be true'
+    assert params['initial_pose'] == {
+        'x': 0.0,
+        'y': 0.0,
+        'z': 0.0,
+        'yaw': 0.0,
+    }, 'initial_pose must match the deployed default pose'
 
     # 6. Map Server configuration block
     assert 'map_server' in data, 'map_server block missing from configuration'

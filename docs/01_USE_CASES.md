@@ -96,7 +96,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 - AMR 已完成啟動。
 - 使用者已選定場域資料夾，並人工確認其中包含導航所需之 Map Package（`map.pgm` 與 `map.yaml`），以及人工建立之 Route Graph（`route_graph.geojson`）。
 - 使用 Station Target 時，使用者亦已人工確認同一資料夾中包含人工建立之 Station Catalog（`stations.yaml`）。
-- 若 AMR 開機位置無法由系統可靠得知，使用者已提供目前地圖中的 approximate initial pose。
+- AMCL 已採用部署設定的預設初始位姿 `x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0` 完成定位初始化；若 AMR 實際開機位置不符合此預設，使用者已提供目前地圖中的 approximate initial pose 以覆寫該預設。
 - 地圖定位功能已啟動，並依 AMCL 原生介面提供標準定位 pose 與 `map → odom` transform。
 
 ---
@@ -124,9 +124,9 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ### Initial Pose Provision
 
-若 AMR 每次開機位置不固定，且系統無法可靠取得其在目前地圖中的初始位置，使用者應先提供 approximate initial pose，包含 `x`、`y` 與 `yaw`。系統應將該資訊提供給 AMCL 作為定位初始化輸入。
+v0.1 的 AMCL 預設以部署設定中的 `initial_pose`（`x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）完成定位初始化。若 AMR 實際開機位置不符合此預設，使用者應提供 approximate initial pose，包含 `x`、`y` 與 `yaw`；系統應將該資訊透過 `/initialpose` 提供給 AMCL，覆寫預設初始化位姿。
 
-此操作在 v0.1 由使用者透過 RViz `2D Pose Estimate` 人工完成；系統不另行定義 localization-valid 或收斂 gate。
+覆寫操作在 v0.1 由使用者透過 RViz `2D Pose Estimate` 人工完成；系統不另行定義 localization-valid 或收斂 gate。
 
 ---
 
@@ -165,7 +165,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 - Station ID 不存在或 Goal Pose 無效時，系統拒絕導航任務並回報原因。
 - 使用者應在 Navigation 啟動前人工確認所選場域資料夾中的必要 Navigation Resources；任一成熟元件仍無法載入其資源時，系統沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback。
-- 需要 initial pose 時，使用者應透過 RViz `2D Pose Estimate` 提供；定位輸入或 TF 不可用時，系統沿用 AMCL／Nav2 原生行為。
+- 預設初始位姿不適用時，使用者應透過 RViz `2D Pose Estimate` 提供覆寫用的 initial pose；定位輸入或 TF 不可用時，系統沿用 AMCL／Nav2 原生行為。
 - First Mile、On Route 或 Last Mile 無法安全執行時，系統應先用盡可用的 route-assisted alternatives。
 - 符合保留的 Free-space Fallback eligibility 但已無可用 route-assisted solution 時，v0.1 應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
 - 系統無法繼續導航時，系統終止導航任務並回報失敗。

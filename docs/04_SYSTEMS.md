@@ -277,7 +277,7 @@ graph TD
 ---
 
 ### 4.5 S5: Localization
-- **主要職責**：在 Navigation Mode 下，透過 `map_server` 載入所選定之 Map Package 提供佔據網格，並利用 AMCL 粒子濾波結合前雷達掃描與系統里程資訊，估測 AMR 在地圖中的全局位姿，作為唯一權威發布 `map -> odom` 動態座標轉換與標準定位 Pose；接收使用者提供之 Approximate Initial Pose 完成定位初始化。
+- **主要職責**：在 Navigation Mode 下，透過 `map_server` 載入所選定之 Map Package 提供佔據網格，並利用 AMCL 粒子濾波結合前雷達掃描與系統里程資訊，估測 AMR 在地圖中的全局位姿，作為唯一權威發布 `map -> odom` 動態座標轉換與標準定位 Pose；以部署設定的預設 `initial_pose` 完成定位初始化，並在預設不適用時接收使用者提供的 Approximate Initial Pose 覆寫。
 - **承接需求**：`SYS-007`, `SYS-010`。
 - **核心執行元件**：
   - `map_server` (`nav2_map_server`, Lifecycle Node)。
@@ -287,7 +287,8 @@ graph TD
   - Map Package 檔案（經由 `site_resolution` 或 CLI 傳入 `map.yaml` 由 `map_server` 載入）。
   - `/scan_front` (`sensor_msgs/msg/LaserScan`, 來自 S2)。
   - 動態 TF `odom -> base_footprint` (來自 S3)。
-  - `/initialpose` (`geometry_msgs/msg/PoseWithCovarianceStamped`, 來自 RViz2 或上層客戶端)。
+  - AMCL 部署設定 `initial_pose`（`set_initial_pose: true`，預設為 `x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）。
+  - `/initialpose` (`geometry_msgs/msg/PoseWithCovarianceStamped`, 來自 RViz2 或上層客戶端；在預設不適用時覆寫）。
 - **重要輸出**：
   - `/map` (`nav_msgs/msg/OccupancyGrid`, 由 `map_server` 於導航期發布供定位與代價地圖使用)。
   - `/amcl_pose` (`geometry_msgs/msg/PoseWithCovarianceStamped`)。

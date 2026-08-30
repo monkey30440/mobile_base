@@ -73,13 +73,15 @@ ros2 launch mobile_base_bringup navigation.launch.py \
 - `/map`：由 `nav2_map_server` 發布的靜態地圖
 - `/amcl_pose`：AMCL 估測的全域位姿
 - TF `odom -> base_footprint`：僅由 EKF 負責發布
-- TF `map -> odom`：收到初始位姿後，僅由 `nav2_amcl` 負責發布
+- TF `map -> odom`：AMCL 以部署設定的預設初始位姿或 `/initialpose` 覆寫完成初始化後，僅由 `nav2_amcl` 負責發布
 - 速度命令鏈：`controller_server`（`/cmd_vel_nav`）→ `collision_monitor` → `/diff_drive_controller/cmd_vel`
 - S4 `slam_toolbox` 必須完全排除且不得執行
 
 ## 設定初始位姿
 
-啟動導航模式後，使用 RViz2 的 `2D Pose Estimate` 工具，或透過 `/initialpose` topic，提供 AMR 的概略初始位姿。AMCL 隨後會初始化粒子濾波器，並開始發布 `map -> odom` TF。
+導航模式啟動時，AMCL 會使用部署設定的預設初始位姿 `x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0` 初始化粒子濾波器，並開始發布 `map -> odom` TF。
+
+若 AMR 實際開機位置不符合此預設，請使用 RViz2 的 `2D Pose Estimate` 工具，或透過 `/initialpose` topic，提供概略初始位姿以覆寫預設值。
 
 ## 執行站點導航 (Station Navigation)
 
@@ -132,7 +134,7 @@ ros2 topic echo /amcl_pose --once
 ros2 run tf2_ros tf2_echo map odom
 ```
 
-確認已透過 RViz2 `2D Pose Estimate` 或 `/initialpose` 設定初始位姿，且 `/scan_front` 正常發布。
+確認 AMCL 已使用部署設定的預設初始位姿完成初始化，或已透過 RViz2 `2D Pose Estimate`／`/initialpose` 覆寫初始位姿，且 `/scan_front` 正常發布。
 
 ### `navigate_to_station` 回報 `NAV2_UNAVAILABLE`
 
