@@ -155,11 +155,11 @@ def test_navigation_mode_tf_authority_and_cmd_vel_chain():
     assert ekf_params['publish_tf'] is True
     assert ekf_params['world_frame'] == 'odom'
 
-    # 3. Navigation cmd_vel -> Collision Monitor -> diff_drive_controller chain
+    # 3. Navigation controller_server -> diff_drive_controller direct chain
     nav_launch = ws_root / 'src' / 'mobile_base_navigation' / 'launch' / 'navigation.launch.py'
     assert nav_launch.exists()
     with open(nav_launch, 'r', encoding='utf-8') as f:
         nav_launch_text = f.read()
 
-    assert "'/cmd_vel_nav'" in nav_launch_text
+    assert "'/cmd_vel_nav'" not in nav_launch_text
     assert "'/diff_drive_controller/cmd_vel'" in nav_launch_text

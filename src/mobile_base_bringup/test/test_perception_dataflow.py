@@ -61,8 +61,8 @@ def test_rear_lidar_data_contract():
     assert "default_value='base_lidar_link_BR'" in content
 
 
-def test_lidar_routing_contracts_a_through_e():
-    """Verify independent LiDAR routing contracts A through E."""
+def test_lidar_routing_contracts_a_through_d():
+    """Verify independent LiDAR routing contracts A through D."""
     ws_root = get_workspace_root()
 
     # Requirement A: slam_toolbox scan_topic == /scan_front
@@ -81,7 +81,7 @@ def test_lidar_routing_contracts_a_through_e():
         kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
     assert kicp_params['lidar_topic'] == '/scan_front'
 
-    # Requirements C, D, E: Nav2 local/global costmaps and collision_monitor
+    # Requirements C and D: Nav2 local/global costmaps
     nav2_config = ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml'
     assert nav2_config.exists()
     with open(nav2_config, 'r', encoding='utf-8') as f:
@@ -107,14 +107,7 @@ def test_lidar_routing_contracts_a_through_e():
     assert gc_obstacle['scan_front']['topic'] == '/scan_front'
     assert gc_obstacle['scan_rear']['topic'] == '/scan_rear'
 
-    # Requirement E: collision_monitor observation_sources contains scan_front and scan_rear
-    cm_params = nav2_params['collision_monitor']['ros__parameters']
-    assert 'scan_front' in cm_params['observation_sources']
-    assert 'scan_rear' in cm_params['observation_sources']
-    assert cm_params['scan_front']['topic'] == '/scan_front'
-    assert cm_params['scan_rear']['topic'] == '/scan_rear'
-    assert cm_params['scan_front']['type'] == 'scan'
-    assert cm_params['scan_rear']['type'] == 'scan'
+    assert 'collision_monitor' not in nav2_params
 
     # S5 AMCL scan_topic == /scan_front
     amcl_config = ws_root / 'src' / 'mobile_base_localization' / 'config' / 'amcl_params.yaml'
@@ -256,7 +249,7 @@ def test_kinematic_icp_odometry_contract_and_ekf_consumer():
 
 
 def test_freshness_and_timeout_configurations():
-    """Verify sensor freshness and timeout thresholds across S3, S6, and S7."""
+    """Verify sensor freshness and S7 command timeout thresholds."""
     ws_root = get_workspace_root()
 
     # 1. S3 EKF sensor timeout (100 ms)
@@ -266,15 +259,7 @@ def test_freshness_and_timeout_configurations():
         ekf_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
     assert ekf_params['sensor_timeout'] == 0.1
 
-    # 2. S6 Collision Monitor scan source timeout
-    nav2_yaml = ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml'
-    assert nav2_yaml.exists()
-    with open(nav2_yaml, 'r', encoding='utf-8') as f:
-        nav2_params = yaml.safe_load(f)
-    cm_timeout = nav2_params['collision_monitor']['ros__parameters']['source_timeout']
-    assert cm_timeout >= 0.5
-
-    # 3. S7 diff_drive_controller command timeout (500 ms)
+    # 2. S7 diff_drive_controller command timeout (500 ms)
     ctrl_yaml = ws_root / 'src' / 'mobile_base_control' / 'config' / 'base_control_params.yaml'
     assert ctrl_yaml.exists()
     with open(ctrl_yaml, 'r', encoding='utf-8') as f:

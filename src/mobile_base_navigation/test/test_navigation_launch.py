@@ -60,31 +60,18 @@ def test_nav2_params_contracts():
     assert pytest.approx(sgc['trans_stopped_velocity']) == 0.05
     assert pytest.approx(sgc['rot_stopped_velocity']) == 0.10
 
-    # 4. Route Server contract
+    # 4. Route Server contract: retain route obstruction/reroute operation.
     assert 'route_server' in params
     route_params = params['route_server']['ros__parameters']
     assert 'DistanceScorer' in route_params['edge_cost_functions']
+    assert 'CollisionMonitor' in route_params['operations']
+    assert (
+        route_params['CollisionMonitor']['plugin']
+        == 'nav2_route::CollisionMonitor'
+    )
+    assert 'collision_monitor' not in params
 
-    # 5. Collision Monitor contract
-    assert 'collision_monitor' in params
-    cm_params = params['collision_monitor']['ros__parameters']
-    assert cm_params['base_frame_id'] == 'base_footprint'
-    assert cm_params['odom_frame_id'] == 'odom'
-    assert cm_params['cmd_vel_in_topic'] == 'cmd_vel_nav'
-    assert cm_params['cmd_vel_out_topic'] == 'cmd_vel'
-    assert 'PolygonStop' in cm_params['polygons']
-    assert 'PolygonSlow' in cm_params['polygons']
-    assert cm_params['PolygonStop']['action_type'] == 'stop'
-    assert cm_params['PolygonSlow']['action_type'] == 'slowdown'
-    assert 'scan_front' in cm_params['observation_sources']
-    assert 'scan_rear' in cm_params['observation_sources']
-    assert cm_params['scan_front']['topic'] == '/scan_front'
-    assert cm_params['scan_rear']['topic'] == '/scan_rear'
-    assert cm_params['scan_front']['type'] == 'scan'
-    assert cm_params['scan_rear']['type'] == 'scan'
-    assert cm_params.get('enable_stamped_cmd_vel') is True
-
-    # 6. Costmaps observation sources contract
+    # 5. Costmaps observation sources contract
     assert 'local_costmap' in params
     lc_obs = (
         params['local_costmap']['local_costmap']['ros__parameters']
@@ -243,7 +230,7 @@ def test_launch_description_composition():
     assert 'planner_server' in node_names
     assert 'route_server' in node_names
     assert 'bt_navigator' in node_names
-    assert 'collision_monitor' in node_names
+    assert 'collision_monitor' not in node_names
     assert 'lifecycle_manager_navigation' in node_names
 
     # Ensure no unauthorized nodes are present in S6 navigation launch
@@ -252,7 +239,7 @@ def test_launch_description_composition():
     assert 'amcl' not in node_names
     assert 'robot_state_publisher' not in node_names
 
-    # 1. Check controller_server outputs to /cmd_vel_nav (not directly to diff_drive)
+    # controller_server directly drives S7 in Navigation Mode.
     ctrl_node = next(
         n for n in nodes if getattr(n, '_Node__node_name', '') == 'controller_server'
     )
@@ -263,18 +250,5 @@ def test_launch_description_composition():
         dst = ''.join(getattr(d, 'text', str(d)) for d in dst_subst)
         ctrl_remap_pairs.append((src, dst))
 
-    assert any('/cmd_vel_nav' in dst for src, dst in ctrl_remap_pairs)
-    assert not any('/diff_drive_controller/cmd_vel' in dst for src, dst in ctrl_remap_pairs)
-
-    # 2. Check collision_monitor is the sole publisher to /diff_drive_controller/cmd_vel
-    cm_node = next(
-        n for n in nodes if getattr(n, '_Node__node_name', '') == 'collision_monitor'
-    )
-    cm_raw_remappings = getattr(cm_node, '_Node__remappings', [])
-    cm_remap_pairs = []
-    for src_subst, dst_subst in cm_raw_remappings:
-        src = ''.join(getattr(s, 'text', str(s)) for s in src_subst)
-        dst = ''.join(getattr(d, 'text', str(d)) for d in dst_subst)
-        cm_remap_pairs.append((src, dst))
-
-    assert any('/diff_drive_controller/cmd_vel' in dst for src, dst in cm_remap_pairs)
+    assert any('/diff_drive_controller/cmd_vel' in dst for src, dst in ctrl_remap_pairs)
+    assert not any('/cmd_vel_nav' in dst for src, dst in ctrl_remap_pairs)

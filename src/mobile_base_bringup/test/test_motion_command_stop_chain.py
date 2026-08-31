@@ -25,7 +25,7 @@ def get_workspace_root() -> Path:
 
 
 def test_navigation_motion_command_chain_contract():
-    """Verify Nav2 controller_server -> Collision Monitor -> diff_drive_controller chain."""
+    """Verify Nav2 controller_server directly commands diff_drive_controller."""
     ws_root = get_workspace_root()
 
     # 1. Navigation launch file remappings
@@ -36,9 +36,7 @@ def test_navigation_motion_command_chain_contract():
     with open(nav_launch, 'r', encoding='utf-8') as f:
         launch_content = f.read()
 
-    # Verify controller_server remaps output to /cmd_vel_nav
-    assert "'/cmd_vel_nav'" in launch_content
-    # Verify collision_monitor remaps output to /diff_drive_controller/cmd_vel
+    assert "'/cmd_vel_nav'" not in launch_content
     assert "'/diff_drive_controller/cmd_vel'" in launch_content
 
     # 2. Navigation parameters configuration
@@ -49,15 +47,9 @@ def test_navigation_motion_command_chain_contract():
     with open(nav_yaml, 'r', encoding='utf-8') as f:
         nav_params = yaml.safe_load(f)
 
-    cm_params = nav_params['collision_monitor']['ros__parameters']
-    assert cm_params['cmd_vel_in_topic'] == 'cmd_vel_nav'
-    assert cm_params['cmd_vel_out_topic'] == 'cmd_vel'
-    assert cm_params['enable_stamped_cmd_vel'] is True
-    assert 'scan_front' in cm_params['observation_sources']
-    assert 'scan_rear' in cm_params['observation_sources']
-    assert cm_params['scan_front']['topic'] == '/scan_front'
-    assert cm_params['scan_rear']['topic'] == '/scan_rear'
-    assert cm_params['source_timeout'] >= 0.5
+    assert 'collision_monitor' not in nav_params
+    route_params = nav_params['route_server']['ros__parameters']
+    assert route_params['CollisionMonitor']['plugin'] == 'nav2_route::CollisionMonitor'
 
 
 def test_teleop_motion_command_chain_contract():

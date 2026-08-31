@@ -76,15 +76,9 @@ def generate_launch_description():
         'planner_server',
         'route_server',
         'bt_navigator',
-        'collision_monitor',
     ]
 
     controller_remappings = [
-        ('/cmd_vel', '/cmd_vel_nav'),
-        ('cmd_vel', '/cmd_vel_nav'),
-    ]
-
-    collision_monitor_remappings = [
         ('/cmd_vel', '/diff_drive_controller/cmd_vel'),
         ('cmd_vel', '/diff_drive_controller/cmd_vel'),
     ]
@@ -131,17 +125,6 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-            ),
-            Node(
-                package='nav2_collision_monitor',
-                executable='collision_monitor',
-                name='collision_monitor',
-                output='screen',
-                respawn=False,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=collision_monitor_remappings,
             ),
             Node(
                 package='nav2_lifecycle_manager',

@@ -128,7 +128,7 @@ S8 為兩種模式共用、與核心功能隔離的觀察旁路；其啟動、�
 ### 3.2 Navigation Mode (UC-002)
 - **目的**：載入已建置地圖與路網資源，依據使用者提交之 Station 或 Goal Pose 目標執行三階段自主導航。
 - **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S5 Localization`（包含 `map_server` 地圖載入與 `amcl` 定位）, `S6 Navigation`, `S7 Base Control`。`S4 Mapping` 處於非活躍狀態（Inactive）。
-- **運動控制輸入**：由 S6 Nav2 `controller_server` 運算自主軌跡，經 `collision_monitor` 安全閘門後輸出至 S7（`/diff_drive_controller/cmd_vel`）。
+- **運動控制輸入**：由 S6 Nav2 `controller_server` 運算自主軌跡，直接輸出至 S7（`/diff_drive_controller/cmd_vel`）。
 - **動態 TF 權限**：由 S5 `nav2_amcl` 唯一發布 `map -> odom` TF；由 S3 `robot_localization` EKF 唯一發布 `odom -> base_footprint` TF。
 - **互斥邊界**：S4 `slam_toolbox` 建圖節點與外部 `teleop_twist_keyboard` **嚴格禁止啟動**。
 
@@ -145,7 +145,7 @@ graph TD
     S3["S3: State Estimation<br/>(Kinematic-ICP / EKF 融合 / odom TF)"]
     S4["S4: Mapping<br/>(地圖建立 / 儲存 / 讀回驗證)"]
     S5["S5: Localization<br/>(地圖載入 / AMCL 定位 / map→odom TF)"]
-    S6["S6: Navigation<br/>(目標接收 / 三階段導航 / 碰撞監控)"]
+    S6["S6: Navigation<br/>(目標接收 / 三階段導航 / 路徑追蹤)"]
     S7["S7: Base Control<br/>(差速控制 / 命令安全閘 / 停用)"]
     S8["S8: Observability and Diagnostics<br/>(Logs / Events / Key Telemetry)"]
 
@@ -169,7 +169,7 @@ graph TD
     S5 -.->|Loaded Map /map| S6
 
     S5 -->|Current Pose & TF| S6
-    S6 -->|cmd_vel_nav → Interception| S7
+    S6 -->|/diff_drive_controller/cmd_vel| S7
     S7 -->|Encoder Odom Prior| S3
 
     S1 -. Runtime Information .-> S8
@@ -306,7 +306,7 @@ graph TD
   1. **Target Admission**：接收外部目標，執行目標判別（SYS-008）、Goal Pose 正規化（SYS-009）、Station Catalog 查表解析（SYS-032）與 Canonical 幾何合法性驗證（SYS-033）。
   2. **Route Strategy**：讀取 `route_graph.geojson`，由 `route_server` 運算路網拓撲路徑。
   3. **Stage Execution**：編排與監控 First Mile → On Route → Last Mile 三階段路徑拼接與追蹤。
-  4. **Supervision & Collision Protection**：透過 Nav2 Costmaps 維護障礙物代價，由 `collision_monitor` 攔截自主速度命令進行安全減速與煞停。
+  4. **Supervision & Obstacle Handling**：透過 Nav2 Costmaps 維護障礙物代價，並依 Nav2 原生規劃與路徑追蹤結果監控任務能否繼續執行。
   5. **Completion & Result**：以 `StoppedGoalChecker` 評估到站停妥條件，對外統一回傳導航結果（Success / Failure / Canceled）。
 - **承接需求**：`SYS-008`, `SYS-009`, `SYS-011`, `SYS-013`, `SYS-014`, `SYS-015`, `SYS-016`, `SYS-017`, `SYS-018`, `SYS-019`, `SYS-020`, `SYS-021`, `SYS-025`, `SYS-032`, `SYS-033`。
 - **核心執行元件**：
@@ -314,17 +314,16 @@ graph TD
   - `route_server` (`nav2_route`, 載入 `route_graph.geojson`)。
   - `planner_server` (`nav2_planner`, 使用 `nav2_navfn_planner::NavfnPlanner`)。
   - `controller_server` (`nav2_controller`, 使用 `nav2_mppi_controller::MPPIController` 與 `StoppedGoalChecker`)。
-  - `collision_monitor` (`nav2_collision_monitor`)。
   - `lifecycle_manager_navigation` (`nav2_lifecycle_manager`)。
   - `navigate_to_station` CLI 應用程式（整合 `TargetAdmission` 模組）。
 - **重要輸入**：
   - 外部目標（Station ID 或 Goal Pose）。
   - `/map` (來自 S5 `map_server`)。
-  - `/scan_front` 與 `/scan_rear` (來自 S2，供 Local/Global Costmaps 與 Collision Monitor 使用)。
+  - `/scan_front` 與 `/scan_rear` (來自 S2，供 Local/Global Costmaps 使用)。
   - TF `map -> odom` (來自 S5) 與 `odom -> base_footprint` (來自 S3)。
   - 場域資源 `route_graph.geojson` 與 `stations.yaml`。
 - **重要輸出**：
-  - `/cmd_vel_nav` (`geometry_msgs/msg/TwistStamped`, 經 `collision_monitor` 攔截轉發至 S7 `/diff_drive_controller/cmd_vel`)。
+  - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`, 直接送至 S7)。
   - 原生 Nav2 Action 介面反饋與結果 (`nav2_msgs/action/NavigateToPose`)。
 - **TF 所有權**：無。
 - **架構約束**：
@@ -355,7 +354,7 @@ graph TD
   - `M1Hardware` (`mobile_base_control/M1Hardware` SystemInterface Plugin)。
   - `M1Driver` (Modbus RTU 通訊庫)。
 - **重要輸入**：
-  - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`, 來自 S6 `collision_monitor` 或 Mapping 模式之 `teleop_twist_keyboard`)。
+  - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`, 來自 Navigation Mode 的 S6 velocity producer 或 Mapping Mode 之 `teleop_twist_keyboard`)。
 - **重要輸出**：
   - 物理輪端運動驅動（Modbus RTU FC17 輪速下發至 M1 驅動器）。
   - `/joint_states` (`sensor_msgs/msg/JointState`)。
@@ -725,7 +724,6 @@ sequenceDiagram
     participant Route as S6: route_server
     participant Planner as S6: planner_server (Navfn)
     participant Ctrl as S6: controller_server (MPPI)
-    participant CM as S6: collision_monitor
     participant S7 as S7: Base Control
 
     BT->>S5: 取得目前 AMR Pose (Current Pose)
@@ -746,9 +744,7 @@ sequenceDiagram
     BT->>Ctrl: 啟動 FollowPath 路徑追蹤 (MPPI)
 
     loop 軌跡追蹤循環
-        Ctrl->>CM: 發布期望速度 /cmd_vel_nav
-        CM->>CM: 依前/後雷達點雲評估 Stop / Slowdown 多邊形安全狀態
-        CM->>S7: 輸出受控速度至 /diff_drive_controller/cmd_vel
+        Ctrl->>S7: 發布期望速度至 /diff_drive_controller/cmd_vel
         S7->>S7: 檢查 0.5s 逾時、限制加速度與速度
         S7->>S7: 驅動 M1 輪速並檢驗編碼器回授
     end
@@ -822,7 +818,7 @@ flowchart LR
 
 ## 8. Velocity Command and Safety Chain
 
-系統建立階層式速度命令與安全攔截鏈，明確區分運動意圖產出與底盤安全防護：
+系統建立直接速度命令鏈，並由 S7 負責底盤安全防護：
 
 ```text
     ┌───────────────────────────┐         ┌───────────────────────────┐
@@ -831,16 +827,8 @@ flowchart LR
     │   (Navigation Mode 啟用)   │         │   (Mapping Mode 啟用)     │
     └─────────────┬─────────────┘         └─────────────┬─────────────┘
                   │                                     │
-                  │ /cmd_vel_nav (TwistStamped)         │
-                  │                                     │
-                  ▼                                     │
-    ┌───────────────────────────┐                       │
-    │   S6 Collision Monitor    │                       │
-    │  (前/後雷達多邊形安全防護)    │                       │
-    └─────────────┬─────────────┘                       │
-                  │                                     │
                   │ /diff_drive_controller/cmd_vel      │ /diff_drive_controller/cmd_vel
-                  │ (經碰撞攔截後之安全命令)                 │ (手動巡覽速度命令, SYS-034)
+                  │ (自主速度命令)                         │ (手動巡覽速度命令, SYS-034)
                   │                                     │
                   └──────────────────┬──────────────────┘
                                      │
@@ -871,7 +859,6 @@ flowchart LR
 |---|---|---|---|
 | **Level 1a: Navigation Task Stop** | 抵達目標 / 任務取消 / 規劃失敗 | `S6 Navigation` | 終止導航任務、停止後續追蹤、輸出零速運動意圖。 |
 | **Level 1b: Manual Movement Stop** | 建圖操作員放開按鍵 / 按下停止鍵 | 外部 `teleop_twist_keyboard` | 發布零速 `TwistStamped`，底盤受控減速煞停；建圖程序維持運作。 |
-| **Level 1c: Collision Interception Stop** | 障礙物侵入 `PolygonStop` 安全多邊形 | `S6 Collision Monitor` | 攔截 `/cmd_vel_nav`，主動將輸出速度歸零發布至底盤，阻止碰撞。 |
 | **Level 2: Command Timeout Stop** | 上游當機、通訊中斷或閒置超過 $0.5\,\text{s}$ | `S7 Base Control` | 控制器內部 Stale-command 逾時機制觸發，強制歸零輸出煞停（SYS-027）。 |
 | **Level 3: Hardware Safe Stop** | 底盤故障 (`ERROR`) / 系統關機 / 停用請求 | `S7 Base Control` | 主動煞車減速、確認輪端完全停轉後切斷使能 (Servo-Off, SYS-030)。 |
 
@@ -1073,8 +1060,8 @@ navigate_to_station CLI
    - 驗證三階段路網導航編排（First Mile $\rightarrow$ On Route $\rightarrow$ Last Mile）與 MPPI 控制器路徑追蹤（[§6.3](#63-路網導航執行流程-route-assisted-navigation-flow---uc-002)、[§9](#9-route-assisted-navigation)）。
    - 實機驗證 Station A $\rightarrow$ Station B 自主路網導航成功抵達並通過 StoppedGoalChecker 到站停妥判定。
 
-7. **安全攔截與碰撞監控 (S6 Collision Monitor & S7 Base Gate)**：
-   - 實機驗證 `collision_monitor` 多邊形安全攔截機制與靜態防護閘門，且無誤觸發（[§4.6](#46-s6-navigation)、[§8.1](#81-多層停止安全架構-multi-tier-stop-architecture)）。
+7. **S7 底盤安全閘門**：
+   - 實機驗證 S7 的安全啟動、命令逾時、運動限制與停機行為（[§4.7](#47-s7-base-control)、[§8.1](#81-多層停止安全架構-multi-tier-stop-architecture)）。
 
 ---
 
@@ -1083,7 +1070,7 @@ navigate_to_station CLI
 1. **Known Limitation B — 回程導航進度逾時 (Station B $\rightarrow$ Station A)**：
    - **觀察現象**：在 `test_site` 場域實機驗證中，Station A 前往 Station B 導航已通過驗收；反向由 Station B 前往 Station A 於接近目標時，因 Nav2 控制器進度檢查器判定進度逾時（`error_code=105`）而終止任務。
    - **安全處置**：任務終止後，系統依多層停止架構安全煞停底盤，未發生失控或碰撞。
-   - **目前狀態**：根本原因尚未確定（root cause undetermined）。此現象為 v0.1.0 基線之已知受限運作邊界，不影響單向自主導航能力、目標解析與安全攔截機制之確立。
+   - **目前狀態**：根本原因尚未確定（root cause undetermined）。此現象為 v0.1.0 基線之已知受限運作邊界，不影響單向自主導航能力、目標解析與 S7 安全停機機制之確立。
 
 ---
 

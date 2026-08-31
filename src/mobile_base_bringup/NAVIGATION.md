@@ -9,7 +9,7 @@
 - S2 Perception：IMU 與雙實體 LiDAR（/scan_front, /scan_rear）
 - S3 State Estimation：Kinematic-ICP（前 LiDAR + wheel prior）與 EKF
 - S5 Localization：Map Server 與 AMCL
-- S6 Navigation：Nav2 路線輔助導航堆疊與 Collision Monitor
+- S6 Navigation：Nav2 路線輔助導航堆疊
 
 各子系統套件仍是驅動程式、控制器、狀態估測、AMCL 參數、Nav2 設定與 TF 權限的權威來源。
 
@@ -64,8 +64,8 @@ ros2 launch mobile_base_bringup navigation.launch.py \
 
 導航模式正常運作時，會提供下列主要執行期契約：
 
-- `/scan_front`：實體前 LiDAR 原始掃描資料（供 Kinematic-ICP、AMCL、Nav2 成本地圖與 Collision Monitor 使用）
-- `/scan_rear`：實體後 LiDAR 原始掃描資料（供 Nav2 成本地圖與 Collision Monitor 使用）
+- `/scan_front`：實體前 LiDAR 原始掃描資料（供 Kinematic-ICP、AMCL 與 Nav2 成本地圖使用）
+- `/scan_rear`：實體後 LiDAR 原始掃描資料（供 Nav2 成本地圖使用）
 - `/imu/data_raw`：原始 IMU 量測資料
 - `/diff_drive_controller/odom`：Kinematic-ICP 的 encoder wheel prior
 - `/lidar_odometry`：Kinematic-ICP 平面里程，且 `publish_odom_tf=false`
@@ -74,7 +74,7 @@ ros2 launch mobile_base_bringup navigation.launch.py \
 - `/amcl_pose`：AMCL 估測的全域位姿
 - TF `odom -> base_footprint`：僅由 EKF 負責發布
 - TF `map -> odom`：AMCL 以部署設定的預設初始位姿或 `/initialpose` 覆寫完成初始化後，僅由 `nav2_amcl` 負責發布
-- 速度命令鏈：`controller_server`（`/cmd_vel_nav`）→ `collision_monitor` → `/diff_drive_controller/cmd_vel`
+- 速度命令鏈：`controller_server` → `/diff_drive_controller/cmd_vel`
 - S4 `slam_toolbox` 必須完全排除且不得執行
 
 ## 設定初始位姿
