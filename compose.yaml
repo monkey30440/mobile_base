@@ -17,6 +17,7 @@ services:
       - DISPLAY=${DISPLAY}
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
       - TOPIC_NAMESPACE=${TOPIC_NAMESPACE}
+      - MOBILE_BASE_INFLUXDB_TOKEN=${MOBILE_BASE_INFLUXDB_TOKEN:-}
 
     volumes:
       - .:/workspaces/mobile_base
