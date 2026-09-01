@@ -95,6 +95,27 @@ def test_zero_timestamp_odometry_is_not_enqueued():
         node.destroy_node()
 
 
+def test_malformed_timestamp_never_reaches_queue_or_influx_sender():
+    """A noncanonical source timestamp must not update or enqueue data."""
+    node = ObservabilityAdapterNode(parameter_overrides=[
+        Parameter('robot_id', value='test_amr'),
+        Parameter('queue_capacity', value=3),
+    ])
+    message = Odometry()
+    message.header.stamp.sec = 1
+    message.header.stamp.nanosec = 1_500_000_000
+    message.twist.twist.linear.x = 1.23
+
+    try:
+        node.handle_odometry(message)
+        assert node.queued_record_count == 0
+
+        node.sample_latest()
+        assert node.queued_record_count == 0
+    finally:
+        node.destroy_node()
+
+
 def test_all_topic_callbacks_only_update_latest_until_sampling_occurs():
     node = ObservabilityAdapterNode(parameter_overrides=[
         Parameter('robot_id', value='test_amr'),

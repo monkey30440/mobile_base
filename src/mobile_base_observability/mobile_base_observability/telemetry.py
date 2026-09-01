@@ -50,8 +50,12 @@ class TelemetryRecord:
 
 def _header_timestamp_ns(message):
     stamp = message.header.stamp
+    seconds = int(stamp.sec)
+    nanoseconds = int(stamp.nanosec)
+    if not 0 <= nanoseconds < _NANOSECONDS_PER_SECOND:
+        return None
     header_timestamp_ns = (
-        int(stamp.sec) * _NANOSECONDS_PER_SECOND + int(stamp.nanosec)
+        seconds * _NANOSECONDS_PER_SECOND + nanoseconds
     )
     if header_timestamp_ns <= 0:
         return None

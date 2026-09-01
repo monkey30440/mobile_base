@@ -82,6 +82,43 @@ def test_zero_odometry_header_timestamp_produces_no_observations():
     ) == ()
 
 
+@pytest.mark.parametrize(
+    ('sec', 'nanosec'),
+    [
+        (1, 0),
+        (0, 1),
+        (1, 999_999_999),
+    ],
+)
+def test_canonical_positive_header_timestamps_are_accepted(sec, nanosec):
+    observations = extract_filtered_odometry_metrics(
+        _odometry(1.23, -0.45, sec=sec, nanosec=nanosec)
+    )
+
+    assert len(observations) == 2
+    assert all(
+        item.timestamp_ns == sec * 1_000_000_000 + nanosec
+        for item in observations
+    )
+
+
+@pytest.mark.parametrize('nanosec', [1_000_000_000, 1_500_000_000])
+def test_noncanonical_nanoseconds_are_rejected_without_normalization(nanosec):
+    assert extract_filtered_odometry_metrics(
+        _odometry(1.23, -0.45, sec=1, nanosec=nanosec)
+    ) == ()
+
+    assert extract_wheel_velocity_metrics(_joint_state(
+        ['driving_wheel_joint_L', 'driving_wheel_joint_R'], [1.0, 2.0],
+        sec=1, nanosec=nanosec,
+    )) == ()
+
+    assert extract_selected_diagnostic_level(
+        _diagnostics([('selected', 2)], sec=1, nanosec=nanosec),
+        'selected',
+    ) is None
+
+
 def test_wheel_velocity_lookup_uses_names_when_order_is_swapped():
     observations = extract_wheel_velocity_metrics(_joint_state(
         ['driving_wheel_joint_R', 'driving_wheel_joint_L'], [2.0, 1.0]

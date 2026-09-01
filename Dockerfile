@@ -2,6 +2,11 @@ FROM nvcr.io/nvidia/isaac/ros:isaac_ros_740c8500df2685ab1f4a4e53852601df-arm64-j
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN curl -fsSL https://packages.fluentbit.io/fluentbit.key \
+        | gpg --dearmor -o /usr/share/keyrings/fluentbit-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/fluentbit-keyring.gpg] https://packages.fluentbit.io/ubuntu/noble noble main" \
+        > /etc/apt/sources.list.d/fluent-bit.list
+
 RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
     && echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99fix \
     && apt-get update \
@@ -24,6 +29,7 @@ RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
         ros-jazzy-foxglove-bridge \
         ros-jazzy-teleop-twist-keyboard \
         ros-jazzy-rviz2 \
+        fluent-bit=4.2.8 \
         python3-serial \
         iputils-ping \
     && rm -rf /var/lib/apt/lists/*
