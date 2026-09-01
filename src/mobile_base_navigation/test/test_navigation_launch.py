@@ -92,6 +92,19 @@ def test_nav2_params_contracts():
     assert gc_obs['scan_front']['topic'] == '/scan_front'
     assert gc_obs['scan_rear']['topic'] == '/scan_rear'
 
+    # 6. Docking Server contract
+    assert 'docking_server' in params
+    docking_params = params['docking_server']['ros__parameters']
+    assert docking_params.get('base_frame') == 'base_link'
+    assert docking_params.get('fixed_frame') == 'odom'
+    assert docking_params.get('enable_stamped_cmd_vel') is True
+    assert 'apriltag_dock' in docking_params['dock_plugins']
+    assert (
+        docking_params['apriltag_dock']['plugin']
+        == 'opennav_docking::SimpleNonChargingDock'
+    )
+    assert docking_params['apriltag_dock']['use_external_detection_pose'] is True
+
 
 def test_bt_xml_structure_and_fallback_policy():
     bt_path = os.path.join(
@@ -230,6 +243,7 @@ def test_launch_description_composition():
     assert 'planner_server' in node_names
     assert 'route_server' in node_names
     assert 'bt_navigator' in node_names
+    assert 'docking_server' in node_names
     assert 'collision_monitor' not in node_names
     assert 'lifecycle_manager_navigation' in node_names
 
@@ -252,3 +266,16 @@ def test_launch_description_composition():
 
     assert any('/diff_drive_controller/cmd_vel' in dst for src, dst in ctrl_remap_pairs)
     assert not any('/cmd_vel_nav' in dst for src, dst in ctrl_remap_pairs)
+
+    # docking_server directly drives S7 in Navigation Mode.
+    docking_node = next(
+        n for n in nodes if getattr(n, '_Node__node_name', '') == 'docking_server'
+    )
+    docking_raw_remappings = getattr(docking_node, '_Node__remappings', [])
+    docking_remap_pairs = []
+    for src_subst, dst_subst in docking_raw_remappings:
+        src = ''.join(getattr(s, 'text', str(s)) for s in src_subst)
+        dst = ''.join(getattr(d, 'text', str(d)) for d in dst_subst)
+        docking_remap_pairs.append((src, dst))
+
+    assert any('/diff_drive_controller/cmd_vel' in dst for src, dst in docking_remap_pairs)

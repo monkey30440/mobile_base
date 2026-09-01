@@ -76,6 +76,7 @@ def generate_launch_description():
         'planner_server',
         'route_server',
         'bt_navigator',
+        'docking_server',
     ]
 
     controller_remappings = [
@@ -125,6 +126,17 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
+            ),
+            Node(
+                package='opennav_docking',
+                executable='opennav_docking',
+                name='docking_server',
+                output='screen',
+                respawn=False,
+                respawn_delay=2.0,
+                parameters=[configured_params],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=controller_remappings,
             ),
             Node(
                 package='nav2_lifecycle_manager',
