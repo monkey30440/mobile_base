@@ -115,6 +115,52 @@ ros2 run mobile_base_navigation navigate_to_station \
 
 在 `test_site` 場域實機驗證中，Station A 前往 Station B 導航已驗收通過；反向 Station B 前往 Station A 於接近目標時觀察到進度逾時（`error_code=105`），此現象列為 Known Limitation B（root cause undetermined），操作時請留意進度狀態。
 
+## 執行視覺停靠 (AprilTag Direct Docking)
+
+在導航模式運行期間，若需使 AMR 精準停靠於視覺標記（AprilTag）前，可透過 Trigger 服務一鍵觸發。
+
+### 前置條件
+
+1. 導航模式已啟動（`mobile_base.launch.py mode:=navigation`）。
+2. Nav2 `docking_server` 處於 Active 生命週期狀態，且 `apriltag_dock_trigger` 節點正常運作。
+3. 外部視覺系統（Upper Body）已持續在 `/detected_dock_pose` 發布標記相對於基座之姿態（`geometry_msgs/msg/PoseStamped`，`frame_id: "base_link"`）。
+4. AprilTag 穩定可見。
+
+> **第一階段實機建議起始條件**（保守初次驗證範圍）：
+> - 距 AprilTag 約 1.0–1.5 m
+> - lateral error 建議 < 20 cm
+> - heading error 建議 < 10–15°
+
+### 操作步驟
+
+1. **確認視覺偵測串流**（選用）：
+   ```bash
+   ros2 topic echo /detected_dock_pose --once
+   ```
+   確認已收到帶有 `frame_id: base_link` 的有效位姿。
+
+2. **觸發視覺停靠**：
+   開啟終端執行 Trigger 服務：
+   ```bash
+   ros2 service call /apriltag_dock std_srvs/srv/Trigger "{}"
+   ```
+
+### 停靠行為與架構說明
+
+- `apriltag_dock_trigger` 會自動取用最新一筆快取的 `/detected_dock_pose` 作為初始停靠目標，並送出 `DockRobot` Action Goal。
+- Trigger 節點不修改任何位姿幾何；標記至停等點的 70 cm 外參幾何轉換完全由 `docking_server` 的 `SimpleNonChargingDock` 外掛處理。
+- 服務呼叫端會同步等待停靠完成，並於結束時回傳結果（`success: true` 與 `message: "Docking succeeded"`）。
+- **失敗與防護**：
+  - 尚未收到任何視覺偵測資料時：立即回傳失敗（`No detected dock pose received yet`）。
+  - 停靠任務已在進行中時：重複觸發立即拒絕（`Docking already in progress`）。
+  - `docking_server` 離線、拒絕目標、偵測逾時或停靠控制失敗時：服務回傳失敗並附帶具體錯誤訊息。
+
+### 停止與取消方式
+
+- **取消介面現況**：MVP-1 的 `/apriltag_dock` Trigger API 尚未提供獨立 cancel 介面，請勿捏造或假設存在 `/apriltag_dock/cancel`。
+- **維運停止**：若需非緊急中斷停靠，可直接停止導航模式 launch 程序。
+- **緊急停止**：緊急狀況請直接使用 AMR 實體 E-stop / STO 按鈕。
+
 ## Foxglove
 
 Foxglove Bridge 是選用的視覺化工具。只有在啟動導航模式時指定 `use_foxglove:=true` 才會啟動。請使用 Foxglove 用戶端連線至 Bridge 啟動輸出中顯示的端點。

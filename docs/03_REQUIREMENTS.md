@@ -152,6 +152,18 @@ v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無
 
 ---
 
+## SYS-044 AprilTag 視覺停靠 / Direct AprilTag Docking
+
+Navigation Mode 應提供基於視覺標記之 AprilTag Direct Docking 能力。
+
+系統應提供 `/apriltag_dock`（`std_srvs/srv/Trigger`）服務作為單次停靠之觸發介面。外部視覺感知系統（Upper Body）應提供標記相對於基座之位姿 `/detected_dock_pose`（`geometry_msgs/msg/PoseStamped`，`frame_id: "base_link"`），其中 position 與 orientation 均應有效。
+
+底盤導航系統（Lower Body）應接收該標記位姿，透過停靠外掛設定之外參轉換計算目標停靠位姿（使 AMR 最終停於標記前約 70 cm，其實體轉換符號與旋轉偏移待實機標定驗證），並直接執行閉迴路停靠控制，不執行 `NavigateToPose` 預備站點導航。
+
+停靠運動期間發布之速度命令應遵守 S7 既有底盤運動限制（SYS-028）、命令逾時停止（SYS-027）與時間戳格式（`TwistStamped`），並使用既有 Local Costmap 進行障礙物防撞判定。當視覺感知逾時、停靠控制逾時或 Nav2 停靠失敗時，系統應終止該次停靠、嘗試使底盤停止並回報失敗結果。
+
+---
+
 # UC-003 觀察與診斷 AMR 運行
 
 ## SYS-035 AMR 運行資訊觀察
@@ -282,6 +294,7 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 | SYS-020 | UC-002 | CAP-002 |
 | SYS-021 | UC-002 | CAP-002 |
 | SYS-025 | UC-002 | CAP-002 |
+| SYS-044 | UC-002 | CAP-002 |
 | SYS-003 | UC-002 | CAP-002 |
 | SYS-004 | UC-002 | CAP-002 |
 | SYS-005 | UC-002 | CAP-002 |

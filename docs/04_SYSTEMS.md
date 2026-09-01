@@ -126,9 +126,9 @@ S8 為兩種模式共用、與核心功能隔離的觀察旁路；其啟動、�
 - **互斥邊界**：`S5 Localization` 與 `S6 Navigation` **嚴格禁止啟動**。全系統僅存在單一手動運動命令源，不引入 `twist_mux` 或額外模式仲裁節點。
 
 ### 3.2 Navigation Mode (UC-002)
-- **目的**：載入已建置地圖與路網資源，依據使用者提交之 Station 或 Goal Pose 目標執行三階段自主導航。
-- **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S5 Localization`（包含 `map_server` 地圖載入與 `amcl` 定位）, `S6 Navigation`, `S7 Base Control`。`S4 Mapping` 處於非活躍狀態（Inactive）。
-- **運動控制輸入**：由 S6 Nav2 `controller_server` 運算自主軌跡，直接輸出至 S7（`/diff_drive_controller/cmd_vel`）。
+- **目的**：載入已建置地圖與路網資源，依據使用者提交之 Station 或 Goal Pose 目標執行三階段自主導航，或透過視覺標記執行 AprilTag Direct Docking。
+- **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S5 Localization`（包含 `map_server` 地圖載入與 `amcl` 定位）, `S6 Navigation`（包含 Nav2 導航堆疊、`docking_server` 與 `apriltag_dock_trigger`）, `S7 Base Control`。`S4 Mapping` 處於非活躍狀態（Inactive）。
+- **運動控制輸入**：由 S6 Nav2 `controller_server`（三階段路線導航）或 `docking_server`（AprilTag 視覺停靠）運算自主軌跡，依任務狀態互斥輸出至 S7（`/diff_drive_controller/cmd_vel`）。
 - **動態 TF 權限**：由 S5 `nav2_amcl` 唯一發布 `map -> odom` TF；由 S3 `robot_localization` EKF 唯一發布 `odom -> base_footprint` TF。
 - **互斥邊界**：S4 `slam_toolbox` 建圖節點與外部 `teleop_twist_keyboard` **嚴格禁止啟動**。
 
@@ -308,26 +308,32 @@ graph TD
   3. **Stage Execution**：編排與監控 First Mile → On Route → Last Mile 三階段路徑拼接與追蹤。
   4. **Supervision & Obstacle Handling**：透過 Nav2 Costmaps 維護障礙物代價，並依 Nav2 原生規劃與路徑追蹤結果監控任務能否繼續執行。
   5. **Completion & Result**：以 `StoppedGoalChecker` 評估到站停妥條件，對外統一回傳導航結果（Success / Failure / Canceled）。
-- **承接需求**：`SYS-008`, `SYS-009`, `SYS-011`, `SYS-013`, `SYS-014`, `SYS-015`, `SYS-016`, `SYS-017`, `SYS-018`, `SYS-019`, `SYS-020`, `SYS-021`, `SYS-025`, `SYS-032`, `SYS-033`。
+  6. **Direct AprilTag Docking**：接收 Upper Body 視覺標記姿態 `/detected_dock_pose`，透過 `apriltag_dock_trigger` 轉發 Action Goal 並由 `docking_server`（載入 `SimpleNonChargingDock` 外掛）執行閉迴路精準停靠（SYS-044）。
+- **承接需求**：`SYS-008`, `SYS-009`, `SYS-011`, `SYS-013`, `SYS-014`, `SYS-015`, `SYS-016`, `SYS-017`, `SYS-018`, `SYS-019`, `SYS-020`, `SYS-021`, `SYS-025`, `SYS-032`, `SYS-033`, `SYS-044`。
 - **核心執行元件**：
   - `bt_navigator` (`nav2_bt_navigator`, 載入 `route_assisted_nav.xml`)。
   - `route_server` (`nav2_route`, 載入 `route_graph.geojson`)。
   - `planner_server` (`nav2_planner`, 使用 `nav2_navfn_planner::NavfnPlanner`)。
   - `controller_server` (`nav2_controller`, 使用 `nav2_mppi_controller::MPPIController` 與 `StoppedGoalChecker`)。
-  - `lifecycle_manager_navigation` (`nav2_lifecycle_manager`)。
+  - `docking_server` (`opennav_docking::DockingServer`, Lifecycle Node, 載入 `opennav_docking::SimpleNonChargingDock` 外掛)。
+  - `apriltag_dock_trigger` (`mobile_base_navigation::ApriltagDockTriggerNode`, 一般 ROS 2 Node，不加入 Nav2 lifecycle manager)。
+  - `lifecycle_manager_navigation` (`nav2_lifecycle_manager`，統籌管理 `bt_navigator`, `route_server`, `planner_server`, `controller_server`, `docking_server`)。
   - `navigate_to_station` CLI 應用程式（整合 `TargetAdmission` 模組）。
 - **重要輸入**：
   - 外部目標（Station ID 或 Goal Pose）。
+  - `/detected_dock_pose` (`geometry_msgs/msg/PoseStamped`, `frame_id: "base_link"`, 來自 Upper Body 感知)。
+  - `/apriltag_dock` (`std_srvs/srv/Trigger`, 停靠觸發服務)。
   - `/map` (來自 S5 `map_server`)。
   - `/scan_front` 與 `/scan_rear` (來自 S2，供 Local/Global Costmaps 使用)。
   - TF `map -> odom` (來自 S5) 與 `odom -> base_footprint` (來自 S3)。
   - 場域資源 `route_graph.geojson` 與 `stations.yaml`。
 - **重要輸出**：
-  - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`, 直接送至 S7)。
-  - 原生 Nav2 Action 介面反饋與結果 (`nav2_msgs/action/NavigateToPose`)。
-- **TF 所有權**：無。
+  - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`, 來自 `controller_server` 或 `docking_server`，直接送至 S7)。
+  - 原生 Nav2 Action 介面反饋與結果 (`nav2_msgs/action/NavigateToPose` 與 `nav2_msgs/action/DockRobot`)。
+- **TF 所有權**：無（`docking_server` 配置 `base_frame: "base_link"`、`fixed_frame: "odom"`，僅查詢既有 TF，嚴禁發布 TF）。
 - **架構約束**：
   - 採用原生 `nav2_msgs/action/NavigateToPose` 進行導航目標調度，**系統不存在任何自製 `mobile_base_msgs/action/NavigateToStation` 介面**。
+  - 採用原生 `nav2_msgs/action/DockRobot` 進行視覺停靠控制，由 `apriltag_dock_trigger` 轉接 `/apriltag_dock`（`std_srvs/srv/Trigger`）人工作業介面。
   - v0.1 關閉全域自由空間 Fallback（SYS-021）；當無可用路網解時直接終止任務並回報失敗。
 - **權威實作與配置參考**：
   - Launch: `src/mobile_base_navigation/launch/navigation.launch.py`
@@ -335,6 +341,71 @@ graph TD
   - Behavior Tree: `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`
   - Target Admission: `src/mobile_base_navigation/include/mobile_base_navigation/target_admission.hpp`
   - Station App: `src/mobile_base_navigation/src/navigate_to_station_app.cpp`
+  - Trigger Node: `src/mobile_base_navigation/include/mobile_base_navigation/apriltag_dock_trigger_node.hpp`, `src/mobile_base_navigation/src/apriltag_dock_trigger_node.cpp`
+
+#### 4.6.1 AprilTag 視覺停靠架構與介面契約 (Direct AprilTag Docking Architecture & Interface Contract)
+
+MVP-1 的 AprilTag 停靠採用分層解耦的 Direct Docking 設計：
+
+```text
+Upper Body (視覺感知)
+    │
+    │ /detected_dock_pose
+    │ (geometry_msgs/msg/PoseStamped, frame_id=base_link)
+    ▼
+apriltag_dock_trigger (Adapter / Trigger Node)
+    │
+    │ /dock_robot (nav2_msgs/action/DockRobot Goal)
+    ▼
+docking_server (opennav_docking)
+    │
+    ├── SimpleNonChargingDock (Tag → Target Transform / 70 cm Stop Geometry)
+    ├── Docking Controller (Smooth Control Law)
+    └── Local Costmap Collision Checker
+    │
+    │ /diff_drive_controller/cmd_vel (geometry_msgs/msg/TwistStamped)
+    ▼
+S7 Base Control
+```
+
+**責任邊界配置 (Responsibility Boundary)**：
+
+| 元件 | 專屬擁有職責 (Owned Responsibilities) | 嚴格禁止涉足 (Non-Goals / Excluded) |
+|---|---|---|
+| **`apriltag_dock_trigger`** | • 一般 ROS 2 節點（不納入 Nav2 lifecycle manager）<br/>• 訂閱並快取最新一筆 `/detected_dock_pose`<br/>• 提供 `/apriltag_dock` (`std_srvs/srv/Trigger`) 一鍵服務<br/>• 觸發時將快取 PoseStamped 原封不動填入 `DockRobot.goal.dock_pose`<br/>• 固定 Direct Docking 目標（`use_dock_id=false`, `dock_id=""`, `dock_type="apriltag_dock"`, `navigate_to_staging_pose=false`）<br/>• 防範重疊停靠請求<br/>• 等候 Action 最終結果並映射至 Trigger 回應 | • 70 cm 偏移或外參計算<br/>• TF 座標轉換<br/>• 姿態濾波或平滑<br/>• 感知時效 (Freshness) 判斷<br/>• PID 或速度控制<br/>• 碰撞偵測或避障<br/>• 重試 (Retry) 與恢復 (Recovery)<br/>• 多標記選擇或搜尋 |
+| **`docking_server` / `SimpleNonChargingDock`** | • `base_frame="base_link"`, `fixed_frame="odom"`<br/>• 接收並處理 `DockRobot` Action 請求<br/>• 擁有 Tag $\to$ Dock 外參轉換與 70 cm 停止幾何<br/>• 處理 Perception / Approach 逾時<br/>• 執行 Nav2 原生 Smooth Control Law 停靠控制器<br/>• 訂閱 Local Costmap 進行前向碰撞預測<br/>• 輸出 `geometry_msgs/msg/TwistStamped` 至 S7 cmd_vel 速度鏈 | • 自製自定義控制器<br/>• 預備點導航 (MVP-1 `navigate_to_staging_pose=false`)<br/>• Dock Database 查詢 (MVP-1 不使用)<br/>• 充電樁充電交握 (Non-charging dock 立即完成) |
+
+**上下半身介面契約 (Upper / Lower Body Interface Contract)**：
+
+1. **Upper Body (視覺感知)**：
+   - 負責相機串流擷取與 AprilTag 姿態估測。
+   - 依相機外參將標記姿態轉換至機器人基座座標系，發布為標準 `geometry_msgs/msg/PoseStamped`（topic: `/detected_dock_pose`，`frame_id: "base_link"`）。
+   - 保證發布之 `position` 與 `orientation` 均為有效數值。
+   - **嚴格不套用 70 cm 停止偏移**，且不直接下發底盤速度命令。
+2. **Lower Body (S6 導航與底盤控制)**：
+   - 不感知相機內部參數或安裝外參。
+   - `apriltag_dock_trigger` 僅原封不動轉發最新偵測姿態至 `docking_server`。
+   - `SimpleNonChargingDock` 獨佔擁有標記至目標停靠點的外參變換幾何（70 cm 偏移）。
+   - `docking_server` 獨佔擁有停靠運動閉迴路與速度命令生成。
+
+**MVP-1 Scope 邊界**：
+
+- **包含 (In Scope)**：
+  - Direct AprilTag Docking。
+  - `/apriltag_dock` 一鍵 Trigger 服務。
+  - 最新偵測姿態直接填入 `DockRobot` Goal。
+  - Nav2 原生 `opennav_docking::SimpleNonChargingDock` 外掛。
+  - 單一 `apriltag_dock` 外掛配置。
+  - `navigate_to_staging_pose = false`。
+  - `max_retries = 0`。
+- **不包含 (Out of Scope)**：
+  - `NavigateToPose` 全域導航與 Staging 預備站點串接。
+  - Dock Database 站點資料庫。
+  - 多標記選擇與過濾。
+  - 自動尋標 (Tag Search)。
+  - 自製 Docking Controller。
+  - 自製 PID / cmd_vel 旁路控制。
+  - 自製 Retry / Recovery 行為。
 
 ---
 
@@ -779,6 +850,49 @@ flowchart LR
 
 ---
 
+### 6.5 視覺停靠資料流 (Direct AprilTag Docking Flow - SYS-044)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 操作員 / 上層系統
+    participant Upper as Upper Body (視覺感知)
+    participant Trigger as S6: apriltag_dock_trigger
+    participant Dock as S6: docking_server (SimpleNonChargingDock)
+    participant Costmap as S6: local_costmap
+    participant S7 as S7: Base Control
+    participant M1 as 底盤硬體 (M1 Motors)
+
+    Upper-->>Trigger: 持續發布 /detected_dock_pose (frame_id=base_link)
+    Trigger->>Trigger: 快取最新 PoseStamped
+
+    User->>Trigger: 呼叫 /apriltag_dock (std_srvs/srv/Trigger)
+    alt 尚未收到任何 /detected_dock_pose
+        Trigger-->>User: 立即回傳失敗 (No detected dock pose received yet)
+    else 停靠已在執行中
+        Trigger-->>User: 立即回傳失敗 (Docking already in progress)
+    else 條件就緒
+        Trigger->>Dock: 發送 DockRobot Action Goal (dock_pose=cached_pose, navigate_to_staging_pose=false)
+        Dock->>Dock: doInitialPerception 確認外部標記姿態
+
+        loop 停靠控制迴圈 (20 Hz)
+            Upper-->>Dock: 接收 /detected_dock_pose 更新
+            Dock->>Dock: getRefinedPose 套用 70cm 幾何偏移
+            Costmap-->>Dock: 查詢 local_costmap/costmap_raw 碰撞檢測
+            Dock->>S7: 發布 TwistStamped 至 /diff_drive_controller/cmd_vel
+            S7->>S7: 檢查 0.5s 逾時、限制運動極限
+            S7->>M1: Modbus RTU FC17 輪速下發
+        end
+
+        Dock->>Dock: isDocked 判定到達停靠距離門檻 (docking_threshold)
+        Dock->>S7: 輸出零速煞停
+        Dock-->>Trigger: 回傳 DockRobot Action Result (SUCCEEDED)
+        Trigger-->>User: 回傳 Trigger Response (success=true, message="Docking succeeded")
+    end
+```
+
+---
+
 ## 7. TF Ownership
 
 全系統嚴格規範每一段座標轉換（TF）的**唯一權威發布擁有者**，禁止任何未授權節點重複廣播造成 TF 跳動或競爭：
@@ -829,12 +943,19 @@ flowchart LR
 ```text
     ┌───────────────────────────┐         ┌───────────────────────────┐
     │       S6 Navigation       │         │   User / Operator         │
-    │    (controller_server)    │         │   teleop_twist_keyboard   │
-    │   (Navigation Mode 啟用)   │         │   (Mapping Mode 啟用)     │
-    └─────────────┬─────────────┘         └─────────────┬─────────────┘
+    │ ┌───────────────────────┐ │         │   teleop_twist_keyboard   │
+    │ │ controller_server     │ │         │   (Mapping Mode 啟用)     │
+    │ │ (三階段路線導航)       │ │         └─────────────┬─────────────┘
+    │ └───────────┬───────────┘ │                       │
+    │ ┌───────────┴───────────┐ │                       │
+    │ │ docking_server        │ │                       │
+    │ │ (AprilTag 視覺停靠)   │ │                       │
+    │ └───────────┬───────────┘ │                       │
+    │   (Navigation Mode 啟用)  │                       │
+    └─────────────┬─────────────┘                       │
                   │                                     │
                   │ /diff_drive_controller/cmd_vel      │ /diff_drive_controller/cmd_vel
-                  │ (自主速度命令)                         │ (手動巡覽速度命令, SYS-034)
+                  │ (自主速度命令, 兩者互斥)               │ (手動巡覽速度命令, SYS-034)
                   │                                     │
                   └──────────────────┬──────────────────┘
                                      │
@@ -858,6 +979,8 @@ flowchart LR
                       │  └─────────────────────┘  │
                       └───────────────────────────┘
 ```
+
+> **速度命令發布權限**：Navigation Mode 下速度命令僅由 S6 的 `controller_server` 或 `docking_server` 依任務狀態互斥發布；`apriltag_dock_trigger` 僅為 Action 轉發適配節點，不是速度命令生產者（Not a Velocity Producer）。
 
 ### 8.1 多層停止安全架構 (Multi-Tier Stop Architecture)
 
@@ -1022,12 +1145,12 @@ navigate_to_station CLI
 | **S3** | **State Estimation** | SYS-005 |
 | **S4** | **Mapping** | SYS-001, SYS-002, SYS-006, SYS-024 |
 | **S5** | **Localization** | SYS-007, SYS-010 |
-| **S6** | **Navigation** | SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033 |
+| **S6** | **Navigation** | SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033, SYS-044 |
 | **S7** | **Base Control** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 |
 | **S8** | **Observability and Diagnostics** | SYS-035, SYS-036, SYS-037, SYS-038, SYS-042 |
 
 ### 12.2 權威需求規範參照
-- **系統需求規範**：系統 37 項規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
+- **系統需求規範**：系統 38 項規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
 - **系統驗證狀態**：目前 AMR 實機已驗證功能、驗證結論與已知限制彙整於本文件「[13. 系統驗證狀態與已知限制](#13-系統驗證狀態與已知限制-system-verification-status--known-limitations)」。
 
 ---
@@ -1069,6 +1192,24 @@ navigate_to_station CLI
 7. **S7 底盤安全閘門**：
    - 實機驗證 S7 的安全啟動、命令逾時、運動限制與停機行為（[§4.7](#47-s7-base-control)、[§8.1](#81-多層停止安全架構-multi-tier-stop-architecture)）。
 
+8. **AprilTag 視覺停靠 (S6 Navigation / Direct Docking, SYS-044)**：
+   - **已軟體驗證 (Software Validated)**：
+     - 驗證 Nav2 `docking_server` launch 整合與 Lifecycle Manager 納管（[§4.6](#46-s6-navigation)、[§4.6.1](#461-apriltag-視覺停靠架構與介面契約-direct-apriltag-docking-architecture--interface-contract)）。
+     - 驗證 `apriltag_dock_trigger` launch 整合（為一般 ROS 2 節點，不納入 Lifecycle 管理）。
+     - 驗證 `SimpleNonChargingDock` 外掛配置與 Jazzy 1.3.12 停靠參數解析。
+     - 驗證 `docking_server` 之 `geometry_msgs/msg/TwistStamped` 輸出與 `/diff_drive_controller/cmd_vel` 銜接。
+     - 驗證 Local Costmap 碰撞檢測 topic 訂閱契約。
+     - 驗證 `apriltag_dock_trigger` 節點行為：無感知資料時防禦拒絕、PoseStamped 原封不動填入 Action Goal、Action 成功／失敗結果映射、Action Server 離線保護。
+     - 並行回調設計已透過自動化測試驗證同步等待 Action 結果時可正常完成。
+     - `mobile_base_navigation` 與 `mobile_base_bringup` 測試套件全數通過。
+   - **尚待實機驗證 (Pending Hardware Validation)**：
+     - Upper Body 真實 AprilTag 座標軸定義（X-forward vs Z-forward）。
+     - `external_detection_translation_x` 實機外參正負號（$\pm 0.7\,\text{m}$）與 `external_detection_rotation_*` 實際旋轉偏移量標定。
+     - 實機牆面／標記前停止距離約 70 cm 幾何驗收。
+     - `docking_threshold` 到站判定在實機差速底盤上的實際精度。
+     - Local Costmap 在 AMR 靠近牆面時是否會因膨脹層過早阻擋停靠。
+     - AMR 實機停靠軌跡與停止精度。
+
 ---
 
 ### 13.2 已知限制邊界 (Known Operational Limitations)
@@ -1082,6 +1223,6 @@ navigate_to_station CLI
 
 ### 13.3 需求驗證現況摘要 (Requirement Verification Accounting)
 
-- **規範性需求總數**：`03_REQUIREMENTS.md` 共定義 37 項規範性系統需求（SYS-001 ~ SYS-011, SYS-013 ~ SYS-030, SYS-032 ~ SYS-038, SYS-042）。
+- **規範性需求總數**：`03_REQUIREMENTS.md` 共定義 38 項規範性系統需求（SYS-001 ~ SYS-011, SYS-013 ~ SYS-030, SYS-032 ~ SYS-038, SYS-042, SYS-044）。
 - **編號保留缺口**：SYS-012 與 SYS-031 為需求編號分配缺口（未定義於基準中，非系統功能或實作缺口）。
-- **驗證狀態統計**：31 項需求已完成實機或自動化整合驗證；1 項需求（SYS-015 路徑追蹤）因 Known Limitation B 被評定為部分驗證（Partial）；S8 承接的 5 項需求目前僅完成 System Design，尚未實作或驗證。
+- **驗證狀態統計**：31 項需求已完成實機或自動化整合驗證；1 項需求（SYS-044 AprilTag 視覺停靠）已完成軟體驗證，尚待實機標定驗收；1 項需求（SYS-015 路徑追蹤）因 Known Limitation B 被評定為部分驗證（Partial）；S8 承接的 5 項需求目前僅完成 System Design，尚未實作或驗證。
