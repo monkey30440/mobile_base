@@ -594,6 +594,12 @@ Selected ROS Runtime Information
 - AMR onboard 僅部署 ROS Observability Adapter、Fluent Bit 與 bounded RAM buffers。
 - Server 部署 OpenSearch 與 InfluxDB；AMR 不部署 OpenSearch、InfluxDB 或任何 long-term observability database。
 
+**Repository Ownership Boundary**：
+
+- `mobile_base` repository 只負責 AMR onboard software 與其 client-side observability configuration，可包含 ROS Observability Adapter、Fluent Bit AMR-side configuration、bounded volatile buffering implementation / configuration，以及 External Observability Server endpoint、robot / source identity 與 credentials injection interface 的設定。
+- OpenSearch 與 InfluxDB 屬於 External Observability Server；其 deployment（包括 Server Docker Compose）、bootstrap、persistent volume / storage configuration、installation 與 operations artifacts 由 `mobile_base` repository 之外管理，不得存放於本 repository。
+- 不得將 OpenSearch 或 InfluxDB services 加入 AMR root Compose。
+
 #### 4.8.8 Explicit Out of Scope
 
 S8 目前產品範圍明確不提供：`SYS-039`、`SYS-040`、`SYS-041`、`SYS-043`、Raw MCAP production integration、offline replay、Dataset Catalog、completeness / gap accounting、dropped count、priority queue、persistent local spool、guaranteed resend / backfill、composite subsystem health、automatic root cause、alerting、anomaly detection、dashboard requirement、continuous raw recording、rolling raw buffer，以及任何 Phase 2 範圍。
