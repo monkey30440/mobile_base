@@ -158,7 +158,7 @@ Navigation Mode 應提供基於視覺標記之 AprilTag Direct Docking 能力。
 
 系統應提供 `/apriltag_dock`（`std_srvs/srv/Trigger`）服務作為單次停靠之觸發介面。外部視覺感知系統（Upper Body）應提供標記相對於基座之位姿 `/detected_dock_pose`（`geometry_msgs/msg/PoseStamped`，`frame_id: "base_link"`），其中 position 與 orientation 均應有效。
 
-底盤導航系統（Lower Body）應接收該標記位姿，透過停靠外掛設定之外參轉換計算目標停靠位姿（使 AMR 最終停於標記前約 70 cm，其實體轉換符號與旋轉偏移待實機標定驗證），並直接執行閉迴路停靠控制，不執行 `NavigateToPose` 預備站點導航。
+底盤導航系統（Lower Body）應接收該標記位姿，透過停靠外掛設定之幾何外參轉換計算目標停靠位姿（使 AMR 最終停於標記前約 70 cm，其實際停止距離與旋轉偏移待實機標定驗證），並直接執行閉迴路停靠控制，不執行 `NavigateToPose` 預備站點導航。
 
 停靠運動期間發布之速度命令應遵守 S7 既有底盤運動限制（SYS-028）、命令逾時停止（SYS-027）與時間戳格式（`TwistStamped`），並使用既有 Local Costmap 進行障礙物防撞判定。當視覺感知逾時、停靠控制逾時或 Nav2 停靠失敗時，系統應終止該次停靠、嘗試使底盤停止並回報失敗結果。
 

@@ -1204,8 +1204,8 @@ navigate_to_station CLI
      - `mobile_base_navigation` 與 `mobile_base_bringup` 測試套件全數通過。
    - **尚待實機驗證 (Pending Hardware Validation)**：
      - Upper Body 真實 AprilTag 座標軸定義（X-forward vs Z-forward）。
-     - `external_detection_translation_x` 實機外參正負號（$\pm 0.7\,\text{m}$）與 `external_detection_rotation_*` 實際旋轉偏移量標定。
-     - 實機牆面／標記前停止距離約 70 cm 幾何驗收。
+     - `external_detection_rotation_*` 實際旋轉偏移量標定。
+     - 實機牆面／標記前實際停止距離約 70 cm 幾何驗收。
      - `docking_threshold` 到站判定在實機差速底盤上的實際精度。
      - Local Costmap 在 AMR 靠近牆面時是否會因膨脹層過早阻擋停靠。
      - AMR 實機停靠軌跡與停止精度。
