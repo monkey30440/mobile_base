@@ -244,7 +244,7 @@ def test_launch_description_composition():
     assert 'route_server' in node_names
     assert 'bt_navigator' in node_names
     assert 'docking_server' in node_names
-    assert 'apriltag_dock_trigger' in node_names
+    assert 'apriltag_dock_trigger' not in node_names
     assert 'collision_monitor' not in node_names
     assert 'lifecycle_manager_navigation' in node_names
 

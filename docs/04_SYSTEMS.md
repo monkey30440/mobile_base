@@ -127,7 +127,7 @@ S8 為兩種模式共用、與核心功能隔離的觀察旁路；其啟動、�
 
 ### 3.2 Navigation Mode (UC-002)
 - **目的**：載入已建置地圖與路網資源，依據使用者提交之 Station 或 Goal Pose 目標執行三階段自主導航，或透過視覺標記執行 AprilTag Direct Docking。
-- **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S5 Localization`（包含 `map_server` 地圖載入與 `amcl` 定位）, `S6 Navigation`（包含 Nav2 導航堆疊、`docking_server` 與 `apriltag_dock_trigger`）, `S7 Base Control`。`S4 Mapping` 處於非活躍狀態（Inactive）。
+- **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S5 Localization`（包含 `map_server` 地圖載入與 `amcl` 定位）, `S6 Navigation`（包含 Nav2 導航堆疊與 `docking_server`）, `S7 Base Control`。`S4 Mapping` 處於非活躍狀態（Inactive）。
 - **運動控制輸入**：由 S6 Nav2 `controller_server`（三階段路線導航）或 `docking_server`（AprilTag 視覺停靠）運算自主軌跡，依任務狀態互斥輸出至 S7（`/diff_drive_controller/cmd_vel`）。
 - **動態 TF 權限**：由 S5 `nav2_amcl` 唯一發布 `map -> odom` TF；由 S3 `robot_localization` EKF 唯一發布 `odom -> base_footprint` TF。
 - **互斥邊界**：S4 `slam_toolbox` 建圖節點與外部 `teleop_twist_keyboard` **嚴格禁止啟動**。
@@ -308,7 +308,7 @@ graph TD
   3. **Stage Execution**：編排與監控 First Mile → On Route → Last Mile 三階段路徑拼接與追蹤。
   4. **Supervision & Obstacle Handling**：透過 Nav2 Costmaps 維護障礙物代價，並依 Nav2 原生規劃與路徑追蹤結果監控任務能否繼續執行。
   5. **Completion & Result**：以 `StoppedGoalChecker` 評估到站停妥條件，對外統一回傳導航結果（Success / Failure / Canceled）。
-  6. **Direct AprilTag Docking**：接收 Upper Body 視覺標記姿態 `/detected_dock_pose`，透過 `apriltag_dock_trigger` 轉發 Action Goal 並由 `docking_server`（載入 `SimpleNonChargingDock` 外掛）執行閉迴路精準停靠（SYS-044）。
+  6. **Direct AprilTag Docking**：Upper Body 直接發送 Nav2 原生 `/dock_robot` Action Goal 並發布視覺標記姿態 `/detected_dock_pose`，由 `docking_server`（載入 `SimpleNonChargingDock` 外掛）執行閉迴路精準停靠（SYS-044）。
 - **承接需求**：`SYS-008`, `SYS-009`, `SYS-011`, `SYS-013`, `SYS-014`, `SYS-015`, `SYS-016`, `SYS-017`, `SYS-018`, `SYS-019`, `SYS-020`, `SYS-021`, `SYS-025`, `SYS-032`, `SYS-033`, `SYS-044`。
 - **核心執行元件**：
   - `bt_navigator` (`nav2_bt_navigator`, 載入 `route_assisted_nav.xml`)。
@@ -316,13 +316,12 @@ graph TD
   - `planner_server` (`nav2_planner`, 使用 `nav2_navfn_planner::NavfnPlanner`)。
   - `controller_server` (`nav2_controller`, 使用 `nav2_mppi_controller::MPPIController` 與 `StoppedGoalChecker`)。
   - `docking_server` (`opennav_docking::DockingServer`, Lifecycle Node, 載入 `opennav_docking::SimpleNonChargingDock` 外掛)。
-  - `apriltag_dock_trigger` (`mobile_base_navigation::ApriltagDockTriggerNode`, 一般 ROS 2 Node，不加入 Nav2 lifecycle manager)。
   - `lifecycle_manager_navigation` (`nav2_lifecycle_manager`，統籌管理 `bt_navigator`, `route_server`, `planner_server`, `controller_server`, `docking_server`)。
   - `navigate_to_station` CLI 應用程式（整合 `TargetAdmission` 模組）。
 - **重要輸入**：
   - 外部目標（Station ID 或 Goal Pose）。
-  - `/detected_dock_pose` (`geometry_msgs/msg/PoseStamped`, `frame_id: "base_link"`, 來自 Upper Body 感知)。
-  - `/apriltag_dock` (`std_srvs/srv/Trigger`, 停靠觸發服務)。
+  - `/dock_robot` (`nav2_msgs/action/DockRobot`, 來自 Upper Body 停靠任務請求)。
+  - `/detected_dock_pose` (`geometry_msgs/msg/PoseStamped`, `frame_id: "base_link"`, 來自 Upper Body 感知串流)。
   - `/map` (來自 S5 `map_server`)。
   - `/scan_front` 與 `/scan_rear` (來自 S2，供 Local/Global Costmaps 使用)。
   - TF `map -> odom` (來自 S5) 與 `odom -> base_footprint` (來自 S3)。
@@ -333,7 +332,7 @@ graph TD
 - **TF 所有權**：無（`docking_server` 配置 `base_frame: "base_link"`、`fixed_frame: "odom"`，僅查詢既有 TF，嚴禁發布 TF）。
 - **架構約束**：
   - 採用原生 `nav2_msgs/action/NavigateToPose` 進行導航目標調度，**系統不存在任何自製 `mobile_base_msgs/action/NavigateToStation` 介面**。
-  - 採用原生 `nav2_msgs/action/DockRobot` 進行視覺停靠控制，由 `apriltag_dock_trigger` 轉接 `/apriltag_dock`（`std_srvs/srv/Trigger`）人工作業介面。
+  - 採用原生 `nav2_msgs/action/DockRobot` 進行視覺停靠控制，**由 Upper Body 作為 Action Client 直接發起與管理任務**，不設置自製 Trigger 或中介節點。
   - v0.1 關閉全域自由空間 Fallback（SYS-021）；當無可用路網解時直接終止任務並回報失敗。
 - **權威實作與配置參考**：
   - Launch: `src/mobile_base_navigation/launch/navigation.launch.py`
@@ -341,71 +340,73 @@ graph TD
   - Behavior Tree: `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`
   - Target Admission: `src/mobile_base_navigation/include/mobile_base_navigation/target_admission.hpp`
   - Station App: `src/mobile_base_navigation/src/navigate_to_station_app.cpp`
-  - Trigger Node: `src/mobile_base_navigation/include/mobile_base_navigation/apriltag_dock_trigger_node.hpp`, `src/mobile_base_navigation/src/apriltag_dock_trigger_node.cpp`
 
 #### 4.6.1 AprilTag 視覺停靠架構與介面契約 (Direct AprilTag Docking Architecture & Interface Contract)
 
-MVP-1 的 AprilTag 停靠採用分層解耦的 Direct Docking 設計：
+AprilTag 視覺停靠採用 Nav2/OpenNav 原生標準介面，達成 Upper（感知與決策）與 Lower（導航與運動控制）清晰解耦：
 
 ```text
-Upper Body (視覺感知)
+Upper Body (決策與感知)
     │
-    │ /detected_dock_pose
-    │ (geometry_msgs/msg/PoseStamped, frame_id=base_link)
-    ▼
-apriltag_dock_trigger (Adapter / Trigger Node)
-    │
-    │ /dock_robot (nav2_msgs/action/DockRobot Goal)
-    ▼
-docking_server (opennav_docking)
-    │
-    ├── SimpleNonChargingDock (Tag → Target Transform / 70 cm Stop Geometry)
-    ├── Docking Controller (Smooth Control Law)
-    └── Local Costmap Collision Checker
-    │
-    │ /diff_drive_controller/cmd_vel (geometry_msgs/msg/TwistStamped)
-    ▼
+    ├── /dock_robot Goal (nav2_msgs/action/DockRobot) ────────────┐
+    │   (dock_pose @ base_link, use_dock_id=false)                │
+    │                                                             │
+    └── /detected_dock_pose ────────────────────────────┐         │
+        (geometry_msgs/msg/PoseStamped, frame_id=base_link)       │
+                                                        │         │
+Lower Body (S6 Navigation)                              │         │
+    │                                                   ▼         ▼
+    └── docking_server (opennav_docking) ◀─────────────────────────┘
+            │
+            ├── SimpleNonChargingDock (Tag → Target Transform / 70 cm Stop Geometry)
+            ├── Docking Controller (Smooth Control Law)
+            └── Local Costmap Collision Checker
+            │
+            │ /diff_drive_controller/cmd_vel (geometry_msgs/msg/TwistStamped)
+            ▼
 S7 Base Control
 ```
 
 **責任邊界配置 (Responsibility Boundary)**：
 
-| 元件 | 專屬擁有職責 (Owned Responsibilities) | 嚴格禁止涉足 (Non-Goals / Excluded) |
+| 實體 | 專屬擁有職責 (Owned Responsibilities) | 嚴格禁止涉足 (Non-Goals / Excluded) |
 |---|---|---|
-| **`apriltag_dock_trigger`** | • 一般 ROS 2 節點（不納入 Nav2 lifecycle manager）<br/>• 訂閱並快取最新一筆 `/detected_dock_pose`<br/>• 提供 `/apriltag_dock` (`std_srvs/srv/Trigger`) 一鍵服務<br/>• 觸發時將快取 PoseStamped 原封不動填入 `DockRobot.goal.dock_pose`<br/>• 固定 Direct Docking 目標（`use_dock_id=false`, `dock_id=""`, `dock_type="apriltag_dock"`, `navigate_to_staging_pose=false`）<br/>• 防範重疊停靠請求<br/>• 等候 Action 最終結果並映射至 Trigger 回應 | • 70 cm 偏移或外參計算<br/>• TF 座標轉換<br/>• 姿態濾波或平滑<br/>• 感知時效 (Freshness) 判斷<br/>• PID 或速度控制<br/>• 碰撞偵測或避障<br/>• 重試 (Retry) 與恢復 (Recovery)<br/>• 多標記選擇或搜尋 |
-| **`docking_server` / `SimpleNonChargingDock`** | • `base_frame="base_link"`, `fixed_frame="odom"`<br/>• 接收並處理 `DockRobot` Action 請求<br/>• 擁有 Tag $\to$ Dock 外參轉換與 70 cm 停止幾何<br/>• 處理 Perception / Approach 逾時<br/>• 執行 Nav2 原生 Smooth Control Law 停靠控制器<br/>• 訂閱 Local Costmap 進行前向碰撞預測<br/>• 輸出 `geometry_msgs/msg/TwistStamped` 至 S7 cmd_vel 速度鏈 | • 自製自定義控制器<br/>• 預備點導航 (MVP-1 `navigate_to_staging_pose=false`)<br/>• Dock Database 查詢 (MVP-1 不使用)<br/>• 充電樁充電交握 (Non-charging dock 立即完成) |
+| **Upper Body**<br/>(視覺感知與決策) | • 相機擷取與 AprilTag 姿態估測<br/>• 持續發布 `/detected_dock_pose`（`frame_id="base_link"`, 原始標記位姿）<br/>• 依任務流程自主決定何時開始停靠<br/>• 作為 Action Client 發送 `/dock_robot` Action Goal<br/>• 監聽 Action Feedback、處理 Result、可主動發送 Cancel 取消停靠 | • 70 cm 停止幾何偏移計算（不得預扣 70 cm）<br/>• 下發底盤速度控制命令（嚴禁直連 cmd_vel）<br/>• 底盤 TF 座標轉換與里程計整合<br/>• 底盤障礙物避障與防撞判定 |
+| **`docking_server` / `SimpleNonChargingDock`**<br/>(Lower Body 停靠執行) | • 提供 Nav2 原生 `/dock_robot` Action 服務（支援 Feedback, Result, Cancel, Preemption）<br/>• 接收 Goal 當下以 TF 將目標標記位姿轉換鎖定至 `fixed_frame="odom"`<br/>• 獨立訂閱 `/detected_dock_pose` 作為控制更新流<br/>• 擁有標記至目標停靠點的外參變換幾何（70 cm 停止偏移）<br/>• 處理感知逾時（2.0s）、初始偵測逾時（5.0s）與逼近控制總逾時（30.0s）<br/>• 執行 Nav2 原生 Smooth Control Law 閉迴路控制器<br/>• 訂閱 Local Costmap 進行前向碰撞預測與防撞<br/>• 輸出 `geometry_msgs/msg/TwistStamped` 至 S7 cmd_vel 速度鏈 | • 相機內參或安裝外參計算<br/>• 預備點導航（Direct Docking `navigate_to_staging_pose=false`）<br/>• 自製自定義控制器或 PID 旁路<br/>• 充電樁硬體交握（Non-charging dock 立即完成） |
 
 **上下半身介面契約 (Upper / Lower Body Interface Contract)**：
 
-1. **Upper Body (視覺感知)**：
-   - 負責相機串流擷取與 AprilTag 姿態估測。
-   - 依相機外參將標記姿態轉換至機器人基座座標系，發布為標準 `geometry_msgs/msg/PoseStamped`（topic: `/detected_dock_pose`，`frame_id: "base_link"`）。
-   - 保證發布之 `position` 與 `orientation` 均為有效數值。
-   - **嚴格不套用 70 cm 停止偏移**，且不直接下發底盤速度命令。
-2. **Lower Body (S6 導航與底盤控制)**：
-   - 不感知相機內部參數或安裝外參。
-   - `apriltag_dock_trigger` 僅原封不動轉發最新偵測姿態至 `docking_server`。
-   - `SimpleNonChargingDock` 獨佔擁有標記至目標停靠點的外參變換幾何（70 cm 偏移）。
-   - `docking_server` 獨佔擁有停靠運動閉迴路與速度命令生成。
+1. **任務觸發契約 (`/dock_robot`)**：
+   - 介面類型：`nav2_msgs/action/DockRobot`。
+   - 觸發語意：發送 Action Goal 才是唯一的停靠啟動觸發；單純偵測到標記不等於啟動停靠。
+   - Demo Goal 填寫規範：
+     - `use_dock_id = false`
+     - `dock_id = ""`
+     - `dock_pose.header.frame_id = "base_link"`
+     - `dock_pose.pose` = Upper 當前測得之原始 AprilTag 位姿（未扣除 70 cm）
+     - `dock_type = "apriltag_dock"`
+     - `navigate_to_staging_pose = false`
+     - `max_staging_time = 0.0`
+2. **感知串流契約 (`/detected_dock_pose`)**：
+   - 介面類型：`geometry_msgs/msg/PoseStamped`。
+   - 座標系：`header.frame_id = "base_link"`。
+   - 時間戳：`header.stamp` 必須為感知取樣之真實時間戳（Lower `getRefinedPose` 以此判定 2.0s 新鮮度）。
+   - 數值內容：`pose` 為標記相對於 `base_link` 之原始位姿（Upper 嚴格不套用 70 cm 偏移）。
 
-**MVP-1 Scope 邊界**：
+**Direct Docking Scope 邊界**：
 
 - **包含 (In Scope)**：
-  - Direct AprilTag Docking。
-  - `/apriltag_dock` 一鍵 Trigger 服務。
-  - 最新偵測姿態直接填入 `DockRobot` Goal。
-  - Nav2 原生 `opennav_docking::SimpleNonChargingDock` 外掛。
-  - 單一 `apriltag_dock` 外掛配置。
+  - Upper $\rightarrow$ Lower 原生 Direct AprilTag Docking。
+  - Nav2 原生 `opennav_docking::SimpleNonChargingDock` 外掛與 `docking_server`。
+  - 原生 Action Feedback、Result 錯誤碼、Cancel 與 Preemption 語意。
   - `navigate_to_staging_pose = false`。
   - `max_retries = 0`。
-- **不包含 (Out of Scope)**：
-  - `NavigateToPose` 全域導航與 Staging 預備站點串接。
-  - Dock Database 站點資料庫。
-  - 多標記選擇與過濾。
-  - 自動尋標 (Tag Search)。
-  - 自製 Docking Controller。
+- **不包含 (Out of Scope / Future Migration)**：
+  - `NavigateToPose` 全域導航預備點 Staging（MVP-1 由 Upper 導航至站點後發起 Direct Docking）。
+  - Dock Database 站點資料庫（生產環境演進時僅需調整 `use_dock_id=true`，Action 介面本體不變）。
+  - 自動尋標旋轉 (Tag Search)。
+  - 自製自定義 Docking Controller。
   - 自製 PID / cmd_vel 旁路控制。
-  - 自製 Retry / Recovery 行為。
 
 ---
 
@@ -855,40 +856,40 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as 操作員 / 上層系統
-    participant Upper as Upper Body (視覺感知)
-    participant Trigger as S6: apriltag_dock_trigger
+    actor Upper as Upper Body (決策與視覺感知)
     participant Dock as S6: docking_server (SimpleNonChargingDock)
     participant Costmap as S6: local_costmap
     participant S7 as S7: Base Control
     participant M1 as 底盤硬體 (M1 Motors)
 
-    Upper-->>Trigger: 持續發布 /detected_dock_pose (frame_id=base_link)
-    Trigger->>Trigger: 快取最新 PoseStamped
+    Upper-->>Dock: 持續發布 /detected_dock_pose (frame_id=base_link, raw pose)
 
-    User->>Trigger: 呼叫 /apriltag_dock (std_srvs/srv/Trigger)
-    alt 尚未收到任何 /detected_dock_pose
-        Trigger-->>User: 立即回傳失敗 (No detected dock pose received yet)
-    else 停靠已在執行中
-        Trigger-->>User: 立即回傳失敗 (Docking already in progress)
-    else 條件就緒
-        Trigger->>Dock: 發送 DockRobot Action Goal (dock_pose=cached_pose, navigate_to_staging_pose=false)
-        Dock->>Dock: doInitialPerception 確認外部標記姿態
+    Note over Upper,Dock: Upper 自主決定停靠時機，發送 Action Goal
+    Upper->>Dock: 發送 /dock_robot Action Goal (dock_pose @ base_link, navigate_to_staging_pose=false)
+    Dock->>Dock: 收悉當下以 TF 將目標姿態鎖定至 fixed_frame (odom)
+    Dock->>Dock: doInitialPerception 確認外部標記姿態 (5.0s 逾時)
+    Dock-->>Upper: 回傳 Goal Accepted
 
-        loop 停靠控制迴圈 (20 Hz)
-            Upper-->>Dock: 接收 /detected_dock_pose 更新
-            Dock->>Dock: getRefinedPose 套用 70cm 幾何偏移
-            Costmap-->>Dock: 查詢 local_costmap/costmap_raw 碰撞檢測
-            Dock->>S7: 發布 TwistStamped 至 /diff_drive_controller/cmd_vel
-            S7->>S7: 檢查 0.5s 逾時、限制運動極限
-            S7->>M1: Modbus RTU FC17 輪速下發
-        end
-
-        Dock->>Dock: isDocked 判定到達停靠距離門檻 (docking_threshold)
-        Dock->>S7: 輸出零速煞停
-        Dock-->>Trigger: 回傳 DockRobot Action Result (SUCCEEDED)
-        Trigger-->>User: 回傳 Trigger Response (success=true, message="Docking succeeded")
+    loop 停靠控制迴圈 (20 Hz)
+        Upper-->>Dock: 接收 /detected_dock_pose 更新 (2.0s 新鮮度檢核)
+        Dock->>Dock: getRefinedPose 套用 70cm 幾何偏移
+        Costmap-->>Dock: 查詢 local_costmap/costmap_raw 碰撞檢測
+        Dock->>S7: 發布 TwistStamped 至 /diff_drive_controller/cmd_vel
+        Dock-->>Upper: 發布 Action Feedback (state, docking_time, num_retries)
+        S7->>S7: 檢查 0.5s 逾時、限制運動極限
+        S7->>M1: Modbus RTU FC17 輪速下發
     end
+
+    opt Upper 主動取消任務 (Cancel)
+        Upper->>Dock: 發送 Action Cancel Request
+        Dock->>Dock: checkAndWarnIfCancelled 中斷控制迴圈
+        Dock->>S7: 發布零速煞停 (publishZeroVelocity)
+        Dock-->>Upper: 回傳 Action Result (CANCELED)
+    end
+
+    Dock->>Dock: isDocked 判定到達停靠距離門檻 (docking_threshold)
+    Dock->>S7: 輸出零速煞停
+    Dock-->>Upper: 回傳 DockRobot Action Result (SUCCEEDED, error_code=0)
 ```
 
 ---
@@ -980,7 +981,7 @@ sequenceDiagram
                       └───────────────────────────┘
 ```
 
-> **速度命令發布權限**：Navigation Mode 下速度命令僅由 S6 的 `controller_server` 或 `docking_server` 依任務狀態互斥發布；`apriltag_dock_trigger` 僅為 Action 轉發適配節點，不是速度命令生產者（Not a Velocity Producer）。
+> **速度命令發布權限**：Navigation Mode 下速度命令僅由 S6 的 `controller_server` 或 `docking_server` 依任務狀態互斥發布；Upper Body 或其他外部節點不是速度命令生產者（Not a Velocity Producer）。
 
 ### 8.1 多層停止安全架構 (Multi-Tier Stop Architecture)
 
@@ -1195,12 +1196,11 @@ navigate_to_station CLI
 8. **AprilTag 視覺停靠 (S6 Navigation / Direct Docking, SYS-044)**：
    - **已軟體驗證 (Software Validated)**：
      - 驗證 Nav2 `docking_server` launch 整合與 Lifecycle Manager 納管（[§4.6](#46-s6-navigation)、[§4.6.1](#461-apriltag-視覺停靠架構與介面契約-direct-apriltag-docking-architecture--interface-contract)）。
-     - 驗證 `apriltag_dock_trigger` launch 整合（為一般 ROS 2 節點，不納入 Lifecycle 管理）。
-     - 驗證 `SimpleNonChargingDock` 外掛配置與 Jazzy 1.3.12 停靠參數解析。
+     - 驗證原生 `nav2_msgs/action/DockRobot` Action Server 就緒與介面相容性。
+     - 驗證 `SimpleNonChargingDock` 外掛配置、`/detected_dock_pose` 訂閱與 Jazzy 1.3.12 停靠參數解析。
      - 驗證 `docking_server` 之 `geometry_msgs/msg/TwistStamped` 輸出與 `/diff_drive_controller/cmd_vel` 銜接。
      - 驗證 Local Costmap 碰撞檢測 topic 訂閱契約。
-     - 驗證 `apriltag_dock_trigger` 節點行為：無感知資料時防禦拒絕、PoseStamped 原封不動填入 Action Goal、Action 成功／失敗結果映射、Action Server 離線保護。
-     - 並行回調設計已透過自動化測試驗證同步等待 Action 結果時可正常完成。
+     - 驗證原生 Action 取消（Cancel）與零速煞停機制。
      - `mobile_base_navigation` 與 `mobile_base_bringup` 測試套件全數通過。
    - **尚待實機驗證 (Pending Hardware Validation)**：
      - Upper Body 真實 AprilTag 座標軸定義（X-forward vs Z-forward）。

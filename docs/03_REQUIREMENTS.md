@@ -156,11 +156,19 @@ v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無
 
 Navigation Mode 應提供基於視覺標記之 AprilTag Direct Docking 能力。
 
-系統應提供 `/apriltag_dock`（`std_srvs/srv/Trigger`）服務作為單次停靠之觸發介面。外部視覺感知系統（Upper Body）應提供標記相對於基座之位姿 `/detected_dock_pose`（`geometry_msgs/msg/PoseStamped`，`frame_id: "base_link"`），其中 position 與 orientation 均應有效。
+### 任務控制介面 (Task Interface)
+系統應提供 Nav2 原生 `/dock_robot`（`nav2_msgs/action/DockRobot`）Action 伺服介面作為停靠任務之控制與觸發入口。外部決策系統（Upper Body）應作為 Action Client，自主決定啟動停靠之時機並發送 `DockRobot` Action Goal。系統應支援原生 Action 語意，包含即時 Feedback、結構化 Result（`success`, `error_code`, `error_msg`）、任務取消（Cancel）與新目標搶佔（Preemption）。
 
-底盤導航系統（Lower Body）應接收該標記位姿，透過停靠外掛設定之幾何外參轉換計算目標停靠位姿（使 AMR 最終停於標記前約 70 cm，其實際停止距離與旋轉偏移待實機標定驗證），並直接執行閉迴路停靠控制，不執行 `NavigateToPose` 預備站點導航。
+### 感知資料介面 (Perception Interface)
+外部視覺感知系統（Upper Body）應獨立且持續發布標記相對於基座之姿態串流 `/detected_dock_pose`（`geometry_msgs/msg/PoseStamped`，`frame_id: "base_link"`，`header.stamp` 為感知擷取時間戳），其中 position 與 orientation 均應有效。偵測到標記姿態僅代表感知串流可用，不等於啟動停靠任務；唯有發送 `DockRobot` Action Goal 才是啟動停靠之明確觸發。
 
-停靠運動期間發布之速度命令應遵守 S7 既有底盤運動限制（SYS-028）、命令逾時停止（SYS-027）與時間戳格式（`TwistStamped`），並使用既有 Local Costmap 進行障礙物防撞判定。當視覺感知逾時、停靠控制逾時或 Nav2 停靠失敗時，系統應終止該次停靠、嘗試使底盤停止並回報失敗結果。
+### 停靠執行與幾何責任 (Execution & Geometry Boundary)
+底盤導航系統（Lower Body）之 `docking_server`（載入 `opennav_docking::SimpleNonChargingDock` 外掛）應接收 `DockRobot` Action Goal 並獨立訂閱 `/detected_dock_pose` 串流，於收悉 Goal 當下將目標姿態轉換至 `fixed_frame: "odom"` 快照，並由停靠外掛獨佔處理幾何外參轉換（使 AMR 最終停於標記前約 70 cm，其實際停止距離與旋轉偏移待實機標定驗證），直接執行閉迴路停靠控制，不執行 `NavigateToPose` 預備站點導航。外部感知系統嚴禁自行預先扣除 70 cm 偏移。
+
+### 安全與逾時保護 (Safety & Timeout Protection)
+停靠運動期間發布之速度命令應遵守 S7 既有底盤運動限制（SYS-028）、命令逾時停止（SYS-027）與時間戳格式（`TwistStamped`），並使用既有 Local Costmap 進行障礙物防撞判定。當視覺感知逾時（`external_detection_timeout`）、初始偵測逾時（`initial_perception_timeout`）、停靠控制逾時（`dock_approach_timeout`）或 Nav2 停靠失敗時，系統應終止該次停靠、發布零速使底盤停止並回報失敗 Action Result。
+
+> **註（架構演進）**：Demo 階段採用 Direct Docking（`use_dock_id = false`, `dock_id = ""`，不使用 Dock Database）；未來完整生產環境遷移至 Dock Database 管理時，將維持原生 `DockRobot` 介面不變，僅調整 Goal 中之 `use_dock_id` 與資料庫配置。
 
 ---
 

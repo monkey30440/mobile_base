@@ -11,7 +11,6 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
@@ -61,38 +60,9 @@ ament_target_dependencies(navigate_to_station
   rclcpp
 )
 
-# AprilTag Dock Trigger node
-add_library(apriltag_dock_trigger_lib
-  src/apriltag_dock_trigger_node.cpp
-)
-target_include_directories(apriltag_dock_trigger_lib PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-ament_target_dependencies(apriltag_dock_trigger_lib
-  rclcpp
-  rclcpp_action
-  geometry_msgs
-  nav2_msgs
-  std_srvs
-)
-
-add_executable(apriltag_dock_trigger
-  src/apriltag_dock_trigger_main.cpp
-)
-target_include_directories(apriltag_dock_trigger PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_link_libraries(apriltag_dock_trigger
-  apriltag_dock_trigger_lib
-)
-ament_target_dependencies(apriltag_dock_trigger
-  rclcpp
-)
-
 # Install libraries and headers
 install(
-  TARGETS target_admission_lib apriltag_dock_trigger_lib
+  TARGETS target_admission_lib
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -100,7 +70,7 @@ install(
 )
 
 install(
-  TARGETS navigate_to_station apriltag_dock_trigger
+  TARGETS navigate_to_station
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -182,9 +152,6 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_navigation_launch
     test/test_navigation_launch.py
-  )
-  ament_add_pytest_test(test_apriltag_dock_trigger
-    test/test_apriltag_dock_trigger.py
   )
 endif()
 

@@ -139,16 +139,6 @@ def generate_launch_description():
                 remappings=controller_remappings,
             ),
             Node(
-                package='mobile_base_navigation',
-                executable='apriltag_dock_trigger',
-                name='apriltag_dock_trigger',
-                output='screen',
-                respawn=False,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-            ),
-            Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
                 name='lifecycle_manager_navigation',

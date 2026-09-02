@@ -98,26 +98,48 @@ ros2 launch mobile_base_bringup mobile_base.launch.py \
 ```
 *(實際部署時將 `test_site` 替換為現場 site 名稱)*
 
-**Step 2：確認 AprilTag 視覺偵測串流**（選用確認）
+**Step 2：確認 AprilTag 視覺偵測串流**（感知串流確認）
 ```bash
 ros2 topic echo /detected_dock_pose --once
 ```
-確認已收到 `frame_id: base_link` 的有效 PoseStamped（Upper Body 運作時應持續發布，`--once` 僅供確認）。
+確認已收到 `frame_id: base_link` 的有效 PoseStamped（由 Upper Body 視覺感知持續發布）：
+- `header.frame_id = "base_link"`
+- `header.stamp` 必須為感知取樣時間戳（Lower 以此檢驗 2.0s 幀時效）
+- `pose` 為相機估測之原始 AprilTag 位姿（Upper 嚴格不加 `-0.7m` 偏移，偏移由 Lower 外掛幾何計算）
 
-**Step 3：一鍵觸發停靠**
+**Step 3：發送 Nav2 原生 DockRobot Action 目標**（正式任務介面）
+Upper Body 決策模組應透過 ROS 2 Action Client 發送 `nav2_msgs/action/DockRobot` 至 `/dock_robot`。
+
+*(CLI 手動調試範例 — 注意：Thor 在未安裝實體馬達/光達時禁止發送會產生物理運動之 Goal)*：
 ```bash
-ros2 service call /apriltag_dock std_srvs/srv/Trigger "{}"
+ros2 action send_goal /dock_robot nav2_msgs/action/DockRobot "{
+  use_dock_id: false,
+  dock_id: '',
+  dock_pose: {
+    header: {frame_id: 'base_link'},
+    pose: {
+      position: {x: 1.2, y: 0.0, z: 0.0},
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    }
+  },
+  dock_type: 'apriltag_dock',
+  max_staging_time: {sec: 0, nanosec: 0},
+  navigate_to_staging_pose: false
+}"
 ```
-呼叫後等待停靠完成與服務回傳結果（`success: true` 與 `message: "Docking succeeded"`）。
 
 ### 停靠行為與防護
 
-- 系統自動使用最新 AprilTag 偵測結果作為目標，70 cm 停靠幾何由系統設定處理，操作員無需手動修改位姿或建立 Action Goal。
-- 若尚未收到有效偵測、停靠已在進行中、視覺逾時或控制失敗，Trigger 服務會立即回傳對應的失敗訊息。
+- **任務與感知分離**：`/detected_dock_pose` 是純感知資料串流，偵測到標記不等於啟動停靠；發送 `/dock_robot` Action Goal 才是唯一的停靠觸發。
+- **幾何與控制責任**：70 cm 停靠幾何偏移由 Lower 的 `SimpleNonChargingDock` 外掛獨佔計算，Upper 僅提供原始標記位姿。
+- **原生 Action 語意**：
+  - Upper 可即時接收 Feedback（`state`, `docking_time`, `num_retries`）。
+  - 任務結束時接收結構化 Result（`success`, `error_code`, `error_msg`）。
+  - 若視覺逾時（2.0s）、初始感知逾時（5.0s）或控制逾時（30.0s），Action Server 自動煞停並回傳對應錯誤碼。
 
 ### 停靠停止與安全
 
-- **取消介面現況**：MVP-1 的 `/apriltag_dock` Trigger API 尚未提供獨立 cancel 介面，請勿捏造或假設存在 `/apriltag_dock/cancel`。
+- **原生 Action 取消 (Cancel)**：Upper Body 作為 Action Client 可隨時發送 Action Cancel 請求；`docking_server` 收到後立即中斷控制迴圈、發布零速 `cmd_vel` 煞停並將狀態標記為 `CANCELED`。
 - **維運停止**：若需非緊急中斷停靠，可直接停止導航模式 launch 程序。
 - **緊急停止**：緊急狀況請直接使用 AMR 實體 E-stop / STO 按鈕。
 
@@ -126,8 +148,9 @@ ros2 service call /apriltag_dock std_srvs/srv/Trigger "{}"
 ## 停止與安全
 
 1. **取消站點導航**：於 `navigate_to_station` 終端按下 `Ctrl-C` 取消目標。
-2. **關閉導航模式**：於 launch 終端按下 `Ctrl-C` 停止導航模式所有節點。
-3. **緊急停止**：軟體取消非硬體急停；緊急狀況請立即按下 AMR 實體 E-stop / STO 按鈕。
+2. **取消視覺停靠**：由 Upper Body Action Client 發送 Action Cancel 請求。
+3. **關閉導航模式**：於 launch 終端按下 `Ctrl-C` 停止導航模式所有節點。
+4. **緊急停止**：軟體取消非硬體急停；緊急狀況請立即按下 AMR 實體 E-stop / STO 按鈕。
 
 ---
 
@@ -157,7 +180,9 @@ ros2 node list | grep -E '(bt_navigator|controller_server|planner_server)'
 ### 4. AprilTag 停靠無法觸發或回報失敗
 
 ```bash
+ros2 action list -t | grep dock_robot
 ros2 topic echo /detected_dock_pose --once
 ```
-- 若回傳 `No detected dock pose received yet`：確認 Upper Body 是否已啟動並持續發布 `/detected_dock_pose`。
-- 若回傳 `DockRobot action server unavailable`：確認 Nav2 `docking_server` 是否處於 Active 狀態。
+- 若 `/dock_robot` 不存在：確認 Nav2 `docking_server` 是否已啟動且處於 Active 生命週期狀態（`ros2 lifecycle get /docking_server`）。
+- 若未收到標記位姿：確認 Upper Body 是否已啟動並持續發布 `/detected_dock_pose`（`frame_id: "base_link"`）。
+- 若 Action 回傳 `FAILED_TO_DETECT_DOCK`（904）：確認 `/detected_dock_pose` 發布時間戳是否即時更新（時效需在 2.0s 內）。
