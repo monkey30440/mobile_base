@@ -153,6 +153,10 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_navigation_launch
     test/test_navigation_launch.py
   )
+  ament_add_pytest_test(test_apriltag_docking_integration
+    test/test_apriltag_docking_integration.py
+    TIMEOUT 60
+  )
 endif()
 
 ament_export_include_directories(include)
