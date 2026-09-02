@@ -78,7 +78,7 @@ ros2 run mobile_base_navigation navigate_to_station \
 
 ## 執行視覺停靠 (AprilTag Direct Docking)
 
-在導航模式運行期間，若需使 AMR 精準停靠於視覺標記前，可透過 Trigger 服務一鍵觸發。
+在導航模式運行期間，若需使 AMR 精準停靠於視覺標記前，可透過 Nav2 原生 /dock_robot Action 發送停靠任務。
 
 ### 前置條件與建議起始位置
 
@@ -123,7 +123,7 @@ ros2 action send_goal /dock_robot nav2_msgs/action/DockRobot "{
     }
   },
   dock_type: 'apriltag_dock',
-  max_staging_time: {sec: 0, nanosec: 0},
+  max_staging_time: 1000.0,
   navigate_to_staging_pose: false
 }"
 ```
