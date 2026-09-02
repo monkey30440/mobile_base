@@ -28,19 +28,19 @@ def generate_launch_description():
     # Declare launch arguments
     front_hostname_arg = DeclareLaunchArgument(
         'front_hostname',
-        default_value='192.168.0.1',
+        default_value='192.168.0.52',
         description='IP address of Front-Left SICK picoScan150 LiDAR'
     )
 
     rear_hostname_arg = DeclareLaunchArgument(
         'rear_hostname',
-        default_value='192.168.0.2',
+        default_value='192.168.0.53',
         description='IP address of Rear-Right SICK picoScan150 LiDAR'
     )
 
     udp_receiver_ip_arg = DeclareLaunchArgument(
         'udp_receiver_ip',
-        default_value='192.168.0.100',
+        default_value='192.168.0.51',
         description='Host IP address to receive LiDAR UDP scan packets'
     )
 
