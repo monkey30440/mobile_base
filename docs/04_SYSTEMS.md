@@ -193,7 +193,7 @@ graph TD
   - `/joint_states` (`sensor_msgs/msg/JointState`, 來自 S7)。
 - **重要輸出**：
   - `/robot_description` (`std_msgs/msg/String`, Topic 與 Parameter)。
-  - `/tf_static` (`tf2_msgs/msg/TFMessage`, 包含 `base_footprint -> base_link`、`base_link -> base_lidar_link_FL/BR`、`base_link -> base_imu_link`)。
+  - `/tf_static` (`tf2_msgs/msg/TFMessage`, 包含 `base_footprint -> base_link`、`base_link -> base_lidar_link_FL/BR`、光達實體 link 至 z-up scan link `base_lidar_link_FL/BR_1`、`base_link -> base_imu_link`)。
   - `/tf` (`tf2_msgs/msg/TFMessage`, 輪端關節動態變換 `base_link -> driving_wheel_link_L/R`)。
 - **TF 所有權**：所有靜態轉換與輪端關節狀態轉換。
 - **架構約束**：嚴禁發布動態 `odom -> base_footprint` 或 `map -> odom`。
@@ -212,8 +212,8 @@ graph TD
   - `imu_driver_node` (`tdk_ros2_imu` 之 `tdk_imu_node`，讀取 TDK IIM-42652)。
 - **重要輸入**：實體感測器硬體通訊訊號（UDP / Serial）。
 - **重要輸出**：
-  - `/scan_front` (`sensor_msgs/msg/LaserScan`, Frame: `base_lidar_link_FL`, 25 Hz)。
-  - `/scan_rear` (`sensor_msgs/msg/LaserScan`, Frame: `base_lidar_link_BR`, 25 Hz)。
+  - `/scan_front` (`sensor_msgs/msg/LaserScan`, Frame: `base_lidar_link_FL_1`, 25 Hz)。
+  - `/scan_rear` (`sensor_msgs/msg/LaserScan`, Frame: `base_lidar_link_BR_1`, 25 Hz)。
   - `/imu/data_raw` (`sensor_msgs/msg/Imu`, Frame: `base_imu_link`, 50–100 Hz)。
 - **TF 所有權**：無（由 S1 統一發布感測器靜態 Frame）。
 - **架構約束**：
@@ -915,8 +915,8 @@ sequenceDiagram
   ▼
 [base_link]
   │
-  ├──► [base_lidar_link_FL]          (S1 /tf_static)
-  ├──► [base_lidar_link_BR]          (S1 /tf_static)
+  ├──► [base_lidar_link_FL] ──► [base_lidar_link_FL_1]  (S1 /tf_static)
+  ├──► [base_lidar_link_BR] ──► [base_lidar_link_BR_1]  (S1 /tf_static)
   ├──► [base_imu_link]               (S1 /tf_static)
   ├──► [driving_wheel_link_L]        (S1 /tf, 依據 S7 /joint_states)
   └──► [driving_wheel_link_R]        (S1 /tf, 依據 S7 /joint_states)
@@ -932,6 +932,7 @@ sequenceDiagram
 | `base_footprint -> base_link` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 靜態幾何高度固定（地面高程 $0.2560\,\text{m}$）。 |
 | `base_link -> base_lidar_link_FL` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 固定外參 $[+0.288, +0.267, -0.060]\,\text{m}$。 |
 | `base_link -> base_lidar_link_BR` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 固定外參 $[-0.247, -0.267, -0.060]\,\text{m}$。 |
+| `base_lidar_link_FL/BR -> base_lidar_link_FL/BR_1` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 實體光達維持倒裝（z-down）；scan child 以 roll = pi 取消倒裝，使 SICK `LaserScan` 角度資料位於 z-up frame。 |
 | `base_link -> base_imu_link` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 固定外參 $[+0.044, -0.008, -0.015]\,\text{m}$。 |
 | `base_link -> driving_wheel_link_L/R` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf` (Dynamic) | `publish_frequency: 30.0` (30 Hz) | 依據 S7 提供之 `/joint_states` 發布。 |
 

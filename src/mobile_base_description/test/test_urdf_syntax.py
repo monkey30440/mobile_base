@@ -216,7 +216,10 @@ def test_canonical_joints_and_transforms(urdf_xml_string):
     xyz_fl_1 = [float(v) for v in lidar_fl_1.find('origin').attrib.get('xyz').split()]
     rpy_fl_1 = [float(v) for v in lidar_fl_1.find('origin').attrib.get('rpy').split()]
     assert pytest.approx(xyz_fl_1, abs=1e-4) == [0.0, 0.0, 0.0]
-    assert pytest.approx(rpy_fl_1, abs=1e-4) == [0.0, 0.0, 0.0]
+    # sick_scan_xd publishes picoScan angles in a z-up scan convention.  The
+    # physical LiDAR link remains upside-down; this coincident child provides
+    # the ROS LaserScan frame expected by consumers.
+    assert pytest.approx(rpy_fl_1, abs=1e-4) == [math.pi, 0.0, 0.0]
 
     # 5. Rear-Right LiDAR (base_lidar_joint_BR)
     assert 'base_lidar_joint_BR' in joints
@@ -238,7 +241,7 @@ def test_canonical_joints_and_transforms(urdf_xml_string):
     xyz_br_1 = [float(v) for v in lidar_br_1.find('origin').attrib.get('xyz').split()]
     rpy_br_1 = [float(v) for v in lidar_br_1.find('origin').attrib.get('rpy').split()]
     assert pytest.approx(xyz_br_1, abs=1e-4) == [0.0, 0.0, 0.0]
-    assert pytest.approx(rpy_br_1, abs=1e-4) == [0.0, 0.0, 0.0]
+    assert pytest.approx(rpy_br_1, abs=1e-4) == [math.pi, 0.0, 0.0]
 
     # 6. IMU Joint (base_imu_joint)
     assert 'base_imu_joint' in joints
