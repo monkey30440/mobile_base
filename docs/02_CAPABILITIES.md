@@ -1,6 +1,6 @@
 # Capabilities
 
-本文件定義 `mobile_base` v0.1 對外提供之系統能力。
+本文件定義 `mobile_base` 對外提供之系統能力。
 
 Capability 描述系統可提供之功能，不描述內部設計與實作方式。
 
@@ -10,7 +10,9 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 ## 目的
 
-建立可供定位與導航使用之二維 Occupancy Grid 地圖。
+建立可供定位與導航使用的二維佔據網格（Occupancy Grid）地圖。
+
+Map Package 是可儲存及重新載入的地圖產物，可供 CAP-002 的定位與導航使用。
 
 ---
 
@@ -21,9 +23,8 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 - 建立二維 Occupancy Grid。
 - 接收使用者手動移動命令控制 AMR 移動以巡覽環境。
 - 持續更新建圖結果。
-- 儲存地圖。
-- 重新載入已建立之地圖。
-- 管理 Map Package。
+- 將建圖結果儲存為 Map Package。
+- 重新載入已建立的 Map Package。
 - 回報建圖與 Map Package 儲存結果。
 
 ---
@@ -32,15 +33,14 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 - 使用者開始建圖。
 - 使用者手動移動命令。
+- 已建立的 Map Package（重新載入時）。
 
 ---
 
 ## 輸出
 
-- Map Package（包含 `map.pgm` 與 `map.yaml`，成功時）
-- Map Creation Result
-  - Success
-  - Failure
+- 產物：成功時產生 Map Package，包含 `map.pgm` 與 `map.yaml`。
+- 結果：回報建圖與 Map Package 儲存成功（Success）或失敗（Failure）。
 
 ---
 
@@ -66,7 +66,7 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 ## 目的
 
-使 AMR 自主導航至使用者指定之導航目標。
+接受使用者指定的導航目標（Navigation Target），利用已準備的場域資料與定位資訊，使 AMR 自主導航至指定目標。
 
 ---
 
@@ -76,11 +76,11 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 - 接收 Navigation Target。
 - 驗證 Navigation Target。
-- 將 Navigation Target 解析為 Canonical Goal Pose。
-- 使用使用者從場域資料夾選定之 Map Package（建圖產物）與人工建立之 Route Graph。
-- 使用 Station Target 時，使用同一場域資料夾中人工建立之 Station Catalog。
-- 使用 AMCL 部署設定的預設初始位姿（`x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）啟動地圖定位；當實際開機位置不符合該預設時，接受使用者提供的 approximate initial pose 覆寫初始化。
-- 透過標準定位 pose 與 `map → odom` transform 提供地圖定位結果。
+- 將不同形式的 Navigation Target 解析與驗證為統一的導航目標位置與朝向（Canonical Goal Pose）。
+- 使用選定場域的 Map Package 提供地圖，並使用人工建立的 Route Graph 作為偏好的導航路網。
+- 使用 Station Target 時，透過同一場域資料夾中人工建立的 Station Catalog，將 Station ID 對應至位置與朝向。
+- 使用預設初始位置與朝向啟動地圖定位；預設不適用時，接受使用者提供的近似位置與朝向覆寫。
+- 提供 AMR 在地圖中的位置與朝向，作為導航的位置基準。
 - 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
 - 執行 First Mile，將 AMR 由目前位姿銜接至適用的 route entry。
 - 執行 On Route movement，沿選定 Route Graph route 移動。
@@ -95,54 +95,42 @@ Capability 描述系統可提供之功能，不描述內部設計與實作方式
 
 ---
 
-## Navigation Target
+## 輸入
 
-系統支援下列導航目標。
+### Navigation Target
+
+Navigation Target 是使用者希望 AMR 前往的目標描述，支援下列兩種形式。
 
 | Target Type | 說明 |
 |---|---|
-| Station | 使用 Station ID 指定預先定義站點 |
-| Pose | 使用 Goal Pose 指定任意導航位置與朝向 |
+| Station Target | 使用 Station ID 指定預先定義站點 |
+| Pose Target | 使用 Goal Pose 指定任意導航位置與朝向 |
 
----
+### Navigation Resources
 
-## 輸入
+使用者在啟動 Navigation 前選定場域資料夾，並人工確認下列必要資料已準備完成。
 
-Navigation Target：
+| 場域資料 | 角色與準備方式 |
+|---|---|
+| Map Package（`map.pgm`、`map.yaml`） | UC-001 的建圖產物，提供定位與導航所需地圖 |
+| Route Graph（`route_graph.geojson`） | 人工離線標註建立，提供偏好的導航路網 |
+| Station Catalog（`stations.yaml`） | 人工離線編輯建立，將 Station ID 對應至位置與朝向；僅 Station Target 需要 |
 
-```text
-Navigation Target
-├── Station ID
-└── Goal Pose
-```
+上述資料放在同一場域資料夾中。資源載入設計參見 [04_SYSTEMS.md §5.2](./04_SYSTEMS.md#52-資源責任與載入架構)。
 
-Navigation Resources：
+> 既有系統邊界：系統不提供跨資源 identity／compatibility admission。
 
-```text
-Navigation Resources（場域資料夾）
-├── Map Package（map.pgm 與 map.yaml，UC-001 建圖產物）
-├── Route Graph（route_graph.geojson，人工離線標註建立）
-└── Station Catalog（stations.yaml，人工離線編輯建立，Station Target 使用）
-```
+任一成熟元件無法載入其資源時，沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback 條件。
 
-v0.1 由使用者選定場域資料夾，並確認其中的 Map Package（建圖產物）以及人工建立之 Route Graph 與 Station Catalog；系統不提供跨資源 identity／compatibility admission。任一成熟元件無法載入其資源時，沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback 條件。
+### Localization Initialization
 
-Localization Initialization：
+初始定位（Initial Localization）以初始位置與朝向作為地圖定位的起點，不是指定要前往的 Navigation Target。
 
-```text
-Default AMCL Initial Pose
-├── x = 0.0
-├── y = 0.0
-├── z = 0.0
-└── yaw = 0.0
+系統使用部署設定的預設初始位置與朝向。當預設與實際開機位置不符時，使用者可提供近似位置與朝向覆寫（Approximate Initial Pose Override）。
 
-Approximate Initial Pose Override, when required
-├── x
-├── y
-└── yaw
-```
+定位介面與初始化設定參見 [04_SYSTEMS.md §4.5](./04_SYSTEMS.md#45-s5-localization)；使用者覆寫操作參見 [01_USE_CASES.md 的初始位置覆寫](./01_USE_CASES.md#初始位置覆寫)。
 
-預設 AMCL Initial Pose 只用於啟動地圖定位，不是 Navigation Target。當此預設不適用時，v0.1 由使用者透過 RViz `2D Pose Estimate` 提供 Approximate Initial Pose Override；系統不另行定義 localization-valid 或收斂 gate。
+> 既有行為邊界：系統不另行定義 localization-valid 或收斂 gate。
 
 ---
 

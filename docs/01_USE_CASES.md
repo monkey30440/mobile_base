@@ -1,8 +1,8 @@
-# Use Cases
+# 使用案例（Use Cases）
 
-本文件定義 `mobile_base` v0.1 使用者可操作之系統功能。
+本文件定義 `mobile_base` 的使用流程。
 
-Use Case 描述使用者可完成之工作流程，不描述內部演算法或系統實作。
+Use Case 描述使用者可完成的工作流程，不描述內部演算法或系統實作。
 
 ---
 
@@ -10,7 +10,9 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ## 目的
 
-建立可供定位與導航使用之二維 Occupancy Grid 地圖。
+建立可供定位與導航使用的二維佔據網格（Occupancy Grid）地圖。
+
+建圖（Mapping）讓使用者操作 AMR 巡覽環境並建立地圖。Map Package 是可儲存及重新載入的建圖成果，包含 `map.pgm` 與 `map.yaml`。
 
 ---
 
@@ -23,7 +25,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ## 前置條件
 
 - AMR 已完成啟動並可由使用者操作。
-- 系統已具備執行建圖所需之功能。
+- 系統已具備執行建圖所需的功能。
 
 ---
 
@@ -44,23 +46,23 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ---
 
-## Failure Flow
+## 完成條件
 
-- 前置條件不成立時，系統不開始建圖並回報原因。
-- 建圖期間無法繼續時，系統終止建圖並回報失敗。
-- Map Package 無法儲存時，系統回報失敗，且不得回報已建立可重新載入之 Map Package。
+建立完整且可重新載入的 Map Package。
 
 ---
 
-## 完成條件
+## 失敗情境
 
-建立完整且可重新載入之 Map Package（即 `map.pgm` 與 `map.yaml`）。
+- 前置條件不成立時，系統不開始建圖並回報原因。
+- 建圖期間無法繼續時，系統終止建圖並回報失敗。
+- Map Package 無法儲存時，系統回報失敗，不將此次建圖視為成功完成。
 
 ---
 
 ## 使用系統能力
 
-| Capability |
+| 系統能力（Capability） |
 |---|
 | CAP-001 |
 
@@ -70,7 +72,7 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ## 目的
 
-使 AMR 自主導航至使用者指定之導航目標。
+使 AMR 在已建立地圖的場域中，自主移動至使用者指定的目標，完成導航（Navigation）。
 
 ---
 
@@ -80,24 +82,35 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 
 ---
 
-## Navigation Target
-
-系統支援下列導航目標。
-
-| Target Type | 說明 |
-|---|---|
-| Station | 使用 Station ID 指定預先定義之站點 |
-| Pose | 使用 Goal Pose 指定任意可導航位置與朝向 |
-
----
-
 ## 前置條件
 
 - AMR 已完成啟動。
-- 使用者已選定場域資料夾，並人工確認其中包含導航所需之 Map Package（`map.pgm` 與 `map.yaml`），以及人工建立之 Route Graph（`route_graph.geojson`）。
-- 使用 Station Target 時，使用者亦已人工確認同一資料夾中包含人工建立之 Station Catalog（`stations.yaml`）。
-- AMCL 已採用部署設定的預設初始位姿 `x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0` 完成定位初始化；若 AMR 實際開機位置不符合此預設，使用者已提供目前地圖中的 approximate initial pose 以覆寫該預設。
-- 地圖定位功能已啟動，並依 AMCL 原生介面提供標準定位 pose 與 `map → odom` transform。
+- 必要場域資料已準備完成，並經使用者人工確認。
+- 地圖定位功能已啟動，提供 AMR 在地圖中的位置與朝向。
+- 已完成初始定位（Initial Localization），以初始位置與朝向作為定位起點。預設位置不適用時，使用者已依「初始位置覆寫」完成操作。
+
+---
+
+## 導航目標（Navigation Target）
+
+系統支援下列導航目標。
+
+| 目標形式 | 說明 |
+|---|---|
+| 站點目標（Station Target） | 使用 Station ID 指定預先定義的站點 |
+| 位姿目標（Pose Target） | 使用 Goal Pose 指定任意可導航位置與朝向 |
+
+---
+
+## 場域資料
+
+下列資料放在使用者選定的同一場域資料夾中。
+
+| 場域資料 | 在流程中的角色 | 準備方式 |
+|---|---|---|
+| Map Package | 提供定位與導航所用的地圖 | 使用 UC-001 的建圖成果 |
+| Route Graph（`route_graph.geojson`） | 定義導航優先使用的路網 | 人工離線標註建立 |
+| Station Catalog（`stations.yaml`） | 將 Station ID 對應至站點位置與朝向 | 使用 Station Target 時，人工建立 |
 
 ---
 
@@ -110,79 +123,75 @@ Use Case 描述使用者可完成之工作流程，不描述內部演算法或�
 ## 基本流程
 
 1. 使用者指定 Navigation Target。
-2. 系統將 Navigation Target 正規化或解析為 Canonical Goal Pose，並驗證該 Pose。
-3. 系統根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
-4. 若目前位姿不在選定 route entry，系統執行 First Mile 銜接該 entry。
-5. 系統沿選定 Route Graph 執行 On Route movement。
-6. 若選定 route exit 未直接到達 Canonical Goal Pose，系統執行 Last Mile 銜接目標。
-7. 系統持續監控 navigation stage 與整體導航進度。
+2. 系統將目標解析為位置與朝向，並確認目標有效。
+3. 系統根據目前位置與目標選擇移動路線，優先使用可安全通行的 Route Graph。
+4. 需要時，AMR 先移動至路網入口（First Mile）。
+5. AMR 沿選定路網移動（On Route）。
+6. 需要時，AMR 從路網出口移動至目標（Last Mile）。
+7. 系統持續監控各移動階段與整體導航進度。
 8. 系統抵達 Navigation Target、停止並回報導航結果。
 
 ---
 
-## Alternative Flow
+## 替代流程
 
-### Initial Pose Provision
+### 初始位置覆寫
 
-v0.1 的 AMCL 預設以部署設定中的 `initial_pose`（`x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）完成定位初始化。若 AMR 實際開機位置不符合此預設，使用者應提供 approximate initial pose，包含 `x`、`y` 與 `yaw`；系統應將該資訊透過 `/initialpose` 提供給 AMCL，覆寫預設初始化位姿。
+系統預設使用部署設定的初始位置與朝向。若與實際開機位置不符，使用者透過 RViz `2D Pose Estimate` 提供目前地圖中的近似位置與朝向，覆寫預設值。
 
-覆寫操作在 v0.1 由使用者透過 RViz `2D Pose Estimate` 人工完成；系統不另行定義 localization-valid 或收斂 gate。
-
----
-
-### Station Target
-
-使用者提供 Station ID。系統確認該 Station 存在，並將其解析為導航目標。
+此操作用於定位初始化，不是提交導航目標。定位介面與初始化設定參見 [04_SYSTEMS.md §4.5](./04_SYSTEMS.md#45-s5-localization)。
 
 ---
 
-### Pose Target
+### 站點目標（Station Target）
 
-使用者提供 Goal Pose。系統確認該 Pose 可作為導航目標後，使用該 Pose 執行導航。
-
----
-
-### Zero-length Connection Stage
-
-若目前位姿已位於適用的 route entry，First Mile 可省略。若 Canonical Goal Pose 已位於適用的 route exit，Last Mile 可省略。
+使用者提供 Station ID。系統確認站點存在，並將其解析為導航目標。
 
 ---
 
-### Reserved Free-space Fallback Boundary
+### 位姿目標（Pose Target）
 
-系統應優先使用可安全執行的 route-assisted movement。架構保留下列 Free-space Fallback eligibility，以供後續版本擴充：
-
-- Current Pose 無法連接任何可用 route entry。
-- Active、valid Route Graph 無法提供通往 Canonical Goal Pose 方向的可用 route。
-- On Route movement 因目前環境阻塞而無法維持，且重新選擇 Route Graph route 仍失敗。
-- 所有可用 route-assisted candidates 均無法由 route exit 透過 Last Mile 安全連接 Canonical Goal Pose。
-
-存在有效且可安全執行的 route-assisted solution 時，系統不得任意選擇完整 free-space movement。v0.1 不執行 Free-space Fallback；符合上述任一 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
+使用者提供 Goal Pose。系統確認目標有效後執行導航。
 
 ---
 
-## Failure / Cancellation Flow
+### 省略銜接移動
 
-- Station ID 不存在或 Goal Pose 無效時，系統拒絕導航任務並回報原因。
-- 使用者應在 Navigation 啟動前人工確認所選場域資料夾中的必要 Navigation Resources；任一成熟元件仍無法載入其資源時，系統沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback。
-- 預設初始位姿不適用時，使用者應透過 RViz `2D Pose Estimate` 提供覆寫用的 initial pose；定位輸入或 TF 不可用時，系統沿用 AMCL／Nav2 原生行為。
-- First Mile、On Route 或 Last Mile 無法安全執行時，系統應先用盡可用的 route-assisted alternatives。
-- 符合保留的 Free-space Fallback eligibility 但已無可用 route-assisted solution 時，v0.1 應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
-- 系統無法繼續導航時，系統終止導航任務並回報失敗。
-- 使用者取消導航時，系統終止導航任務並回報取消結果。
+若 AMR 已在適用的路網入口，First Mile 可省略。若目標已在適用的路網出口，Last Mile 可省略。
+
+---
+
+## 導航邊界（Free-space Fallback）
+
+Free-space Fallback 指放棄路網，改以完整自由空間路線前往目標。導航流程不執行此替代方案。
+
+路網策略與詳細失敗邊界依 [03_REQUIREMENTS.md 的 SYS-013](./03_REQUIREMENTS.md#sys-013-route-preferred-navigation-strategy) 與 [SYS-021](./03_REQUIREMENTS.md#sys-021-reserved-free-space-fallback-boundary)；導航編排參見 [04_SYSTEMS.md §9](./04_SYSTEMS.md#9-route-assisted-navigation)。
 
 ---
 
 ## 完成條件
 
-- AMR 抵達使用者指定之 Navigation Target。
+- AMR 抵達使用者指定的 Navigation Target。
 - 系統回報導航成功。
+
+---
+
+## 失敗／取消情境
+
+- Station ID 不存在或 Goal Pose 無效時，系統拒絕導航任務並回報原因。
+- 必要場域資料無法載入時，沿用載入元件的原生失敗與原因回報。
+- 定位所需資料或座標轉換不可用時，沿用既有定位與導航元件的原生行為。
+- 任一移動階段無法安全執行時，系統嘗試其餘可用的路網方案。
+- 若仍無法建立或繼續安全的路網導航，系統終止任務、嘗試使底盤停止，並回報 Free-space Fallback unavailable。
+- 場域資料、導航目標或定位的缺失與無效，不屬於 Free-space Fallback 情境。
+- 系統無法繼續導航時，系統終止導航任務並回報失敗。
+- 使用者取消導航時，系統終止導航任務並回報取消結果。
 
 ---
 
 ## 使用系統能力
 
-| Capability |
+| 系統能力（Capability） |
 |---|
 | CAP-002 |
 
@@ -192,7 +201,9 @@ v0.1 的 AMCL 預設以部署設定中的 `initial_pose`（`x=0.0`、`y=0.0`、`
 
 ## 目的
 
-使 AMR 操作員或維護／開發人員能查看 AMR 當前或歷史運行資訊、Logs、Events 與關鍵 Telemetry，並依 timestamp、source 與共同時間範圍進行基本關聯，以人工縮小異常可能涉及的子系統範圍。
+提供當前或歷史運行資料，協助 AMR 操作員或維護／開發人員人工定位問題。
+
+Observability 提供運行資訊供使用者觀察與診斷，包括日誌（Logs）、運行事件（Events）與關鍵量測資料（Telemetry）。使用者依時間戳與來源，在共同時間範圍內進行基本關聯。
 
 ---
 
@@ -201,58 +212,43 @@ v0.1 的 AMCL 預設以部署設定中的 `initial_pose`（`x=0.0`、`y=0.0`、`
 - 主要參與者：AMR 操作員
 - 次要參與者：維護／開發人員
 
+以下以「使用者」統稱上述參與者。
+
 ---
 
 ## 前置條件
 
-- Actor 已選定目前運行期間或欲調查之歷史時間範圍。
-- 系統具有該時間範圍內可供觀察或查詢之運行資料。
+- 使用者已選定目前運行期間或要調查的歷史時間範圍。
+- 系統具有該時間範圍內可供觀察或查詢的運行資料。
 
 ---
 
 ## 觸發條件
 
-- Actor 需要確認 AMR 是否正常運行。
-- Mapping、Localization、Navigation、Control 或 Hardware Communication 發生異常。
-- Actor 需要調查過去已發生之事件。
+- 使用者需要確認 AMR 是否正常運行。
+- 建圖、定位、導航、控制或硬體通訊發生異常。
+- 使用者需要調查過去已發生的事件。
 
 ---
 
 ## 基本流程
 
-1. Actor 選擇目前運行期間或歷史時間範圍。
-2. 系統提供該時間範圍內可用的 AMR 與主要 ROS Runtime Information。
-3. Actor 查看相關 Logs、Events 與關鍵 Telemetry。
-4. Actor 依資料的 timestamp、source 與共同時間範圍進行基本關聯。
-5. Actor 根據可用資訊人工縮小問題可能所屬之子系統範圍。
-
----
-
-## Failure Flow
-
-- Observability 或 Server 無法使用時，Actor 可能暫時無法取得相關運行資料。
-- Observability 無法使用不得影響 AMR 既有 Navigation、Localization、Control 或 Safety 運行。
-
----
-
-## MVP Scope
-
-- 觀察 AMR 與主要 ROS Runtime Information。
-- 查看目前與歷史 Logs、Events。
-- 查看關鍵 Telemetry 之時間序列。
-- 依 timestamp、source 與共同時間範圍進行基本人工關聯。
-- 提供 Actor 人工縮小異常可能所屬子系統範圍所需的資訊。
-
----
-
-## Non-goals
-
-- 不改變 Navigation、Localization、Control 或 Safety 行為。
-- Observability 不作為 Navigation、Localization、Control 或 Safety 運行的必要依賴。
+1. 使用者選擇目前運行期間或歷史時間範圍。
+2. 系統提供該時間範圍內可用的 AMR 與主要 ROS 運行資訊（ROS Runtime Information）。
+3. 使用者查看相關 Logs、Events 與關鍵 Telemetry 時間序列。
+4. 使用者依資料的時間戳與來源，在共同時間範圍內進行基本關聯。
+5. 使用者根據可用資訊，嘗試人工縮小問題可能所屬的子系統範圍。
 
 ---
 
 ## 完成條件
 
-- Actor 已取得所選時間範圍內可用之 AMR 運行資訊、Logs、Events 與關鍵 Telemetry。
-- Actor 能依 timestamp、source 與共同時間範圍進行基本關聯，並人工縮小異常可能所屬之子系統範圍。
+- 系統已提供所選時間範圍內可用的 AMR 運行資訊、Logs、Events 與關鍵 Telemetry。
+- 系統已提供時間戳與來源等關聯資訊，供使用者在共同時間範圍內進行基本關聯與人工問題定位。
+
+---
+
+## 失敗情境
+
+- Observability 或保存與查詢資料的 Server 無法使用時，使用者可能暫時無法取得相關運行資料。
+- Observability 僅供觀察與診斷，不改變導航、定位、控制或安全功能的行為。即使 Observability 無法使用，這些功能仍可運行。
