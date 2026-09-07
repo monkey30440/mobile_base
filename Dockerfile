@@ -1,4 +1,7 @@
-FROM nvcr.io/nvidia/isaac/ros:isaac_ros_740c8500df2685ab1f4a4e53852601df-arm64-jetpack
+# =========================
+# 1. Shared runtime base
+# =========================
+FROM nvcr.io/nvidia/isaac/ros:isaac_ros_740c8500df2685ab1f4a4e53852601df-arm64-jetpack AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -28,15 +31,55 @@ RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
         ros-jazzy-sick-scan-xd \
         ros-jazzy-foxglove-bridge \
         ros-jazzy-teleop-twist-keyboard \
-        ros-jazzy-rviz2 \
         fluent-bit=4.2.8 \
         python3-serial \
-        iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspaces/mobile_base
 
-RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc \
-    && echo '[ -f install/setup.bash ] && source install/setup.bash' >> ~/.bashrc
+RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+
+CMD ["bash"]
+
+
+# =========================
+# 2. Development environment
+# =========================
+FROM base AS dev
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ros-jazzy-rviz2 \
+        iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN echo '[ -f /workspaces/mobile_base/install/setup.bash ] && source /workspaces/mobile_base/install/setup.bash' >> ~/.bashrc
+
+CMD ["bash"]
+
+
+# =========================
+# 3. Release builder
+# =========================
+FROM base AS builder
+
+WORKDIR /ws
+
+COPY src /ws/src
+
+RUN bash -c "source /opt/ros/jazzy/setup.bash && \
+    colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release"
+
+
+# =========================
+# 4. Release runtime
+# =========================
+FROM base AS release
+
+WORKDIR /workspaces/mobile_base
+
+COPY --from=builder /ws/install /workspaces/mobile_base/install
+
+RUN echo "source /workspaces/mobile_base/install/setup.bash" >> ~/.bashrc
 
 CMD ["bash"]
