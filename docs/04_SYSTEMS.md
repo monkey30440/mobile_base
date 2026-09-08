@@ -1,6 +1,6 @@
 # System Architecture
 
-本文件定義 `mobile_base` v0.1 之系統層級架構，包含系統邊界、操作模式、子系統劃分與責任配置、跨系統資料流與控制鏈、動態 TF 權限契約，以及全系統核心架構規範。
+本文件定義 `mobile_base` 目前之系統層級架構，包含系統邊界、操作模式、Implementation Area 責任、跨系統資料流與控制鏈、動態 TF 權限契約，以及全系統核心架構規範。
 
 ---
 
@@ -21,8 +21,7 @@
 
 | 系統架構（docs/04_SYSTEMS.md）決定 | 不應由架構決定（保留至 Source / Config / Verification） |
 |---|---|
-| 系統分解為 S1–S7 主要 Subsystem 與責任配置 | Class / Struct / Function 內部程式碼實作細節 |
-| 系統規範性需求（SYS Requirements）之子系統責任配置 | 具體原始碼檔案內部行級邏輯與資料結構 |
+| Implementation Areas 的責任與介面邊界 | Class / Struct / Function 內部程式碼實作細節 |
 | 跨子系統之資料流、控制流與生命週期依賴關係 | Launch 檔與 YAML 配置之細部數值與調校表格 |
 | 座標框架 TF Tree 的唯一動態與靜態發布權限契約 | 驅動程式內部暫存器編號與 Modbus 封包細部編解碼 |
 | 速度命令鏈（Command Chain）與多層停止安全架構 | 操作命令指南、開發日誌與除錯記錄 |
@@ -33,7 +32,7 @@
 
 ## 2. System Context
 
-`mobile_base` 為基於 ROS 2 Jazzy 開發的自主移動機器人（AMR）底盤系統。系統邊界涵蓋 8 大核心子系統及其運行的軟體責任。
+`mobile_base` 為基於 ROS 2 Jazzy 開發的自主移動機器人（AMR）底盤系統。系統邊界涵蓋 10 個 Implementation Areas 及其運行的軟體責任。
 
 ### 2.1 外部實體 (External Entities)
 - **使用者 / 操作員 (Operator / User)**：提交建圖與儲存命令、操作鍵盤手動移動巡覽（透過外部 `teleop_twist_keyboard`）、提交導航目標（Station ID 或 Goal Pose）或發出取消請求。
@@ -57,28 +56,28 @@
     │                        mobile_base                          │
     │                                                             │
     │  ┌────────────────┐      ┌────────────────┐                 │
-    │  │ S1 Robot Desc  │      │ S2 Perception  │◄─┼── 實體感測器 (LiDAR / IMU)
+    │  │ Robot Model    │      │Sensor Ingestion│◄─┼── 實體感測器 (LiDAR / IMU)
     │  └───────┬────────┘      └───────┬────────┘  │              │
     │          │                       │           │              │
     │          ▼                       ▼           │              │
     │  ┌────────────────┐      ┌────────────────┐  │              │
-    │  │ S4 Mapping     │      │ S3 State Estim │  │              │
+    │  │ Mapping        │      │State Estimation│  │              │
     │  └───────┬────────┘      └───────┬────────┘  │              │
     │          │                       │           │              │
     │          ▼ (Map Package)         ▼           │              │
     │  ┌────────────────┐      ┌────────────────┐  │              │
-    │  │ S5 Localize    │─────►│ S6 Navigation  │  │              │
+    │  │ Localization   │─────►│ Navigation Areas│  │              │
     │  └────────────────┘      └───────┬────────┘  │              │
     │                                  │           │              │
     │                                  ▼           │              │
     │                          ┌────────────────┐  │              │
-    │                          │ S7 Base Control│◄─┴──────────────┘ (手動 TwistStamped)
+    │                          │ Base Control   │◄─┴──────────────┘ (手動 TwistStamped)
     │                          └───────┬────────┘
     │                                  │
     │                                  ▼
     │                                  底盤動力硬體 (M1 Motors)
     │                                                             │
-    │  S1–S7 Runtime Information / Logs / Events ──► S8 Observability
+    │  Implementation Areas Runtime Information / Logs / Events ──► Observability
     └─────────────────────────────────────────────────────────────┘
                         ▲
                         │ 載入 Map Package / Route Graph / Station Catalog
@@ -86,1144 +85,985 @@
            │ 場域資源 (Site Artifacts)│
            └────────────────────────┘
 
-    S8 Observability ── Logs / Events / Key Telemetry ──► Observability Server
+    Observability ── Logs / Events / Key Telemetry ──► Observability Server
 ```
 
 ---
 
 ## 3. Operational Modes
 
-`mobile_base` v0.1 定義兩種**嚴格互斥 (Mutually Exclusive)** 的系統操作模式：
+`mobile_base` 目前定義兩種**嚴格互斥 (Mutually Exclusive)** 的系統操作模式：
 
 ```text
-                         ┌─────────────────┐
-                         │   mobile_base   │
-                         │   Shared Base   │
-                         │ (S1,S2,S3,S7)   │
-                         └────────┬────────┘
-                                  │
-                 ┌────────────────┴────────────────┐
-                 ▼                                 ▼
-      ┌─────────────────────┐           ┌─────────────────────┐
-      │    Mapping Mode     │           │   Navigation Mode   │
-      │       (UC-001)      │           │       (UC-002)      │
-      ├─────────────────────┤           ├─────────────────────┤
-      │ • S4 Mapping (建圖)  │           │ • S5 Localization   │
-      │ • Teleop 速度命令輸入│           │   (map_server+AMCL) │
-      │ • SLAM 擁有 map→odom │           │ • S6 Navigation     │
-      │ • S5, S6 未啟用      │           │ • AMCL 擁有 map→odom│
-      │                     │           │ • S4 未啟用         │
-      └─────────────────────┘           └─────────────────────┘
+Shared Areas: Robot Model / Sensor Ingestion / State Estimation / Base Control
+        │
+        ├── Mapping Mode: Mapping + Teleop
+        │                 Mapping owns map → odom
+        │
+        └── Navigation Mode: Localization + Navigation Target Admission
+                             + Route-Assisted Navigation + Precision Docking
+                             Localization owns map → odom
 ```
 
-S8 為兩種模式共用、與核心功能隔離的觀察旁路；其啟動、停止或故障不改變 Mapping Mode 或 Navigation Mode 的成立條件。
+Observability 為兩種模式共用、與核心功能隔離的觀察旁路；其啟動、停止或故障不改變 Mapping Mode 或 Navigation Mode 的成立條件。
 
-### 3.1 Mapping Mode (UC-001)
+### 3.1 Mapping Mode
 - **目的**：巡覽未知環境，即時建立二維佔據網格地圖，並持久化儲存為 Map Package。
-- **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S4 Mapping`, `S7 Base Control`。
-- **運動控制輸入**：操作員透過外部 `teleop_twist_keyboard` 發布手動速度命令（`geometry_msgs/msg/TwistStamped`）直接至 S7（`/diff_drive_controller/cmd_vel`，SYS-034）。未操作或命令停止時底盤停等，建圖程序維持運行。
-- **動態 TF 權限**：由 S4 `slam_toolbox` 動態發布 `map -> odom` TF；由 S3 `robot_localization` EKF 動態發布 `odom -> base_footprint` TF。
-- **互斥邊界**：`S5 Localization` 與 `S6 Navigation` **嚴格禁止啟動**。全系統僅存在單一手動運動命令源，不引入 `twist_mux` 或額外模式仲裁節點。
+- **活躍區域**：Robot Model、Sensor Ingestion、State Estimation、Mapping、Base Control。
+- **運動控制輸入**：操作員透過外部 `teleop_twist_keyboard` 發布手動速度命令（`geometry_msgs/msg/TwistStamped`）直接至 Base Control（`/diff_drive_controller/cmd_vel`）。未操作或命令停止時底盤停等，建圖程序維持運行。
+- **動態 TF 權限**：由 Mapping 的 `slam_toolbox` 動態發布 `map -> odom` TF；由 State Estimation 的 `robot_localization` EKF 動態發布 `odom -> base_footprint` TF。
+- **互斥邊界**：Localization、Navigation Target Admission、Route-Assisted Navigation 與 Precision Docking **嚴格禁止啟動**。全系統僅存在單一手動運動命令源，不引入 `twist_mux` 或額外模式仲裁節點。
 
-### 3.2 Navigation Mode (UC-002)
+### 3.2 Navigation Mode
 - **目的**：載入已建置地圖與路網資源，依據使用者提交之 Station 或 Goal Pose 目標執行三階段自主導航，或透過視覺標記執行 AprilTag Direct Docking。
-- **活躍子系統**：`S1 Robot Description`, `S2 Perception`, `S3 State Estimation`, `S5 Localization`（包含 `map_server` 地圖載入與 `amcl` 定位）, `S6 Navigation`（包含 Nav2 導航堆疊與 `docking_server`）, `S7 Base Control`。`S4 Mapping` 處於非活躍狀態（Inactive）。
-- **運動控制輸入**：由 S6 Nav2 `controller_server`（三階段路線導航）或 `docking_server`（AprilTag 視覺停靠）運算自主軌跡，依任務狀態互斥輸出至 S7（`/diff_drive_controller/cmd_vel`）。
-- **動態 TF 權限**：由 S5 `nav2_amcl` 唯一發布 `map -> odom` TF；由 S3 `robot_localization` EKF 唯一發布 `odom -> base_footprint` TF。
-- **互斥邊界**：S4 `slam_toolbox` 建圖節點與外部 `teleop_twist_keyboard` **嚴格禁止啟動**。
+- **活躍區域**：Robot Model、Sensor Ingestion、State Estimation、Localization（包含 `map_server` 地圖載入與 `amcl` 定位）、Navigation Target Admission、Route-Assisted Navigation、Precision Docking、Base Control。Mapping 處於非活躍狀態（Inactive）。
+- **運動控制輸入**：由 Route-Assisted Navigation 的 `controller_server` 或 Precision Docking 的 `docking_server` 運算自主軌跡，依任務狀態互斥輸出至 Base Control（`/diff_drive_controller/cmd_vel`）。
+- **動態 TF 權限**：由 Localization 的 `nav2_amcl` 唯一發布 `map -> odom` TF；由 State Estimation 的 `robot_localization` EKF 唯一發布 `odom -> base_footprint` TF。
+- **互斥邊界**：Mapping 的 `slam_toolbox` 建圖節點與外部 `teleop_twist_keyboard` **嚴格禁止啟動**。
 
 ---
 
-## 4. Subsystem Architecture
+## 1. Robot Model
 
-系統劃分為 8 個高內聚、低耦合的子系統（S1–S8）：
+### Responsibility
 
-```mermaid
-graph TD
-    S1["S1: Robot Description<br/>(靜態幾何 / 關節 / 固定 TF)"]
-    S2["S2: Perception<br/>(雙光達 / IMU 原始量測)"]
-    S3["S3: State Estimation<br/>(Kinematic-ICP / EKF 融合 / odom TF)"]
-    S4["S4: Mapping<br/>(地圖建立 / 儲存 / 讀回驗證)"]
-    S5["S5: Localization<br/>(地圖載入 / AMCL 定位 / map→odom TF)"]
-    S6["S6: Navigation<br/>(目標接收 / 三階段導航 / 路徑追蹤)"]
-    S7["S7: Base Control<br/>(差速控制 / 命令安全閘 / 停用)"]
-    S8["S8: Observability and Diagnostics<br/>(Logs / Events / Key Telemetry)"]
+Robot Model 負責提供 AMR 的車體幾何、感測器安裝外參、關節結構與輪端運動學配置，並透過 `robot_state_publisher` 將機器人模型描述（`robot_description`）載入系統，同時發布機器人本體之靜態座標轉換與隨關節狀態更新的動態輪端座標轉換。
 
-    S1 --> S2
-    S1 --> S3
-    S1 --> S4
-    S1 --> S5
-    S1 --> S6
-    S1 --> S7
-
-    S2 --> S3
-    S2 --> S4
-    S2 --> S5
-    S2 --> S6
-
-    S3 --> S4
-    S3 --> S5
-    S3 --> S6
-
-    S4 -.->|Map Package Artifact| S5
-    S5 -.->|Loaded Map /map| S6
-
-    S5 -->|Current Pose & TF| S6
-    S6 -->|/diff_drive_controller/cmd_vel| S7
-    S7 -->|Encoder Odom Prior| S3
-
-    S1 -. Runtime Information .-> S8
-    S2 -. Runtime Information .-> S8
-    S3 -. Runtime Information .-> S8
-    S4 -. Runtime Information .-> S8
-    S5 -. Runtime Information .-> S8
-    S6 -. Runtime Information .-> S8
-    S7 -. Runtime Information .-> S8
-```
-
----
-
-### 4.1 S1: Robot Description
-- **主要職責**：全系統幾何模型、車體外形（Footprint）、關節拓撲與感測器安裝靜態座標轉換（`/tf_static`）的唯一權威提供者。
-- **承接需求**：`SYS-023`。
-- **核心執行元件**：
-  - `robot_state_publisher`（`mobile_base_description`）。
-  - URDF/Xacro 幾何模型描述。
-- **重要輸入**：
-  - `/joint_states` (`sensor_msgs/msg/JointState`, 來自 S7)。
-- **重要輸出**：
-  - `/robot_description` (`std_msgs/msg/String`, Topic 與 Parameter)。
-  - `/tf_static` (`tf2_msgs/msg/TFMessage`, 包含 `base_footprint -> base_link`、`base_link -> base_lidar_link_FL/BR`、光達實體 link 至 z-up scan link `base_lidar_link_FL/BR_1`、`base_link -> base_imu_link`)。
-  - `/tf` (`tf2_msgs/msg/TFMessage`, 輪端關節動態變換 `base_link -> driving_wheel_link_L/R`)。
-- **TF 所有權**：所有靜態轉換與輪端關節狀態轉換。
-- **架構約束**：嚴禁發布動態 `odom -> base_footprint` 或 `map -> odom`。
-- **權威實作與配置參考**：
-  - Launch: `src/mobile_base_description/launch/robot_description.launch.py`
-  - Config: `src/mobile_base_description/config/robot_state_publisher.yaml`
-
----
-
-### 4.2 S2: Perception
-- **主要職責**：自實體硬體感測器（雙 2D 光達與 6 軸 IMU）擷取原始觀測量，轉換為標準 ROS 2 感測資料發布供下游子系統消耗。
-- **承接需求**：`SYS-003`, `SYS-004`。
-- **核心執行元件**：
-  - `front_lidar_node` (`sick_scan_xd` 之 `sick_generic_caller`，讀取前左 SICK picoScan150)。
-  - `rear_lidar_node` (`sick_scan_xd` 之 `sick_generic_caller`，讀取後右 SICK picoScan150)。
-  - `imu_driver_node` (`tdk_ros2_imu` 之 `tdk_imu_node`，讀取 TDK IIM-42652)。
-- **重要輸入**：實體感測器硬體通訊訊號（UDP / Serial）。
-- **重要輸出**：
-  - `/scan_front` (`sensor_msgs/msg/LaserScan`, Frame: `base_lidar_link_FL_1`, 25 Hz)。
-  - `/scan_rear` (`sensor_msgs/msg/LaserScan`, Frame: `base_lidar_link_BR_1`, 25 Hz)。
-  - `/imu/data_raw` (`sensor_msgs/msg/Imu`, Frame: `base_imu_link`, 50–100 Hz)。
-- **TF 所有權**：無（由 S1 統一發布感測器靜態 Frame）。
-- **架構約束**：
-  - 採用**獨立雙雷達架構 (Independent Dual LiDAR)**。生產執行路徑中**完全不使用**虛擬融合節點 `dual_laser_merger`，亦無全局合併主題 `/scan`。
-  - 各下游消費者（建圖、定位、里程、代價地圖、碰撞監控）直接訂閱所需之獨立雷達主題。
-- **權威實作與配置參考**：
-  - Launch: `src/mobile_base_perception/launch/sick_dual_lidar.launch.py`, `src/mobile_base_perception/launch/tdk_imu.launch.py`
-  - Config: `src/mobile_base_perception/config/tdk_imu.yaml`
-
----
-
-### 4.3 S3: State Estimation
-- **主要職責**：以平面雷達掃描與輪速里程為先驗驅動 Kinematic-ICP，並由 EKF 融合雷達里程與 IMU 角速度，提供不依賴地圖的連續平面里程估測，作為全系統唯一權威發布 `odom -> base_footprint` 動態 TF。
-- **承接需求**：`SYS-005`。
-- **核心執行元件**：
-  - `kinematic_icp_online_node` (`kinematic_icp`)。
-  - `ekf_filter_node` (`robot_localization` / `mobile_base_state_estimation`)。
-- **重要輸入**：
-  - `/scan_front` (`sensor_msgs/msg/LaserScan`, 來自 S2)。
-  - `/diff_drive_controller/odom` (`nav_msgs/msg/Odometry`, 來自 S7，作為 Kinematic-ICP 運動先驗)。
-  - `/imu/data_raw` (`sensor_msgs/msg/Imu`, 來自 S2，EKF 僅融合 `yaw_rate`)。
-- **重要輸出**：
-  - `/lidar_odometry` (`nav_msgs/msg/Odometry`, 由 Kinematic-ICP 產出平面位姿 $x, y, \text{yaw}$)。
-  - `/odometry/filtered` (`nav_msgs/msg/Odometry`, 由 EKF 融合輸出)。
-  - 動態 TF: `odom -> base_footprint`（由 EKF 於 50 Hz 唯一發布）。
-- **TF 所有權**：`odom -> base_footprint` 動態 TF 之**全系統唯一擁有者**。
-- **架構約束**：
-  - Kinematic-ICP 配置 `publish_odom_tf: false`，嚴禁發布 TF。
-  - S7 `diff_drive_controller` 配置 `enable_odom_tf: false`，嚴禁發布 TF。
-  - 生產架構中不存在任何 RF2O 元件或中間 `odom_lidar` 座標框架。
-- **權威實作與配置參考**：
-  - Config: `src/kinematic_icp/ros/config/kinematic_icp_ros.yaml`, `src/mobile_base_state_estimation/config/ekf.yaml`
-  - Launch: `src/kinematic_icp/ros/launch/kinematic_icp.launch.py`, `src/mobile_base_state_estimation/launch/ekf.launch.py`
-
----
-
-### 4.4 S4: Mapping
-- **主要職責**：管理二維佔據網格地圖（Occupancy Grid）之建立與持久化生命週期：在 Mapping Mode 下接收感知與里程資訊，即時建立與更新地圖、持久化儲存為 Map Package（`map.pgm` 與 `map.yaml`），並執行儲存後讀回驗證（Read-back verification）。
-- **承接需求**：`SYS-001`, `SYS-002`, `SYS-006`, `SYS-024`。
-- **核心執行元件**：
-  - `async_slam_toolbox_node` (`slam_toolbox`, Lifecycle Node)。
-  - `map_saver_cli` (`nav2_map_server`)。
-  - `validate_map_readback` (`mobile_base_mapping`)。
-- **重要輸入**：
-  - `/scan_front` (`sensor_msgs/msg/LaserScan`, 來自 S2)。
-  - 動態 TF `odom -> base_footprint` (來自 S3)。
-- **重要輸出**：
-  - `/map` (`nav_msgs/msg/OccupancyGrid`, $0.05\,\text{m}$ 解析度)。
-  - 動態 TF `map -> odom`（建圖模式下由 SLAM 暫時擁有並依 `transform_publish_period: 0.05` 發布）。
-  - Map Package 實體檔案（`map.pgm`, `map.yaml`）。
-- **TF 所有權**：Mapping Mode 下暫時擁有 `map -> odom` 動態 TF。
-- **架構約束**：
-  - 僅在 Mapping Mode 啟用；在 Navigation Mode 下保持非活躍（Inactive）。
-  - 僅消耗前左雷達 `/scan_front`。
-  - 地圖儲存流程必須在寫入後調用 `validate_map_readback` 進行反序列化與幾何元數據檢驗，確認合格後方判定儲存成功。
-- **權威實作與配置參考**：
-  - Config: `src/mobile_base_mapping/config/slam_toolbox.yaml`
-  - Launch: `src/mobile_base_mapping/launch/mapping.launch.py`
-  - Script: `src/mobile_base_bringup/scripts/save_map.sh`
-
----
-
-### 4.5 S5: Localization
-- **主要職責**：在 Navigation Mode 下，透過 `map_server` 載入所選定之 Map Package 提供佔據網格，並利用 AMCL 粒子濾波結合前雷達掃描與系統里程資訊，估測 AMR 在地圖中的全局位姿，作為唯一權威發布 `map -> odom` 動態座標轉換與標準定位 Pose；以部署設定的預設 `initial_pose` 完成定位初始化，並在預設不適用時接收使用者提供的 Approximate Initial Pose 覆寫。
-- **承接需求**：`SYS-007`, `SYS-010`。
-- **核心執行元件**：
-  - `map_server` (`nav2_map_server`, Lifecycle Node)。
-  - `amcl` (`nav2_amcl`, Lifecycle Node)。
-  - `lifecycle_manager_localization` (`nav2_lifecycle_manager`，統籌管理 `map_server` 與 `amcl`)。
-- **重要輸入**：
-  - Map Package 檔案（經由 `site_resolution` 或 CLI 傳入 `map.yaml` 由 `map_server` 載入）。
-  - `/scan_front` (`sensor_msgs/msg/LaserScan`, 來自 S2)。
-  - 動態 TF `odom -> base_footprint` (來自 S3)。
-  - AMCL 部署設定 `initial_pose`（`set_initial_pose: true`，預設為 `x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）。
-  - `/initialpose` (`geometry_msgs/msg/PoseWithCovarianceStamped`, 來自 RViz2 或上層客戶端；在預設不適用時覆寫）。
-- **重要輸出**：
-  - `/map` (`nav_msgs/msg/OccupancyGrid`, 由 `map_server` 於導航期發布供定位與代價地圖使用)。
-  - `/amcl_pose` (`geometry_msgs/msg/PoseWithCovarianceStamped`)。
-  - 動態 TF `map -> odom`（導航模式下由 AMCL 唯一發布，`tf_broadcast: true`）。
-- **TF 所有權**：Navigation Mode 下 `map -> odom` 動態 TF 之**唯一權威擁有者**。
-- **架構約束**：僅在 Navigation Mode 啟用；僅消耗前雷達 `/scan_front`。
-- **權威實作與配置參考**：
-  - Config: `src/mobile_base_localization/config/amcl_params.yaml`
-  - Launch: `src/mobile_base_localization/launch/localization.launch.py`
-
----
-
-### 4.6 S6: Navigation
-- **主要職責**：導航全生命週期任務編排（Navigation Task Orchestration）：
-  1. **Target Admission**：接收外部目標，執行目標判別（SYS-008）、Goal Pose 正規化（SYS-009）、Station Catalog 查表解析（SYS-032）與 Canonical 幾何合法性驗證（SYS-033）。
-  2. **Route Strategy**：讀取 `route_graph.geojson`，由 `route_server` 運算路網拓撲路徑。
-  3. **Stage Execution**：編排與監控 First Mile → On Route → Last Mile 三階段路徑拼接與追蹤。
-  4. **Supervision & Obstacle Handling**：透過 Nav2 Costmaps 維護障礙物代價，並依 Nav2 原生規劃與路徑追蹤結果監控任務能否繼續執行。
-  5. **Completion & Result**：以 `StoppedGoalChecker` 評估到站停妥條件，對外統一回傳導航結果（Success / Failure / Canceled）。
-  6. **Direct AprilTag Docking**：Upper Body 直接發送 Nav2 原生 `/dock_robot` Action Goal 並發布視覺標記姿態 `/detected_dock_pose`，由 `docking_server`（載入 `SimpleNonChargingDock` 外掛）執行閉迴路精準停靠（SYS-044）。
-- **承接需求**：`SYS-008`, `SYS-009`, `SYS-011`, `SYS-013`, `SYS-014`, `SYS-015`, `SYS-016`, `SYS-017`, `SYS-018`, `SYS-019`, `SYS-020`, `SYS-021`, `SYS-025`, `SYS-032`, `SYS-033`, `SYS-044`。
-- **核心執行元件**：
-  - `bt_navigator` (`nav2_bt_navigator`, 載入 `route_assisted_nav.xml`)。
-  - `route_server` (`nav2_route`, 載入 `route_graph.geojson`)。
-  - `planner_server` (`nav2_planner`, 使用 `nav2_navfn_planner::NavfnPlanner`)。
-  - `controller_server` (`nav2_controller`, 使用 `nav2_mppi_controller::MPPIController` 與 `StoppedGoalChecker`)。
-  - `docking_server` (`opennav_docking::DockingServer`, Lifecycle Node, 載入 `opennav_docking::SimpleNonChargingDock` 外掛)。
-  - `lifecycle_manager_navigation` (`nav2_lifecycle_manager`，統籌管理 `bt_navigator`, `route_server`, `planner_server`, `controller_server`, `docking_server`)。
-  - `navigate_to_station` CLI 應用程式（整合 `TargetAdmission` 模組）。
-- **重要輸入**：
-  - 外部目標（Station ID 或 Goal Pose）。
-  - `/dock_robot` (`nav2_msgs/action/DockRobot`, 來自 Upper Body 停靠任務請求)。
-  - `/detected_dock_pose` (`geometry_msgs/msg/PoseStamped`, `frame_id: "base_link"`, 來自 Upper Body 感知串流)。
-  - `/map` (來自 S5 `map_server`)。
-  - `/scan_front` 與 `/scan_rear` (來自 S2，供 Local/Global Costmaps 使用)。
-  - TF `map -> odom` (來自 S5) 與 `odom -> base_footprint` (來自 S3)。
-  - 場域資源 `route_graph.geojson` 與 `stations.yaml`。
-- **重要輸出**：
-  - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`, 來自 `controller_server` 或 `docking_server`，直接送至 S7)。
-  - 原生 Nav2 Action 介面反饋與結果 (`nav2_msgs/action/NavigateToPose` 與 `nav2_msgs/action/DockRobot`)。
-- **TF 所有權**：無（`docking_server` 配置 `base_frame: "base_link"`、`fixed_frame: "odom"`，僅查詢既有 TF，嚴禁發布 TF）。
-- **架構約束**：
-  - 採用原生 `nav2_msgs/action/NavigateToPose` 進行導航目標調度，**系統不存在任何自製 `mobile_base_msgs/action/NavigateToStation` 介面**。
-  - 採用原生 `nav2_msgs/action/DockRobot` 進行視覺停靠控制，**由 Upper Body 作為 Action Client 直接發起與管理任務**，不設置自製 Trigger 或中介節點。
-  - v0.1 關閉全域自由空間 Fallback（SYS-021）；當無可用路網解時直接終止任務並回報失敗。
-- **權威實作與配置參考**：
-  - Launch: `src/mobile_base_navigation/launch/navigation.launch.py`
-  - Config: `src/mobile_base_navigation/config/nav2_params.yaml`
-  - Behavior Tree: `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`
-  - Target Admission: `src/mobile_base_navigation/include/mobile_base_navigation/target_admission.hpp`
-  - Station App: `src/mobile_base_navigation/src/navigate_to_station_app.cpp`
-
-#### 4.6.1 AprilTag 視覺停靠架構與介面契約 (Direct AprilTag Docking Architecture & Interface Contract)
-
-AprilTag 視覺停靠採用 Nav2/OpenNav 原生標準介面，達成 Upper（感知與決策）與 Lower（導航與運動控制）清晰解耦：
+### Interfaces and Flow
 
 ```text
-Upper Body (決策與感知)
-    │
-    ├── /dock_robot Goal (nav2_msgs/action/DockRobot) ────────────┐
-    │   (dock_pose @ base_link, use_dock_id=false)                │
-    │                                                             │
-    └── /detected_dock_pose ────────────────────────────┐         │
-        (geometry_msgs/msg/PoseStamped, frame_id=base_link)       │
-                                                        │         │
-Lower Body (S6 Navigation)                              │         │
-    │                                                   ▼         ▼
-    └── docking_server (opennav_docking) ◀─────────────────────────┘
-            │
-            ├── SimpleNonChargingDock (Tag → Target Transform / 70 cm Stop Geometry)
-            ├── Docking Controller (Smooth Control Law)
-            └── Local Costmap Collision Checker
-            │
-            │ /diff_drive_controller/cmd_vel (geometry_msgs/msg/TwistStamped)
-            ▼
-S7 Base Control
+mobile_base.urdf.xacro (URDF/Xacro)
+       │
+       ▼ (xacro command parsing)
+/robot_description (Topic & Node Parameter)
+       │
+       ├─────────────────────────────────────────┐
+       ▼                                         ▼
+robot_state_publisher                     ros2_control (controller_manager)
+       │                                         │
+       │                                         ▼ (讀取硬體狀態並發布)
+       │◄──────── /joint_states ─────────────────┘ (sensor_msgs/msg/JointState)
+       │
+       ├──► /tf_static (tf2_msgs/msg/TFMessage, Latched)
+       │    ├── base_footprint -> base_link
+       │    ├── base_link -> base_lidar_link_FL -> base_lidar_link_FL_1
+       │    ├── base_link -> base_lidar_link_BR -> base_lidar_link_BR_1
+       │    └── base_link -> base_imu_link
+       │
+       └──► /tf (tf2_msgs/msg/TFMessage, Dynamic)
+            ├── base_link -> driving_wheel_link_L
+            └── base_link -> driving_wheel_link_R
 ```
 
-**責任邊界配置 (Responsibility Boundary)**：
+- **模型載入與發布**：在底盤啟動程序中，`robot_description.launch.py` 調用 `xacro` 解析 `mobile_base.urdf.xacro`，產出 URDF XML 字串並作為節點參數與 `/robot_description` 主題提供給系統。
+- **靜態幾何發布**：`robot_state_publisher` 根據 URDF 定義，透過 `/tf_static` 一次性廣播底盤本體、感測器安裝位置與光達掃描參考框架之靜態座標轉換。
+- **動態關節轉換**：`robot_state_publisher` 訂閱來自 Base Control（`joint_state_broadcaster`）發布的 `/joint_states`，依據目前左右輪位置，計算並於 `/tf` 發布隨關節狀態更新之左右驅動輪動態變換（目前實作配置為 30 Hz）。
+- **TF 所有權邊界**：Robot Model 與 `robot_state_publisher` 僅負責 `base_footprint` 以下的機器人本體 link/joint TF。`robot_state_publisher` 不發布、亦不擁有世界座標到機器人本體的動態座標轉換（如 `odom -> base_footprint` 或 `map -> odom`）。
 
-| 實體 | 專屬擁有職責 (Owned Responsibilities) | 嚴格禁止涉足 (Non-Goals / Excluded) |
-|---|---|---|
-| **Upper Body**<br/>(視覺感知與決策) | • 相機擷取與 AprilTag 姿態估測<br/>• 持續發布 `/detected_dock_pose`（`frame_id="base_link"`, 原始標記位姿）<br/>• 依任務流程自主決定何時開始停靠<br/>• 作為 Action Client 發送 `/dock_robot` Action Goal<br/>• 監聽 Action Feedback、處理 Result、可主動發送 Cancel 取消停靠 | • 70 cm 停止幾何偏移計算（不得預扣 70 cm）<br/>• 下發底盤速度控制命令（嚴禁直連 cmd_vel）<br/>• 底盤 TF 座標轉換與里程計整合<br/>• 底盤障礙物避障與防撞判定 |
-| **`docking_server` / `SimpleNonChargingDock`**<br/>(Lower Body 停靠執行) | • 提供 Nav2 原生 `/dock_robot` Action 服務（支援 Feedback, Result, Cancel, Preemption）<br/>• 接收 Goal 當下以 TF 將目標標記位姿轉換鎖定至 `fixed_frame="odom"`<br/>• 獨立訂閱 `/detected_dock_pose` 作為控制更新流<br/>• 擁有標記至目標停靠點的外參變換幾何（70 cm 停止偏移）<br/>• 處理感知逾時（2.0s）、初始偵測逾時（5.0s）與逼近控制總逾時（30.0s）<br/>• 執行 Nav2 原生 Smooth Control Law 閉迴路控制器<br/>• 訂閱 Local Costmap 進行前向碰撞預測與防撞<br/>• 輸出 `geometry_msgs/msg/TwistStamped` 至 S7 cmd_vel 速度鏈 | • 相機內參或安裝外參計算<br/>• 預備點導航（Direct Docking `navigate_to_staging_pose=false`）<br/>• 自製自定義控制器或 PID 旁路<br/>• 充電樁硬體交握（Non-charging dock 立即完成） |
+### Implementation
 
-**上下半身介面契約 (Upper / Lower Body Interface Contract)**：
+1. **核心模型與執行元件**：
+   - **Xacro / URDF Entrypoint**：`src/mobile_base_description/urdf/mobile_base.urdf.xacro`
+     - 幾何定義：`src/mobile_base_description/urdf/mobile_base_geometry.xacro`
+     - 傳動介面：`src/mobile_base_description/urdf/mobile_base_ros2_control.xacro`
+   - **發布節點**：`robot_state_publisher`（標準 ROS 2 套件），由 `src/mobile_base_description/launch/robot_description.launch.py` 啟動，套用配置檔 `src/mobile_base_description/config/robot_state_publisher.yaml`（`publish_frequency: 30.0`）。
 
-1. **任務觸發契約 (`/dock_robot`)**：
-   - 介面類型：`nav2_msgs/action/DockRobot`。
-   - 觸發語意：發送 Action Goal 才是唯一的停靠啟動觸發；單純偵測到標記不等於啟動停靠。
-   - Demo Goal 填寫規範：
-     - `use_dock_id = false`
-     - `dock_id = ""`
-     - `dock_pose.header.frame_id = "base_link"`
-     - `dock_pose.pose` = Upper 當前測得之原始 AprilTag 位姿（未扣除 70 cm）
-     - `dock_type = "apriltag_dock"`
-     - `navigate_to_staging_pose = false`
-     - `max_staging_time = 0.0`
-2. **感知串流契約 (`/detected_dock_pose`)**：
-   - 介面類型：`geometry_msgs/msg/PoseStamped`。
-   - 座標系：`header.frame_id = "base_link"`。
-   - 時間戳：`header.stamp` 必須為感知取樣之真實時間戳（Lower `getRefinedPose` 以此判定 2.0s 新鮮度）。
-   - 數值內容：`pose` 為標記相對於 `base_link` 之原始位姿（Upper 嚴格不套用 70 cm 偏移）。
+2. **核心幾何與輪端配置**：
+   - **底盤參考與本體關係**：
+     - 地面投影參考點為 `base_footprint`（REP-120），底盤本體 `base_link` 透過固定關節 `base_joint` 連結於其上方。
+   - **差速驅動輪運動學參數**：
+     - 輪半徑（`wheel_radius`）：`0.0800 m`。
+     - 輪距（`wheel_separation`）：`0.5545 m`。
+     - 左右輪關節：`driving_wheel_joint_L` 與 `driving_wheel_joint_R`（連續旋轉關節），分別連結左輪 `driving_wheel_link_L` 與右輪 `driving_wheel_link_R`，提供差速運動學計算與動態姿態呈現。
+   - 精確幾何尺寸與詳細安裝外參數值以 `src/mobile_base_description/urdf/mobile_base_geometry.xacro` 為權威來源。
 
-**Direct Docking Scope 邊界**：
+3. **感測器安裝框架與倒置補償**：
+   - **前左 2D LiDAR（SICK picoScan150）**：
+     - 機構安裝框架：`base_lidar_link_FL`（透過固定關節 `base_lidar_joint_FL` 掛載於 `base_link`，為倒置安裝）。
+     - 修正掃描框架：`base_lidar_link_FL_1`（透過固定關節 `base_lidar_joint_FL_1` 連結於 `base_lidar_link_FL`）。此 scan frame 藉由旋轉變換抵消實體機構倒置的 roll 角度，向 ROS 感測串流與下游演算法提供 Z 軸朝上（z-up）、水平順向的標準二維掃描參考基準。
+   - **後右 2D LiDAR（SICK picoScan150）**：
+     - 機構安裝框架：`base_lidar_link_BR`（透過固定關節 `base_lidar_joint_BR` 掛載於 `base_link`，為倒置安裝）。
+     - 修正掃描框架：`base_lidar_link_BR_1`（透過固定關節 `base_lidar_joint_BR_1` 連結於 `base_lidar_link_BR`），同樣抵消倒置 roll 角度以提供 Z 軸朝上之標準掃描參考基準。
+   - **慣性測量單元（TDK IIM-42652 IMU）**：
+     - 安裝框架：`base_imu_link`（透過固定關節 `base_imu_joint` 掛載於 `base_link`）。
 
-- **包含 (In Scope)**：
-  - Upper $\rightarrow$ Lower 原生 Direct AprilTag Docking。
-  - Nav2 原生 `opennav_docking::SimpleNonChargingDock` 外掛與 `docking_server`。
-  - 原生 Action Feedback、Result 錯誤碼、Cancel 與 Preemption 語意。
-  - `navigate_to_staging_pose = false`。
-  - `max_retries = 0`。
-- **不包含 (Out of Scope / Future Migration)**：
-  - `NavigateToPose` 全域導航預備點 Staging（MVP-1 由 Upper 導航至站點後發起 Direct Docking）。
-  - Dock Database 站點資料庫（生產環境演進時僅需調整 `use_dock_id=true`，Action 介面本體不變）。
-  - 自動尋標旋轉 (Tag Search)。
-  - 自製自定義 Docking Controller。
-  - 自製 PID / cmd_vel 旁路控制。
+4. **啟動流程與關節狀態串聯**：
+   - 在 canonical bringup（`src/mobile_base_bringup/launch/mobile_base.launch.py`）中，啟動時透過 `base_control.launch.py` 啟動 `robot_description.launch.py`。
+   - `robot_state_publisher` 節點啟動後訂閱 `/joint_states` 主題。
+   - 當 `ros2_control` 之 `controller_manager` 載入並激活 `joint_state_broadcaster` 後，自底盤馬達回授發布左右輪的實際關節狀態（`driving_wheel_joint_L`、`driving_wheel_joint_R`），由 `robot_state_publisher` 換算為輪端動態 TF。
 
----
+### Expected Normal Behavior
 
-### 4.7 S7: Base Control
-- **主要職責**：將自主或手動速度命令轉為差速輪運動控制，作為**底盤物理執行與安全防護的最終擁有者**：
-  1. 執行差速輪閉迴路速度控制（SYS-022）。
-  2. 接收並執行建圖期間來自外部手動速度命令（SYS-034）。
-  3. 實施運動命令逾時保護（Command Timeout Stop, SYS-027）。
-  4. 實施直線／旋轉速度與加速度極限限制（Operational Limits, SYS-028）。
-  5. 檢核馬達驅動器編碼器回授狀態之有效性，提供可信的 Measured Wheel State（禁止偽造, SYS-029）。
-  6. 實施底盤硬體安全 Enable 自檢與停機 Safe Stop / Disable 序列（SYS-026, SYS-030）。
-- **承接需求**：`SYS-022`, `SYS-026`, `SYS-027`, `SYS-028`, `SYS-029`, `SYS-030`, `SYS-034`。
-- **核心執行元件**：
-  - `ros2_control_node` (`controller_manager`)。
-  - `diff_drive_controller` (`diff_drive_controller/DiffDriveController`)。
-  - `joint_state_broadcaster` (`joint_state_broadcaster/JointStateBroadcaster`)。
-  - `M1Hardware` (`mobile_base_control/M1Hardware` SystemInterface Plugin)。
-  - `M1Driver` (Modbus RTU 通訊庫)。
-- **重要輸入**：
-  - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`, 來自 Navigation Mode 的 S6 velocity producer 或 Mapping Mode 之 `teleop_twist_keyboard`)。
-- **重要輸出**：
-  - 物理輪端運動驅動（Modbus RTU FC17 輪速下發至 M1 驅動器）。
-  - `/joint_states` (`sensor_msgs/msg/JointState`)。
-  - `/diff_drive_controller/odom` (`nav_msgs/msg/Odometry`, 僅作為 S3 狀態估測先驗，不發布 TF)。
-- **TF 所有權**：無。配置 `enable_odom_tf: false`，嚴禁向 `/tf` 發布 `odom -> base_footprint`。
-- **架構約束**：
-  - 控制迴圈運作於 30 Hz。
-  - 嚴格實施時間戳 Stamped 速度命令逾時（$0.5\,\text{s}$）。
-  - 實體編碼器回授無效時拒絕提供並發出警告，嚴禁以命令值冒充。
-- **權威實作與配置參考**：
-  - Launch: `src/mobile_base_control/launch/base_control.launch.py`
-  - Config: `src/mobile_base_control/config/base_control_params.yaml`
-  - Driver & Hardware: `src/mobile_base_control/src/m1_hardware.cpp`, `src/mobile_base_control/src/m1_driver.cpp`
+- 啟動完成後，系統提供 `/robot_description` 主題與節點參數供其他子系統讀取使用。
+- `/tf_static` 發布包含 `base_footprint -> base_link`、雙光達機構與 scan 框架、以及 IMU 框架之靜態幾何關係，且在整個生命週期中穩定可查。
+- 輪端動態座標轉換（`base_link -> driving_wheel_link_L` 與 `base_link -> driving_wheel_link_R`）隨 `/joint_states` 持續更新並發布於 `/tf`。
+- Robot Model 僅負責 `base_footprint` 以下的機器人本體 link/joint 座標轉換；`odom -> base_footprint` 與 `map -> odom` 不屬於 Robot Model，不與 State Estimation（EKF）或 Localization（AMCL / SLAM Toolbox）的動態 TF 權限發生衝突。
 
-#### 4.7.1 底盤控制分層架構與責任邊界 (Base-Control Architecture & Responsibility Boundary)
+### Implementation References
 
-底盤運動控制堆疊劃分為兩層應用層設計：
+- URDF Entrypoint: `src/mobile_base_description/urdf/mobile_base.urdf.xacro`
+- Geometry Definition: `src/mobile_base_description/urdf/mobile_base_geometry.xacro`
+- ros2_control Hardware Tag: `src/mobile_base_description/urdf/mobile_base_ros2_control.xacro`
+- Description Launch: `src/mobile_base_description/launch/robot_description.launch.py`
+- Description Config: `src/mobile_base_description/config/robot_state_publisher.yaml`
+- Base Control Launch (Integration): `src/mobile_base_control/launch/base_control.launch.py`
+- Base Control Config: `src/mobile_base_control/config/base_control_params.yaml`
+- Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
+
+## 2. Sensor Ingestion
+
+### Responsibility
+
+Sensor Ingestion 負責自實體感測器硬體（雙 2D 激光雷達與 6 軸 IMU）讀取原始觀測量，透過對應之硬體驅動程式發布為標準 ROS 2 感測主題（`/scan_front`、`/scan_rear` 與 `/imu/data_raw`），供下游狀態估測、建圖、定位與導航等子系統消耗。
+
+### Interfaces and Flow
 
 ```text
-diff_drive_controller
-        │
-        │ 輪端目標角速度 [rad/s]
-        ▼
-   ros2_control
-        │
-        │ Joint Command / State Interfaces
-        ▼
-   M1Hardware (Hardware Plugin)
-        │
-        │ MotorCommand / MotorState (馬達目標 RPM / 狀態資料)
-        ▼
-    M1Driver (Protocol Library)
-        │
-        │ 私有 RTU 封包 (Raw Modbus Frames)
-        ▼
-    libmodbus (C Library)
-        │
-        ▼
-      RS-485 序列匯流排 (/dev/ttyUSB0, 230400 8N1)
-        │
-   ┌────┴────┐
-   ▼         ▼
-M1 ID1    M1 ID2
-(右輪)    (左輪)
+Physical Front LiDAR (SICK picoScan150)
+       │ (Ethernet / UDP)
+       ▼
+front_lidar_node (sick_scan_xd)
+       │
+       ▼
+/scan_front (sensor_msgs/msg/LaserScan, frame_id: base_lidar_link_FL_1)
+       ├──► State Estimation
+       ├──► Mapping
+       ├──► Localization
+       └──► Navigation
+
+Physical Rear LiDAR (SICK picoScan150)
+       │ (Ethernet / UDP)
+       ▼
+rear_lidar_node (sick_scan_xd)
+       │
+       ▼
+/scan_rear (sensor_msgs/msg/LaserScan, frame_id: base_lidar_link_BR_1)
+       └──► Navigation
+
+Physical IMU (TDK IIM-42652)
+       │ (USB Serial)
+       ▼
+imu_driver_node (tdk_ros2_imu)
+       │
+       ▼
+/imu/data_raw (sensor_msgs/msg/Imu, frame_id: base_imu_link)
+       └──► State Estimation
 ```
 
-**責任邊界配置 (Responsibility Boundary)**：
+- **雙光達獨立資料流**：前左與後右光達分別由獨立的驅動節點讀取並發布至 `/scan_front` 與 `/scan_rear`。生產環境中不存在虛擬雷達合併節點（`dual_laser_merger`），亦無全域合併主題（`/scan`）；下游消費者直接依需求訂閱所需之雷達主題。
+- **感測框架參照**：發布之感測訊息分別標註對應之 `frame_id`（`base_lidar_link_FL_1`、`base_lidar_link_BR_1`、`base_imu_link`），其空間安裝外參與靜態 TF 轉換由 Robot Model 負責發布，Sensor Ingestion 本身不發布 TF。
+- **下游資料流邊界**：
+  - `/scan_front` 由 State Estimation、Mapping、Localization 與 Navigation 訂閱。
+  - `/scan_rear` 由 Navigation 訂閱。
+  - `/imu/data_raw` 由 State Estimation 訂閱。
 
-| 元件 | 專屬擁有職責 (Owned Responsibilities) | 嚴格禁止涉足 (Non-Goals / Excluded) |
-|---|---|---|
-| **`M1Hardware`** | • ROS 2 / ros2_control 生命週期管理<br/>• 左右輪語意與馬達 ID 映射 (ID1 $\rightarrow$ Right, ID2 $\rightarrow$ Left)<br/>• 輪速 [rad/s] 與馬達 [RPM] 雙向轉換<br/>• 機械減速比 ($20:1$) 與馬達方向極性 ($\text{Left}=+1, \text{Right}=-1$)<br/>• 命令有限性檢查、極限截斷 (`max_motor_rpm = 3000.0`)<br/>• 連續位置追蹤與 int32 溢位解算 (`PositionTracker`)<br/>• 裝置健康政策 (Alarm 檢驗與 `ERROR` 判定)<br/>• 安全啟動與停機序列編排<br/>• A2 同步控制模型之狀態快取 (`latest_motor_state_`) | • Modbus 協定封包與暫存器編解碼<br/>• Multi-drive 2.0 廣播定址與 Bitmap 運算<br/>• `libmodbus` context 管理與串列通訊<br/>• 機器人差速運動學 (由 `diff_drive_controller` 擁有) |
-| **`M1Driver`** | • M1 通訊協定語意與 Multi-drive 2.0 廣播定址 (Group ID `0x65`)<br/>• Multi-drive 2.0 FC03 / FC17 封包建構<br/>• JG (RPM 控制)、SVON (使能)、SVOFF (去能) 命令編碼<br/>• 有符號整數解碼 (Signed int16 RPM, Signed int32 Position)<br/>• 協定回應結構語意驗證 (FC、長度、驅動器區塊完整性)<br/>• 私有 `libmodbus` context 管理與 RTU 通訊 (`connect`, `disconnect`, `transact`)<br/>• 標準 Modbus 單一暫存器維護存取 (`read_register`, `write_register`) | • ROS 2 介面、Node 或 ros2_control 生命週期<br/>• 機器人左右輪幾何、輪徑、輪距或減速比<br/>• 輪端弧度與角速度轉換<br/>• 連續位置溢位展開 (Rollover Tracking)<br/>• 裝置健康業務政策 (如警報轉為 ROS Error) |
+### Implementation
 
-- **封裝原則**：`M1Hardware` 專注於 ROS 與機器人領域語意，不依賴任何 Modbus 暫存器或 `libmodbus` 型別；`M1Driver` 私有擁有 `libmodbus`，不向外暴露傳輸層細節。MVP 架構中無獨立之 `SerialTransport` 抽象層，維持單一後端之最簡架構（Avoid Premature Structure）。
+1. **雙 2D 光達驅動（Dual SICK picoScan150）**：
+   - **套件與節點**：使用 `sick_scan_xd` 套件之 `sick_generic_caller`，於 Launch 檔具現化兩個獨立節點：
+     - 前左光達：節點名稱 `front_lidar_node`，經 Ethernet / UDP 接收資料，輸出主題為 `/scan_front`（`sensor_msgs/msg/LaserScan`）。
+     - 後右光達：節點名稱 `rear_lidar_node`，經 Ethernet / UDP 接收資料，輸出主題為 `/scan_rear`（`sensor_msgs/msg/LaserScan`）。
+   - **Frame 命名與發布行為**：
+     - Launch 引數 `publish_frame_id` 分別配置為 `base_lidar_link_FL` 與 `base_lidar_link_BR`。
+     - 驅動程式內部依圖層索引發布 `header.frame_id` 為 `base_lidar_link_FL_1` 與 `base_lidar_link_BR_1`，直接對齊 Robot Model 定義之 Z 軸朝上校正掃描框架。
+   - **TF 權限配置**：
+     - 驅動參數設定 `tf_publish_rate:=0.0`，光達驅動不發布 TF；所有感測器靜態 TF 由 Robot Model 的 `robot_state_publisher` 統一負責。
 
-#### 4.7.2 硬體基準與馬達參數 (Hardware Baseline & Motor Configuration)
+2. **慣性測量單元驅動（TDK IIM-42652 IMU）**：
+   - **套件與節點**：使用 `tdk_ros2_imu` 套件之 `tdk_imu_node`，節點名稱為 `imu_driver_node`。
+   - **硬體傳輸與配置**：透過 USB Serial 介面讀取實體 IMU，精確連線設定依 `src/mobile_base_perception/config/tdk_imu.yaml`。
+   - **主題映射與 Frame**：
+     - 節點預設主題經 Launch 重新映射為 `/imu/data_raw`（`sensor_msgs/msg/Imu`）。
+     - 座標框架標註為 `frame_id: "base_imu_link"`。
 
-系統採用實機驗證通過之硬體與馬達參數基準：
+3. **系統整合啟動（Canonical Bringup Integration）**：
+   - 在標準系統啟動流程（`src/mobile_base_bringup/launch/mobile_base.launch.py`）中，`tdk_imu.launch.py` 與 `sick_dual_lidar.launch.py` 納入通用實體清單（`common_entities`），於 Mapping Mode 與 Navigation Mode 下皆保持運行。
 
-- **序列通訊參數**：RS-485 介面，固定埠位 `/dev/ttyUSB0`，鮑率 `230400` bps，格式 `8N1`（8 資料位元、無同位檢查、1 停止位元）。
-- **通訊逾時門檻**：`response_timeout_ms: 50` ms（URDF / Launch 強制指定之必要參數，系統不依賴隱式預設值）。
-- **驅動器與輪端映射**：
-  - 驅動器 ID 1：右輪馬達（Right Motor），原生安裝旋轉極性 $\text{sign}_{\text{right}} = -1$（負轉為機器人前進方向）。
-  - 驅動器 ID 2：左輪馬達（Left Motor），原生安裝旋轉極性 $\text{sign}_{\text{left}} = +1$（正轉為機器人前進方向）。
-- **機械幾何與減速比**：
-  - 輪半徑 $R = 0.080\,\text{m}$，輪間距 $L = 0.5545\,\text{m}$（由 `diff_drive_controller` 擁有）。
-  - 機械減速比 $G = 20.0$（$20:1$ 行星減速機，由 `M1Hardware` 擁有）。
-- **編碼器與位置解析度**：
-  - 馬達編碼器原生解析度 $2500\,\text{CPR}$，設定為 Format 1（`02-14 = 1`）四倍頻解碼，馬達端每圈對應 $10{,}000\,\text{steps/motor rev}$。
-  - 經 $20:1$ 減速後，輪端旋轉一圈對應 $200{,}000\,\text{steps/wheel rev}$（即 $200{,}000\,\text{steps} = 2\pi\,\text{rad}$）。
-- **運作極限與逾時**：
-  - 馬達轉速工作限制 `max_motor_rpm = 3000.0` RPM。
-  - 速度命令逾時門檻 `cmd_vel_timeout = 0.5` s。
-- **控制頻率基準**：`controller_manager` 控制迴圈基準為 **30 Hz**（週期 $33.3\,\text{ms}$）。
+### Expected Normal Behavior
 
-#### 4.7.3 Multi-drive 2.0 通訊架構 (Multi-drive 2.0 Communication Design)
+- 系統啟動後，`/scan_front` 持續提供前光達 LaserScan 訊息。
+- 系統啟動後，`/scan_rear` 持續提供後光達 LaserScan 訊息。
+- 系統啟動後，`/imu/data_raw` 持續提供原始 IMU 量測訊息。
+- 運行期各感測訊息之 `header.frame_id` 與 Robot Model 定義之感測器座標框架（`base_lidar_link_FL_1`、`base_lidar_link_BR_1`、`base_imu_link`）一致。
+- 前後雙光達感測串流維持完全獨立，系統無 `dual_laser_merger` 亦無合併 `/scan` 主題。
+- Sensor Ingestion 不負責任何 TF 廣播、里程推算或位姿估算。
 
-M1 驅動器支援 Multi-drive 2.0 協定，透過廣播群組定址（Group ID `0x65` 與驅動器位元遮罩），以單一總線事務同時存取雙馬達：
+### Implementation References
 
-1. **唯讀狀態路徑 (`read_state()`)**：
-   - 使用 Multi-drive 2.0 FC03（Read Holding Registers）。
-   - 在單一總線讀取事務中同時獲取雙驅動器之運作狀態、警報碼、即時轉速與編碼器位置等關鍵狀態資料。
-2. **運行期控制路徑 (`exchange()`, `enable()`, `stop()`, `disable()`)**：
-   - 使用 Multi-drive 2.0 FC17（Read/Write Multiple Registers）。
-   - 在**單一總線事務中同步下發雙輪控制命令並回讀雙輪狀態**：
-     - `exchange()`：下發 JG（Jog 速度控制）目標轉速 RPM。
-     - `enable()`：下發 SVON（Servo-On 使能）命令。
-     - `stop()`：下發 JG 零速命令。
-     - `disable()`：下發 SVOFF（Servo-Off 去能）命令。
-   - **設計理由**：將控制命令下發與狀態回授合併於單一 FC17 事務，消除傳統 Modbus 分立讀寫的多餘總線往返，大幅減少總線延遲並支持同步控制迴圈。
-3. **標準 Modbus 維護路徑**：
-   - 支援標準單一暫存器讀寫（FC03 / FC06），專責於離線配置、參數檢查與診斷維護（如 02-14 位置格式、09-19 驅動器 ID、09-20 鮑率、09-26 Multi-drive 映射），嚴禁介入運行期即時控制迴圈。
+- Dual LiDAR Launch: `src/mobile_base_perception/launch/sick_dual_lidar.launch.py`
+- IMU Launch: `src/mobile_base_perception/launch/tdk_imu.launch.py`
+- IMU Parameter Config: `src/mobile_base_perception/config/tdk_imu.yaml`
+- Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
 
-#### 4.7.4 A2 同步控制迴圈與轉換模型 (A2 Synchronous Control Model & Conversions)
+## 3. State Estimation
 
-系統採用實機驗證通過之 **A2 同步控制模型 (Synchronous Model A2)**：
+### Responsibility
+
+State Estimation 負責在不依賴全域地圖的前提下，持續估測機器人在二維平面上的運動狀態與連續里程，並透過分層架構結合雷達匹配與感測融合：由 Kinematic-ICP 以輪速里程為運動學先驗配準二維雷達點雲，產出雷達里程估算；再由擴展卡爾曼濾波器（EKF）融合雷達里程與 IMU 偏航角速度，輸出連續的平面濾波狀態（`/odometry/filtered`），並發布 `odom -> base_footprint` 動態座標轉換。
+
+### Interfaces and Flow
 
 ```text
-M1Hardware::read()
-    │
-    ├── 消耗前一週期 write() 快取之最新馬達狀態 latest_motor_state_ (無總線通訊)
-    ├── 檢查馬達狀態健康度 (alarm == 0)
-    ├── 執行 PositionTracker 增量累加與輪端位置 [rad] 轉換
-    └── 轉換 actual_rpm 為輪端角速度 [rad/s]
-    │
-controller_manager / diff_drive_controller update() 運算
-    │
-M1Hardware::write()
-    │
-    ├── 檢驗輪端角速度命令合法性 (有限值) 與極限截斷 (max_motor_rpm)
-    ├── 轉換左/右輪角速度 [rad/s] 為馬達轉速 [RPM]
-    ├── 執行單一 M1Driver::exchange() FC17 總線事務
-    ├── 快取回傳之 ExchangeResult 作為最新狀態 latest_motor_state_
-    └── 檢驗回傳狀態之警報碼
+/diff_drive_controller/odom ────┐ (nav_msgs/msg/Odometry, Wheel Motion Prior)
+(Base Control)                  │
+                                ▼
+/scan_front ───────────────► kinematic_icp_online_node (kinematic_icp)
+(sensor_msgs/msg/LaserScan)     │
+(Sensor Ingestion)              ▼
+                         /lidar_odometry (nav_msgs/msg/Odometry)
+                                │ (odom0: x, y, yaw)
+                                ▼
+/imu/data_raw ─────────────► ekf_filter_node (robot_localization)
+(sensor_msgs/msg/Imu)           │ (imu0: vyaw)
+(Sensor Ingestion)              │
+                                ├──► /odometry/filtered (nav_msgs/msg/Odometry)
+                                │
+                                └──► /tf (Dynamic TF)
+                                     └── odom -> base_footprint
 ```
 
-- **A2 模型設計理由**：每個 30 Hz 控制週期（$33.3\,\text{ms}$）僅在 `write()` 發生一次物理總線通訊，`read()` 直接使用快取，避免重複通訊開銷，確保控制迴圈完全收斂在時限內。
-- **速度命令轉換公式 (Wheel Command to Motor RPM)**：
-  $$\text{motor\_rpm} = \text{clamp}\left( \text{round}\left( \omega_{\text{wheel}} \times \frac{60}{2\pi} \times G \times \text{sign}_{\text{motor}} \right), -\text{max\_rpm}, \text{max\_rpm} \right)$$
-  其中 $G = 20.0$；$\text{sign}_{\text{left}} = +1$，$\text{sign}_{\text{right}} = -1$；$\text{max\_rpm} = 3000.0$。
-- **速度回授轉換公式 (Motor RPM to Wheel Velocity)**：
-  $$\omega_{\text{wheel}} = \text{actual\_rpm} \times \text{sign}_{\text{motor}} \times \frac{1}{G} \times \frac{2\pi}{60}$$
-- **轉換職責劃分**：機器人線速／角速與輪速間的差速運動學轉換由 `diff_drive_controller` 擁有；輪端角速度與馬達轉速／符號間的轉換由 `M1Hardware` 擁有；馬達轉速之協定暫存器編碼由 `M1Driver` 擁有。
+- **輸入資料流**：
+  - `/scan_front`（`sensor_msgs/msg/LaserScan`）：來自 Sensor Ingestion，由前左 2D 光達提供平面掃描量測（`frame_id: base_lidar_link_FL_1`），供 Kinematic-ICP 進行點雲配準。
+  - `/diff_drive_controller/odom`（`nav_msgs/msg/Odometry`）：來自 Base Control，提供輪端差速里程估算，作為 Kinematic-ICP 幀間點雲配準的運動學先驗（Kinematic Prior）。
+  - `/imu/data_raw`（`sensor_msgs/msg/Imu`）：來自 Sensor Ingestion，由 6 軸 IMU 提供慣性量測（`frame_id: base_imu_link`），供 EKF 融合繞 Z 軸之偏航角速度（`vyaw`）。
+- **輸出資料流**：
+  - `/lidar_odometry`（`nav_msgs/msg/Odometry`）：由 `kinematic_icp_online_node` 輸出之雷達里程估計，包含相對於 `odom` 框架的平面位姿（$x, y, \text{yaw}$）。
+  - `/odometry/filtered`（`nav_msgs/msg/Odometry`）：由 `ekf_filter_node` 發布之濾波狀態估測結果，供下游 Mapping、Localization 與 Navigation 模組使用。
+  - 動態 TF（`odom -> base_footprint`）：由 `ekf_filter_node` 於 `/tf` 上發布。
+- **TF 所有權與邊界**：
+  - `diff_drive_controller` 配置 `enable_odom_tf: false`。
+  - `kinematic_icp_online_node` 配置 `publish_odom_tf: false`。
+  - `ekf_filter_node` 配置 `publish_tf: true`。
+  - 在目前 production 執行路徑中，EKF 是 `odom -> base_footprint` 動態 TF 的唯一 publisher。
+  - 下游邊界劃分：機器人本體與感測器內部幾何（`base_footprint` 以下）由 Robot Model（`robot_state_publisher`）負責；全域地圖到里程框架之轉換（`map -> odom`）由 Mapping Mode 下的 Mapping（`slam_toolbox`）或 Navigation Mode 下的 Localization（`amcl`）發布；State Estimation 不發布 `map -> odom`，亦不執行地圖載入或全域重定位。
 
-#### 4.7.5 連續位置追蹤與溢位解算 (Position Tracking & Rollover Unwrapping)
+### Implementation
 
-- **M1 位置回授特性**：M1 回傳之位置為 signed 32-bit 整數（`position_steps`），計數範圍在 $[-2^{31}, 2^{31}-1]$ 之間，持續運轉會發生數值溢位（Rollover）。
-- **`PositionTracker` 解算機制**：
-  - 每個馬達獨立配置一個 `PositionTracker`。
-  - 採用二補數差值（2's complement difference）計算相鄰採樣之原始增量：
-    $$\Delta_{\text{steps}} = (\text{int32\_t})\left( (\text{uint32\_t})\text{raw}_{\text{current}} - (\text{uint32\_t})\text{raw}_{\text{previous}} \right)$$
-  - 將增量累加至 64 位元累加器 $\text{accumulated\_steps} \in \text{int64\_t}$，消除溢位突變。
-- **輪端連續位置計算公式**：
-  $$\theta_{\text{wheel}}\,\text{[rad]} = \frac{\text{accumulated\_steps}}{\text{motor\_steps\_per\_rev} \times G} \times 2\pi \times \text{sign}_{\text{motor}} = \frac{\text{accumulated\_steps}}{200{,}000} \times 2\pi \times \text{sign}_{\text{motor}}$$
-- **原點重置政策 (Origin Reset Policy)**：
-  - 每次 `M1Hardware::on_activate()` 執行時，強制將左右輪 `PositionTracker` 歸零重置，將當前馬達實體位置定義為 ROS 輪端位置原點（$0.0\,\text{rad}$）。
-  - 系統在節點重啟或生命週期重新啟動後**不保留先前的絕對里程記帳**。
+1. **Kinematic-ICP 雷達里程估測（Kinematic-ICP Online Node）**：
+   - **套件與節點**：使用 `kinematic_icp` 套件之 `kinematic_icp_online_node`，由 `src/kinematic_icp/ros/launch/kinematic_icp.launch.py` 啟動，套用配置檔 `src/kinematic_icp/ros/config/kinematic_icp_ros.yaml`。
+   - **二維點雲配準**：配置 `use_2d_lidar: true`，訂閱前光達 `/scan_front`。節點將 2D 雷達掃描轉換為局部點雲並執行體素化降採樣（`voxel_size: 0.1`）與點雲配準。
+   - **輪速先驗整合（Kinematic Prior）**：訂閱輪式里程計 `/diff_drive_controller/odom`，以輪速里程之運動增量作為點雲配準初值先驗。
+   - **座標框架與輸出**：設定 `lidar_odom_frame: "odom"` 與 `base_frame: "base_footprint"`，輸出未濾波之雷達里程計主題 `/lidar_odometry`；配置 `publish_odom_tf: false`，不發布 TF。
 
-#### 4.7.6 裝置健康政策與錯誤隔離 (Device Health Policy & Error Responsibility)
+2. **擴展卡爾曼濾波融合（EKF State Estimation）**：
+   - **套件與節點**：使用 `robot_localization` 套件之 `ekf_node`，具現化為節點 `ekf_filter_node`，由 `src/mobile_base_state_estimation/launch/ekf.launch.py` 啟動，套用配置檔 `src/mobile_base_state_estimation/config/ekf.yaml`。
+   - **運行模式與頻率**：配置 `two_d_mode: true`，約束於二維平面運動；目前配置之運行頻率為 50 Hz（`frequency: 50.0`）。
+   - **觀測量融合配置**：
+     - `odom0`（`/lidar_odometry`）：融合平面位置與航向角（$x, y, \text{yaw}$）。
+     - `imu0`（`/imu/data_raw`）：融合繞 Z 軸之偏航角速度（`vyaw`）。
+   - **輸出狀態**：發布濾波里程主題 `/odometry/filtered`（`nav_msgs/msg/Odometry`）。
 
-- **通訊結果與裝置狀態的架構區隔**：
-  - 一次 Modbus 總線通訊在傳輸層與協定層可能完全成功（`Result::ok == true`），但馬達驅動器在狀態區塊中可能回報非零警報碼（如 `alarm = 21`）。
-  - `M1Driver` 專責判定傳輸與封包語意是否成功，不擅自解釋硬體健康狀態。
-  - `M1Hardware` 專責實施裝置健康政策：當檢測到任何驅動器 `alarm != 0` 時，判定硬體故障並使 ros2_control 進入 `ERROR` / `FAILURE` 狀態。
-- **無自動清除警報政策**：系統嚴禁在運行中靜默自動清除驅動器警報，必須將異常明確呈報上層與操作員。
+3. **動態 TF 所有權（Dynamic TF Ownership）**：
+   - `diff_drive_controller` 配置 `enable_odom_tf: false`。
+   - `kinematic_icp_online_node` 配置 `publish_odom_tf: false`。
+   - `ekf_filter_node` 配置 `publish_tf: true`，指定 `odom_frame: "odom"`、`base_link_frame: "base_footprint"` 與 `world_frame: "odom"`。
+   - 在目前 production 執行路徑中，EKF 是 `odom -> base_footprint` 動態 TF 的唯一 publisher。
 
----
+4. **系統整合與模式通用性（Canonical Bringup Integration）**：
+   - 在標準系統啟動流程（`src/mobile_base_bringup/launch/mobile_base.launch.py`）中，`kinematic_icp.launch.py` 與 `ekf.launch.py` 均註冊於共通實體清單（`common_entities`）。
+   - State Estimation 在 Mapping Mode 與 Navigation Mode 下皆保持運作，提供一致的里程推算基底。
 
-### 4.8 S8: Observability and Diagnostics
+### Expected Normal Behavior
 
-- **主要職責**：提供 AMR runtime information 觀察，將選定的 Logs / Events 與少量 Key Telemetry 傳送至 Server 保存及歷史查詢，並以 timestamp、source identity 與共同時間範圍支援人工關聯與診斷。
-- **承接需求**：`SYS-035`, `SYS-036`, `SYS-037`, `SYS-038`, `SYS-042`。
-- **核心執行元件**：
-  - **AMR onboard**：ROS Observability Adapter、Fluent Bit、bounded volatile RAM buffering。
-  - **Server**：OpenSearch、InfluxDB。
-- **重要輸入**：選定的 ROS runtime information、AMR / ROS Logs 與 selected runtime Events。
-- **重要輸出**：可依時間與來源查詢的 Logs / Events，以及可依時間範圍查詢的 Key Telemetry。
-- **控制權限**：S8 不擁有亦不介入 Navigation、Localization、Control 或 Safety 的控制、參數、生命週期轉換或 recovery。
+- `/lidar_odometry` 持續提供 local LiDAR odometry。
+- `/odometry/filtered` 持續提供 filtered planar odometry。
+- EKF 持續發布 `odom -> base_footprint` 動態 TF。
+- 系統無第二個 `odom -> base_footprint` publisher。
+- State Estimation 不發布 `map -> odom`。
+- Mapping Mode 與 Navigation Mode 皆使用同一 State Estimation ownership。
 
-#### 4.8.1 MVP 資料流與產品責任
+### Implementation References
 
-**Logs / Events path**：
+- Kinematic-ICP Launch: `src/kinematic_icp/ros/launch/kinematic_icp.launch.py`
+- Kinematic-ICP Parameter Config: `src/kinematic_icp/ros/config/kinematic_icp_ros.yaml`
+- State Estimation Launch: `src/mobile_base_state_estimation/launch/ekf.launch.py`
+- State Estimation Parameter Config: `src/mobile_base_state_estimation/config/ekf.yaml`
+- Base Control Parameter Config (Wheel Odometry Source): `src/mobile_base_control/config/base_control_params.yaml`
+- Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
+
+## 4. Mapping
+
+### Responsibility
+
+Mapping 負責在 Mapping Mode 下，依據前向 2D 激光雷達掃描與系統座標轉換（TF），即時建立並更新二維佔據網格地圖（Occupancy Grid），於 Mapping Mode 期間發布 `map -> odom` 動態座標轉換，並透過專案儲存流程將建立之地圖持久化為包含 `map.yaml` 與 `map.pgm` 的 Map Package，供後續 Localization 載入使用。
+
+### Interfaces and Flow
+
+#### A. 運行期建圖資料流（Runtime Mapping Flow）
 
 ```text
-Selected AMR / ROS Logs and Runtime Events
-                    │
-                    ▼
-                Fluent Bit
-                    │
-                    ▼
-        Bounded Volatile RAM Buffer
-                    │
-                    ▼
-                  Network
-                    │
-                    ▼
-       OpenSearch on Observability Server
+/scan_front (sensor_msgs/msg/LaserScan) ──┐
+(Sensor Ingestion)                         │
+                                           ▼
+TF: odom -> base_footprint ──────────► async_slam_toolbox_node (slam_toolbox)
+(State Estimation)                         │
+                                           ├─► /map (nav_msgs/msg/OccupancyGrid)
+TF: base_footprint -> ... -> scan_frame ──┘
+(Robot Model, /tf_static)                  └─► /tf (Dynamic TF)
+                                                └── map -> odom
 ```
 
-**Key Telemetry path**：
+- **輸入資料與座標轉換相依**：
+  - `/scan_front`（`sensor_msgs/msg/LaserScan`）：來自 Sensor Ingestion，由前左 2D 光達提供平面掃描量測（`frame_id: base_lidar_link_FL_1`），為 SLAM 演算法唯一消耗之感測主題。
+  - 動態 TF `odom -> base_footprint`：由 State Estimation 發布；SLAM Toolbox 不直接訂閱 `/odometry/filtered` 主題，而是透過 TF 緩衝區查詢此座標轉換以獲取本體里程。
+  - 靜態 TF `base_footprint -> ... -> base_lidar_link_FL_1`：由 Robot Model 於 `/tf_static` 發布，提供雷達安裝外參。
+- **輸出資料流**：
+  - `/map`（`nav_msgs/msg/OccupancyGrid`）：即時二維佔據網格地圖，目前配置解析度為 0.05 m。
+  - `/map_metadata`（`nav_msgs/msg/MapMetaData`）：地圖元數據（尺寸、解析度與原點）。
+  - 動態 TF（`map -> odom`）：由 `async_slam_toolbox_node` 於 `/tf` 發布。
+- **TF 所有權與邊界**：
+  - 在 Mapping Mode 下，`async_slam_toolbox_node` 是 `map -> odom` 動態 TF 的唯一 publisher。
+  - State Estimation 獨立維護 `odom -> base_footprint`，Robot Model 維護 `base_footprint` 以下的本體幾何。
+  - 模式互斥原則：Navigation Mode 下的 Localization（AMCL）在 Mapping Mode 下不啟動；Navigation Mode 的 `map -> odom` 不屬於 Mapping。
+
+#### B. 地圖包保存流程（Map Package Save Flow）
 
 ```text
-Selected ROS Runtime Information
-                    │
-                    ▼
-        ROS Observability Adapter
-                    │
-                    ▼
- Simple Structured Time-series Data
-                    │
-                    ▼
-        Bounded Volatile RAM Buffer
-                    │
-                    ▼
-                  Network
-                    │
-                    ▼
-         InfluxDB on Observability Server
+/map (nav_msgs/msg/OccupancyGrid, Transient Local)
+       │
+       ▼ (save_map.sh)
+map_saver_cli (nav2_map_server)
+       │
+       ├──► map.yaml (地圖參數設定)
+       └──► map.pgm  (二維佔據網格光柵影像)
+               │
+               ▼
+validate_map_readback (mobile_base_mapping / MapIO)
+       │
+       ▼ (loadMapFromYaml 驗證成功)
+Map Package (maps/<timestamp>/)
 ```
 
-#### 4.8.2 ROS Observability Adapter
+- **地圖包產物邊界**：
+  - 儲存流程僅產生並驗證 Map Package 實體檔案（`map.yaml` 與 `map.pgm`）。
+  - 站點目錄（`stations.yaml`）與路網圖（`route_graph.geojson`）不屬於 Mapping 產物，Mapping 亦不擁有整個場域目錄。
 
-- 只讀取選定的 ROS runtime information，產生少量 Key Telemetry，並轉換為適合 Server time-series storage 的簡單結構化資料。
-- 每筆概念資料僅要求：`timestamp`、`robot/source identity`、`metric`、`value`。
-- exact topic profile、sampling frequency，以及 InfluxDB measurement、tags、fields schema 由 Implementation Design 決定，本層不固定。
-- Adapter 不得控制 Navigation、Localization、Control 或 Safety，不得修改 parameter、觸發 lifecycle transition、執行 recovery、推導 composite health，亦不得錄製 raw ROS data。
+### Implementation
 
-#### 4.8.3 Fluent Bit
+1. **SLAM 即時建圖節點（SLAM Toolbox Lifecycle Node）**：
+   - **套件與節點**：使用 `slam_toolbox` 套件之 `async_slam_toolbox_node`（以 Lifecycle 節點管理），由 `src/mobile_base_mapping/launch/mapping.launch.py` 啟動，套用配置檔 `src/mobile_base_mapping/config/slam_toolbox.yaml`。
+   - **啟動狀態轉換**：在 Mapping Mode 啟動時，Launch 事件處理器自動觸發節點之 `configure` 與 `activate` 狀態轉換，進入活躍運行狀態。
+   - **感測輸入與解析度**：配置 `scan_topic: "/scan_front"`（僅使用前光達，不使用後光達）；網格解析度為 `resolution: 0.05`（0.05 m）。
+   - **里程相依機制**：節點不訂閱 `/odometry/filtered` 主題，直接透過 TF 查詢 `odom -> base_footprint` 與雷達安裝外參。
 
-- Fluent Bit 為 MVP Log / Event forwarder，負責收集 selected AMR / ROS Logs 與 selected runtime Events，並傳送至 Server OpenSearch。
-- Fluent Bit 不理解 ROS topic semantics，不解讀 Key Telemetry，不判定 subsystem health，亦不錄製 raw ROS data。
+2. **動態 TF 所有權（Mapping Mode map -> odom Ownership）**：
+   - 座標框架配置：`map_frame: "map"`、`odom_frame: "odom"`、`base_frame: "base_footprint"`。
+   - 發布週期：配置 `transform_publish_period: 0.05`（以 20 Hz 發布 `map -> odom` 動態 TF）。
+   - 在 Mapping Mode 期間，`async_slam_toolbox_node` 是系統中 `map -> odom` 的唯一 publisher。
 
-#### 4.8.4 Server Storage and Query
+3. **地圖持久化與儲存流程（Map Package Save Flow）**：
+   - **儲存腳本**：`src/mobile_base_bringup/scripts/save_map.sh`（安裝於 `lib/mobile_base_bringup/save_map.sh`）。
+   - **輸出路徑**：預設於專案目錄之 `maps/<timestamp>/` 建立輸出結構，並以 `map` 為基礎檔名。
+   - **執行元件與參數**：調用 `nav2_map_server` 之 `map_saver_cli` 訂閱 `/map` 主題（`map_subscribe_transient_local:=true`，逾時時間 10.0 秒），匯出 `map.yaml` 與 `map.pgm`。
 
-- **OpenSearch**：部署於 Server，只負責 Logs / Events persistence、historical query、basic time-range filtering 與 basic source filtering；不得用於保存完整高頻 ROS telemetry 或 raw payload。
-- **InfluxDB**：部署於 Server，只負責 Key Telemetry persistence 與 time-range query。
-- InfluxDB MVP 不包含 alerting、anomaly detection、dashboard、downsampling、advanced aggregation、fleet analytics、composite health 或 retention optimization。
+4. **讀回反序列化驗證（MapIO Read-Back Verification）**：
+   - **驗證元件**：`src/mobile_base_mapping/test/validate_map_readback.cpp` 編譯產出並安裝為套件執行檔 `validate_map_readback`。
+   - **驗證邏輯**：使用 `nav2_map_server::loadMapFromYaml` 重新載入剛產生的 `map.yaml`，確認 Map Package 可被成功反序列化讀回。
+   - **流程串接**：`save_map.sh` 在 `map_saver_cli` 結束後直接調用 `validate_map_readback "${map_yaml}"`，檢驗通過後方回報成功。
 
-#### 4.8.5 Bounded RAM Buffer
+### Expected Normal Behavior
 
-- AMR 不長期保存 Observability Data；Logs / Events 與 Key Telemetry 傳送路徑只使用 bounded volatile RAM buffering。
-- Network 或 Server unavailable 時，尚未送出的 Observability Data 可暫存於對應的 bounded RAM buffer。
-- Buffer capacity exhausted 時必須 drop oldest、保留較新的 Observability Data，且 AMR 核心功能持續運行。
-- 具體 buffer size 由 Implementation Design 決定。
-- Buffer 不提供 dropped count、gap accounting、priority queue、filesystem spool、persistent local storage、guaranteed resend 或 guaranteed backfill。
+- 系統於 Mapping Mode 啟動後，`async_slam_toolbox_node` 完成 configure 與 activate 進入活躍狀態。
+- `/map` 持續提供目前建立之二維佔據網格地圖。
+- `async_slam_toolbox_node` 持續發布 `map -> odom` 動態 TF。
+- State Estimation 繼續獨立發布 `odom -> base_footprint` 動態 TF。
+- 執行 `save_map.sh` 後，於 `maps/<timestamp>/` 產生 `map.yaml` 與 `map.pgm`，並成功通過 MapIO read-back。
+- 成功保存之 Map Package 可供後續 Navigation Mode 之 Localization 載入。
 
-#### 4.8.6 Basic Time Correlation
+### Failure Behavior
 
-- Logs / Events / Key Telemetry 至少保留可用的 `timestamp` 與 `source identity`。
-- OpenSearch 與 InfluxDB 各自支援依共同 time range 查詢，使 Actor 可人工關聯兩條資料路徑。
-- S8 不建立 clock normalization subsystem、clock drift model、clock discontinuity model、alignment quality engine、precision alignment threshold 或 completeness inference。
+- 若 `map_saver_cli` 逾時（10.0 秒）未取得地圖或未產出 `map.yaml` 與 `map.pgm`，`save_map.sh` 輸出錯誤訊息並以 exit code 1 終止。
+- 若 `validate_map_readback` 反序列化讀回失敗，回傳 exit code 2，`save_map.sh` 立即中斷終止，不回報儲存成功。
 
-#### 4.8.7 Failure Isolation and Deployment Boundary
+### Implementation References
 
-- ROS Observability Adapter、Fluent Bit、Network、OpenSearch、InfluxDB 或 bounded RAM buffer 的故障或不可用，不得成為 Navigation、Localization、Control 或 Safety 的必要依賴。
-- Observability failure 可造成資料遺失，但不得對核心 ROS 執行路徑施加阻塞、無界重試或 backpressure。
-- AMR onboard 僅部署 ROS Observability Adapter、Fluent Bit 與 bounded RAM buffers。
-- Server 部署 OpenSearch 與 InfluxDB；AMR 不部署 OpenSearch、InfluxDB 或任何 long-term observability database。
+- Mapping Launch: `src/mobile_base_mapping/launch/mapping.launch.py`
+- SLAM Toolbox Parameter Config: `src/mobile_base_mapping/config/slam_toolbox.yaml`
+- Map Save Script: `src/mobile_base_bringup/scripts/save_map.sh`
+- Map Readback Validator Source: `src/mobile_base_mapping/test/validate_map_readback.cpp`
+- Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
+- Mapping Compatibility Wrapper Launch: `src/mobile_base_bringup/launch/mapping.launch.py`
 
-**Repository Ownership Boundary**：
+## 5. Localization
 
-- `mobile_base` repository 只負責 AMR onboard software 與其 client-side observability configuration，可包含 ROS Observability Adapter、Fluent Bit AMR-side configuration、bounded volatile buffering implementation / configuration，以及 External Observability Server endpoint、robot / source identity 與 credentials injection interface 的設定。
-- OpenSearch 與 InfluxDB 屬於 External Observability Server；其 deployment（包括 Server Docker Compose）、bootstrap、persistent volume / storage configuration、installation 與 operations artifacts 由 `mobile_base` repository 之外管理，不得存放於本 repository。
-- 不得將 OpenSearch 或 InfluxDB services 加入 AMR root Compose。
+### Responsibility
 
-#### 4.8.8 Explicit Out of Scope
+Localization 負責在 Navigation Mode 下：
+載入所選定之 Map Package → 發布二維佔據網格靜態地圖 → 結合前向光達掃描與系統里程估測 AMR 於地圖中之位姿 → 作為唯一權威發布 Navigation Mode 下之 `map -> odom` 動態坐標轉換與定位位姿。
 
-S8 目前產品範圍明確不提供：`SYS-039`、`SYS-040`、`SYS-041`、`SYS-043`、Raw MCAP production integration、offline replay、Dataset Catalog、completeness / gap accounting、dropped count、priority queue、persistent local spool、guaranteed resend / backfill、composite subsystem health、automatic root cause、alerting、anomaly detection、dashboard requirement、continuous raw recording、rolling raw buffer，以及任何 Phase 2 範圍。
+本區域不包含：
+- 地圖建圖（Mapping）
+- 導航目標接收與驗證（Navigation Target Admission）
+- 路網規劃與導航控制（Route-Assisted Navigation）
+- 底盤運動控制（Base Control）
+- 精準對接（Precision Docking）
 
----
-
-## 5. Site Resources
-
-### 5.1 場域資源模型 (Site Resource Artifacts)
-v0.1 的場域資源集中存放於 `maps/<site_name>/` 目錄中，包含三項產品層資料：
+### Interfaces and Flow
 
 ```text
-maps/<site_name>/
-├── Map Package
-│   ├── map.pgm             # 二維佔據網格影像 (UC-001 建圖產物)
-│   └── map.yaml            # 地圖解析度 (0.05m)、原點與佔據門檻元數據
-├── Route Graph
-│   └── route_graph.geojson # 人工離線標註建立之路網拓撲 (GeoJSON 規範)
-└── Station Catalog
-    └── stations.yaml       # 站點 ID 與 map 座標/朝向映射表
+Map Package (map.yaml, map.pgm)
+       │
+       ▼ (site_resolution.py / launch CLI)
+   map_server (nav2_map_server)
+       │
+       ├─────────────────────────────────────────► /map (nav_msgs/msg/OccupancyGrid)
+       │
+       ▼ (地圖佔據網格)
+      amcl (nav2_amcl) ◄─────── /initialpose (geometry_msgs/msg/PoseWithCovarianceStamped)
+       ▲           ▲            (外部可選初始位姿覆寫)
+       │           │
+       │           └─────────── 動態 TF: odom -> base_footprint (State Estimation EKF)
+       │                        靜態機構 TF: base_footprint -> ... -> base_lidar_link_FL_1
+       │
+       └─────────────────────── /scan_front (sensor_msgs/msg/LaserScan, Sensor Ingestion)
+       │
+       ├─────────────────────────────────────────► 動態 TF: map -> odom
+       ├─────────────────────────────────────────► /amcl_pose (geometry_msgs/msg/PoseWithCovarianceStamped)
+       └─────────────────────────────────────────► /particle_cloud (nav2_msgs/msg/ParticleCloud)
 ```
 
-### 5.2 資源責任與載入架構
+1. **輸入介面與資料流**：
+   - **Map Package**：包含 `map.yaml` 與 `map.pgm`。於系統啟動時透過 `site_resolution.py` 解析（依 `site` 參數）或由 CLI 引數 `map` 顯式傳入，由 `map_server` 讀取並反序列化。
+   - `/scan_front` (`sensor_msgs/msg/LaserScan`)：來自 Sensor Ingestion 之前向光達測距掃描（`frame_id: base_lidar_link_FL_1`）。AMCL 僅訂閱前向光達，不使用後向光達。
+   - **動態 TF `odom -> base_footprint`**：由 State Estimation（EKF）發布。AMCL 透過 TF Buffer 查詢此轉換以及底盤至感測器之靜態機構 TF（`base_footprint -> ... -> base_lidar_link_FL_1`），不直接訂閱 `/odometry/filtered` 主題。
+   - **Initial Pose**：
+     - **預設初始位姿**：由部署設定提供（`set_initial_pose: true`，預設為 `x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）。
+     - **外部覆寫位姿**：`/initialpose` (`geometry_msgs/msg/PoseWithCovarianceStamped`)，供 RViz2 或上層系統在預設不適用時顯式發布，重設粒子群分佈。
 
-| 場域資源 | 產物生命週期擁有者 (Artifact Lifecycle Owner) | 導航運行期載入擁有者 (Runtime Loading Owner) | 主要消費者 | 載入時機與條件 |
-|---|---|---|---|---|
-| **Map Package** (`map.yaml`, `map.pgm`) | `S4 Mapping` (建圖、儲存、讀回驗證) | `S5 Localization` (`map_server`) | `S5 AMCL`, `S6 Costmaps` | Navigation Mode 啟動時一次性載入 |
-| **Route Graph** (`route_graph.geojson`) | 離線人工標註 / 場域維護 | `S6 Navigation` (`route_server`) | `S6 Navigation` (Route Server) | Navigation Mode 啟動時一次性載入 |
-| **Station Catalog** (`stations.yaml`) | 離線人工定義 / 場域維護 | `S6 Navigation` (`TargetAdmission`) | `S6 Navigation` (CLI / Admission) | 提交 Station Target 時解析使用 |
+2. **輸出介面與資料流**：
+   - `/map` (`nav_msgs/msg/OccupancyGrid`，QoS: Transient Local）：由 `map_server` 發布已知環境之二維佔據網格地圖。
+   - **動態 TF `map -> odom`**：由 `amcl` 節點週期性廣播。在 Navigation Mode 下，AMCL 是 `map -> odom` 動態坐標轉換的唯一權威發布者。
+   - `/amcl_pose` (`geometry_msgs/msg/PoseWithCovarianceStamped`）：AMCL 估測之機器人全局位姿與協方差矩陣。
+   - `/particle_cloud` (`nav2_msgs/msg/ParticleCloud`）：AMCL 當前粒子群分佈狀態。
 
-### 5.3 資源解析層級 (Resolution Hierarchy)
-啟動 Navigation Mode 時，資源路徑依據以下優先順序解析（由 `site_resolution.py` 實施）：
-1. **Explicit CLI Overrides**：若指定 `map:=/path/to/map.yaml` 或 `route_graph:=/path/to/graph.geojson`，以顯式路徑優先。
-2. **Site Directory Resolution**：若指定 `site:=<site_name>`，自動在 `maps/<site_name>/` 中尋找 `map.yaml`、`route_graph.geojson` 與 `stations.yaml`。
-3. **錯誤防呆**：若未指定有效 site 且無 explicit map override，啟動腳本即刻中斷並回報原因。
+### Implementation
 
-> **架構邊界**：ROS 節點內部之演算法與超參數（如 AMCL 粒子數、MPPI 權重、控制器極限）屬於**部署配置 (Deployment Configuration)**，由套件 share 目錄中之參數 YAML 擁有，嚴禁混入現場資源目錄。
+1. **節點組成與生命週期管理**：
+   - `map_server` (`nav2_map_server/map_server`，Lifecycle Node）：負責解析 `map.yaml` 並提供地圖資料主題與服務。
+   - `amcl` (`nav2_amcl/amcl`，Lifecycle Node）：自適應蒙地卡羅粒子濾波定位節點，採用似然場模型（`laser_model_type: "likelihood_field"`）與差速運動模型（`nav2_amcl::DifferentialMotionModel`）。
+   - `lifecycle_manager_localization` (`nav2_lifecycle_manager/lifecycle_manager`）：統籌管理 `map_server` 與 `amcl` 生命週期狀態轉換（`autostart: true`）。
 
----
+2. **坐標框架與配置事實**：
+   - `global_frame_id`: `map`
+   - `odom_frame_id`: `odom`
+   - `base_frame_id`: `base_footprint`
+   - `scan_topic`: `/scan_front`
+   - `tf_broadcast`: `true`
+   - `set_initial_pose`: `true`，`initial_pose: {x: 0.0, y: 0.0, z: 0.0, yaw: 0.0}`
 
-## 6. Cross-Subsystem Data Flows
+### Expected Normal Behavior
 
-### 6.1 建圖資料流 (Mapping Flow - UC-001)
+- 系統於 Navigation Mode 啟動後，`lifecycle_manager_localization` 將 `map_server` 與 `amcl` 轉至 ACTIVE 狀態。
+- `map_server` 發布具備 Transient Local 特性之 `/map` 佔據網格。
+- `amcl` 依配置之預設初始位姿完成粒子初始化，或於收到 `/initialpose` 時重設粒子分佈。
+- 當機器人移動且前向光達接收掃描資料時，`amcl` 依據差速模型與似然場連續更新粒子權重，並持續廣播 `map -> odom` 動態 TF。
+- 結合 State Estimation 維護之 `odom -> base_footprint`，下游導航演算法可完整解析 `map -> base_footprint` 之全局坐標鏈。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as 操作員 / Operator
-    participant Teleop as 外部 teleop_twist_keyboard
-    participant S7 as S7: Base Control
-    participant M1 as 底盤硬體 (M1 Motors)
-    participant S2 as S2: Perception
-    participant S3 as S3: State Estimation
-    participant S4 as S4: Mapping
-    participant Site as 場域目錄 (maps/)
+### Failure Behavior
 
-    User->>S4: 啟動建圖 (mapping.launch.py)
-    S4->>S4: async_slam_toolbox_node 初始化並進入 ACTIVE
-    S2-->>S4: 前雷達 /scan_front (25 Hz)
-    S2-->>S3: 前雷達 /scan_front 與 IMU /imu/data_raw (yaw rate)
-    S7-->>S3: 編碼器輪速里程先驗 /diff_drive_controller/odom
+- 若指定之 `map.yaml` 檔案不存在或損毀，`map_server` 無法通過 configure 階段，生命週期管理器回報錯誤，定位子系統無法進入活躍（ACTIVE）狀態。
+- 若前向光達掃描 `/scan_front` 中斷或 TF `odom -> base_footprint` 丟失，`amcl` 無法更新粒子權重；若超過轉換容許逾時（`transform_tolerance`），`amcl` 輸出警告日誌並停止發布最新之 `map -> odom` 動態坐標轉換與 `/amcl_pose`。
 
-    loop 巡覽建圖環境
-        User->>Teleop: 鍵盤操作移動
-        Teleop->>S7: 發布手動 TwistStamped 至 /diff_drive_controller/cmd_vel
-        S7->>S7: 檢查安全閘門、限制運動極限、檢查逾時
-        S7->>M1: Modbus RTU FC17 輪速下發
-        M1-->>S7: 讀取馬達編碼器實體數據
-        S7-->>S3: 發布可信之 /diff_drive_controller/odom 與 /joint_states
-        S3->>S3: Kinematic-ICP 產出 /lidar_odometry，EKF 融合並發布 odom→base_footprint TF (50 Hz)
-        S4->>S4: SLAM 依感知與里程即時更新地圖並發布 map→odom TF
-    end
+### Implementation References
 
-    User->>S4: 執行 save_map.sh
-    S4->>Site: map_saver_cli 寫入 map.pgm 與 map.yaml
-    S4->>S4: validate_map_readback 執行反序列化與幾何檢驗
-    S4-->>User: 回報儲存成功與驗證結果
-```
+- Localization Launch: `src/mobile_base_localization/launch/localization.launch.py`
+- AMCL Configuration: `src/mobile_base_localization/config/amcl_params.yaml`
+- Site Resolution Module: `src/mobile_base_bringup/launch/site_resolution.py`
+- Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
 
----
+## 6. Navigation Target Admission
 
-### 6.2 導航目標接收與驗證流程 (Target Admission Flow)
+### Responsibility
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as 操作員 / 終端客戶端
-    participant App as navigate_to_station CLI
-    participant Adm as TargetAdmission
-    participant Catalog as stations.yaml
-    participant BT as S6: bt_navigator (Nav2)
+Navigation Target Admission 負責在導航任務發起前處理站點目標（Station Target）：
+接收外部站點目標請求（Station ID） → 透過 Station Catalog 查表解析站點坐標（Station Resolution） → 坐標框架正規化（Frame Normalization） → 幾何與數值合法性驗證（Validation） → 產出標準規範位姿（Canonical Goal Pose）並發送至 Nav2 `/navigate_to_pose` Action Server。
 
-    User->>App: 提交目標 (Station ID 或 Goal Pose)
-    alt 輸入為 Station ID (SYS-008)
-        App->>Adm: admit_station(station_id)
-        Adm->>Catalog: 查詢 stations.yaml (SYS-032)
-        alt 查無站點或 Catalog 格式錯誤
-            Adm-->>App: 拒絕 (REJECTED_STATION_NOT_FOUND / REJECTED_CATALOG_*)
-            App-->>User: 終止並回報拒絕原因 (Exit code 3)
-        else 查詢成功
-            Adm->>Adm: 轉換為 PoseStamped (map frame)
-        end
-    else 輸入為 Goal Pose (SYS-008)
-        App->>Adm: admit_goal_pose(x, y, yaw_deg)
-        Adm->>Adm: 正規化角度為 Quaternion (SYS-009)
-    end
+關於通用位姿目標（Generic Pose Target）：
+外部客戶端（如 RViz2 或上層系統）可直接發送位姿至 Nav2 原生 `/navigate_to_pose` Action Server，該路徑屬於 Nav2 與外部系統之生產邊界（External Production Boundary），不經過 `mobile_base` 的 `TargetAdmission` 模組，亦不具備本模組提供之提前驗證。
 
-    Adm->>Adm: 驗證有限數值、Quaternion 模長與 Frame (SYS-033)
-    alt 幾何或數值無效
-        Adm-->>App: 拒絕 (REJECTED_NON_FINITE / REJECTED_INVALID_*)
-        App-->>User: 終止並回報拒絕原因
-    else 驗證通過
-        Adm-->>App: 產出 Canonical PoseStamped
-        App->>BT: 發布 native nav2_msgs/action/NavigateToPose
-        App-->>User: 監控 Action 反饋並回報最終導航結果
-    end
-```
+本區域責任範圍終止於 Station Target 之 Canonical Goal Pose 驗證通過並送達 Nav2 Action Server，不包含後續路徑規劃、避障、運動追蹤或對接執行。
 
----
-
-### 6.3 路網導航執行流程 (Route-assisted Navigation Flow - UC-002)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant S5 as S5: Localization (map_server & AMCL)
-    participant BT as S6: bt_navigator
-    participant Route as S6: route_server
-    participant Planner as S6: planner_server (Navfn)
-    participant Ctrl as S6: controller_server (MPPI)
-    participant S7 as S7: Base Control
-
-    BT->>S5: 取得目前 AMR Pose (Current Pose)
-    BT->>Route: 傳入 Current Pose 與 Canonical Goal Pose
-    Route-->>BT: 計算路網拓撲路徑 (ComputeRoute)
-
-    opt First Mile 連接
-        BT->>Planner: 若 Current Pose 遠離路網起點，規劃 First Mile 路徑
-        Planner-->>BT: 回傳 first_mile_path
-    end
-
-    opt Last Mile 連接
-        BT->>Planner: 若路網終點遠離目標 Pose，規劃 Last Mile 路徑
-        Planner-->>BT: 回傳 last_mile_path
-    end
-
-    BT->>BT: 拼接為完整 final_route_path
-    BT->>Ctrl: 啟動 FollowPath 路徑追蹤 (MPPI)
-
-    loop 軌跡追蹤循環
-        Ctrl->>S7: 發布期望速度至 /diff_drive_controller/cmd_vel
-        S7->>S7: 檢查 0.5s 逾時、限制加速度與速度
-        S7->>S7: 驅動 M1 輪速並檢驗編碼器回授
-    end
-
-    Ctrl->>Ctrl: StoppedGoalChecker 評估到站條件 (位置/角度/停妥)
-    Ctrl-->>BT: 到站條件滿足
-    BT-->>User: 回報 NavigateToPose 成功 (SUCCESS)
-```
-
-### 6.4 觀察與診斷資料流 (Observability and Diagnostics Flow - UC-003)
-
-```mermaid
-flowchart LR
-    Runtime["S1–S7 Selected ROS Runtime Information"] --> Adapter["ROS Observability Adapter"]
-    Adapter --> TelemetryBuffer["Bounded Volatile RAM Buffer<br/>full: drop oldest"]
-    TelemetryBuffer --> NetworkA["Network"]
-    NetworkA --> InfluxDB["Server InfluxDB<br/>Key Telemetry Persistence / Time-range Query"]
-
-    Logs["Selected AMR / ROS Logs and Runtime Events"] --> FluentBit["Fluent Bit"]
-    FluentBit --> LogBuffer["Bounded Volatile RAM Buffer<br/>full: drop oldest"]
-    LogBuffer --> NetworkB["Network"]
-    NetworkB --> OpenSearch["Server OpenSearch<br/>Logs / Events Persistence / Historical Query"]
-```
-
-兩條路徑皆為 S1–S7 的單向觀察旁路。Server、Network 或 S8 onboard component 不可用時允許 Observability Data 遺失，但不得形成返回 Navigation、Localization、Control 或 Safety 的控制或阻塞依賴。
-
----
-
-### 6.5 視覺停靠資料流 (Direct AprilTag Docking Flow - SYS-044)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Upper as Upper Body (決策與視覺感知)
-    participant Dock as S6: docking_server (SimpleNonChargingDock)
-    participant Costmap as S6: local_costmap
-    participant S7 as S7: Base Control
-    participant M1 as 底盤硬體 (M1 Motors)
-
-    Upper-->>Dock: 持續發布 /detected_dock_pose (frame_id=base_link, raw pose)
-
-    Note over Upper,Dock: Upper 自主決定停靠時機，發送 Action Goal
-    Upper->>Dock: 發送 /dock_robot Action Goal (dock_pose @ base_link, navigate_to_staging_pose=false)
-    Dock->>Dock: 收悉當下以 TF 將目標姿態鎖定至 fixed_frame (odom)
-    Dock->>Dock: doInitialPerception 確認外部標記姿態 (5.0s 逾時)
-    Dock-->>Upper: 回傳 Goal Accepted
-
-    loop 停靠控制迴圈 (20 Hz)
-        Upper-->>Dock: 接收 /detected_dock_pose 更新 (2.0s 新鮮度檢核)
-        Dock->>Dock: getRefinedPose 套用 70cm 幾何偏移
-        Costmap-->>Dock: 查詢 local_costmap/costmap_raw 碰撞檢測
-        Dock->>S7: 發布 TwistStamped 至 /diff_drive_controller/cmd_vel
-        Dock-->>Upper: 發布 Action Feedback (state, docking_time, num_retries)
-        S7->>S7: 檢查 0.5s 逾時、限制運動極限
-        S7->>M1: Modbus RTU FC17 輪速下發
-    end
-
-    opt Upper 主動取消任務 (Cancel)
-        Upper->>Dock: 發送 Action Cancel Request
-        Dock->>Dock: checkAndWarnIfCancelled 中斷控制迴圈
-        Dock->>S7: 發布零速煞停 (publishZeroVelocity)
-        Dock-->>Upper: 回傳 Action Result (CANCELED)
-    end
-
-    Dock->>Dock: isDocked 判定到達停靠距離門檻 (docking_threshold)
-    Dock->>S7: 輸出零速煞停
-    Dock-->>Upper: 回傳 DockRobot Action Result (SUCCEEDED, error_code=0)
-```
-
----
-
-## 7. TF Ownership
-
-全系統嚴格規範每一段座標轉換（TF）的**唯一權威發布擁有者**，禁止任何未授權節點重複廣播造成 TF 跳動或競爭：
+### Interfaces and Flow
 
 ```text
-[map]
+[導航目標輸入]
+  ├─ Station Target: CLI 引數 --station <ID> --catalog <path> ─┐
+  │                                                            ▼
+  │                                                navigate_to_station (CLI 應用程式)
+  │                                                            │ (調用 TargetAdmission C++ 模組)
+  │                                                            ├─ 載入 Station Catalog (stations.yaml)
+  │                                                            ├─ 解析 station_id 坐標 (x, y, yaw)
+  │                                                            ├─ 四元數姿態正規化
+  │                                                            └─ 數值有限性與 frame_id 驗證
+  │                                                            │
+  │                                                            ▼ (Canonical Goal Pose)
+  └─ Generic Pose Target (外部生產邊界): 外部客戶端 / RViz2 ──► /navigate_to_pose (Action)
+                                                                 (nav2_msgs/action/NavigateToPose)
+```
+
+1. **目標輸入介面**：
+   - **Station Target**：透過 CLI 應用程式 `navigate_to_station` 傳入 `--station <station_id> --catalog <stations.yaml>`。
+   - **Generic Pose Target（外部邊界）**：外部客戶端（如 RViz2 或外部調度系統）直接向 Nav2 原生 Action `/navigate_to_pose` (`nav2_msgs/action/NavigateToPose`) 發送目標，此路徑不經過 `TargetAdmission` 處理。
+   - **Station Catalog**：站點目錄 YAML 檔案（`stations.yaml`），定義站點名稱、`x`、`y` 與 `yaw`（弧度），坐標系基準為 `map`。
+
+2. **驗證與正規化介面（僅限 Station Target）**：
+   - 經由 `TargetAdmission` 模組驗證：坐標為有限實數（`std::isfinite`）、坐標系為 `map`、四元數非零且長度正規化。
+
+3. **目標輸出介面**：
+   - `/navigate_to_pose` (`nav2_msgs/action/NavigateToPose`)：Station Target 經由 `navigate_to_station` 驗證通過後，產出之標準規範位姿（`geometry_msgs/msg/PoseStamped`，`frame_id: "map"`）封裝為 Action Goal 提交至 Nav2。
+
+### Implementation
+
+1. **核心程式庫 `TargetAdmission`** (`src/mobile_base_navigation/src/target_admission.cpp`, `include/mobile_base_navigation/target_admission.hpp`)：
+   - **Station Catalog 解析**：`load_station_catalog()` 解析 YAML 結構，載入站點清單。
+   - **站點查表**：`resolve_station()` 依據給定之 `station_id` 於目錄中進行精確字串比對，提取 `(x, y, yaw)` 坐標。
+   - **位姿正規化**：`normalize_goal_pose()` 將 Euler yaw 轉換為正規化之四元數姿態 `(x, y, z, w)`。
+   - **位姿驗證**：`validate_canonical_pose()` 嚴格校驗坐標是否為有限數值、`frame_id` 是否為 `map`、四元數是否滿足非零且接近單位長度。
+
+2. **執行應用程式 `navigate_to_station`** (`src/mobile_base_navigation/src/navigate_to_station_app.cpp`, `src/mobile_base_navigation/src/navigate_to_station_main.cpp`)：
+   - 提供命令列操作介面，強制要求 `--station` 與 `--catalog` 參數。
+   - 透過 `TargetAdmission` 依序執行目錄載入、站點查詢與位姿驗證。
+   - 驗證成功後建立 `/navigate_to_pose` Action Client，設定時間戳並非同步發送 Action Goal，同時監聽回傳之反饋資訊（`distance_remaining`、`current_pose`）。
+
+3. **生產環境介面邊界說明**：
+   - **Station Target**：具備專屬生產級 CLI 應用程式（`navigate_to_station`）與 `TargetAdmission` 核心程式庫，執行目錄載入、站點查詢、位姿轉換與數值/幾何合法性提前驗證，並提供明確狀態碼輸出。
+   - **Generic Pose Target**：屬於外部生產邊界（External Production Boundary），`mobile_base` 現行實作未為 Generic Pose Target 設置自訂 CLI、轉接節點或提前驗證邏輯，外部客戶端直接對接 Nav2 原生 `/navigate_to_pose` Action Server 介面。
+
+### Expected Normal Behavior
+
+- 操作者執行 `navigate_to_station --station <ID> --catalog <path>`。
+- 程式成功解析目錄，比對取得站點位姿，校驗數值為有限實數且姿態有效，坐標系確立為 `map`。
+- 程式連線至 `/navigate_to_pose` Action Server，發送目標並持續輸出反饋，待機器人到達目標並完成導航後以 exit code 0 正常退出。
+
+### Failure / Cancel Behavior
+
+- **站點目錄或解析失敗**：若目錄檔案不存在、格式損毀或查無指定 `station_id`，`navigate_to_station` 輸出錯誤訊息並以 exit code 3 (`kExitResolutionFailure`) 終止，不發送任何導航目標。
+- **目標位姿校驗失敗**：若坐標包含 NaN/Inf 或四元數非法，判定為驗證不通過，以 exit code 3 終止。
+- **Nav2 服務不可用**：若連線 `/navigate_to_pose` 逾時，以 exit code 4 (`kExitNav2Unavailable`) 終止。
+- **下游導航執行失敗**：若 Nav2 回報導航終止或失敗，以 exit code 5 (`kExitNavigationFailure`) 退出。
+- **使用者取消**：若於提交前或執行中收到取消信號（如 SIGINT），向伺服器發起取消並以 exit code 130 (`kExitCanceled`) 退出。
+
+### Implementation References
+
+- Target Admission Library: `src/mobile_base_navigation/include/mobile_base_navigation/target_admission.hpp`, `src/mobile_base_navigation/src/target_admission.cpp`
+- Navigate to Station App: `src/mobile_base_navigation/src/navigate_to_station_app.cpp`, `src/mobile_base_navigation/src/navigate_to_station_main.cpp`
+
+## 7. Route-Assisted Navigation
+
+### Responsibility
+
+Route-Assisted Navigation 負責在接收已驗證之 Canonical Goal Pose（經由 `/navigate_to_pose` Action）後：
+計算拓撲路網導引（Topological Route Computation） → 規劃起點至路網的第一哩接駁路徑（First Mile Connector，必要時） → 沿路網圖行進（On Route） → 規劃路網至終點目標的最後一哩接駁路徑（Last Mile Connector，必要時） → 串接路徑之運動控制追蹤（Path Tracking） → 終點減速煞停確認與結果回報。
+
+本區域不包含導航目標接收（Target Admission）與精準對接（Precision Docking）。
+
+### Interfaces and Flow
+
+```text
+Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
+       │
+       ▼
+/navigate_to_pose Action Server (bt_navigator)
+       │
+       ▼ (route_assisted_nav.xml 行為樹管線)
+       ├─► ComputeRoute (route_server) ◄─── route_graph.geojson (路網拓撲圖)
+       │         │
+       │         ▼ (raw_route_path)
+       ├─► First Mile 判定與規劃 (planner_server, NavfnPlanner) ──┐
+       │         │                                               ▼
+       │         ▼                                      first_connected_path
+       ├─► Last Mile 判定與規劃 (planner_server, NavfnPlanner) ───┤
+       │         │                                               ▼
+       │         ▼                                       final_route_path
+       └─► FollowPath (controller_server, MPPIController)
+                 │
+                 ├──► 障礙物避障監控 (local_costmap, global_costmap)
+                 ├──► 到點煞停檢查 (StoppedGoalChecker)
+                 │
+                 ▼
+       /diff_drive_controller/cmd_vel (geometry_msgs/msg/TwistStamped)
+                 │
+                 ▼
+           Base Control
+```
+
+1. **Action 介面**：
+   - `/navigate_to_pose` (`nav2_msgs/action/NavigateToPose`)：主要任務入口，由 `bt_navigator` 提供 Action Server。
+
+2. **內部節點協作與服務/Action**：
+   - **拓撲路網計算**：由 `bt_navigator` 調用 `route_server` 之 `ComputeRoute`，以離線路網圖 `route_graph.geojson` 產出拓撲軌跡 `raw_route_path`。
+   - **接駁路徑規劃**：由 `bt_navigator` 調用 `planner_server`（`nav2_navfn_planner::NavfnPlanner`，Plugin ID `GridBased`）之 `ComputePathToPose`，於代價地圖上計算第一哩與最後一哩接駁路徑。
+   - **路徑追蹤控制**：由 `bt_navigator` 調用 `controller_server` 之 `FollowPath`，將串接後之完整路徑 `final_route_path` 交由 MPPI 控制器追蹤。
+
+3. **代價地圖與感知輸入**：
+   - `global_costmap`：基於 `map` 坐標系，包含靜態圖層（`StaticLayer`，訂閱 `/map`）、障礙物圖層（`ObstacleLayer`，訂閱 `/scan_front` 與 `/scan_rear`）與膨脹圖層（`InflationLayer`）。
+   - `local_costmap`：基於 `odom` 坐標系之滑動窗口（3m × 3m），訂閱 `/scan_front` 與 `/scan_rear` 進行即時避障。
+
+4. **速度指令輸出**：
+   - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`)：由 `controller_server` 重映射並發布至 Base Control 的時戳速度指令。
+
+### Implementation
+
+1. **行為樹管線結構** (`src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`)：
+   - 採用 `PipelineSequence`（名稱為 `NavigateRouteAssisted`），以 1.0 Hz 頻率循環評估與更新路徑：
+     - **第一步：Topological Route (`ComputeRoute`)**：`route_server` 根據全局目標與當前位姿在 `route_graph.geojson` 拓撲圖上搜尋最優節點路徑，產出 `raw_route_path`。
+     - **第二步：First Mile Connector**：檢驗當前機器人位姿與 `raw_route_path` 起點（索引 0）之距離。若距離小於等於容許值 0.2 m（`ArePosesNear tolerance="0.2"`），則跳過第一哩接駁；否則調用 `planner_server` 規劃當前位姿至路網起點之無碰撞路徑，並透過 `ConcatenatePaths` 拼接於路網前段（產出 `first_connected_path`）。
+     - **第三步：Last Mile Connector**：檢驗 `first_connected_path` 終點（索引 -1）與目標 Goal 之距離。若距離小於等於 0.2 m，跳過最後一哩；否則調用 `planner_server` 規劃路網終點至目標 Goal 之路徑，拼接產出 `final_route_path`。
+     - **第四步：FollowPath 與停止校驗**：由 `controller_server` 執行 MPPI 演算法追蹤 `final_route_path`。配置 `StoppedGoalChecker`（`xy_goal_tolerance: 0.25` m，`yaw_goal_tolerance: 0.5236` rad，`trans_stopped_velocity: 0.05` m/s，`rot_stopped_velocity: 0.10` rad/s），確保機器人不僅在幾何容許誤差內到達目標，且完全煞停後方回報成功。
+
+2. **核心架構原則與事實**：
+   - **三段式架構構成**：First Mile、On Route 與 Last Mile 均為 Route-Assisted Navigation 之常態組成環節，非降級備援機制（Not Fallbacks）。
+   - **無全局自由空間自動備援**：當前生產實作未提供獨立或自動之全局自由空間備援規劃。若拓撲路網無法計算（例如目標點無法對應至路網圖）或接駁路徑受阻，行為樹序列直接終止並回報 FAILURE。
+
+### Expected Normal Behavior
+
+- 接收 Canonical Goal Pose 後，`bt_navigator` 啟動行為樹。
+- `route_server` 產出拓撲路徑，系統依幾何距離自動計算第一哩與最後一哩接駁路徑，拼接產出完整路徑（`final_route_path`）。
+- 由 `controller_server` 之 MPPI 控制器沿軌跡計算平移與旋轉速度指令，發布至 `/diff_drive_controller/cmd_vel`。
+- 底盤沿軌跡行進；在接近目標位姿時，控制器依減速參數調節速度。
+- 滿足 `StoppedGoalChecker` 之位姿誤差與靜止速度門檻後，`/navigate_to_pose` Action 回傳 SUCCEEDED。
+
+### Failure / Cancel Behavior
+
+- **拓撲路網計算失敗**：若 `ComputeRoute` 無法於路網圖建立路徑，行為樹直接失敗終止，不嘗試自由空間直達規劃。
+- **接駁規劃失敗**：若第一哩或最後一哩遭遇障礙阻擋導致 `ComputePathToPose` 無法成路，導航任務失敗。
+- **前進停滯（Progress Failure）**：若 `SimpleProgressChecker` 偵測在 30.0 秒內機器人位移未達 0.05 m，判定為受困，控制器終止並回報失敗。
+- **任務取消**：客戶端發送取消請求時，行為樹立即中斷執行，`controller_server` 輸出全零速度指令並回傳 CANCELED。
+
+### Implementation References
+
+- Navigation Launch: `src/mobile_base_navigation/launch/navigation.launch.py`
+- Nav2 Parameter Config: `src/mobile_base_navigation/config/nav2_params.yaml`
+- Behavior Tree XML: `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`
+- Site Resolution Module: `src/mobile_base_bringup/launch/site_resolution.py`
+
+## 8. Precision Docking
+
+### Responsibility
+
+Precision Docking 負責在接收外部明確的對接請求後：
+結合外部視覺感知持續提供之對接標靶位姿 → 轉換並鎖定標靶幾何位姿於固定坐標系 → 執行局部閉迴路逼近與位姿對齊 → 於預定幾何間隙處煞停 → 回報對接成功、失敗或取消。
+
+本區域為獨立之局部對接任務，不包含視覺標靶偵測（AprilTag/Image Perception）、對接發起時機決策、遠場導航或充電確認交握。
+
+### Interfaces and Flow
+
+```text
+上身 (Upper Body) 視覺系統
+       │
+       ▼ (以約 10 Hz 持續發布標靶位姿)
+/detected_dock_pose (geometry_msgs/msg/PoseStamped, frame_id: base_link)
+       │
+       ▼
+docking_server (opennav_docking / apriltag_dock) ◄─── /dock_robot Action Goal
+       │                                               (外部調度發起 DockRobot)
+       ├─► TF Buffer: 將標靶鎖定至 fixed_frame (odom)
+       ├─► 施加幾何停止間隙 (-0.7 m 沿標靶軸向)
+       ├─► local_costmap 局部避障檢驗
+       │
+       ▼ (閉迴路控制速度指令)
+/diff_drive_controller/cmd_vel (geometry_msgs/msg/TwistStamped)
+       │
+       ▼
+  Base Control
+```
+
+1. **Action 觸發介面**：
+   - `/dock_robot` (`nav2_msgs/action/DockRobot`)：由外部任務調度系統顯式發起。外部視覺標靶之存在或偵測不會自動觸發對接動作。
+
+2. **對接標靶輸入**：
+   - `/detected_dock_pose` (`geometry_msgs/msg/PoseStamped`，`frame_id: "base_link"`）：由上身（Upper Body）視覺系統持續以約 10 Hz 發布之 AprilTag 偵測位姿。
+
+3. **環境安全輸入**：
+   - `local_costmap/costmap_raw` 與 `local_costmap/published_footprint`：提供即時局部障礙物資訊，用於逼近過程之碰撞預檢。
+
+4. **速度指令輸出**：
+   - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`）：由 `docking_server` 重映射並發布至 Base Control 的時戳速度指令。
+
+### Implementation
+
+1. **節點與外掛架構**：
+   - `docking_server` (`opennav_docking/opennav_docking`，Lifecycle Node，納入 `lifecycle_manager_navigation` 管理）。
+   - 對接外掛採用 `opennav_docking::SimpleNonChargingDock`（外掛識別名稱 `apriltag_dock`）。
+
+2. **配置與運作事實**：
+   - `base_frame`: `base_link`
+   - `fixed_frame`: `odom`
+   - `use_external_detection_pose`: `true`
+   - `dock_backwards`: `false`（採車頭前向對接進入）
+   - `external_detection_translation_x`: `-0.7`（幾何預留間隙：車體停止於標靶前方 70 cm 處）
+   - `docking_threshold`: `0.05`（對接成功位移誤差門檻 5 cm）
+   - `controller_frequency`: `20.0` Hz
+   - `use_collision_detection`: `true`（`dock_collision_threshold: 0.3`）
+   - `enable_stamped_cmd_vel`: `true`
+
+3. **關鍵架構界限**：
+   - **無充電交握機制**：當前外掛為非充電對接器（`SimpleNonChargingDock`），無任何充電握手協議、BMS 狀態查詢或充電確認流程；AMR 於達到幾何誤差門檻停止後即判定任務完成。
+   - **純局部對接**：任務參數配置 `navigate_to_staging_pose: false` 與 `use_dock_id: false`，完全依賴當前局部視野與外掛閉迴路控制。
+
+### Expected Normal Behavior
+
+- 上身視覺節點持續發布 `/detected_dock_pose`。
+- 外部任務發送 `DockRobot::Goal` 至 `/dock_robot`。
+- `docking_server` 接收任務，擷取最新標靶位姿，利用 TF Buffer 轉換並鎖定至 `odom` 坐標系，並施加 -0.7 m 的幾何位移偏移量作為目標停留點。
+- 閉迴路控制器以最大 0.15 m/s 線速度與 0.5 rad/s 角速度驅動底盤靠近並對齊標靶，同時監控局部代價地圖避障。
+- 當 AMR 與停留點之距離收斂至 `docking_threshold`（0.05 m）以內時，控制器輸出零速度煞停，`/dock_robot` Action 回報 SUCCEEDED。
+
+### Failure / Cancel Behavior
+
+- **初始標靶超時**：若於目標發起後 `initial_perception_timeout`（5.0 秒）內未收到 `/detected_dock_pose`，對接任務失敗終止。
+- **標靶遺失超時**：若逼近過程中標靶丟失且超過 `external_detection_timeout`（2.0 秒），對接任務中斷失敗。
+- **對接逾時**：若總逼近時間超過 `dock_approach_timeout`（30.0 秒），強制終止並回報失敗。
+- **碰撞風險**：若局部代價地圖於預測軌跡上偵測到小於 `dock_collision_threshold`（0.3 m）之障礙物，即刻停車並回報失敗。
+- **取消任務**：外部客戶端請求取消時，`docking_server` 立即發布全零速度停止底盤運動，並回傳 CANCELED。
+
+### Implementation References
+
+- Docking Server Launch: `src/mobile_base_navigation/launch/navigation.launch.py`
+- Docking Parameter Config: `src/mobile_base_navigation/config/nav2_params.yaml`
+- Docking Integration Test: `src/mobile_base_navigation/test/test_apriltag_docking_integration.py`
+
+## 9. Base Control
+
+### Responsibility
+
+Base Control 負責底盤運動控制與硬體介面抽象：
+接收時戳速度指令 → 經差速運動學轉換與加速度/速度限幅 → ros2_control 硬體抽象層 → 透過 Modbus RTU 與 M1 雙馬達驅動器進行即時通訊 → 讀取輪速與編碼器回授 → 產出輪式里程計（Odometry Source）與關節狀態 → 執行指令超時處置、馬達致能管理與安全煞停。
+
+安全防護與煞停機制直接落實於 Base Control 內部，不另設獨立架構層。
+
+### Interfaces and Flow
+
+```text
+/diff_drive_controller/cmd_vel (geometry_msgs/msg/TwistStamped)
+(來源: teleop_twist_keyboard / controller_server / docking_server，無 twist_mux)
+       │
+       ▼
+diff_drive_controller (ros2_control, update_rate: 30 Hz)
+       │
+       ├─► 差速運動學換算與加速度/速度限幅 (cmd_vel_timeout: 3600.0 s)
+       │
+       ▼
+M1Hardware (hardware_interface::SystemInterface 外掛)
+       │
+       ▼ (調用 M1Driver)
+Modbus RTU over /dev/ttyUSB0 (230400 bps, 廣播 Group 0x65, FC17 單一交易交換)
+       │
+       ├──► 同時寫入: 馬達 1 (右輪) 與馬達 2 (左輪) 目標轉速
+       └──► 同時讀回: 馬達 1 (右輪) 與馬達 2 (左輪) 編碼器位置與轉速
+       │
+       ├─────────────────────────────────────────► /diff_drive_controller/odom (nav_msgs/msg/Odometry)
+       │                                           (輪式里程計先驗，enable_odom_tf: false)
+       │
+       └─────────────────────────────────────────► /joint_states (sensor_msgs/msg/JointState)
+                                                   (由 joint_state_broadcaster 發布至 TF)
+```
+
+1. **速度指令輸入介面**：
+   - `/diff_drive_controller/cmd_vel` (`geometry_msgs/msg/TwistStamped`)。
+   - 生產環境中未部署 `twist_mux`，所有指令來源（Mapping Mode 之手動遙控、Navigation Mode 之 `controller_server` 或 `docking_server`）直接對接此單一主題。
+
+2. **回授輸出介面**：
+   - `/diff_drive_controller/odom` (`nav_msgs/msg/Odometry`）：以 30 Hz 發布輪式里程計估測，作為 State Estimation 中 Kinematic-ICP 之運動先驗（Motion Prior）。
+   - `/joint_states` (`sensor_msgs/msg/JointState`）：由 `joint_state_broadcaster` 以 30 Hz 發布左輪（`driving_wheel_joint_L`）與右輪（`driving_wheel_joint_R`）關節位置與速度，供 `robot_state_publisher` 更新機構動態轉換。
+
+3. **硬體通訊介面**：
+   - 序列埠 `/dev/ttyUSB0`，鮑率 230400 bps，Modbus RTU 協定。
+   - 廣播群組位址 `0x65`，對應 M1 雙軸無刷馬達驅動器：右輪馬達驅動 ID 為 1（`DriveId::Right = 1`，關聯 `driving_wheel_joint_R`），左輪馬達驅動 ID 為 2（`DriveId::Left = 2`，關聯 `driving_wheel_joint_L`）。
+
+### Implementation
+
+1. **控制器堆疊與生命週期**：
+   - `controller_manager` (`ros2_control_node`）：主控週期為 30 Hz（`update_rate: 30`）。
+   - `diff_drive_controller` (`diff_drive_controller/DiffDriveController`）：
+     - 輪系關節：`driving_wheel_joint_L`、`driving_wheel_joint_R`。
+     - 幾何參數：輪距 `0.5545` m，輪半徑 `0.080` m。
+     - 速度與加速度限制：最大線速度 1.0 m/s，最小線速度 -0.5 m/s，最大線加速度 0.5 m/s²，最大減速度 -1.0 m/s²；最大角速度 1.5 rad/s，最大角加速度 1.0 rad/s²，最大角減速度 -2.0 rad/s²。
+     - `use_stamped_vel: true`。
+     - `enable_odom_tf: false`：嚴格禁止由控制器發布 TF，避免與 State Estimation 之 EKF 產生衝突。
+     - `cmd_vel_timeout: 3600.0`：當前實作之配置參數值為 3600.0 秒。
+   - `joint_state_broadcaster` (`joint_state_broadcaster/JointStateBroadcaster`）：讀取硬體狀態並發布 `/joint_states`。
+
+2. **硬體介面外掛與驅動封裝**：
+   - `M1Hardware` (`hardware_interface::SystemInterface` 外掛）：實作 ros2_control 之生命週期（`on_init`, `on_configure`, `on_activate`, `on_deactivate` 等）與即時讀寫迴圈（`read()`, `write()`）。
+   - `M1Driver`：以私有封裝之 `libmodbus` 實作序列通訊。採用 Modbus FC17（`FC_READ_WRITE_MULTIPLE`，`0x17` 功能碼）進行單一交易交換（Single Transaction Exchange）：在同一次通訊來回中同時寫入右輪（ID 1）與左輪（ID 2）目標速度並讀回輪端編碼器計數與轉速，以廣播群組 `0x65` 確保雙輪動作同步並壓低通訊延遲。
+
+### Expected Normal Behavior
+
+- 啟動 `base_control.launch.py` 後，`ros2_control_node` 載入 `M1Hardware`，開啟 `/dev/ttyUSB0` 序列通訊並致能馬達。
+- 當 `/diff_drive_controller/cmd_vel` 收到時戳速度指令時，控制器根據差速幾何計算輪速命令並施加限幅。
+- `M1Hardware` 於每週期（30 Hz）調用 `M1Driver` 發送 FC17 指令至馬達驅動器，並同步讀回最新編碼器讀數。
+- 控制器發布 `/diff_drive_controller/odom`，廣播器發布 `/joint_states`，底盤依指令順暢運行。
+
+### Failure / Safety Behavior
+
+- **指令超時處置**：若超過 `cmd_vel_timeout`（當前實作配置為 3600.0 秒）未收到新速度指令，`diff_drive_controller` 自動向硬體介面下達零速度命令。
+- **序列通訊異常**：若發生 CRC 錯誤或讀寫超時（逾時門檻 50 ms），`M1Driver::exchange()` 回傳通訊失敗，`M1Hardware::write()`（或 `read()`）記錄錯誤日誌並向 `controller_manager` 回傳 `hardware_interface::return_type::ERROR`。系統未實作自主多重失敗復原狀態機（No autonomous multi-failure recovery sequencer）。
+- **節點關閉與反致能**：當硬體介面進入 deactivation 或程序關閉（`on_deactivate` / `on_cleanup` / `on_shutdown`）時，`M1Hardware` 調用 `M1Driver::stop()`（發送 `CMD_JG` 速度 0）與 `M1Driver::disable()`（發送 `CMD_SVOFF` 馬達釋放），隨後關閉序列埠。
+
+### Implementation References
+
+- Launch File: `src/mobile_base_control/launch/base_control.launch.py`
+- Base Control Parameter Config: `src/mobile_base_control/config/base_control_params.yaml`
+- Hardware Plugin Source: `src/mobile_base_control/src/m1_hardware.cpp`, `include/mobile_base_control/m1_hardware.hpp`
+- M1 Driver Source: `src/mobile_base_control/src/m1_driver.cpp`, `include/mobile_base_control/m1_driver.hpp`
+
+## 10. Observability
+
+### Responsibility
+
+Observability 負責底盤運行資料之收集與轉發：
+採集 AMR 運行過程中選定之核心指標、系統日誌與診斷事件 → 附加精確時戳與來源環境標記 → 透過有界記憶體佇列（Bounded Volatile Memory Buffer）暫存 → 非同步轉發至外部伺服器端點（InfluxDB 用於遙測時序指標，OpenSearch 用於系統日誌） → 供維運人員進行事後觀測與異常診斷。
+
+本區域不具備自動化根因診斷功能。Observability 屬於獨立非關鍵功能，其網路中斷、轉發延遲或異常崩潰嚴格不得干擾底盤運動控制、狀態估測、導航安全或感測運作。
+
+### Interfaces and Flow
+
+```text
+[AMR 運行資料來源]
+  ├─ /odometry/filtered (nav_msgs/msg/Odometry) ────────┐
+  ├─ /joint_states (sensor_msgs/msg/JointState) ────────┼──► ros_observability_adapter
+  ├─ /diagnostics (diagnostic_msgs/msg/DiagnosticArray) ┘     │
+  │                                                           ├─ 1.0 Hz 採樣五項核心遙測指標
+  │                                                           ├─ BoundedTelemetryQueue (RAM 容量 60 筆, drop oldest)
+  │                                                           │
+  │                                                           ▼ (非同步 HTTP POST)
+  │                                                       InfluxDB 伺服器端點 (時序指標)
   │
-  │ 唯一動態擁有者:
-  │ • Navigation Mode: S5 Localization (nav2_amcl)
-  │ • Mapping Mode:    S4 Mapping (slam_toolbox)
-  ▼
-[odom]
-  │
-  │ 唯一動態擁有者: S3 State Estimation (robot_localization EKF)
-  ▼
-[base_footprint]
-  │
-  │ 唯一靜態擁有者: S1 Robot Description (robot_state_publisher)
-  ▼
-[base_link]
-  │
-  ├──► [base_lidar_link_FL] ──► [base_lidar_link_FL_1]  (S1 /tf_static)
-  ├──► [base_lidar_link_BR] ──► [base_lidar_link_BR_1]  (S1 /tf_static)
-  ├──► [base_imu_link]               (S1 /tf_static)
-  ├──► [driving_wheel_link_L]        (S1 /tf, 依據 S7 /joint_states)
-  └──► [driving_wheel_link_R]        (S1 /tf, 依據 S7 /joint_states)
+  └─ ROS 2 節點輸出與系統日誌 ─────────────────────────────► Fluent Bit 守護行程
+                                                              │
+                                                              ▼ (TCP/HTTP 轉發)
+                                                          OpenSearch 伺服器端點 (日誌與事件)
 ```
 
-### 7.1 TF 擁有權契約矩陣
+1. **AMR 運行採集來源**：
+   - `/odometry/filtered` (`nav_msgs/msg/Odometry`)：提取過濾後之線速度與角速度。
+   - `/joint_states` (`sensor_msgs/msg/JointState`)：提取左、右驅動輪之轉速。
+   - `/diagnostics` (`diagnostic_msgs/msg/DiagnosticArray`)：提取控制器硬體活動診斷狀態（`controller_manager: Hardware Components Activity`）。
+   - 本地系統日誌：ROS 2 節點日誌與標準輸出串流。
 
-| Transform | 模式 | 唯一權威發布者 | 發布介面 | 配置依據 | 嚴格禁止事項 |
-|---|---|---|---|---|---|
-| `map -> odom` | Mapping Mode | `S4 Mapping` (`slam_toolbox`) | `/tf` (Dynamic) | `transform_publish_period: 0.05` | 嚴禁 AMCL 同時啟動或發布。 |
-| `map -> odom` | Navigation Mode | `S5 Localization` (`nav2_amcl`) | `/tf` (Dynamic) | `tf_broadcast: true` (變化時廣播) | 嚴禁 SLAM 同時啟動或發布。 |
-| `odom -> base_footprint` | 全模式 (Mapping & Navigation) | `S3 State Estimation` (`ekf_filter_node`) | `/tf` (Dynamic) | `frequency: 50.0` (50 Hz) | 嚴禁 `diff_drive_controller` 或 `kinematic_icp` 發布此 TF。 |
-| `base_footprint -> base_link` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 靜態幾何高度固定（地面高程 $0.2560\,\text{m}$）。 |
-| `base_link -> base_lidar_link_FL` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 固定外參 $[+0.288, +0.267, -0.060]\,\text{m}$。 |
-| `base_link -> base_lidar_link_BR` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 固定外參 $[-0.247, -0.267, -0.060]\,\text{m}$。 |
-| `base_lidar_link_FL/BR -> base_lidar_link_FL/BR_1` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 實體光達維持倒裝（z-down）；scan child 以 roll = pi 取消倒裝，使 SICK `LaserScan` 角度資料位於 z-up frame。 |
-| `base_link -> base_imu_link` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf_static` | Latched | 固定外參 $[+0.044, -0.008, -0.015]\,\text{m}$。 |
-| `base_link -> driving_wheel_link_L/R` | 全模式 | `S1 Robot Description` (`robot_state_publisher`) | `/tf` (Dynamic) | `publish_frequency: 30.0` (30 Hz) | 依據 S7 提供之 `/joint_states` 發布。 |
+2. **轉發輸出介面**：
+   - **時序遙測指標**：透過 HTTP POST 協定發送至 InfluxDB 伺服器端點。
+   - **系統日誌與事件**：透過 Fluent Bit 守護行程發送至 OpenSearch 伺服器端點。
 
----
+### Implementation
 
-## 8. Velocity Command and Safety Chain
+1. **元件組成**：
+   - `ros_observability_adapter` (`mobile_base_observability/observability_adapter_node.py`，Python ROS 2 節點）：
+     - 訂閱 `/odometry/filtered`、`/joint_states` 與 `/diagnostics`。
+     - 由內部計時器以配置頻率（`sample_rate_hz: 1.0` Hz）採樣最新觀測值。
+     - 採用 `BoundedTelemetryQueue`（固定容量 60 筆記錄）於 RAM 中緩衝資料，實作 FIFO 溢位淘汰（Drop Oldest），嚴格不寫入本機硬碟 Spool 檔案。
+     - 透過獨立執行緒 `TelemetrySender` 調用 `InfluxHttpWriter` 進行非同步 HTTP POST 批次推送（`http_timeout_seconds: 2.0` 秒）。
+   - `Fluent Bit` (`mobile_base_observability/launch/fluent_bit.launch.py`，基於 `fluent-bit.conf`）：
+     - 獨立行程，負責收集節點日誌並流式傳輸至 OpenSearch。
 
-系統建立直接速度命令鏈，並由 S7 負責底盤安全防護：
+2. **啟動邊界事實**：
+   - Observability 子系統並未納入規範啟動入口 `mobile_base.launch.py` 之中。
+   - 其啟動分別由獨立之 launch 檔案（`observability_adapter.launch.py` 與 `fluent_bit.launch.py`）管理，屬於外部部署維運邊界。
 
-```text
-    ┌───────────────────────────┐         ┌───────────────────────────┐
-    │       S6 Navigation       │         │   User / Operator         │
-    │ ┌───────────────────────┐ │         │   teleop_twist_keyboard   │
-    │ │ controller_server     │ │         │   (Mapping Mode 啟用)     │
-    │ │ (三階段路線導航)       │ │         └─────────────┬─────────────┘
-    │ └───────────┬───────────┘ │                       │
-    │ ┌───────────┴───────────┐ │                       │
-    │ │ docking_server        │ │                       │
-    │ │ (AprilTag 視覺停靠)   │ │                       │
-    │ └───────────┬───────────┘ │                       │
-    │   (Navigation Mode 啟用)  │                       │
-    └─────────────┬─────────────┘                       │
-                  │                                     │
-                  │ /diff_drive_controller/cmd_vel      │ /diff_drive_controller/cmd_vel
-                  │ (自主速度命令, 兩者互斥)               │ (手動巡覽速度命令, SYS-034)
-                  │                                     │
-                  └──────────────────┬──────────────────┘
-                                     │
-                                     ▼
-                      ┌───────────────────────────┐
-                      │      S7 Base Control      │
-                      │  ┌─────────────────────┐  │
-                      │  │ Base Safety Gate    │  │ ◄── 驅動警報 / 回授無效 / 停機中？ (SYS-030)
-                      │  └──────────┬──────────┘  │     (異常即刻否決並停止)
-                      │             ▼             │
-                      │  ┌─────────────────────┐  │
-                      │  │ Command Timeout     │  │ ◄── 超過 0.5s 未收到新命令？ (SYS-027)
-                      │  └──────────┬──────────┘  │     (自動強制歸零煞停)
-                      │             ▼             │
-                      │  ┌─────────────────────┐  │
-                      │  │ Operational Limits  │  │ ◄── 線速/角速與加速度限制 (SYS-028)
-                      │  └──────────┬──────────┘  │
-                      │             ▼             │
-                      │  ┌─────────────────────┐  │
-                      │  │ Diff-Drive Control  │  │ ──► Modbus RTU FC17 至 M1 驅動器
-                      │  └─────────────────────┘  │
-                      └───────────────────────────┘
-```
+3. **故障隔離與保護特性**：
+   - **記憶體有界性**：緩衝佇列容量固定（預設 60 筆），記憶體佔用恆定。
+   - **無本地磁碟耗損**：採純記憶體暫存，不向本機硬碟寫入快取檔案，避免嵌入式儲存損耗。
+   - **單向無阻斷**：遙測發送過程於獨立背景執行緒進行，網路超時、伺服器離線或 HTTP 錯誤絕不阻斷 ROS 回呼函式或影響控制迴圈。
 
-> **速度命令發布權限**：Navigation Mode 下速度命令僅由 S6 的 `controller_server` 或 `docking_server` 依任務狀態互斥發布；Upper Body 或其他外部節點不是速度命令生產者（Not a Velocity Producer）。
+### Expected Normal Behavior
 
-### 8.1 多層停止安全架構 (Multi-Tier Stop Architecture)
+- 獨立啟動 `observability_adapter.launch.py` 與 `fluent_bit.launch.py` 並配置正確伺服器連線參數後，節點以 1.0 Hz 採樣五項核心遙測指標並傳送至 InfluxDB。
+- Fluent Bit 監控系統日誌並持續轉發至 OpenSearch。
 
-| 停止層級 | 觸發來源 | 責任擁有者 | 行為語意與處置 |
+### Failure Behavior
+
+- **伺服器斷線或網路逾時**：若 InfluxDB 端點無法連線，HTTP 發送於 2.0 秒後超時。緩衝佇列達到 60 筆上限後自動拋棄最舊數據，程序維持運作且不拋出未捕獲例外。當網路恢復後，後續採樣數據恢復正常推送。
+
+### Implementation References
+
+- Observability Adapter Launch: `src/mobile_base_observability/launch/observability_adapter.launch.py`
+- Fluent Bit Launch: `src/mobile_base_observability/launch/fluent_bit.launch.py`
+- Node Source: `src/mobile_base_observability/mobile_base_observability/observability_adapter_node.py`
+- Telemetry & Queue Source: `src/mobile_base_observability/mobile_base_observability/telemetry.py`
+- Influx Client Source: `src/mobile_base_observability/mobile_base_observability/influx.py`
+- Fluent Bit Config: `src/mobile_base_observability/config/fluent-bit.conf`
+
+## 11. System References
+
+### 11.1 Runtime Availability
+
+| 實作區域 (Implementation Area) | Mapping Mode | Navigation Mode | 啟動邊界與管理機制 |
 |---|---|---|---|
-| **Level 1a: Navigation Task Stop** | 抵達目標 / 任務取消 / 規劃失敗 | `S6 Navigation` | 終止導航任務、停止後續追蹤、輸出零速運動意圖。 |
-| **Level 1b: Manual Movement Stop** | 建圖操作員放開按鍵 / 按下停止鍵 | 外部 `teleop_twist_keyboard` | 發布零速 `TwistStamped`，底盤受控減速煞停；建圖程序維持運作。 |
-| **Level 2: Command Timeout Stop** | 上游當機、通訊中斷或閒置超過 $0.5\,\text{s}$ | `S7 Base Control` | 控制器內部 Stale-command 逾時機制觸發，強制歸零輸出煞停（SYS-027）。 |
-| **Level 3: Hardware Safe Stop** | 底盤故障 (`ERROR`) / 系統關機 / 停用請求 | `S7 Base Control` | 主動煞車減速、確認輪端完全停轉後切斷使能 (Servo-Off, SYS-030)。 |
+| **1. Robot Model** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup，由 `base_control.launch.py` 啟動 `robot_description.launch.py` |
+| **2. Sensor Ingestion** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup (`tdk_imu.launch.py`, `sick_dual_lidar.launch.py`) |
+| **3. State Estimation** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup (`kinematic_icp.launch.py`, `ekf.launch.py`) |
+| **4. Mapping** | 啟用 (Active) | 未啟用 (Inactive) | `mobile_base.launch.py` 於 `mode:='mapping'` 時啟動 (`mapping.launch.py`) |
+| **5. Localization** | 未啟用 (Inactive) | 啟用 (Active) | `mobile_base.launch.py` 於 `mode:='navigation'` 時啟動 (`localization.launch.py`) |
+| **6. Navigation Target Admission** | 未啟用 (Inactive) | 可用 (Available) | 獨立 CLI 工具 (`navigate_to_station`) 或外部 Action Client |
+| **7. Route-Assisted Navigation** | 未啟用 (Inactive) | 啟用 (Active) | `mobile_base.launch.py` 於 `mode:='navigation'` 時啟動 (`navigation.launch.py`) |
+| **8. Precision Docking** | 未啟用 (Inactive) | 啟用 (Active) | 納入 `navigation.launch.py` 作為受管生命週期節點 (`docking_server`) |
+| **9. Base Control** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup，由 `base_control.launch.py` 啟動 |
+| **10. Observability** | 可用 (Available) | 可用 (Available) | 獨立啟動邊界 (`observability_adapter.launch.py`, `fluent_bit.launch.py`)，非 canonical bringup 自動啟動 |
 
-### 8.2 底盤生命週期與安全停機序列 (Base Control Lifecycle and Safe Stop Sequencing)
+### 11.2 Production Resources
 
-底盤硬體生命週期與安全煞停由 `M1Hardware` 統一編排，實施嚴格之狀態機與防護程序：
+| 生產資源 (Resource) | 格式與規格 | 生產者 (Producer) | 主要消費者 (Consumer) | 執行期解析機制 (Runtime Resolution) |
+|---|---|---|---|---|
+| **Map Package** | `map.yaml` 與 `map.pgm` | Mapping (`save_map.sh` 調用 `map_saver_cli`) | Localization (`nav2_map_server`) | `site_resolution.py`（依 `site` 引數定位）或 CLI `map` 參數覆寫 |
+| **Station Catalog** | `stations.yaml` | 離線場域工程定義 | Target Admission (`navigate_to_station`) | CLI 引數 `--catalog` 顯式傳入 |
+| **Route Graph** | `route_graph.geojson` | 離線路網拓撲工程定義 | Route-Assisted Navigation (`route_server`) | `site_resolution.py`（依 `site` 引數定位）或 CLI `route_graph` 參數覆寫 |
+| **Robot Description** | URDF / Xacro | 機器人機構模型 | `robot_state_publisher`, `controller_manager`, 代價地圖 | Launch 階段由 `xacro` 動態解析生成 |
 
-#### 8.2.1 啟動序列 (Activation Sequence - `on_activate`)
+說明：場域資源未由單一執行期節點進行集中代理；`site_resolution.py` 負責解析 launch 參數路徑，而 `stations.yaml` 則由操作端直接指定予目標接收工具。
 
-```text
-M1Driver.connect()
-        │
-        ▼
-M1Driver.read_state() 啟動前檢查
-        │
-        ├── 驗證通訊正常且無未解除警報 (alarm == 0)
-        └── 驗證馬達處於零速靜止狀態
-        │
-重置左右輪 PositionTracker 累加器與內部命令變數
-        │
-        ├── 標定當前實體位置為 ROS 輪端位置原點 (0 rad)
-        └── 設定命令變數 = 0.0 rad/s
-        │
-M1Driver.enable() (Multi-drive 2.0 FC17 SVON)
-        │
-        ▼
-有界狀態確認輪詢 (Bounded Status Confirmation)
-        │
-        ├── 於有限逾時視窗內週期性呼叫 read_state()
-        ├── 確認驅動器脫離 WAIT/INHIBIT (status == 6) 並進入正常就緒狀態 (status == 0)
-        └── 確認過程中無任何驅動警報產生
-        │
-轉入 ACTIVE 狀態 (開始執行即時 control loop)
-```
+### 11.3 TF Ownership
 
-- **硬體過渡特性**：實機證據顯示，發送 SVON 後立即回傳之狀態可能仍維持在 status 6；必須透過有界輪詢確認馬達完全進入使能狀態，超時未就緒則自動發送 SVOFF 並回報啟動失敗。
+| 坐標轉換邊 (Transform Edge) | 父坐標 (Parent) | 子坐標 (Child) | 權威發布節點 (Authority Publisher) | 生效模式與生命週期 (Active Mode / Lifecycle) |
+|---|---|---|---|---|
+| `map -> odom` | `map` | `odom` | `slam_toolbox` (`async_slam_toolbox_node`) | 僅限 Mapping Mode |
+| `map -> odom` | `map` | `odom` | `nav2_amcl` (`amcl`) | 僅限 Navigation Mode |
+| `odom -> base_footprint` | `odom` | `base_footprint` | `robot_localization` (`ekf_node`) | Common（所有模式共用） |
+| `base_footprint -> base_link` | `base_footprint` | `base_link` | `robot_state_publisher` | Common（靜態 URDF 描述） |
+| `base_link -> base_lidar_link_FL` | `base_link` | `base_lidar_link_FL` | `robot_state_publisher` | Common（靜態 URDF 描述） |
+| `base_lidar_link_FL -> base_lidar_link_FL_1` | `base_lidar_link_FL` | `base_lidar_link_FL_1` | `robot_state_publisher` | Common（靜態 URDF 描述） |
+| `base_link -> base_lidar_link_BR` | `base_link` | `base_lidar_link_BR` | `robot_state_publisher` | Common（靜態 URDF 描述） |
+| `base_lidar_link_BR -> base_lidar_link_BR_1` | `base_lidar_link_BR` | `base_lidar_link_BR_1` | `robot_state_publisher` | Common（靜態 URDF 描述） |
+| `base_link -> base_imu_link` | `base_link` | `base_imu_link` | `robot_state_publisher` | Common（靜態 URDF 描述） |
+| `base_link -> driving_wheel_link_L` | `base_link` | `driving_wheel_link_L` | `robot_state_publisher` | Common（基於 `/joint_states` 即時動態計算） |
+| `base_link -> driving_wheel_link_R` | `base_link` | `driving_wheel_link_R` | `robot_state_publisher` | Common（基於 `/joint_states` 即時動態計算） |
 
-#### 8.2.2 停用與安全停機序列 (Deactivation Sequence - `on_deactivate` / `on_error` / `on_shutdown`)
+權威發布唯一性事實：
+- **`map -> odom` 互斥性**：Mapping Mode 與 Navigation Mode 屬於嚴格互斥之啟動模式，`slam_toolbox` 與 `amcl` 絕不同時運行，確保全域坐標轉換具備唯一權威發布者。
+- **`odom -> base_footprint` 唯一性**：`diff_drive_controller` 配置 `enable_odom_tf: false`，不廣播 TF；`odom -> base_footprint` 唯一由 EKF 廣播。
 
-```text
-速度命令變數即刻歸零 (hw_commands_ = 0)
-        │
-        ▼
-M1Driver.stop() (Multi-drive 2.0 FC17 JG 0) 主動煞停
-        │
-        ▼
-有界停轉確認 (Bounded Stop Confirmation)
-        │
-        ▼
-M1Driver.disable() (Multi-drive 2.0 FC17 SVOFF) 切斷伺服使能
-        │
-        ▼
-M1Driver.disconnect() 釋放序列通訊與 libmodbus 資源 (Cleanup / Shutdown 階段)
-```
+### 11.4 Motion Command Flow
 
-#### 8.2.3 核心安全與邊界原則
-
-1. **盡力而為安全原則 (Best-Effort Shutdown Invariant)**：
-   - 停機與錯誤處理流程採嚴格之 **Best-Effort** 原則：在執行 Stop、Disable 或 Disconnect 時，若前一動作發生通訊異常或逾時，系統**嚴禁提早中斷**，必須持續嘗試執行後續之安全處置動作，確保硬體盡最大可能脫離受電致動狀態。
-2. **通訊資源清理與馬達安全停機的明確區隔**：
-   - 釋放通訊資源（`disconnect()` / `modbus_close()`）僅關閉作業系統層級之序列埠與 context，**不等於馬達物理煞停**。馬達安全生命週期（Stop / Disable）屬於上層 `M1Hardware` 之專屬職責，嚴禁依賴底層通訊庫解構函數隱式承擔。
-3. **實體急停邊界 (Physical E-Stop / STO Boundary)**：
-   - 軟體層安全停機（JG 0 與 SVOFF）屬於受控減速與正常去能；實體硬體急停（Physical E-Stop）與安全轉矩關斷（Safe Torque Off, STO）屬於外部硬體電氣迴路，獨立於軟體通訊與控制架構之外。
-
----
-
-## 9. Route-Assisted Navigation
-
-`mobile_base` 導航編排採用路網優先（Route-assisted）的三階段移動架構：
+底盤運動控制拓撲如下：
 
 ```text
-[Current Pose] ──First Mile──► [Route Entry] ──On Route──► [Route Exit] ──Last Mile──► [Canonical Goal Pose]
+[Mapping Mode]
+手動鍵盤遙控 (teleop_twist_keyboard)
+      │
+      │ (geometry_msgs/msg/TwistStamped)
+      ▼
+/diff_drive_controller/cmd_vel
+      │
+      ▼
+diff_drive_controller (ros2_control)
+      │
+      ▼ (Modbus FC17 @ 230400 bps)
+M1 馬達驅動器與輪系 (ID 1: 右輪, ID 2: 左輪)
+
+[Navigation Mode]
+路網導航: controller_server (MPPI) ──┐
+                                     ├──► /diff_drive_controller/cmd_vel
+精準對接: docking_server (對接控制) ─┘    (geometry_msgs/msg/TwistStamped)
+                                                 │
+                                                 ▼
+                                      diff_drive_controller (ros2_control)
+                                                 │
+                                                 ▼ (Modbus FC17 @ 230400 bps)
+                                      M1 馬達驅動器與輪系 (ID 1: 右輪, ID 2: 左輪)
 ```
 
-### 9.1 三階段架構行為
-1. **First Mile（第一哩路）**：
-   - 負責將 AMR 自當前初始位姿導引至路網入口（Route Entry）。
-   - 由 Behavior Tree 節點 `ArePosesNear` 檢查；若 AMR 當前位姿已在路網起點容許範圍內，自動略過此階段。
-   - 若未在起點，調用 `GridBased` (`NavfnPlanner`) 規劃自由空間路徑並與後續路徑拼接。
-2. **On Route（路網主段）**：
-   - 沿 `route_graph.geojson` 定義之拓撲路網移動，由 `route_server` 運算拓撲邊界與路徑。
-3. **Last Mile（最後一哩路）**：
-   - 負責將 AMR 自路網出口（Route Exit）導引至最終目標位姿（Canonical Goal Pose）。
-   - 若路網出口與目標位姿重合，自動略過；否則調用 `GridBased` (`NavfnPlanner`) 規劃路徑並拼接。
-4. **路徑追蹤與到站**：
-   - 拼接完成之 `final_route_path` 交由 `MPPIController` (`FollowPath`) 統一追蹤。
-   - 最終由 `StoppedGoalChecker` 確認位置誤差、朝向誤差與底盤停妥狀態（SYS-016）。
-
-### 9.2 自由空間 Fallback 排除政策 (SYS-021)
-- **v0.1 嚴格禁止全域自由空間 Fallback**。
-- 當無法計算有效路網解或路網被障礙完全阻斷且無替代路線時，導航行為樹直接終止任務並回報失敗（`FAILURE`），嚴禁自動退化為全域自由空間尋路。
-
----
-
-## 10. Station Navigation
-
-Station 導航由專屬輕量客戶端與 Target Admission 模組驅動，完全建立於 Nav2 標準架構之上：
-
-```text
-navigate_to_station CLI
-         │
-         ▼
-  TargetAdmission 函式庫
-  ├── Target Discriminator (辨識 Station ID 或 Goal Pose, SYS-008)
-  ├── Goal Pose Normalizer (角度轉 Quaternion, SYS-009)
-  ├── Station Catalog Resolver (查詢 stations.yaml, SYS-032)
-  └── Canonical Goal Validator (驗證數值有限性與 Frame, SYS-033)
-         │
-         ▼ (產出 Canonical PoseStamped)
-  原生 Action 調度: nav2_msgs/action/NavigateToPose
-         │
-         ▼
-  Nav2 bt_navigator (執行 route_assisted_nav.xml)
-```
-
-### 10.1 架構特點
-- **無自製 Action 介面**：系統**不定義亦不暴露**任何 `mobile_base_msgs/action/NavigateToStation` 自製 Action。
-- **純客戶端解析**：Station 目錄查詢與座標轉換完全在客戶端 Target Admission 層完成，送入導航核心之目標皆為標準 `geometry_msgs/msg/PoseStamped`。
-- **標準 Station Schema**：`stations.yaml` 採用簡潔標準格式（包含 `frame_id: map` 與 `stations: [{id, x, y, yaw_rad}]`）。
-
----
-
-## 11. Architectural Constraints and Boundaries
-
-1. **操作模式互斥 (Mode Mutual Exclusion)**：
-   - Mapping Mode 與 Navigation Mode 具有完全不同的生命週期與 TF 拓撲，嚴禁同時運行。
-   - 因模式嚴格互斥，系統維持最簡架構（Avoid Premature Structure），不引入額外之 `twist_mux` 節點。
-2. **原始感測資料隔離 (Raw Perception Stream Isolation)**：
-   - 雙光達原始資料 `/scan_front` 與 `/scan_rear` 獨立發布，不進行虛擬點雲合成。
-   - IMU 僅向 EKF 提供角速度 `yaw_rate`，不提供易漂移之絕對姿態角度或線性加速度融合。
-3. **底盤回授真實性約束 (Feedback Truthfulness Invariant)**：
-   - S7 底盤驅動在通訊中斷或回授無效時必須拋出異常，嚴禁使用速度命令值偽造編碼器回授。
-4. **已知受限邊界 (Bounded Operational Limitation)**：
-   - 系統在特定回程軌跡（如 Station B $\rightarrow$ Station A）存在已記錄之進度逾時現象（Progress Timeout）。此現象屬於已知之受限運作邊界，不阻礙 MVP 基本架構之確立；細部參數最佳化與排查不屬於架構文件之範疇。
-5. **底盤控制架構設計決策理由 (Base Control Architectural Rationale)**：
-   - **分層責任隔離 (Layering Separation)**：區分 `M1Hardware` 與 `M1Driver`，使 ROS 2 關節介面、差速輪幾何、極性方向與連續位置追蹤等機器人領域邏輯，與 Modbus RTU 封包編碼、Multi-drive 廣播定址、暫存器映射及串列 I/O 實作完全解耦，利於獨立單元測試與未來硬體相容性維護。
-   - **通訊細節私有化 (libmodbus Encapsulation)**：`libmodbus` context 僅作為 `M1Driver` 內部私有成員，任何 `modbus_t` 指標、巨集常數或底層 `errno` 皆不向外洩漏，確保上層模組純淨。
-   - **避免過早抽象 (Avoid Premature Abstraction)**：MVP 階段僅使用單一 RS-485 串列總線，不額外設計抽象的 `SerialTransport` 介面層或複雜背景執行緒，大幅降低系統複雜度並提高單元測試穩定性（Avoid Premature Structure）。
-   - **採用 Multi-drive 2.0 FC17 同步讀寫**：運行期控制透過單一 FC17 事務同時完成雙輪速度下發與狀態回授，消除先寫後讀的兩次總線往返，大幅降低總線延遲並避免競爭。
-   - **控制頻率定為 30 Hz 之系統理由**：實機時序量測顯示，單次 FC17 來回通訊延遲約落於 $20\sim 25\,\text{ms}$ 區間。50 Hz 控制週期僅有 $20\,\text{ms}$，無法為現行同步通訊模型提供可靠的時序餘裕；因此現行基準採用 30 Hz（週期 $33.3\,\text{ms}$），為同步控制迴圈提供額外時序餘裕以確保穩定運作。
-6. **Observability Failure Isolation**：
-   - S8 僅能以單向、非必要依賴觀察 S1–S7。Adapter、forwarder、Network、Server stores 或 bounded buffers 的故障與壅塞均不得阻塞或改變 Navigation、Localization、Control 或 Safety。
-   - AMR 端 Observability buffering 必須為 volatile 且 bounded；容量耗盡時 drop oldest 並保留較新資料，核心功能持續運行。
-
----
-
-## 12. Requirement and Verification References
-
-### 12.1 需求分配總表 (Subsystem Requirement Allocation)
-
-| 子系統 ID | 子系統名稱 | 承接之系統需求 (SYS Requirements) |
-|---|---|---|
-| **S1** | **Robot Description** | SYS-023 |
-| **S2** | **Perception** | SYS-003, SYS-004 |
-| **S3** | **State Estimation** | SYS-005 |
-| **S4** | **Mapping** | SYS-001, SYS-002, SYS-006, SYS-024 |
-| **S5** | **Localization** | SYS-007, SYS-010 |
-| **S6** | **Navigation** | SYS-008, SYS-009, SYS-011, SYS-013, SYS-014, SYS-015, SYS-016, SYS-017, SYS-018, SYS-019, SYS-020, SYS-021, SYS-025, SYS-032, SYS-033, SYS-044 |
-| **S7** | **Base Control** | SYS-022, SYS-026, SYS-027, SYS-028, SYS-029, SYS-030, SYS-034 |
-| **S8** | **Observability and Diagnostics** | SYS-035, SYS-036, SYS-037, SYS-038, SYS-042 |
-
-### 12.2 權威需求規範參照
-- **系統需求規範**：系統 38 項規範性需求定義於 [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)。
-- **系統驗證狀態**：目前 AMR 實機已驗證功能、驗證結論與已知限制彙整於本文件「[13. 系統驗證狀態與已知限制](#13-系統驗證狀態與已知限制-system-verification-status--known-limitations)」。
-
----
-
-## 13. 系統驗證狀態與已知限制 (System Verification Status & Known Limitations)
-
-### 13.1 已實機驗證之系統功能與結論 (Demonstrated Runtime Capabilities)
-
-`mobile_base` v0.1.0 AMR 已經由實機運行與自動化整合測試驗證下列核心功能與行為結論（細部架構請參閱各對應章節）：
-
-1. **底盤控制與硬體生命週期 (S7 Base Control)**：
-   - 經由 RS-485 Modbus RTU 與實體 M1 雙驅動器通訊，驗證 30 Hz 同步控制迴圈（A2 模型）與生命週期啟動／停機序列（[§4.7](#47-s7-base-control)、[§8.2](#82-底盤生命週期與安全停機序列-base-control-lifecycle-and-safe-stop-sequencing)）。
-   - 實機驗證差速輪連續編碼器位置追蹤、溢位解算與零速使能原點標定（[§4.7.5](#475-連續位置追蹤與溢位解算-position-tracking--rollover-unwrapping)）。
-   - 實機驗證平地受控前進、後退、原地旋轉與主動煞停運動。
-   - 實機驗證速度命令逾時安全煞停（Command Timeout Stop, SYS-027）：當速度命令中斷超過 $0.5\,\text{s}$ 時，底盤自主強制歸零煞停（[§8.1](#81-多層停止安全架構-multi-tier-stop-architecture)）。
-
-2. **感測感知與獨立雙光達架構 (S2 Perception)**：
-   - 實機驗證前左與後右雙 SICK picoScan150 光達以獨立 2D LaserScan 串流運作，無需亦不使用虛擬融合節點（[§4.2](#42-s2-perception)）。
-   - 實機驗證 TDK IIM-42652 6 軸 IMU 串列資料擷取與動態角速度響應（[§4.2](#42-s2-perception)）。
-
-3. **狀態估測與 TF 擁有權 (S3 State Estimation & TF Tree)**：
-   - 實機驗證 Kinematic-ICP 以前光達結合輪速里程先驗輸出平面雷達里程（`/lidar_odometry`）（[§4.3](#43-s3-state-estimation)）。
-   - 實機驗證 EKF 融合雷達里程與 IMU 角速度，作為唯一權威發布動態 `odom -> base_footprint` TF（[§4.3](#43-s3-state-estimation)、[§7](#7-tf-ownership)）。
-   - 驗證全系統座標框架拓撲與 TF 唯一發布權限契約完全分離，無重複廣播或跳動競爭。
-
-4. **二維建圖與 MapIO 讀回驗證 (S4 Mapping)**：
-   - 實機驗證 Mapping Mode 下 SLAM Toolbox 即時佔據網格建圖與動態 `map -> odom` TF 發布（[§4.4](#44-s4-mapping)、[§6.1](#61-建圖資料流-mapping-flow---uc-001)）。
-   - 驗證 Map Package 地圖儲存腳本（`save_map.sh`）與儲存後自動 MapIO 反序列化讀回檢驗（`validate_map_readback`）。
-
-5. **全域地圖定位 (S5 Localization)**：
-   - 實機驗證 Navigation Mode 下 `map_server` 載入 Map Package 與 AMCL 粒子濾波定位，並由 AMCL 唯一發布動態 `map -> odom` TF（[§4.5](#45-s5-localization)、[§7](#7-tf-ownership)）。
-
-6. **目標解析、路線編排與自主導航 (S6 Navigation)**：
-   - 驗證客戶端 Target Admission 模組：正確解析 `stations.yaml` 站點 ID 或正規化 Goal Pose 為標準 `PoseStamped`，並由原生 `NavigateToPose` 調度（[§4.6](#46-s6-navigation)、[§6.2](#62-導航目標接收與驗證流程-target-admission-flow)、[§10](#10-station-navigation)）。
-   - 驗證未知或無效 Station ID 目標之阻斷拒絕，且不發送任何底盤運動命令。
-   - 驗證三階段路網導航編排（First Mile $\rightarrow$ On Route $\rightarrow$ Last Mile）與 MPPI 控制器路徑追蹤（[§6.3](#63-路網導航執行流程-route-assisted-navigation-flow---uc-002)、[§9](#9-route-assisted-navigation)）。
-   - 實機驗證 Station A $\rightarrow$ Station B 自主路網導航成功抵達並通過 StoppedGoalChecker 到站停妥判定。
-
-7. **S7 底盤安全閘門**：
-   - 實機驗證 S7 的安全啟動、命令逾時、運動限制與停機行為（[§4.7](#47-s7-base-control)、[§8.1](#81-多層停止安全架構-multi-tier-stop-architecture)）。
-
-8. **AprilTag 視覺停靠 (S6 Navigation / Direct Docking, SYS-044)**：
-   - **已軟體驗證 (Software Validated)**：
-     - 驗證 Nav2 `docking_server` launch 整合與 Lifecycle Manager 納管（[§4.6](#46-s6-navigation)、[§4.6.1](#461-apriltag-視覺停靠架構與介面契約-direct-apriltag-docking-architecture--interface-contract)）。
-     - 驗證原生 `nav2_msgs/action/DockRobot` Action Server 就緒與介面相容性。
-     - 驗證 `SimpleNonChargingDock` 外掛配置、`/detected_dock_pose` 訂閱與 Jazzy 1.3.12 停靠參數解析。
-     - 驗證 `docking_server` 之 `geometry_msgs/msg/TwistStamped` 輸出與 `/diff_drive_controller/cmd_vel` 銜接。
-     - 驗證 Local Costmap 碰撞檢測 topic 訂閱契約。
-     - 驗證原生 Action 取消（Cancel）與零速煞停機制。
-     - `mobile_base_navigation` 與 `mobile_base_bringup` 測試套件全數通過。
-   - **尚待實機驗證 (Pending Hardware Validation)**：
-     - Upper Body 真實 AprilTag 座標軸定義（X-forward vs Z-forward）。
-     - `external_detection_rotation_*` 實際旋轉偏移量標定。
-     - 實機牆面／標記前實際停止距離約 70 cm 幾何驗收。
-     - `docking_threshold` 到站判定在實機差速底盤上的實際精度。
-     - Local Costmap 在 AMR 靠近牆面時是否會因膨脹層過早阻擋停靠。
-     - AMR 實機停靠軌跡與停止精度。
-
----
-
-### 13.2 已知限制邊界 (Known Operational Limitations)
-
-1. **Known Limitation B — 回程導航進度逾時 (Station B $\rightarrow$ Station A)**：
-   - **觀察現象**：在 `test_site` 場域實機驗證中，Station A 前往 Station B 導航已通過驗收；反向由 Station B 前往 Station A 於接近目標時，因 Nav2 控制器進度檢查器判定進度逾時（`error_code=105`）而終止任務。
-   - **安全處置**：任務終止後，系統依多層停止架構安全煞停底盤，未發生失控或碰撞。
-   - **目前狀態**：根本原因尚未確定（root cause undetermined）。此現象為 v0.1.0 基線之已知受限運作邊界，不影響單向自主導航能力、目標解析與 S7 安全停機機制之確立。
-
----
-
-### 13.3 需求驗證現況摘要 (Requirement Verification Accounting)
-
-- **規範性需求總數**：`03_REQUIREMENTS.md` 共定義 38 項規範性系統需求（SYS-001 ~ SYS-011, SYS-013 ~ SYS-030, SYS-032 ~ SYS-038, SYS-042, SYS-044）。
-- **編號保留缺口**：SYS-012 與 SYS-031 為需求編號分配缺口（未定義於基準中，非系統功能或實作缺口）。
-- **驗證狀態統計**：31 項需求已完成實機或自動化整合驗證；1 項需求（SYS-044 AprilTag 視覺停靠）已完成軟體驗證，尚待實機標定驗收；1 項需求（SYS-015 路徑追蹤）因 Known Limitation B 被評定為部分驗證（Partial）；S8 承接的 5 項需求目前僅完成 System Design，尚未實作或驗證。
+架構運作事實：
+- **直通主題無多路複用器**：當前架構未部署 `twist_mux` 節點，所有指令來源均重映射並直接發布至 `/diff_drive_controller/cmd_vel`。
+- **操作流程互斥（Operational Exclusivity）**：底盤速度指令來源之互斥性屬於作業流程與運算節點調度的設計約定，而非底層節點或硬體層面之自動互鎖/仲裁機制（系統未部署 `twist_mux` 或類似之優先權仲裁節點）。在正常操作流程中，Mapping Mode 下僅由手動遙控發布指令；Navigation Mode 下，路網導航（`controller_server`）與精準對接（`docking_server`）屬於相繼觸發之不同任務階層，不同時發布指令。
+- **指令超時保護**：`diff_drive_controller` 配置有 `cmd_vel_timeout: 3600.0` 秒，於指令串流中止且超時後自動向硬體介面下達零速度停機。
+- **主動煞停控制**：正常任務結束時（導航抵達目標或對接就位），各上層控制器主動輸出全零之 `TwistStamped` 指令完成煞停。

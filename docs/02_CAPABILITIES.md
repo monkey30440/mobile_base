@@ -74,11 +74,10 @@ Map Package 是可儲存及重新載入的地圖產物，可供 CAP-002 的定�
 
 系統應提供下列能力：
 
-- 接收 Navigation Target。
-- 驗證 Navigation Target。
-- 將不同形式的 Navigation Target 解析與驗證為統一的導航目標位置與朝向（Canonical Goal Pose）。
+- 接收 Navigation Target（支援 Generic Pose Target 與 Station Target）。
+- 對 Generic Pose Target，直接以標準導航介面接收外部提供之 Canonical Goal Pose 進行導航，不要求系統額外建立自訂轉接。
+- 對 Station Target，使用選定場域之 Station Catalog 將 Station ID 解析為 Canonical Goal Pose，經必要驗證後進入導航。
 - 使用選定場域的 Map Package 提供地圖，並使用人工建立的 Route Graph 作為偏好的導航路網。
-- 使用 Station Target 時，透過同一場域資料夾中人工建立的 Station Catalog，將 Station ID 對應至位置與朝向。
 - 使用預設初始位置與朝向啟動地圖定位；預設不適用時，接受使用者提供的近似位置與朝向覆寫。
 - 提供 AMR 在地圖中的位置與朝向，作為導航的位置基準。
 - 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-assisted navigation strategy。
@@ -98,12 +97,12 @@ Map Package 是可儲存及重新載入的地圖產物，可供 CAP-002 的定�
 
 ### Navigation Target
 
-Navigation Target 是使用者希望 AMR 前往的目標描述，支援下列兩種形式。
+Navigation Target 是使用者希望 AMR 前往的目標描述，支援下列兩種形式：
 
-| Target Type | 說明 |
+| Target Type | 說明與介面契約 |
 |---|---|
-| Station Target | 使用 Station ID 指定預先定義站點 |
-| Pose Target | 使用 Goal Pose 指定任意導航位置與朝向 |
+| Generic Pose Target | 由外部直接提供符合標準導航介面之 Canonical Goal Pose（包含目標位置與朝向），直接作為導航目標使用，不要求系統額外建立自訂轉接 |
+| Station Target | 使用 Station ID 指定預先定義站點，由系統透過場域 Station Catalog 解析為 Canonical Goal Pose，並於通過驗證後進入導航 |
 
 ### Navigation Resources
 
@@ -115,7 +114,7 @@ Navigation Target 是使用者希望 AMR 前往的目標描述，支援下列兩
 | Route Graph（`route_graph.geojson`） | 人工離線標註建立，提供偏好的導航路網 |
 | Station Catalog（`stations.yaml`） | 人工離線編輯建立，將 Station ID 對應至位置與朝向；僅 Station Target 需要 |
 
-上述資料放在同一場域資料夾中。資源載入設計參見 [04_SYSTEMS.md §5.2](./04_SYSTEMS.md#52-資源責任與載入架構)。
+上述資料放在同一場域資料夾中。資源載入設計參見 [`04_SYSTEMS.md` 的 System References → Production Resources](./04_SYSTEMS.md#112-production-resources)。
 
 > 既有系統邊界：系統不提供跨資源 identity／compatibility admission。
 
@@ -127,7 +126,7 @@ Navigation Target 是使用者希望 AMR 前往的目標描述，支援下列兩
 
 系統使用部署設定的預設初始位置與朝向。當預設與實際開機位置不符時，使用者可提供近似位置與朝向覆寫（Approximate Initial Pose Override）。
 
-定位介面與初始化設定參見 [04_SYSTEMS.md §4.5](./04_SYSTEMS.md#45-s5-localization)；使用者覆寫操作參見 [01_USE_CASES.md 的初始位置覆寫](./01_USE_CASES.md#初始位置覆寫)。
+定位介面與初始化設定參見 [`04_SYSTEMS.md` 的 Localization](./04_SYSTEMS.md#5-localization)；使用者覆寫操作參見 [01_USE_CASES.md 的初始位置覆寫](./01_USE_CASES.md#初始位置覆寫)。
 
 > 既有行為邊界：系統不另行定義 localization-valid 或收斂 gate。
 
@@ -184,7 +183,7 @@ First Mile 與 Last Mile 使用一般路徑規劃銜接路網與起訖點，為�
 適用於：
 
 - 指定預先定義站點（Station Target）進行自主導航。
-- 指定任意位置與朝向（Pose Target）進行自主導航。
+- 指定任意位置與朝向（Generic Pose Target）進行自主導航。
 - 必要時提供初始定位覆寫以啟動導航定位基準。
 - 導航進行中依需求取消導航任務。
 - 系統自主執行路徑追蹤與避障，並回報導航結果。
@@ -276,3 +275,81 @@ AMR 運行時產生並由系統處理的資訊：
 | Use Case |
 |---|
 | UC-003 |
+
+---
+
+# CAP-004 精準停靠
+
+## 目的
+
+接收外部任務控制端之停靠要求與外部系統提供之停靠目標資訊，控制 AMR 在目標鄰近範圍內自主完成局部精準接近、對準與停止，並回報停靠結果。
+
+---
+
+## 系統能力
+
+系統應提供下列能力：
+
+- 接收外部任務控制端提出之停靠要求。
+- 接收外部系統提供之停靠目標資訊，並確認其可供使用。
+- 根據停靠目標資訊控制 AMR 執行目標鄰近範圍內的精準接近與對準。
+- 停靠期間持續使用外部更新之目標資訊調整停靠運動，並提供執行狀態。
+- 無法安全繼續、目標資訊失效或無法在允許時間內完成時，終止停靠、使 AMR 停止並回報失敗。
+- 接收外部任務控制端提出之取消要求，終止停靠、使 AMR 停止並回報取消。
+- 達成預定停靠條件時使 AMR 停止，並回報停靠成功。
+
+---
+
+## 能力邊界
+
+- 不負責場域長距離導航或路網規劃；全域導航屬於 CAP-002。
+- 不負責產生停靠目標感知或位姿資訊；目標資訊由外部系統提供。
+- 不負責充電連接確認或充電管理。
+- 不管理場域停靠站點資料庫或上層任務排程。
+
+---
+
+## 輸入
+
+### 停靠任務控制
+
+- 停靠要求（Docking Request）：外部任務控制端發起停靠任務之明確要求。
+- 停靠取消請求（Docking Cancel Request）：外部任務控制端要求中斷進行中停靠任務之請求。
+
+### 停靠目標資訊
+
+由外部系統提供，描述停靠目標相對於 AMR 的空間位置與朝向，供停靠接近與對準使用。停靠期間可持續更新。
+
+---
+
+## 輸出
+
+系統完成或終止停靠任務時，回報停靠結果（Docking Result）：
+
+- **Success**：AMR 抵達預定停靠相對位置與朝向容差範圍，停止，並回報成功（不代表充電流程或電氣連接完成）。
+- **Failure**：停靠未能完成（如外部停靠目標資訊不可用或中斷、逼近過程受阻或超時未收斂）。
+- **Canceled**：收到外部取消請求後，系統停止停靠並終止任務。
+
+---
+
+## 與其他 Capability 的關係
+
+CAP-002 與 CAP-004 為並列且獨立之系統能力。在運作流程上，系統可先由 CAP-002 將 AMR 導航至停靠目標鄰近範圍，再由 CAP-004 執行精準停靠；但 CAP-004 不要求 CAP-002 必須先執行。CAP-002 的 Station Target 不等於停靠目標（Docking Target），且 Navigation Success 亦不代表停靠完成。
+
+---
+
+## 使用情境
+
+適用於：
+
+- 接收停靠要求，對指定停靠目標執行精準接近與對準。
+- 在目標鄰近範圍內完成精準終端對準與停靠。
+- 停靠進行中依外部要求取消任務。
+
+---
+
+## 對應 Use Case
+
+| Use Case |
+|---|
+| UC-004 |

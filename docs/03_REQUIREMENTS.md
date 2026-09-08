@@ -1,6 +1,6 @@
 # System Requirements
 
-本文件定義 `mobile_base` v0.1 之可觀察功能需求、安全需求與操作限制。
+本文件定義 `mobile_base` 之可觀察功能需求、安全需求與操作限制。
 
 Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界，不描述系統實作方式。
 
@@ -10,7 +10,7 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-001 建立地圖
 
-系統應建立可供定位與導航使用之二維 Occupancy Grid 地圖；建圖功能無法完成初始化並進入可處理建圖資料之狀態時，系統應回報失敗及原因。
+系統應建立可供定位與導航使用之二維 Occupancy Grid 地圖；建圖功能無法完成初始化並進入就緒狀態時，系統應回報失敗及原因。
 
 ---
 
@@ -28,7 +28,7 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-007 載入地圖
 
-系統應於 Navigation Mode 啟動期間載入所選定之 Map Package，並提供其中的二維 Occupancy Grid 給地圖定位與導航功能使用；Map Package 無法載入時，系統不得進入 navigation-ready 狀態，並應回報原因。
+系統應載入所選定之 Map Package，並提供其中的二維 Occupancy Grid 給地圖定位與導航功能使用；Map Package 無法載入或解析時，系統不得進入可導航就緒狀態，並應回報原因。
 
 ---
 
@@ -48,46 +48,40 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-008 Navigation Target
 
-系統應支援以下 Navigation Target：
+系統應支援以下兩種形式之 Navigation Target：
 
-- Station
-- Goal Pose
-
----
-
-## SYS-009 Goal Pose Normalization
-
-系統應接受使用者透過終端提交以公尺表示之絕對 `x`、`y`，以及以度表示之 `yaw-deg` Goal Pose，並將其正規化為目前導航全域座標框架中的 canonical `geometry_msgs/msg/PoseStamped`；系統應保留其絕對位置與方向語意，將 `yaw-deg` 轉換為 quaternion，並依操作規則設定 frame 與 timestamp。必要欄位缺失或無法解析時，系統應拒絕該目標並回報原因。
+- **Generic Pose Target**：由外部提供可直接作為導航目標使用之 Canonical Goal Pose（包含位置與朝向）。
+- **Station Target**：使用 Station ID 指定預先定義站點，並透過 Station Target Resolution 轉換為 Canonical Goal Pose。
 
 ---
 
 ## SYS-032 Station Target Resolution
 
-系統應使用目前場域之 Station Catalog，將使用者提交的 Station ID 解析為該 Station 預先定義之 canonical `geometry_msgs/msg/PoseStamped`；Station ID 為空、找不到對應 Station 或無法解析時，系統應拒絕該目標並回報原因。
+系統應使用目前場域之 Station Catalog，將使用者提交的 Station ID 解析為該 Station 預先定義之位置與朝向，以形成 Canonical Goal Pose；Station ID 為空、找不到對應 Station 或無法解析時，系統應拒絕該目標並回報原因。
 
 ---
 
 ## SYS-033 Canonical Goal Pose Validation
 
-系統應於導航開始前驗證 canonical `geometry_msgs/msg/PoseStamped`。其位置與方向數值應為有限值、座標框架不得為空且應可轉換至目前導航使用之全域座標框架、方向 quaternion 應有效；驗證失敗時，系統應拒絕該目標並回報原因。只有通過驗證的 canonical `PoseStamped` 才可提供給後續導航流程。
+針對 Station Target 所解析產生之 Canonical Goal Pose，系統應於提交導航前驗證其合法性；其位置與朝向資訊應為有效數值，且應能在目前導航使用之座標基準下正確解釋。驗證失敗時，系統應拒絕該目標並回報原因；只有通過驗證的 Canonical Goal Pose 才可提交至後續導航流程。
 
 ---
 
 ## SYS-010 地圖定位
 
-系統應根據已載入地圖與可用的感知及里程資料估測 AMR 位姿，並提供標準定位 pose 與 `map → odom` transform，供導航功能使用。當 AMR 開機位置無法可靠得知時，系統應接受使用者提供目前地圖中的 approximate initial pose，作為定位初始化輸入。
+系統應根據已載入地圖與可用的感知及里程資料估測 AMR 在地圖中的位置與朝向，並提供導航所需的地圖座標基準。當 AMR 開機位置無法可靠得知時，系統應接受使用者提供目前地圖中的 approximate initial pose，作為定位初始化起點，該輸入不得直接作為導航目標。
 
 ---
 
 ## SYS-011 路徑規劃
 
-系統應使用目前位姿與 active navigation stage 的目標，透過 Navigation2 產生有效且非空的路徑。無法產生路徑時，系統不得開始該 stage 的路徑追蹤，並應回報 Navigation2 原生規劃失敗結果。
+系統應根據目前位姿與目前導航階段之目標位姿，產生安全可行之路徑供該導航階段使用。無法產生有效路徑時，系統不得開始該階段之路徑追蹤，並應回報規劃失敗。
 
 ---
 
 ## SYS-013 Route-preferred Navigation Strategy
 
-系統應根據目前位姿、Canonical Goal Pose 與有效 Route Graph 建立可安全執行的 route-assisted movement，並優先使用適用的 Route Graph 範圍。存在有效且可安全執行的 route-assisted solution 時，系統不得選擇完整 free-space movement。
+系統應以有效 Route Graph 為主要導航依據（route-preferred），根據目前位姿、Canonical Goal Pose 與 Route Graph 建立可安全執行之 route-assisted navigation strategy，並由 First Mile、On Route 與 Last Mile 共同形成通往目標之導航路徑。
 
 ---
 
@@ -99,7 +93,7 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-015 路徑追蹤
 
-系統應透過 Navigation2 `FollowPath` 控制 AMR 追蹤目前 active navigation stage 的有效路徑，並使用設定的 controller 與 progress checker 判定能否繼續追蹤。無法繼續追蹤時，系統應停止該 stage 的路徑追蹤、嘗試使底盤停止，並回報 Navigation2 原生追蹤失敗結果。追蹤接受條件應經整合及實機驗證。
+系統應控制 AMR 追蹤目前 active navigation stage 之有效路徑，並監控路徑追蹤狀態；無法繼續安全追蹤或停滯無法前進時，系統應終止該 stage 之路徑追蹤、使底盤停止並回報追蹤失敗。
 
 ---
 
@@ -111,7 +105,7 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ## SYS-017 導航結果
 
-系統應透過 Navigation2 原生導航結果回報導航成功、失敗或取消；導航失敗時應回報可取得的 Navigation2 原生失敗結果。
+系統應於導航任務結束時回報明確之最終結果，包含成功（Success）、失敗（Failure）或取消（Canceled）；導航失敗時，系統應回報可取得之失敗原因。
 
 ---
 
@@ -133,42 +127,23 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ---
 
-## SYS-021 Reserved Free-space Fallback Boundary
-
-系統應保留下列 Free-space Fallback eligibility，以供後續版本擴充：
-
-- Current Pose 無法連接任何可用 route entry。
-- Active、valid Route Graph 無法提供通往 Canonical Goal Pose 方向的可用 route。
-- On Route movement 因目前環境阻塞而無法維持，且重新選擇 Route Graph route 仍失敗。
-- 所有可用 route-assisted candidates 均無法由 route exit 透過 Last Mile 安全連接 Canonical Goal Pose。
-
-v0.1 不得執行 Free-space Fallback。符合上述任一 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止，並回報 Free-space Fallback unavailable。Navigation Resource、Navigation Target 或 localization 的缺失、無效或不相容仍屬其各自 failure boundary，不構成 fallback eligibility。
-
----
-
 ## SYS-025 導航取消
 
 系統應接受使用者對進行中導航任務提出之取消要求，終止該導航任務，並回報取消結果。
 
 ---
 
-## SYS-044 AprilTag 視覺停靠 / Direct AprilTag Docking
+# UC-004 精準停靠
 
-Navigation Mode 應提供基於視覺標記之 AprilTag Direct Docking 能力。
+## SYS-044 精準停靠控制
 
-### 任務控制介面 (Task Interface)
-系統應提供 Nav2 原生 `/dock_robot`（`nav2_msgs/action/DockRobot`）Action 伺服介面作為停靠任務之控制與觸發入口。外部決策系統（Upper Body）應作為 Action Client，自主決定啟動停靠之時機並發送 `DockRobot` Action Goal。系統應支援原生 Action 語意，包含即時 Feedback、結構化 Result（`success`, `error_code`, `error_msg`）、任務取消（Cancel）與新目標搶佔（Preemption）。
+系統應支援根據外部提供之停靠目標資訊執行精準停靠控制：
 
-### 感知資料介面 (Perception Interface)
-外部視覺感知系統（Upper Body）應獨立且持續發布標記相對於基座之姿態串流 `/detected_dock_pose`（`geometry_msgs/msg/PoseStamped`，`frame_id: "base_link"`，`header.stamp` 為感知擷取時間戳），其中 position 與 orientation 均應有效。偵測到標記姿態僅代表感知串流可用，不等於啟動停靠任務；唯有發送 `DockRobot` Action Goal 才是啟動停靠之明確觸發。
-
-### 停靠執行與幾何責任 (Execution & Geometry Boundary)
-底盤導航系統（Lower Body）之 `docking_server`（載入 `opennav_docking::SimpleNonChargingDock` 外掛）應接收 `DockRobot` Action Goal 並獨立訂閱 `/detected_dock_pose` 串流，於收悉 Goal 當下將目標姿態轉換至 `fixed_frame: "odom"` 快照，並由停靠外掛獨佔處理幾何外參轉換（使 AMR 最終停於標記前約 70 cm，其實際停止距離與旋轉偏移待實機標定驗證），直接執行閉迴路停靠控制，不執行 `NavigateToPose` 預備站點導航。外部感知系統嚴禁自行預先扣除 70 cm 偏移。
-
-### 安全與逾時保護 (Safety & Timeout Protection)
-停靠運動期間發布之速度命令應遵守 S7 既有底盤運動限制（SYS-028）、命令逾時停止（SYS-027）與時間戳格式（`TwistStamped`），並使用既有 Local Costmap 進行障礙物防撞判定。當視覺感知逾時（`external_detection_timeout`）、初始偵測逾時（`initial_perception_timeout`）、停靠控制逾時（`dock_approach_timeout`）或 Nav2 停靠失敗時，系統應終止該次停靠、發布零速使底盤停止並回報失敗 Action Result。
-
-> **註（架構演進）**：Demo 階段採用 Direct Docking（`use_dock_id = false`, `dock_id = ""`，不使用 Dock Database）；未來完整生產環境遷移至 Dock Database 管理時，將維持原生 `DockRobot` 介面不變，僅調整 Goal 中之 `use_dock_id` 與資料庫配置。
+1. **任務控制與觸發**：系統應接受外部任務控制端提出之停靠要求以啟動停靠任務；系統應支援於停靠期間提供執行狀態反饋、接受取消要求，並回報停靠結果。
+2. **外部目標資訊使用**：系統應接收外部系統提供之停靠目標資訊，並於確認該資訊有效且可供使用後，控制 AMR 在目標鄰近範圍內執行局部精準接近與對準；停靠期間應持續使用外部更新之目標資訊調整停靠運動。僅接收停靠目標資訊不得視為啟動停靠任務。
+3. **安全防護與異常終止**：停靠期間若外部停靠目標資訊不可用或失效、無法維持安全運動、或在允許時間內無法完成停靠時，系統應終止停靠、使 AMR 停止並回報失敗。
+4. **任務取消**：收到外部任務控制端之取消要求時，系統應終止停靠、使 AMR 停止並回報取消結果。
+5. **完成條件**：AMR 抵達預定停靠相對位置與朝向容差範圍且 AMR 停止時，系統應判定停靠成功並回報結果。停靠成功僅表示預定相對位置與朝向條件達成並停止，不代表充電連接或充電流程完成。
 
 ---
 
@@ -200,7 +175,7 @@ Navigation Mode 應提供基於視覺標記之 AprilTag Direct Docking 能力。
 
 ## SYS-042 Observability Failure Isolation
 
-Observability Component Failure、Network Unavailable 或 Server Unavailable 不得成為 Navigation、Localization、Control 或 Safety 運行的必要依賴。AMR 端 Observability Buffer 應為 bounded；Buffer 容量耗盡時，系統應丟棄最舊的 Observability Data、保留較新的 Observability Data，並維持既有 AMR 核心功能運行。
+Observability Component Failure、Network Unavailable 或 Server Unavailable 不得成為 Navigation、Localization、Control 或 Safety 運行的必要依賴。Observability Data 無法傳送或持續累積時，系統不得因此無限制消耗 AMR 端系統資源，並應維持既有 AMR 核心功能運行。
 
 ---
 
@@ -220,7 +195,7 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 
 ## SYS-005 系統里程
 
-系統應以實體前 LiDAR `/scan_front` 與 encoder wheel odometry `/diff_drive_controller/odom` 供 Kinematic-ICP 產生 `/lidar_odometry`，再由 EKF 融合其平面位姿（x、y、yaw）與 `/imu/data_raw` yaw rate，產生可供定位、建圖與導航使用之 `/odometry/filtered`，並由 EKF 唯一發布 `odom → base_footprint`；輸入異常或逾時時，系統得依各成熟方案的原生行為處理有效量測或 prediction。
+系統應提供連續且具時間資訊之 AMR 平面位姿與速度里程估測，並提供里程參考基準與機器人本體基準之動態座標關係，供建圖、定位與導航使用。
 
 ---
 
@@ -238,7 +213,7 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 
 ## SYS-026 底盤故障處理
 
-當底盤 hardware interface 回傳 `ERROR` 時，系統應停止使用該硬體介面的 controller，並使其錯誤狀態可被觀察。
+當底盤硬體或通訊發生故障時，系統應停止對底盤發出運動驅動，並使故障狀態可被觀察。
 
 ---
 
@@ -287,7 +262,6 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 | SYS-024 | UC-001 | CAP-001 |
 | SYS-034 | UC-001 | CAP-001 |
 | SYS-008 | UC-002 | CAP-002 |
-| SYS-009 | UC-002 | CAP-002 |
 | SYS-032 | UC-002 | CAP-002 |
 | SYS-033 | UC-002 | CAP-002 |
 | SYS-010 | UC-002 | CAP-002 |
@@ -300,9 +274,7 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 | SYS-018 | UC-002 | CAP-002 |
 | SYS-019 | UC-002 | CAP-002 |
 | SYS-020 | UC-002 | CAP-002 |
-| SYS-021 | UC-002 | CAP-002 |
 | SYS-025 | UC-002 | CAP-002 |
-| SYS-044 | UC-002 | CAP-002 |
 | SYS-003 | UC-002 | CAP-002 |
 | SYS-004 | UC-002 | CAP-002 |
 | SYS-005 | UC-002 | CAP-002 |
@@ -318,3 +290,51 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 | SYS-037 | UC-003 | CAP-003 |
 | SYS-038 | UC-003 | CAP-003 |
 | SYS-042 | UC-003 | CAP-003 |
+| SYS-044 | UC-004 | CAP-004 |
+| SYS-022 | UC-004 | CAP-004 |
+| SYS-027 | UC-004 | CAP-004 |
+| SYS-028 | UC-004 | CAP-004 |
+| SYS-030 | UC-004 | CAP-004 |
+
+### Requirement to Implementation Area Allocation
+
+下表定義各系統需求在 [04_SYSTEMS.md](./04_SYSTEMS.md) 中的主要實作責任區域；Secondary Implementation Area 僅用於需求本身跨越多個直接實作責任的情況。
+
+| Requirement | Primary Implementation Area | Secondary Implementation Area |
+|---|---|---|
+| SYS-001 | Mapping | — |
+| SYS-002 | Mapping | — |
+| SYS-003 | Sensor Ingestion | — |
+| SYS-004 | Sensor Ingestion | — |
+| SYS-005 | State Estimation | — |
+| SYS-006 | Mapping | — |
+| SYS-007 | Localization | — |
+| SYS-008 | Navigation Target Admission | — |
+| SYS-010 | Localization | — |
+| SYS-011 | Route-Assisted Navigation | — |
+| SYS-013 | Route-Assisted Navigation | — |
+| SYS-014 | Route-Assisted Navigation | — |
+| SYS-015 | Route-Assisted Navigation | — |
+| SYS-016 | Route-Assisted Navigation | — |
+| SYS-017 | Route-Assisted Navigation | — |
+| SYS-018 | Route-Assisted Navigation | — |
+| SYS-019 | Route-Assisted Navigation | — |
+| SYS-020 | Route-Assisted Navigation | — |
+| SYS-022 | Base Control | — |
+| SYS-023 | Robot Model | — |
+| SYS-024 | Mapping | — |
+| SYS-025 | Route-Assisted Navigation | — |
+| SYS-026 | Base Control | — |
+| SYS-027 | Base Control | — |
+| SYS-028 | Base Control | — |
+| SYS-029 | Base Control | — |
+| SYS-030 | Base Control | — |
+| SYS-032 | Navigation Target Admission | — |
+| SYS-033 | Navigation Target Admission | — |
+| SYS-034 | Base Control | Mapping |
+| SYS-035 | Observability | — |
+| SYS-036 | Observability | — |
+| SYS-037 | Observability | — |
+| SYS-038 | Observability | — |
+| SYS-042 | Observability | — |
+| SYS-044 | Precision Docking | — |
