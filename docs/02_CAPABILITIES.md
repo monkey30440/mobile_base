@@ -81,11 +81,10 @@ Map Package 是可儲存及重新載入的地圖產物，可供 CAP-002 的定�
 - 使用 Station Target 時，透過同一場域資料夾中人工建立的 Station Catalog，將 Station ID 對應至位置與朝向。
 - 使用預設初始位置與朝向啟動地圖定位；預設不適用時，接受使用者提供的近似位置與朝向覆寫。
 - 提供 AMR 在地圖中的位置與朝向，作為導航的位置基準。
-- 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-preferred movement strategy。
+- 根據目前位姿、Canonical Goal Pose 與 Route Graph 建立 route-assisted navigation strategy。
 - 執行 First Mile，將 AMR 由目前位姿銜接至適用的 route entry。
 - 執行 On Route movement，沿選定 Route Graph route 移動。
 - 執行 Last Mile，將 AMR 由 route exit 銜接至 Canonical Goal Pose。
-- 在 route-assisted movement 無法成立或無法安全繼續時，辨識並回報保留的 Free-space Fallback eligibility；v0.1 不執行 fallback movement。
 - 監控 navigation stage、stage transition 與整體導航進度。
 - 自主避障。
 - 自主追蹤路徑。
@@ -120,7 +119,7 @@ Navigation Target 是使用者希望 AMR 前往的目標描述，支援下列兩
 
 > 既有系統邊界：系統不提供跨資源 identity／compatibility admission。
 
-任一成熟元件無法載入其資源時，沿用該元件的原生失敗與原因回報，且不得將此情況視為 free-space fallback 條件。
+任一成熟元件無法載入其資源時，沿用該元件的原生失敗與原因回報，Navigation 無法正常開始或完成。
 
 ### Localization Initialization
 
@@ -132,41 +131,51 @@ Navigation Target 是使用者希望 AMR 前往的目標描述，支援下列兩
 
 > 既有行為邊界：系統不另行定義 localization-valid 或收斂 gate。
 
+### Navigation Cancel Request
+
+使用者在導航進行中可發出取消請求（Navigation Cancel Request），要求終止目前導航任務。
+
 ---
 
 ## Navigation Strategy
 
-系統的移動原則為 route-preferred：可安全使用 Route Graph 時，應優先沿 Route Graph 移動，不得任意選擇完整 free-space movement。
+系統以 Route Graph 為主要導航依據（route-preferred），建立由 Route Graph 輔助的導航策略（route-assisted navigation strategy）。
 
-Route-assisted movement 由以下階段組成：
+系統使用當前位置（Current Pose）與目標位置朝向（Canonical Goal Pose），結合 Route Graph 規劃導航路徑。Route-assisted navigation 由以下三階段共同形成通往目標的導航路徑：
+
+- **First Mile**：若目前位置不在 Route Graph 上，使用一般路徑規劃將 AMR 由當前位置銜接至適用的 Route Graph route entry（起點）。
+- **On Route**：AMR 沿 Route Graph 計算出的選定 route 移動。
+- **Last Mile**：從 Route Graph route exit（終點）使用一般路徑規劃銜接至 Canonical Goal Pose。
 
 ```text
 Current Pose
     │
-    ├── First Mile（需要時）
+    ├── First Mile（銜接至 route entry）
     ▼
 Route Entry
     │
-    ├── On Route
+    ├── On Route（沿 Route Graph 移動）
     ▼
 Route Exit
     │
-    ├── Last Mile（需要時）
+    ├── Last Mile（銜接至 Canonical Goal Pose）
     ▼
 Canonical Goal Pose
 ```
 
-架構保留 Free-space Fallback eligibility：Current Pose 無法連接任何可用 route entry、有效 Route Graph 無法提供通往目標方向的可用 route、On Route movement 受阻且 route reselection 失敗，或所有可用 route-assisted candidates 均無法由 route exit 安全連接目標。v0.1 不執行 Free-space Fallback；符合 eligibility 且已無可用 route-assisted solution 時，系統應終止導航、嘗試使底盤停止並回報 Free-space Fallback unavailable。
+First Mile 與 Last Mile 使用一般路徑規劃銜接路網與起訖點，為正常 route-assisted navigation 的組成部分。
+
+三段路徑共同形成完整的導航路徑並由系統執行。若 route 無法建立、必要銜接路徑無法建立、路徑執行失敗或整體導航策略無法完成，系統終止導航並回報 Navigation Failure。
 
 ---
 
 ## 輸出
 
-Navigation Result：
+系統完成或終止導航任務時，回報導航結果（Navigation Result）：
 
-- Success
-- Failure
-- Canceled
+- **Success**：AMR 已自主完成導航並抵達指定的 Navigation Target（對 Station Target 而言代表抵達站點目標位置與朝向，不代表對接 docking 完成）。
+- **Failure**：導航未能完成（如路網或銜接路徑無法建立、執行受阻或整體策略無法完成）。
+- **Canceled**：收到使用者取消請求後，系統停止目前導航流程並終止任務。
 
 ---
 
@@ -174,11 +183,11 @@ Navigation Result：
 
 適用於：
 
-- 前往固定站點。
-- 前往任意工作位置。
-- 前往設備。
-- 前往充電站。
-- 前往維修位置。
+- 指定預先定義站點（Station Target）進行自主導航。
+- 指定任意位置與朝向（Pose Target）進行自主導航。
+- 必要時提供初始定位覆寫以啟動導航定位基準。
+- 導航進行中依需求取消導航任務。
+- 系統自主執行路徑追蹤與避障，並回報導航結果。
 
 ---
 
@@ -194,7 +203,7 @@ Navigation Result：
 
 ## 目的
 
-提供 AMR 當前與歷史運行資訊，使操作員或維護／開發人員能查看 Logs、Events 與關鍵 Telemetry，依 timestamp、source 與共同時間範圍進行基本關聯，並人工縮小異常可能涉及的子系統範圍。
+提供 AMR 當前與歷史運行資訊，協助操作員或維護／開發人員查看 Logs、Events 與關鍵 Telemetry，依時間戳（Timestamp）與來源（Source）在共同時間範圍內進行基本人工關聯，以協助人工縮小異常可能涉及的子系統範圍。
 
 ---
 
@@ -202,12 +211,12 @@ Navigation Result：
 
 系統應提供下列能力：
 
-- 提供 AMR 與主要 ROS Runtime Information 供 Actor 查看。
-- 將選定的 Logs 與運行 Events 傳送至 Server，供 Server 保存及歷史查詢。
-- 將選定的關鍵 Telemetry 傳送至 Server，供 Server 保存及依時間範圍查詢。
-- 為 Logs、Events 與關鍵 Telemetry 保留 timestamp 與 source identity。
-- 支援 Actor 依共同時間範圍進行基本人工關聯。
-- 提供 Actor 人工縮小異常可能所屬子系統範圍所需的資訊。
+- 收集並提供 AMR 與主要 ROS Runtime Information。
+- 支援將選定的 Logs 與 Events 傳送至保存端以供歷史查詢。
+- 支援將選定的關鍵 Telemetry 傳送至保存端以供依時間範圍查詢。
+- 為 Logs、Events 與關鍵 Telemetry 保留時間戳（Timestamp）與來源識別（Source Identity）。
+- 支援使用者在共同時間範圍內查詢歷史資料並進行基本人工關聯。
+- 提供支援使用者人工縮小異常可能所屬子系統範圍所需的運行資訊。
 
 ---
 
@@ -216,28 +225,38 @@ Navigation Result：
 - 不建立地圖；Map Creation 屬於 CAP-001。
 - 不接受或執行 Navigation Target；Navigation Execution 屬於 CAP-002。
 - 不控制 Navigation、Localization、Control 或 Safety 行為。
-- 不保證 Observability 資料傳送成功。
-- Observability 或 Server 無法使用不得影響 Navigation、Localization、Control 或 Safety 運行。
+- 不保證 Observability 資料傳送成功，亦不保證自動診斷出根本原因（Root Cause）。
+- Observability 或保存／查詢端無法使用不得影響 Navigation、Localization、Control 或 Safety 核心功能運行。
 
 ---
 
 ## 輸入
 
-- Actor 選定的目前運行期間或歷史時間範圍。
+### 查詢輸入（Query Input）
+
+使用者查詢時提供的條件：
+
+- 使用者選定的目前運行期間或歷史時間範圍。
+
+### 被觀察運行資料（Observed Runtime Data）
+
+AMR 運行時產生並由系統處理的資訊：
+
 - AMR 與主要 ROS Runtime Information。
-- Logs 與 Events。
-- 關鍵 Telemetry。
-- Timestamp 與 source identity。
+- 日誌（Logs）與事件（Events）。
+- 關鍵量測資料（Telemetry）。
+- 資料的時間戳（Timestamp）與來源識別（Source Identity）。
 
 ---
 
 ## 輸出
 
+系統提供支援人工觀察與診斷的運行資訊：
+
 - 指定時間範圍內可用的 AMR 與主要 ROS Runtime Information。
 - 可查詢的 Logs 與 Events。
-- 關鍵 Telemetry 時間序列。
-- 支援基本共同時間範圍關聯的 timestamp 與 source identity。
-- 協助 Actor 人工縮小問題可能所屬子系統範圍的資訊。
+- 可查詢的關鍵 Telemetry 時間序列。
+- 支援在共同時間範圍內進行人工關聯的時間戳與來源資訊。
 
 ---
 
@@ -245,9 +264,10 @@ Navigation Result：
 
 適用於：
 
-- 確認 AMR 是否正常運行。
-- 調查 Mapping、Localization、Navigation、Control 或 Hardware Communication 異常。
-- 查詢過去的 Logs、Events 與關鍵 Telemetry。
+- 確認 AMR 目前或過去是否正常運行。
+- 在指定時間範圍內查詢 Logs、Events 與 Telemetry。
+- 利用時間戳與來源資訊，人工關聯建圖、定位、導航、控制或硬體通訊之異常事件。
+- 協助操作員或維護人員人工縮小問題可能所屬的子系統範圍。
 
 ---
 
