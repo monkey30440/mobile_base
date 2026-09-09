@@ -153,11 +153,11 @@ TEST(DynamicStageD1Test, MathematicalSignAndGearConversion)
     left_rpm_0_5, gear_ratio, left_sign);
   EXPECT_NEAR(left_actual_vel, 0.4974, 1e-3);
 
-  // 5. Position steps conversion (10000 steps/rev * 20 gear = 200000 steps/wheel rev)
+  // 5. Position steps conversion (65535 steps/rev * 20 gear = 1310700 steps/wheel rev)
   PositionTracker tracker;
   tracker.update(0);
-  tracker.update(200000);  // 1 full wheel revolution
-  const double wheel_rad = (static_cast<double>(tracker.accumulated_steps) / (10000.0 * 20.0)) *
+  tracker.update(1310700);  // 1 full wheel revolution
+  const double wheel_rad = (static_cast<double>(tracker.accumulated_steps) / (65535.0 * 20.0)) *
     (2.0 * M_PI) * static_cast<double>(left_sign);
   EXPECT_NEAR(wheel_rad, 2.0 * M_PI, 1e-5);
 }

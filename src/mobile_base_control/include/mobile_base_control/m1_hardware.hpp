@@ -79,7 +79,7 @@ struct M1HardwareConfig
   int left_wheel_sign{1};    // +1 forward
   int right_wheel_sign{-1};  // -1 forward (native sign inversion)
 
-  double motor_steps_per_rev{10000.0};  // 2500 CPR * 4 quadrature in format 1
+  double motor_steps_per_rev{0.0};  // Required; configured by the base firmware
   double max_motor_rpm{3000.0};         // Operational motor clamp
 
   std::string left_wheel_name{"driving_wheel_joint_L"};

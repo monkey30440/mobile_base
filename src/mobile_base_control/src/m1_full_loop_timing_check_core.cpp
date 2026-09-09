@@ -149,7 +149,7 @@ std::string build_full_loop_urdf(const FullLoopTimingOptions & opts)
       <param name="gear_ratio">20.0</param>
       <param name="left_wheel_sign">1</param>
       <param name="right_wheel_sign">-1</param>
-      <param name="motor_steps_per_rev">10000.0</param>
+      <param name="motor_steps_per_rev">65535.0</param>
       <param name="max_motor_rpm">3000.0</param>
     </hardware>
     <joint name="driving_wheel_joint_L">

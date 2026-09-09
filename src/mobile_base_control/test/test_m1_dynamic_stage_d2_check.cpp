@@ -157,8 +157,8 @@ TEST(DynamicStageD2Test, MathematicalSignAndGearConversionRightWheel)
   // 5. Negative motor steps progression -> Positive ROS wheel displacement (+2pi rad)
   PositionTracker tracker;
   tracker.update(0);
-  tracker.update(-200000);  // Negative 200,000 steps (1 full wheel revolution)
-  const double wheel_rad = (static_cast<double>(tracker.accumulated_steps) / (10000.0 * 20.0)) *
+  tracker.update(-1310700);  // Negative 1,310,700 steps (1 full wheel revolution)
+  const double wheel_rad = (static_cast<double>(tracker.accumulated_steps) / (65535.0 * 20.0)) *
     (2.0 * M_PI) * static_cast<double>(right_sign);
   EXPECT_NEAR(wheel_rad, 2.0 * M_PI, 1e-5);
 }

@@ -165,8 +165,13 @@ install(
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  ament_add_pytest_test(test_base_control_launch test/test_base_control_launch.py
+    TIMEOUT 60
+  )
 
   ament_add_gtest(test_m1_driver
     test/test_m1_driver.cpp

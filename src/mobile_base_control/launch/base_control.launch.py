@@ -22,6 +22,22 @@ from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+import yaml
+
+
+def load_motor_steps_per_rev(params_file):
+    try:
+        with open(params_file, encoding='utf-8') as stream:
+            params = yaml.safe_load(stream)
+        value = params['mobile_base_hardware']['ros__parameters']['motor_steps_per_rev']
+        if isinstance(value, bool) or float(value) <= 0.0:
+            raise ValueError
+    except (KeyError, TypeError, ValueError, OSError, yaml.YAMLError) as exc:
+        raise RuntimeError(
+            'motor_steps_per_rev must be positive in base_control_params.yaml'
+        ) from exc
+
+    return str(float(value))
 
 
 def generate_launch_description():
@@ -29,6 +45,7 @@ def generate_launch_description():
     pkg_control = get_package_share_directory('mobile_base_control')
 
     default_params_file = os.path.join(pkg_control, 'config', 'base_control_params.yaml')
+    motor_steps_per_rev = load_motor_steps_per_rev(default_params_file)
 
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
@@ -70,6 +87,7 @@ def generate_launch_description():
             'serial_port': LaunchConfiguration('serial_port'),
             'baud_rate': LaunchConfiguration('baud_rate'),
             'response_timeout_ms': LaunchConfiguration('response_timeout_ms'),
+            'motor_steps_per_rev': motor_steps_per_rev,
         }.items(),
     )
 

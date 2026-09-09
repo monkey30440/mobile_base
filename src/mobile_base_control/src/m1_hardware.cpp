@@ -191,9 +191,17 @@ hardware_interface::CallbackReturn M1Hardware::parse_parameters()
   }
 
   if (params.find("motor_steps_per_rev") != params.end()) {
-    config_.motor_steps_per_rev = std::stod(params.at("motor_steps_per_rev"));
-  } else if (params.find("encoder_cpr") != params.end()) {
-    config_.motor_steps_per_rev = std::stod(params.at("encoder_cpr"));
+    try {
+      config_.motor_steps_per_rev = std::stod(params.at("motor_steps_per_rev"));
+    } catch (const std::exception & e) {
+      RCLCPP_FATAL(
+        get_logger(), "Invalid motor_steps_per_rev parameter '%s': %s",
+        params.at("motor_steps_per_rev").c_str(), e.what());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  } else {
+    RCLCPP_FATAL(get_logger(), "Missing required parameter 'motor_steps_per_rev'");
+    return hardware_interface::CallbackReturn::ERROR;
   }
 
   if (params.find("max_motor_rpm") != params.end()) {

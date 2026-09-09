@@ -51,6 +51,11 @@ def generate_launch_description():
         description='Response timeout in milliseconds (required parameter, no implicit default)',
     )
 
+    motor_steps_per_rev_arg = DeclareLaunchArgument(
+        'motor_steps_per_rev',
+        description='Required motor-shaft feedback counts per revolution',
+    )
+
     default_params_file = PathJoinSubstitution([
         pkg_description, 'config', 'robot_state_publisher.yaml'
     ])
@@ -77,6 +82,9 @@ def generate_launch_description():
             ' ',
             'response_timeout_ms:=',
             LaunchConfiguration('response_timeout_ms'),
+            ' ',
+            'motor_steps_per_rev:=',
+            LaunchConfiguration('motor_steps_per_rev'),
         ]
     )
 
@@ -101,6 +109,7 @@ def generate_launch_description():
             serial_port_arg,
             baud_rate_arg,
             response_timeout_ms_arg,
+            motor_steps_per_rev_arg,
             params_file_arg,
             robot_state_publisher_node,
         ]

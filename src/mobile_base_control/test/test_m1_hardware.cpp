@@ -68,7 +68,7 @@ hardware_interface::HardwareComponentInterfaceParams create_test_params(
   info.hardware_parameters["gear_ratio"] = "20.0";
   info.hardware_parameters["left_wheel_sign"] = "1";
   info.hardware_parameters["right_wheel_sign"] = "-1";
-  info.hardware_parameters["motor_steps_per_rev"] = "10000.0";
+  info.hardware_parameters["motor_steps_per_rev"] = "65535.0";
   info.hardware_parameters["max_motor_rpm"] = "3000.0";
   info.hardware_parameters["left_wheel_name"] = "driving_wheel_joint_L";
   info.hardware_parameters["right_wheel_name"] = "driving_wheel_joint_R";
@@ -164,24 +164,24 @@ TEST(M1HardwareConversionTest, MotorRpmToWheelRadS)
 
 TEST(M1HardwareConversionTest, MotorStepsToWheelRad)
 {
-  const double steps_per_rev = 10000.0;
+  const double steps_per_rev = 65535.0;
   const double gear = 20.0;
-  // 1 wheel revolution = 200,000 motor steps = 2*PI radians
+  // 1 wheel revolution = 1,310,700 motor steps = 2*PI radians
 
   // Left wheel (+1 sign)
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(200000, steps_per_rev, gear, 1),
+    M1Hardware::motor_steps_to_wheel_rad(1310700, steps_per_rev, gear, 1),
     2.0 * PI, 1e-6);
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(-200000, steps_per_rev, gear, 1),
+    M1Hardware::motor_steps_to_wheel_rad(-1310700, steps_per_rev, gear, 1),
     -2.0 * PI, 1e-6);
 
   // Right wheel (-1 sign: positive wheel motion corresponds to negative motor steps)
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(-200000, steps_per_rev, gear, -1),
+    M1Hardware::motor_steps_to_wheel_rad(-1310700, steps_per_rev, gear, -1),
     2.0 * PI, 1e-6);
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(200000, steps_per_rev, gear, -1),
+    M1Hardware::motor_steps_to_wheel_rad(1310700, steps_per_rev, gear, -1),
     -2.0 * PI, 1e-6);
 
   // Zero steps
@@ -297,6 +297,15 @@ TEST(M1HardwareLifecycleTest, MissingTimeoutParameterFails)
   auto params = create_test_params("mock", 230400, 100);
   params.hardware_info.hardware_parameters.erase("timeout_ms");
   params.hardware_info.hardware_parameters.erase("response_timeout_ms");
+  EXPECT_EQ(hw.on_init(params), CallbackReturn::ERROR);
+}
+
+TEST(M1HardwareLifecycleTest, MissingMotorStepsPerRevFails)
+{
+  M1Hardware hw;
+  auto params = create_test_params("mock", 230400, 100);
+  params.hardware_info.hardware_parameters.erase("motor_steps_per_rev");
+
   EXPECT_EQ(hw.on_init(params), CallbackReturn::ERROR);
 }
 
@@ -530,7 +539,7 @@ TEST(M1HardwareIntegrationTest, ResourceManagerURDFLoading)
       <param name="gear_ratio">20.0</param>
       <param name="left_wheel_sign">1</param>
       <param name="right_wheel_sign">-1</param>
-      <param name="motor_steps_per_rev">10000.0</param>
+      <param name="motor_steps_per_rev">65535.0</param>
       <param name="max_motor_rpm">3000.0</param>
     </hardware>
     <joint name="driving_wheel_joint_L">
@@ -606,7 +615,7 @@ protected:
       <param name="gear_ratio">20.0</param>
       <param name="left_wheel_sign">1</param>
       <param name="right_wheel_sign">-1</param>
-      <param name="motor_steps_per_rev">10000.0</param>
+      <param name="motor_steps_per_rev">65535.0</param>
       <param name="max_motor_rpm">3000.0</param>
     </hardware>
     <joint name="driving_wheel_joint_L">
