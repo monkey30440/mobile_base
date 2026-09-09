@@ -2,7 +2,7 @@
 
 ## Project source of truth
 
-- Treat `docs/README.md` as the documentation entrypoint and index. Read only the authoritative documents relevant to the task.
+- Treat `spec/README.md` as the documentation entrypoint and index. Read only the authoritative documents relevant to the task.
 - Follow the repository's Single Source of Truth and Current Baseline principles. Keep architecture, requirements, subsystem details, and verification evidence in their designated documents; do not duplicate them here.
 
 ## Change workflow
@@ -21,7 +21,7 @@
 
 ## Engineering principles
 
-- Apply the principles defined in `docs/README.md`: V-Model, Hardware First, MVP First, Progressive Verification, Document Driven Development, Current Baseline Only, Single Source of Truth, Organic Growth, and Avoid Premature Structure.
+- Apply the principles defined in `spec/README.md`: V-Model, Hardware First, MVP First, Progressive Verification, Document Driven Development, Current Baseline Only, Single Source of Truth, Organic Growth, and Avoid Premature Structure.
 - Preserve traceability from approved requirements and design through implementation and verification.
 
 ## Scope discipline

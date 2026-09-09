@@ -15,9 +15,9 @@
 
 ## Operator Guides
 
-- [Release](./operator/RELEASE.md) — Release image、deployment、startup 與 shutdown 操作。
-- [Mapping](./operator/MAPPING.md) — Mapping 操作。
-- [Navigation](./operator/NAVIGATION.md) — Navigation 與 docking 操作。
+- [Release](../operator/RELEASE.md) — Release image、deployment、startup 與 shutdown 操作。
+- [Mapping](../operator/MAPPING.md) — Mapping 操作。
+- [Navigation](../operator/NAVIGATION.md) — Navigation 操作。
 
 ## Document Responsibilities
 
@@ -31,6 +31,6 @@
 
 - **Requirements Authority**：[03 Requirements](./03_REQUIREMENTS.md)。
 - **Implementation Authority**：production source、launch files、configuration、URDF/Xacro 與 Behavior Tree files。
-- **Operational Procedures**：[Release](./operator/RELEASE.md)、[Mapping](./operator/MAPPING.md) 與 [Navigation](./operator/NAVIGATION.md)。
+- **Operational Procedures**：[Release](../operator/RELEASE.md)、[Mapping](../operator/MAPPING.md) 與 [Navigation](../operator/NAVIGATION.md)。
 
 若描述性文件與 production implementation evidence 衝突，以 implementation evidence 為準，並修正相關文件。

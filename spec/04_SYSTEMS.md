@@ -8,9 +8,9 @@
 
 ### 1.1 上游產品需求基準 (Normative Product Inputs)
 本架構文件嚴格以下列規範性文件為 **唯一 Normative Product Inputs**：
-- [`docs/01_USE_CASES.md`](./01_USE_CASES.md)
-- [`docs/02_CAPABILITIES.md`](./02_CAPABILITIES.md)
-- [`docs/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)
+- [`spec/01_USE_CASES.md`](./01_USE_CASES.md)
+- [`spec/02_CAPABILITIES.md`](./02_CAPABILITIES.md)
+- [`spec/03_REQUIREMENTS.md`](./03_REQUIREMENTS.md)
 
 本架構為 `mobile_base` 目前 as-built 系統架構的**單一權威來源 (Single Canonical Authority)**。
 
@@ -19,7 +19,7 @@
 
 ### 1.3 架構職權範圍 (Architecture Authority Boundaries)
 
-| 系統架構（docs/04_SYSTEMS.md）決定 | 不應由架構決定（保留至 Source / Config / Verification） |
+| 系統架構（spec/04_SYSTEMS.md）決定 | 不應由架構決定（保留至 Source / Config / Verification） |
 |---|---|
 | Implementation Areas 的責任與介面邊界 | Class / Struct / Function 內部程式碼實作細節 |
 | 跨子系統之資料流、控制流與生命週期依賴關係 | Launch 檔與 YAML 配置之細部數值與調校表格 |

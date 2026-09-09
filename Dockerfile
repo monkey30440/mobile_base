@@ -31,6 +31,8 @@ RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
         ros-jazzy-sick-scan-xd \
         ros-jazzy-foxglove-bridge \
         ros-jazzy-teleop-twist-keyboard \
+        ros-jazzy-rviz2 \
+        iputils-ping \
         fluent-bit=4.2.8 \
         python3-serial \
     && rm -rf /var/lib/apt/lists/*
@@ -46,12 +48,6 @@ CMD ["bash"]
 # 2. Development environment
 # =========================
 FROM base AS dev
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ros-jazzy-rviz2 \
-        iputils-ping \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN echo '[ -f /workspaces/mobile_base/install/setup.bash ] && source /workspaces/mobile_base/install/setup.bash' >> ~/.bashrc
 
