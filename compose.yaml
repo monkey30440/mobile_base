@@ -26,8 +26,8 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
 
     devices:
-      - /dev/ttyUSB0:/dev/ttyUSB0
-      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/fihRobotBaseMotor:/dev/ttyUSB0
+      - /dev/fihRobotBaseIMU:/dev/ttyACM0
 
     working_dir: /workspaces/mobile_base
 
