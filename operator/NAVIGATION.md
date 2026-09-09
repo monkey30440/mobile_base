@@ -15,7 +15,8 @@ docker compose exec mobile_base bash
 ```bash
 ros2 launch mobile_base_bringup mobile_base.launch.py \
   mode:=navigation \
-  site:=<site>
+  site:=<site> \
+  use_foxglove:=true  
 ```
 
 `<site>` 表示操作者選定的場域。

@@ -9,7 +9,9 @@ docker compose exec mobile_base bash
 ```
 
 ```bash
-ros2 launch mobile_base_bringup mobile_base.launch.py mode:=mapping
+ros2 launch mobile_base_bringup mobile_base.launch.py \
+  mode:=mapping \
+  use_foxglove:=true
 ```
 
 ## Build the Map
@@ -26,7 +28,8 @@ docker compose exec mobile_base bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard \
   --ros-args \
   -p stamped:=true \
-  -p speed:=0.10 \
+  -p speed:=0.20 \
+  -p turn:=0.20 \
   -r cmd_vel:=/diff_drive_controller/cmd_vel
 ```
 
