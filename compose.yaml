@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: dev
+      network: host
       
     # restart: unless-stopped
 
