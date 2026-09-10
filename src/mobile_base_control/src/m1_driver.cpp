@@ -276,7 +276,7 @@ Result<ExchangeResult> parse_multidrive_response(
     state.actual_rpm = decode_s16(w[2]);
     state.bus_voltage_raw = w[3];
     state.current_raw = w[4];
-    state.position_steps = decode_s32(w[5], w[6]);
+    state.position_sample = decode_format0_position(w[5], w[6]);
     state.error_check = w[7];
 
     result.states[i] = state;
@@ -468,10 +468,8 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
         }
       }
 
-      auto append_driver = [&](uint16_t st, uint16_t al, int16_t rpm, int32_t pos) {
-          const uint16_t pos_hi = static_cast<uint16_t>((static_cast<uint32_t>(pos) >>
-            16) & 0xFFFF);
-          const uint16_t pos_lo = static_cast<uint16_t>(static_cast<uint32_t>(pos) & 0xFFFF);
+      auto append_driver = [&](uint16_t st, uint16_t al, int16_t rpm, int16_t index, uint16_t pos) {
+          const uint16_t u_index = static_cast<uint16_t>(index);
           const uint16_t urpm = static_cast<uint16_t>(rpm);
           // Word 0: Status
           rsp.push_back(static_cast<uint8_t>((st >> 8) & 0xFF));
@@ -488,19 +486,19 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
           // Word 4: Current (0.10 A = 10)
           rsp.push_back(0x00);
           rsp.push_back(0x0A);
-          // Word 5: Pos Hi
-          rsp.push_back(static_cast<uint8_t>((pos_hi >> 8) & 0xFF));
-          rsp.push_back(static_cast<uint8_t>(pos_hi & 0xFF));
-          // Word 6: Pos Lo
-          rsp.push_back(static_cast<uint8_t>((pos_lo >> 8) & 0xFF));
-          rsp.push_back(static_cast<uint8_t>(pos_lo & 0xFF));
+          // Word 5: Pos Hi (Index)
+          rsp.push_back(static_cast<uint8_t>((u_index >> 8) & 0xFF));
+          rsp.push_back(static_cast<uint8_t>(u_index & 0xFF));
+          // Word 6: Pos Lo (Pos)
+          rsp.push_back(static_cast<uint8_t>((pos >> 8) & 0xFF));
+          rsp.push_back(static_cast<uint8_t>(pos & 0xFF));
           // Word 7: Error Check
           rsp.push_back(0x00);
           rsp.push_back(0x00);
         };
 
-      append_driver(0, 0, rpm1, 0);
-      append_driver(0, 0, rpm2, 0);
+      append_driver(0, 0, rpm1, 0, 0);
+      append_driver(0, 0, rpm2, 0, 0);
       return finish(Result<std::vector<uint8_t>>::success(std::move(rsp)));
     }
   }
@@ -702,17 +700,18 @@ Result<M1DeviceConfig> M1Driver::read_device_config(int driver_id)
 {
   // M1-COMM UM-01-S0686, parameter tables 01-06 and 02-14.
   // Read active RAM, not EEPROM: configure must observe the current device state.
-  const auto encoder = read_register(driver_id, 0x3D05);
+  const auto encoder = read_register(driver_id, REG_ENCODER_RESOLUTION);
   if (!encoder.ok) {
-    return Result<M1DeviceConfig>::failure(encoder.error);
+    return Result<M1DeviceConfig>::failure(
+      encoder.error, driver_id, M1ConfigField::ENCODER_RESOLUTION);
   }
-  const auto format = read_register(driver_id, 0x3E0D);
+  const auto format = read_register(driver_id, REG_POSITION_FORMAT);
   if (!format.ok) {
-    return Result<M1DeviceConfig>::failure(format.error);
+    return Result<M1DeviceConfig>::failure(
+      format.error, driver_id, M1ConfigField::POSITION_FORMAT);
   }
-  if (format.value > 1) {
-    return Result<M1DeviceConfig>::failure(ErrorCode::INVALID_RESPONSE);
-  }
+  // M1Driver faithfully returns the M1 configuration value. Capability enforcement
+  // (format == 0) is applied in M1Hardware::on_configure().
   M1DeviceConfig config;
   config.driver_id = driver_id;
   config.encoder_resolution_pulses_per_rev = encoder.value;

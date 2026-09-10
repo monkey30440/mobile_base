@@ -62,6 +62,7 @@ M1Hardware::~M1Hardware()
 void M1Hardware::set_driver_for_testing(std::shared_ptr<M1Driver> driver) noexcept
 {
   device_configs_.reset();
+  runtime_radix_.reset();
   is_active_ = false;
   has_valid_state_ = false;
   driver_ = std::move(driver);
@@ -95,19 +96,17 @@ double M1Hardware::motor_rpm_to_wheel_rad_s(
          RPM_TO_RAD_S;
 }
 
-double M1Hardware::motor_steps_to_wheel_rad(
-  int64_t accumulated_steps,
-  double position_steps_per_rev,
+double M1Hardware::feedback_units_to_wheel_rad(
+  int64_t accumulated_feedback_units,
+  uint32_t feedback_units_per_rev,
   double gear_ratio,
   int motor_sign) noexcept
 {
-  const double steps_per_wheel_rev = position_steps_per_rev * gear_ratio;
-  if (!std::isfinite(steps_per_wheel_rev) || position_steps_per_rev <= 0.0 ||
-    gear_ratio <= 0.0)
-  {
+  if (feedback_units_per_rev == 0 || gear_ratio <= 0.0 || (motor_sign != 1 && motor_sign != -1)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  return (static_cast<double>(accumulated_steps) / steps_per_wheel_rev) * (2.0 * PI) *
+  const double units_per_wheel_rev = static_cast<double>(feedback_units_per_rev) * gear_ratio;
+  return (static_cast<double>(accumulated_feedback_units) / units_per_wheel_rev) * (2.0 * PI) *
          static_cast<double>(motor_sign);
 }
 
@@ -317,6 +316,7 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
   RCLCPP_INFO(get_logger(), "Configuring M1Hardware on port '%s'...", config_.serial_port.c_str());
 
   device_configs_.reset();
+  runtime_radix_.reset();
   is_active_ = false;
   has_valid_state_ = false;
   std::fill_n(hw_positions_, 2, std::numeric_limits<double>::quiet_NaN());
@@ -346,22 +346,89 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
   for (size_t i = 0; i < ids.size(); ++i) {
     const auto result = driver_->read_device_config(ids[i]);
     if (!result.ok || result.value.driver_id != ids[i]) {
-      RCLCPP_ERROR(
-        get_logger(), "Cannot read M1 configuration for ID %d: %s",
-        ids[i], result.ok ? "device ID mismatch" : error_code_to_string(result.error));
+      if (!result.ok) {
+        if (result.failed_field != M1ConfigField::NONE) {
+          RCLCPP_ERROR(
+            get_logger(),
+            "Cannot read M1 configuration for ID %d on register 0x%04X (%s): %s",
+            ids[i], result.failed_register(), result.failed_context(),
+            error_code_to_string(result.error));
+        } else {
+          RCLCPP_ERROR(
+            get_logger(), "Cannot read M1 configuration for ID %d: %s",
+            ids[i], error_code_to_string(result.error));
+        }
+      } else {
+        RCLCPP_ERROR(
+          get_logger(), "Cannot read M1 configuration for ID %d: device ID mismatch",
+          ids[i]);
+      }
       driver_->disconnect();
       return hardware_interface::CallbackReturn::FAILURE;
     }
     configs[i] = result.value;
+
+    if (configs[i].encoder_resolution_pulses_per_rev == 0) {
+      RCLCPP_ERROR(
+        get_logger(),
+        "Invalid encoder resolution 0 reported by M1 driver ID %d",
+        ids[i]);
+      driver_->disconnect();
+      return hardware_interface::CallbackReturn::FAILURE;
+    }
+
+    if (configs[i].position_command_format != 0) {
+      RCLCPP_ERROR(
+        get_logger(),
+        "M1 driver ID %d uses unsupported position command format %u; only format 0 is supported",
+        ids[i], configs[i].position_command_format);
+      driver_->disconnect();
+      return hardware_interface::CallbackReturn::FAILURE;
+    }
+
     RCLCPP_INFO(
       get_logger(), "M1 ID %d: 01-06 encoder resolution=%u single-phase pulses/rev; "
-      "02-14 position command format=%u; Multi-drive feedback scale=%s",
-      ids[i], configs[i].encoder_resolution_pulses_per_rev, configs[i].position_command_format,
-      position_feedback_scales_[i].has_value() ? "available" : "UNVERIFIED");
+      "02-14 position command format=%u (Format 0 verified)",
+      ids[i], configs[i].encoder_resolution_pulses_per_rev, configs[i].position_command_format);
   }
+
+  // Validate pair compatibility
+  if (configs[0].encoder_resolution_pulses_per_rev !=
+    configs[1].encoder_resolution_pulses_per_rev)
+  {
+    RCLCPP_ERROR(
+      get_logger(),
+      "M1 pair compatibility failure: Right ID %d encoder resolution (%u) != "
+      "Left ID %d encoder resolution (%u)",
+      config_.right_driver_id, configs[0].encoder_resolution_pulses_per_rev,
+      config_.left_driver_id, configs[1].encoder_resolution_pulses_per_rev);
+    driver_->disconnect();
+    return hardware_interface::CallbackReturn::FAILURE;
+  }
+
+  // Quad-count multiplier: physically verified 2500 single-phase pulses/rev -> 10000 units/rev.
+  // Note: Vendor documentation does not state a universal rule that every M1 model/firmware
+  // always uses encoder_resolution * 4 as feedback units/rev; this relationship is supported
+  // by current physical hardware verification and protocol observations.
+  const uint32_t derived_radix = static_cast<uint32_t>(
+    static_cast<int64_t>(configs[0].encoder_resolution_pulses_per_rev) *
+    kQuadratureCountsPerPulse);
+  if (derived_radix == 0) {
+    RCLCPP_ERROR(
+      get_logger(),
+      "Failed to derive valid runtime feedback radix from encoder resolution");
+    driver_->disconnect();
+    return hardware_interface::CallbackReturn::FAILURE;
+  }
+
+  // Atomically commit device configs and derived runtime decoding state
   device_configs_ = configs;
+  runtime_radix_ = derived_radix;
+
   RCLCPP_INFO(
-    get_logger(), "M1 configuration read successfully; activation checks feedback scale.");
+    get_logger(), "M1 configuration validated and committed: encoder_resolution=%u pulses/rev, "
+    "derived Format-0 radix=%u feedback units/rev",
+    configs[0].encoder_resolution_pulses_per_rev, derived_radix);
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -416,16 +483,12 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
 {
   RCLCPP_INFO(get_logger(), "Checking M1Hardware activation prerequisites...");
 
-  if (!device_configs_ || std::any_of(
-      position_feedback_scales_.begin(), position_feedback_scales_.end(),
-      [](const std::optional<double> & scale) {
-        return !scale.has_value() || !std::isfinite(*scale) || *scale <= 0.0;
-      }))
-  {
+  if (!device_configs_ || !runtime_radix_ || *runtime_radix_ == 0) {
     RCLCPP_ERROR(
-      get_logger(), "Activation blocked before Servo-On: Multi-drive position feedback "
-      "format/steps per motor revolution is unverified. 01-06 encoder resolution "
-      "does not establish that scale. Record raw feedback across one shaft revolution.");
+      get_logger(),
+      "Activation blocked before Servo-On: Multi-drive position decoding configuration "
+      "is not ready. on_configure() must successfully read M1 device config and derive "
+      "a non-zero radix.");
     return hardware_interface::CallbackReturn::FAILURE;
   }
 
@@ -445,7 +508,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // 2. Pre-activation check: read current state (with bounded retry for transient bus settling)
+  // 2. Pre-activation check: read current Servo-OFF state and establish position baselines
   Result<ExchangeResult> pre_res = Result<ExchangeResult>::failure(ErrorCode::RECEIVE_FAILED);
   for (int attempt = 0; attempt < 3; ++attempt) {
     pre_res = driver_->read_state(config_.right_driver_id, config_.left_driver_id);
@@ -461,12 +524,38 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
       error_code_to_string(pre_res.error));
     return hardware_interface::CallbackReturn::ERROR;
   }
-  if (pre_res.value.states[0].alarm != 0 || pre_res.value.states[1].alarm != 0) {
+
+  const auto & st_right_pre = pre_res.value.states[0];
+  const auto & st_left_pre = pre_res.value.states[1];
+
+  if (st_right_pre.driver_id != config_.right_driver_id ||
+    st_left_pre.driver_id != config_.left_driver_id)
+  {
+    RCLCPP_ERROR(
+      get_logger(),
+      "Activation pre-check driver ID mismatch: expected Right ID %d, got %d; "
+      "expected Left ID %d, got %d",
+      config_.right_driver_id, st_right_pre.driver_id,
+      config_.left_driver_id, st_left_pre.driver_id);
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
+  if (st_right_pre.alarm != 0 || st_left_pre.alarm != 0) {
     RCLCPP_ERROR(
       get_logger(),
       "Activation aborted: active alarm detected (Right alarm=%u, Left alarm=%u)",
-      pre_res.value.states[0].alarm,
-      pre_res.value.states[1].alarm);
+      st_right_pre.alarm,
+      st_left_pre.alarm);
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
+  // Establish Servo-OFF position baselines BEFORE enabling drivers
+  right_position_tracker_.initialize(st_right_pre.position_sample);
+  left_position_tracker_.initialize(st_left_pre.position_sample);
+  if (!right_position_tracker_.initialized || !left_position_tracker_.initialized) {
+    RCLCPP_ERROR(
+      get_logger(),
+      "Activation aborted: failed to initialize Servo-OFF position baselines");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
@@ -529,10 +618,6 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // Initialize position trackers with the baseline active sample
-  right_position_tracker_.update(active_state.states[0].position_steps);
-  left_position_tracker_.update(active_state.states[1].position_steps);
-
   latest_motor_state_ = active_state;
   has_valid_state_ = true;
   is_active_ = true;
@@ -583,7 +668,9 @@ hardware_interface::CallbackReturn M1Hardware::on_cleanup(
 {
   RCLCPP_INFO(get_logger(), "Cleaning up M1Hardware...");
   device_configs_.reset();
-  position_feedback_scales_ = {std::nullopt, std::nullopt};
+  runtime_radix_.reset();
+  left_position_tracker_.reset();
+  right_position_tracker_.reset();
   is_active_ = false;
   has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
@@ -597,7 +684,9 @@ hardware_interface::CallbackReturn M1Hardware::on_shutdown(
 {
   RCLCPP_INFO(get_logger(), "Shutting down M1Hardware...");
   device_configs_.reset();
-  position_feedback_scales_ = {std::nullopt, std::nullopt};
+  runtime_radix_.reset();
+  left_position_tracker_.reset();
+  right_position_tracker_.reset();
   is_active_ = false;
   has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
@@ -615,6 +704,9 @@ hardware_interface::CallbackReturn M1Hardware::on_error(
     get_logger(),
     "M1Hardware entered ERROR state, executing best-effort safety cleanup");
   device_configs_.reset();
+  runtime_radix_.reset();
+  left_position_tracker_.reset();
+  right_position_tracker_.reset();
   is_active_ = false;
   has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
@@ -629,12 +721,16 @@ hardware_interface::return_type M1Hardware::read(
   const rclcpp::Time & /*time*/,
   const rclcpp::Duration & /*period*/)
 {
-  if (!is_active_ || !has_valid_state_) {
+  if (!is_active_ || !has_valid_state_ || !runtime_radix_ || *runtime_radix_ == 0) {
     RCLCPP_ERROR(
       get_logger(),
-      "read() called without valid cached motor state or while component is inactive");
+      "read() called without valid cached motor state, valid runtime radix, "
+      "or while component is inactive");
     return hardware_interface::return_type::ERROR;
   }
+
+  // Consume cached state to protect against reusing stale feedback
+  has_valid_state_ = false;
 
   const auto & st_right = latest_motor_state_.states[0];
   const auto & st_left = latest_motor_state_.states[1];
@@ -649,26 +745,22 @@ hardware_interface::return_type M1Hardware::read(
     return hardware_interface::return_type::ERROR;
   }
 
-  // Update position accumulators with raw steps
-  left_position_tracker_.update(st_left.position_steps);
-  right_position_tracker_.update(st_right.position_steps);
+  // Update position accumulators with Format-0 position sample
+  left_position_tracker_.update(st_left.position_sample, *runtime_radix_);
+  right_position_tracker_.update(st_right.position_sample, *runtime_radix_);
 
-  // Convert accumulated steps -> Continuous wheel position [rad]
-  if (position_feedback_scales_[1].has_value()) {
-    hw_positions_[0] = motor_steps_to_wheel_rad(
-      left_position_tracker_.accumulated_steps,
-      *position_feedback_scales_[1],
-      config_.gear_ratio,
-      config_.left_wheel_sign);
-  }
+  // Convert accumulated feedback units -> Continuous wheel position [rad]
+  hw_positions_[0] = feedback_units_to_wheel_rad(
+    left_position_tracker_.accumulated_feedback_units,
+    *runtime_radix_,
+    config_.gear_ratio,
+    config_.left_wheel_sign);
 
-  if (position_feedback_scales_[0].has_value()) {
-    hw_positions_[1] = motor_steps_to_wheel_rad(
-      right_position_tracker_.accumulated_steps,
-      *position_feedback_scales_[0],
-      config_.gear_ratio,
-      config_.right_wheel_sign);
-  }
+  hw_positions_[1] = feedback_units_to_wheel_rad(
+    right_position_tracker_.accumulated_feedback_units,
+    *runtime_radix_,
+    config_.gear_ratio,
+    config_.right_wheel_sign);
 
   // Convert actual RPM -> Wheel angular velocity [rad/s]
   hw_velocities_[0] = motor_rpm_to_wheel_rad_s(
@@ -731,6 +823,7 @@ hardware_interface::return_type M1Hardware::write(
   // 4. Perform single Multi-drive 2.0 FC17 exchange transaction (Model A2)
   auto exchange_res = driver_->exchange(cmd_right, cmd_left);
   if (!exchange_res.ok) {
+    has_valid_state_ = false;
     RCLCPP_ERROR(
       get_logger(),
       "M1Driver exchange failed during write(): error %s (Right ID %d target=%d RPM, "
@@ -743,10 +836,10 @@ hardware_interface::return_type M1Hardware::write(
 
   // 5. Update cached latest motor state
   latest_motor_state_ = exchange_res.value;
-  has_valid_state_ = true;
 
   // 6. Device health check on returned state
   if (latest_motor_state_.states[0].alarm != 0 || latest_motor_state_.states[1].alarm != 0) {
+    has_valid_state_ = false;
     RCLCPP_ERROR(
       get_logger(),
       "Drive alarm returned in write() exchange: Right ID%d alarm=%u, Left ID%d alarm=%u",
@@ -755,6 +848,7 @@ hardware_interface::return_type M1Hardware::write(
     return hardware_interface::return_type::ERROR;
   }
 
+  has_valid_state_ = true;
   return hardware_interface::return_type::OK;
 }
 

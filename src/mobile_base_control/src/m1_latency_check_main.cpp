@@ -117,10 +117,12 @@ int main(int argc, char ** argv)
   const auto & st_b = init_state.value.states[1];
   std::cout << "Driver " << opts.driver_a << ": Status=" << st_a.status
             << ", Alarm=" << st_a.alarm << ", Actual RPM=" << st_a.actual_rpm
-            << ", Pos=" << st_a.position_steps << std::endl;
+            << ", Index=" << st_a.position_sample.index
+            << ", Pos=" << st_a.position_sample.pos << std::endl;
   std::cout << "Driver " << opts.driver_b << ": Status=" << st_b.status
             << ", Alarm=" << st_b.alarm << ", Actual RPM=" << st_b.actual_rpm
-            << ", Pos=" << st_b.position_steps << std::endl;
+            << ", Index=" << st_b.position_sample.index
+            << ", Pos=" << st_b.position_sample.pos << std::endl;
 
   if (st_a.alarm != 0 || st_b.alarm != 0) {
     std::cerr << "ABORT: Active alarm detected on drivers before test." << std::endl;

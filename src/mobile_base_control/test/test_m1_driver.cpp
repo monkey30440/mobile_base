@@ -28,6 +28,7 @@
 
 using mobile_base_control::ErrorCode;
 using mobile_base_control::M1Driver;
+using mobile_base_control::M1ConfigField;
 using mobile_base_control::MotorCommand;
 using mobile_base_control::Result;
 
@@ -86,13 +87,39 @@ TEST(M1DriverTest, SignedConversions)
   EXPECT_EQ(mobile_base_control::detail::decode_s16(0xFFB0), -80);
   EXPECT_EQ(mobile_base_control::detail::decode_s16(0x7FFF), 32767);
   EXPECT_EQ(mobile_base_control::detail::decode_s16(0x8000), -32768);
+}
 
-  // 32-bit (hi, lo)
-  EXPECT_EQ(mobile_base_control::detail::decode_s32(0x0000, 0x0000), 0);
-  EXPECT_EQ(mobile_base_control::detail::decode_s32(0x0001, 0x86A0), 100000);
-  EXPECT_EQ(mobile_base_control::detail::decode_s32(0xFFFE, 0x7960), -100000);
-  EXPECT_EQ(mobile_base_control::detail::decode_s32(0x7FFF, 0xFFFF), 2147483647);
-  EXPECT_EQ(mobile_base_control::detail::decode_s32(0x8000, 0x0000), -2147483648LL);
+TEST(M1DriverTest, Format0PositionDecoding)
+{
+  using mobile_base_control::detail::decode_format0_position;
+
+  // high = 0x0000, low = 0x0001 -> index = 0, pos = 1
+  auto s1 = decode_format0_position(0x0000, 0x0001);
+  EXPECT_EQ(s1.index, 0);
+  EXPECT_EQ(s1.pos, 1);
+
+  // high = 0xFFFF, low = 9998 -> index = -1, pos = 9998 (not packed signed32 -55538)
+  auto s2 = decode_format0_position(0xFFFF, 9998);
+  EXPECT_EQ(s2.index, -1);
+  EXPECT_EQ(s2.pos, 9998);
+
+  // Normal boundary values
+  auto s3 = decode_format0_position(0x0005, 9999);
+  EXPECT_EQ(s3.index, 5);
+  EXPECT_EQ(s3.pos, 9999);
+
+  auto s4 = decode_format0_position(0x0006, 0);
+  EXPECT_EQ(s4.index, 6);
+  EXPECT_EQ(s4.pos, 0);
+
+  // Extremes of signed 16-bit Index
+  auto s5 = decode_format0_position(0x7FFF, 9999);
+  EXPECT_EQ(s5.index, 32767);
+  EXPECT_EQ(s5.pos, 9999);
+
+  auto s6 = decode_format0_position(0x8000, 0);
+  EXPECT_EQ(s6.index, -32768);
+  EXPECT_EQ(s6.pos, 0);
 }
 
 TEST(M1DriverTest, BuildFC03Request)
@@ -143,17 +170,16 @@ namespace
 {
 std::vector<uint8_t> create_dummy_md2_response(
   uint8_t fc,
-  uint16_t s1_status, uint16_t s1_alarm, int16_t s1_rpm, int32_t s1_pos,
-  uint16_t s2_status, uint16_t s2_alarm, int16_t s2_rpm, int32_t s2_pos)
+  uint16_t s1_status, uint16_t s1_alarm, int16_t s1_rpm, int16_t s1_index, uint16_t s1_pos,
+  uint16_t s2_status, uint16_t s2_alarm, int16_t s2_rpm, int16_t s2_index, uint16_t s2_pos)
 {
   std::vector<uint8_t> rsp;
   rsp.push_back(0x65);
   rsp.push_back(fc);
   rsp.push_back(32);  // 2 drivers * 16 bytes = 32
 
-  auto append_driver = [&](uint16_t st, uint16_t al, int16_t rpm, int32_t pos) {
-      uint16_t pos_hi = static_cast<uint16_t>((static_cast<uint32_t>(pos) >> 16) & 0xFFFF);
-      uint16_t pos_lo = static_cast<uint16_t>(static_cast<uint32_t>(pos) & 0xFFFF);
+  auto append_driver = [&](uint16_t st, uint16_t al, int16_t rpm, int16_t index, uint16_t pos) {
+      uint16_t u_index = static_cast<uint16_t>(index);
       uint16_t urpm = static_cast<uint16_t>(rpm);
 
       // Word 0: Status
@@ -171,19 +197,19 @@ std::vector<uint8_t> create_dummy_md2_response(
       // Word 4: Current (e.g. 150 -> 1.50A)
       rsp.push_back(0x00);
       rsp.push_back(0x96);
-      // Word 5: Pos HI
-      rsp.push_back(static_cast<uint8_t>((pos_hi >> 8) & 0xFF));
-      rsp.push_back(static_cast<uint8_t>(pos_hi & 0xFF));
-      // Word 6: Pos LO
-      rsp.push_back(static_cast<uint8_t>((pos_lo >> 8) & 0xFF));
-      rsp.push_back(static_cast<uint8_t>(pos_lo & 0xFF));
+      // Word 5: Pos HI (Index)
+      rsp.push_back(static_cast<uint8_t>((u_index >> 8) & 0xFF));
+      rsp.push_back(static_cast<uint8_t>(u_index & 0xFF));
+      // Word 6: Pos LO (Step/Pos)
+      rsp.push_back(static_cast<uint8_t>((pos >> 8) & 0xFF));
+      rsp.push_back(static_cast<uint8_t>(pos & 0xFF));
       // Word 7: Error Check
       rsp.push_back(0x00);
       rsp.push_back(0x00);
     };
 
-  append_driver(s1_status, s1_alarm, s1_rpm, s1_pos);
-  append_driver(s2_status, s2_alarm, s2_rpm, s2_pos);
+  append_driver(s1_status, s1_alarm, s1_rpm, s1_index, s1_pos);
+  append_driver(s2_status, s2_alarm, s2_rpm, s2_index, s2_pos);
 
   return rsp;
 }
@@ -204,7 +230,9 @@ uint16_t modbus_crc(const std::vector<uint8_t> & bytes)
 
 TEST(M1DriverTest, ParseMultiDriveResponse)
 {
-  auto valid_rsp = create_dummy_md2_response(0x03, 0, 0, 80, 100000, 6, 0, -80, -100000);
+  // Right: Index=0, Pos=1; Left: Index=-1, Pos=9998
+  auto valid_rsp = create_dummy_md2_response(
+    0x03, 0, 0, 80, 0, 1, 6, 0, -80, -1, 9998);
   auto parse_res = mobile_base_control::detail::parse_multidrive_response(
     0x03, {1, 2}, valid_rsp.data(), valid_rsp.size());
   ASSERT_TRUE(parse_res.ok);
@@ -216,13 +244,15 @@ TEST(M1DriverTest, ParseMultiDriveResponse)
   EXPECT_EQ(states[0].actual_rpm, 80);
   EXPECT_EQ(states[0].bus_voltage_raw, 2400);
   EXPECT_EQ(states[0].current_raw, 150);
-  EXPECT_EQ(states[0].position_steps, 100000);
+  EXPECT_EQ(states[0].position_sample.index, 0);
+  EXPECT_EQ(states[0].position_sample.pos, 1);
 
   EXPECT_EQ(states[1].driver_id, 2);
   EXPECT_EQ(states[1].status, 6);
   EXPECT_EQ(states[1].alarm, 0);
   EXPECT_EQ(states[1].actual_rpm, -80);
-  EXPECT_EQ(states[1].position_steps, -100000);
+  EXPECT_EQ(states[1].position_sample.index, -1);
+  EXPECT_EQ(states[1].position_sample.pos, 9998);
 
   // Exception response: [0x65, 0x83, 0x02]
   std::vector<uint8_t> exc_rsp = {0x65, 0x83, 0x02};
@@ -257,19 +287,21 @@ TEST(M1DriverTest, MockTransactOperations)
   M1Driver driver;
   EXPECT_FALSE(driver.is_connected());
 
-  // Test read_state
+  // Test read_state: Right index=0 pos=500, Left index=-1 pos=9500
   driver.set_transact_override(
     [](const std::vector<uint8_t> & req) -> Result<std::vector<uint8_t>> {
       EXPECT_EQ(req[0], 0x65);
       EXPECT_EQ(req[1], 0x03);
       return Result<std::vector<uint8_t>>::success(
-        create_dummy_md2_response(0x03, 0, 0, 0, 500, 0, 0, 0, -500));
+        create_dummy_md2_response(0x03, 0, 0, 0, 0, 500, 0, 0, 0, -1, 9500));
     });
 
   auto state_res = driver.read_state(1, 2);
   ASSERT_TRUE(state_res.ok);
-  EXPECT_EQ(state_res.value.states[0].position_steps, 500);
-  EXPECT_EQ(state_res.value.states[1].position_steps, -500);
+  EXPECT_EQ(state_res.value.states[0].position_sample.index, 0);
+  EXPECT_EQ(state_res.value.states[0].position_sample.pos, 500);
+  EXPECT_EQ(state_res.value.states[1].position_sample.index, -1);
+  EXPECT_EQ(state_res.value.states[1].position_sample.pos, 9500);
 
   // Test enable (SVON)
   driver.set_transact_override(
@@ -280,7 +312,7 @@ TEST(M1DriverTest, MockTransactOperations)
       EXPECT_EQ(req[11], 0x00);
       EXPECT_EQ(req[12], 0x06);
       return Result<std::vector<uint8_t>>::success(
-        create_dummy_md2_response(0x17, 0, 0, 0, 0, 0, 0, 0, 0));
+        create_dummy_md2_response(0x17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
     });
 
   auto enable_res = driver.enable(1, 2);
@@ -302,7 +334,7 @@ TEST(M1DriverTest, MockTransactOperations)
       EXPECT_EQ(req[17], 0xFF);
       EXPECT_EQ(req[18], 0xCE);  // -50
       return Result<std::vector<uint8_t>>::success(
-        create_dummy_md2_response(0x17, 7, 0, 50, 1000, 7, 0, -50, -1000));
+        create_dummy_md2_response(0x17, 7, 0, 50, 0, 1000, 7, 0, -50, -1, 9000));
     });
 
   MotorCommand cmd1{1, 50};
@@ -322,7 +354,7 @@ TEST(M1DriverTest, MockTransactOperations)
       EXPECT_EQ(req[13], 0x00);
       EXPECT_EQ(req[14], 0x00);  // 0
       return Result<std::vector<uint8_t>>::success(
-        create_dummy_md2_response(0x17, 0, 0, 0, 1050, 0, 0, 0, -1050));
+        create_dummy_md2_response(0x17, 0, 0, 0, 0, 1050, 0, 0, 0, -1, 8950));
     });
 
   auto stop_res = driver.stop(1, 2);
@@ -336,7 +368,7 @@ TEST(M1DriverTest, MockTransactOperations)
       EXPECT_EQ(req[11], 0x00);
       EXPECT_EQ(req[12], 0x07);  // CMD_SVOFF
       return Result<std::vector<uint8_t>>::success(
-        create_dummy_md2_response(0x17, 6, 0, 0, 1050, 6, 0, 0, -1050));
+        create_dummy_md2_response(0x17, 6, 0, 0, 0, 1050, 6, 0, 0, -1, 8950));
     });
 
   auto dis_res = driver.disable(1, 2);
@@ -397,6 +429,86 @@ TEST(M1DriverTest, ReadsM1ConfigurationWithoutInferringFeedbackScale)
   }
 }
 
+TEST(M1DriverTest, ConfigurationReadIdentifiesEncoderRegisterFailure)
+{
+  M1Driver driver;
+  size_t calls = 0;
+  std::vector<std::vector<uint8_t>> captured_requests;
+  driver.set_transact_override([&](const std::vector<uint8_t> & req) {
+      ++calls;
+      captured_requests.push_back(req);
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+    });
+
+  const auto config = driver.read_device_config(2);
+  EXPECT_FALSE(config.ok);
+  EXPECT_EQ(config.error, ErrorCode::TIMEOUT);
+  EXPECT_EQ(config.failed_driver_id, 2);
+  EXPECT_EQ(config.failed_field, M1ConfigField::ENCODER_RESOLUTION);
+  EXPECT_EQ(config.failed_register(), 0x3D05);
+  EXPECT_STREQ(config.failed_context(), "encoder resolution");
+  EXPECT_EQ(calls, 1u);
+  ASSERT_EQ(captured_requests.size(), 1u);
+  EXPECT_EQ(captured_requests[0], (std::vector<uint8_t>{2, 0x03, 0x3D, 0x05, 0x00, 0x01}));
+}
+
+TEST(M1DriverTest, ConfigurationReadIdentifiesFormatRegisterFailure)
+{
+  M1Driver driver;
+  size_t calls = 0;
+  std::vector<std::vector<uint8_t>> captured_requests;
+  driver.set_transact_override([&](const std::vector<uint8_t> & req) {
+      ++calls;
+      captured_requests.push_back(req);
+      if (calls == 1) {
+        return Result<std::vector<uint8_t>>::success({2, 0x03, 0x02, 0x09, 0xC4});
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+    });
+
+  const auto config = driver.read_device_config(2);
+  EXPECT_FALSE(config.ok);
+  EXPECT_EQ(config.error, ErrorCode::TIMEOUT);
+  EXPECT_EQ(config.failed_driver_id, 2);
+  EXPECT_EQ(config.failed_field, M1ConfigField::POSITION_FORMAT);
+  EXPECT_EQ(config.failed_register(), 0x3E0D);
+  EXPECT_STREQ(config.failed_context(), "position command format");
+  EXPECT_EQ(calls, 2u);
+  ASSERT_EQ(captured_requests.size(), 2u);
+  EXPECT_EQ(captured_requests[0], (std::vector<uint8_t>{2, 0x03, 0x3D, 0x05, 0x00, 0x01}));
+  EXPECT_EQ(captured_requests[1], (std::vector<uint8_t>{2, 0x03, 0x3E, 0x0D, 0x00, 0x01}));
+}
+
+TEST(M1DriverTest, ConfigurationReadSuccessPreservesInvariantsAndClearsDiagnosticFields)
+{
+  M1Driver driver;
+  size_t calls = 0;
+  std::vector<std::vector<uint8_t>> captured_requests;
+  driver.set_transact_override([&](const std::vector<uint8_t> & req) {
+      ++calls;
+      captured_requests.push_back(req);
+      if (calls == 1) {
+        return Result<std::vector<uint8_t>>::success({1, 0x03, 0x02, 0x09, 0xC4});
+      }
+      return Result<std::vector<uint8_t>>::success({1, 0x03, 0x02, 0x00, 0x00});
+    });
+
+  const auto config = driver.read_device_config(1);
+  ASSERT_TRUE(config.ok);
+  EXPECT_EQ(config.error, ErrorCode::NONE);
+  EXPECT_EQ(config.value.driver_id, 1);
+  EXPECT_EQ(config.value.encoder_resolution_pulses_per_rev, 2500);
+  EXPECT_EQ(config.value.position_command_format, 0);
+  EXPECT_EQ(config.failed_driver_id, 0);
+  EXPECT_EQ(config.failed_field, M1ConfigField::NONE);
+  EXPECT_EQ(config.failed_register(), 0);
+  EXPECT_STREQ(config.failed_context(), "");
+  EXPECT_EQ(calls, 2u);
+  ASSERT_EQ(captured_requests.size(), 2u);
+  EXPECT_EQ(captured_requests[0], (std::vector<uint8_t>{1, 0x03, 0x3D, 0x05, 0x00, 0x01}));
+  EXPECT_EQ(captured_requests[1], (std::vector<uint8_t>{1, 0x03, 0x3E, 0x0D, 0x00, 0x01}));
+}
+
 TEST(M1DriverTest, ConfigurationReadPropagatesEitherRegisterFailure)
 {
   for (size_t failing_read : {1u, 2u}) {
@@ -449,9 +561,11 @@ TEST(M1DriverTest, ConfigurationReadsPreserveOtherValuesWithoutInventingAScale)
   }
   M1Driver driver;
   driver.set_transact_override([](const std::vector<uint8_t> & req) {
-      return Result<std::vector<uint8_t>>::success({req[0], 3, 2, 0, 2});
+      return Result<std::vector<uint8_t>>::success({req[0], 3, 2, 0, 1});
     });
-  EXPECT_FALSE(driver.read_device_config(1).ok);  // Unsupported 02-14 value.
+  const auto config1 = driver.read_device_config(1);
+  ASSERT_TRUE(config1.ok);
+  EXPECT_EQ(config1.value.position_command_format, 1);
   EXPECT_FALSE(driver.read_device_config(0).ok);
   EXPECT_FALSE(driver.read_device_config(248).ok);
 }
@@ -518,7 +632,8 @@ TEST(M1DriverTest, DetailedTimingObservesLibmodbusWriteAndFirstReadOnPseudoTty)
         received += static_cast<size_t>(count);
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(2));
-      auto response = create_dummy_md2_response(0x17, 0, 0, 0, 0, 0, 0, 0, 0);
+      auto response = create_dummy_md2_response(
+        0x17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
       const uint16_t crc = modbus_crc(response);
       response.push_back(static_cast<uint8_t>(crc & 0xFF));
       response.push_back(static_cast<uint8_t>(crc >> 8));

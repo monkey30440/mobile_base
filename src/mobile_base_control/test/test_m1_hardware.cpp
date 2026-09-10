@@ -39,6 +39,7 @@ using mobile_base_control::M1Hardware;
 using mobile_base_control::M1HardwareConfig;
 using mobile_base_control::M1Driver;
 using mobile_base_control::PositionTracker;
+using mobile_base_control::Format0PositionSample;
 using mobile_base_control::Result;
 using mobile_base_control::ErrorCode;
 using mobile_base_control::ExchangeResult;
@@ -76,7 +77,6 @@ void import_fixture_hardware(
   params.hardware_info = hardware_interface::parse_control_resources_from_urdf(urdf).at(0);
   params.clock = clock;
   auto hw = std::make_unique<M1Hardware>(std::make_shared<FixtureM1Driver>());
-  hw->set_position_feedback_scales_for_testing({4096.0, 8192.0});
   rm.import_component(std::move(hw), params);
   rclcpp_lifecycle::State active(lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE, "active");
   ASSERT_EQ(rm.set_component_state("M1Hardware", active), return_type::OK);
@@ -193,112 +193,166 @@ TEST(M1HardwareConversionTest, MotorRpmToWheelRadS)
   EXPECT_DOUBLE_EQ(M1Hardware::motor_rpm_to_wheel_rad_s(0, gear, 1), 0.0);
 }
 
-TEST(M1HardwareConversionTest, MotorStepsToWheelRad)
+TEST(M1HardwareConversionTest, FeedbackUnitsToWheelRad)
 {
-  const double steps_per_rev = 4096.0;  // Explicit arithmetic fixture only.
+  const uint32_t radix = 10000;
   const double gear = 20.0;
-  // Fixture: 1 wheel revolution = 81,920 motor steps = 2*PI radians
+  // Fixture: 1 wheel revolution = 10,000 * 20 = 200,000 feedback units = 2*PI radians
 
   // Left wheel (+1 sign)
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(81920, steps_per_rev, gear, 1),
+    M1Hardware::feedback_units_to_wheel_rad(200000, radix, gear, 1),
     2.0 * PI, 1e-6);
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(-81920, steps_per_rev, gear, 1),
+    M1Hardware::feedback_units_to_wheel_rad(-200000, radix, gear, 1),
     -2.0 * PI, 1e-6);
 
-  // Right wheel (-1 sign: positive wheel motion corresponds to negative motor steps)
+  // Right wheel (-1 sign: positive wheel motion corresponds to negative motor feedback units)
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(-81920, steps_per_rev, gear, -1),
+    M1Hardware::feedback_units_to_wheel_rad(-200000, radix, gear, -1),
     2.0 * PI, 1e-6);
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(81920, steps_per_rev, gear, -1),
+    M1Hardware::feedback_units_to_wheel_rad(200000, radix, gear, -1),
     -2.0 * PI, 1e-6);
 
-  // Zero steps
-  EXPECT_DOUBLE_EQ(M1Hardware::motor_steps_to_wheel_rad(0, steps_per_rev, gear, 1), 0.0);
+  // Zero units
+  EXPECT_DOUBLE_EQ(M1Hardware::feedback_units_to_wheel_rad(0, radix, gear, 1), 0.0);
+
+  // Invalid parameters
+  EXPECT_TRUE(std::isnan(M1Hardware::feedback_units_to_wheel_rad(100, 0, gear, 1)));
+  EXPECT_TRUE(std::isnan(M1Hardware::feedback_units_to_wheel_rad(100, radix, 0.0, 1)));
+  EXPECT_TRUE(std::isnan(M1Hardware::feedback_units_to_wheel_rad(100, radix, -1.0, 1)));
+  EXPECT_TRUE(std::isnan(M1Hardware::feedback_units_to_wheel_rad(100, radix, gear, 0)));
+
+  // Forwarding helper motor_steps_to_wheel_rad
+  EXPECT_NEAR(
+    M1Hardware::motor_steps_to_wheel_rad(200000, 10000.0, gear, 1),
+    2.0 * PI, 1e-6);
 }
 
 // =========================================================================
-// 2. PositionTracker & Rollover Tests
+// 2. PositionTracker & Format-0 Decoding Tests
 // =========================================================================
 
 TEST(PositionTrackerTest, InitialSampleSetsOrigin)
 {
   PositionTracker tracker;
   EXPECT_FALSE(tracker.initialized);
-  EXPECT_EQ(tracker.accumulated_steps, 0);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 0);
 
-  tracker.update(12345);
+  tracker.initialize(Format0PositionSample{123, 4567});
   EXPECT_TRUE(tracker.initialized);
-  EXPECT_EQ(tracker.previous_raw, 12345);
-  EXPECT_EQ(tracker.accumulated_steps, 0);
+  EXPECT_EQ(tracker.previous_sample.index, 123);
+  EXPECT_EQ(tracker.previous_sample.pos, 4567);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 0);
 }
 
-TEST(PositionTrackerTest, PositiveAndNegativeDeltas)
+TEST(PositionTrackerTest, Format0BoundaryTransitions)
 {
   PositionTracker tracker;
-  tracker.update(1000);
+  const uint32_t radix = 10000;
 
-  tracker.update(1500);
-  EXPECT_EQ(tracker.accumulated_steps, 500);
+  tracker.initialize(Format0PositionSample{0, 0});
+  EXPECT_EQ(tracker.accumulated_feedback_units, 0);
 
-  tracker.update(1200);
-  EXPECT_EQ(tracker.accumulated_steps, 200);
+  // Intra-revolution forward step
+  tracker.update(Format0PositionSample{0, 9999}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 9999);
 
-  tracker.update(200);
-  EXPECT_EQ(tracker.accumulated_steps, -800);
+  // Boundary transition across radix: (0, 9999) -> (1, 0)
+  tracker.update(Format0PositionSample{1, 0}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 10000);
+
+  // Advance several revolutions to (5, 9999)
+  tracker.update(Format0PositionSample{5, 9999}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 59999);
+
+  // Boundary transition: (5, 9999) -> (6, 0) (+1 unit)
+  tracker.update(Format0PositionSample{6, 0}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 60000);
+
+  // Reverse boundary transition: (6, 0) -> (5, 9999) (-1 unit)
+  tracker.update(Format0PositionSample{5, 9999}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 59999);
+
+  // Return to origin (0, 0)
+  tracker.update(Format0PositionSample{0, 0}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 0);
+
+  // Negative boundary transition: (0, 0) -> (-1, 9999) (-1 unit)
+  tracker.update(Format0PositionSample{-1, 9999}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, -1);
+
+  // Negative step: (-1, 9999) -> (-1, 9998) (-1 unit)
+  tracker.update(Format0PositionSample{-1, 9998}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, -2);
 }
 
-TEST(PositionTrackerTest, Signed32BitPositiveRollover)
+TEST(PositionTrackerTest, Signed16BitIndexRollover)
 {
   PositionTracker tracker;
-  // Start near +2^31 - 1 (0x7FFFFFF0 = 2,147,483,632)
-  int32_t near_max = 2147483632;
-  tracker.update(near_max);
+  const uint32_t radix = 10000;
 
-  // Advance by +30 steps across int32 overflow to -2,147,483,634 (0x8000000E)
-  int32_t wrapped_positive = static_cast<int32_t>(static_cast<uint32_t>(near_max) + 30);
-  tracker.update(wrapped_positive);
+  // Initialize near positive maximum int16 index
+  tracker.initialize(Format0PositionSample{32767, 9999});
 
-  EXPECT_EQ(tracker.accumulated_steps, 30);
+  // Advance forward across int16 rollover to (-32768, 0)
+  tracker.update(Format0PositionSample{-32768, 0}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 1);
 
-  // Advance another +50 steps
-  int32_t next_pos = static_cast<int32_t>(static_cast<uint32_t>(wrapped_positive) + 50);
-  tracker.update(next_pos);
+  // Advance further
+  tracker.update(Format0PositionSample{-32768, 50}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 51);
 
-  EXPECT_EQ(tracker.accumulated_steps, 80);
+  // Reverse backward across int16 underflow to (32767, 9999)
+  tracker.update(Format0PositionSample{-32768, 0}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 1);
+  tracker.update(Format0PositionSample{32767, 9999}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 0);
 }
 
-TEST(PositionTrackerTest, Signed32BitNegativeRollover)
+TEST(PositionTrackerTest, RealHardwareObservedTransitions)
 {
-  PositionTracker tracker;
-  // Start near -2^31 (0x8000000E = -2,147,483,634)
-  int32_t near_min = -2147483634;
-  tracker.update(near_min);
+  const uint32_t radix = 10000;
 
-  // Move backwards by -30 steps across int32 underflow
-  int32_t wrapped_negative = static_cast<int32_t>(static_cast<uint32_t>(near_min) - 30);
-  tracker.update(wrapped_negative);
+  // Right driver physically captured baseline and motion:
+  // Before: Index=0, Pos=1
+  // After:  Index=-20, Pos=909
+  // Expected delta = -20 * 10000 + (909 - 1) = -200000 + 908 = -199092 units
+  PositionTracker right_tracker;
+  right_tracker.initialize(Format0PositionSample{0, 1});
+  right_tracker.update(Format0PositionSample{-20, 909}, radix);
+  EXPECT_EQ(right_tracker.accumulated_feedback_units, -199092);
 
-  EXPECT_EQ(tracker.accumulated_steps, -30);
+  // Left driver physically captured baseline and motion:
+  // Before: Index=-1, Pos=9998
+  // After:  Index=20, Pos=422
+  // Expected delta = (20 - (-1)) * 10000 + (422 - 9998) = 210000 - 9576 = +200424 units
+  PositionTracker left_tracker;
+  left_tracker.initialize(Format0PositionSample{-1, 9998});
+  left_tracker.update(Format0PositionSample{20, 422}, radix);
+  EXPECT_EQ(left_tracker.accumulated_feedback_units, 200424);
 }
 
 TEST(PositionTrackerTest, ResetClearsOrigin)
 {
   PositionTracker tracker;
-  tracker.update(5000);
-  tracker.update(5500);
-  EXPECT_EQ(tracker.accumulated_steps, 500);
+  const uint32_t radix = 10000;
+
+  tracker.initialize(Format0PositionSample{5, 500});
+  tracker.update(Format0PositionSample{5, 600}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 100);
 
   tracker.reset();
   EXPECT_FALSE(tracker.initialized);
-  EXPECT_EQ(tracker.accumulated_steps, 0);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 0);
+  EXPECT_EQ(tracker.previous_sample, (Format0PositionSample{0, 0}));
 
-  tracker.update(8000);
-  EXPECT_EQ(tracker.accumulated_steps, 0);
-  tracker.update(8100);
-  EXPECT_EQ(tracker.accumulated_steps, 100);
+  tracker.initialize(Format0PositionSample{8, 8000});
+  EXPECT_TRUE(tracker.initialized);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 0);
+  tracker.update(Format0PositionSample{8, 8100}, radix);
+  EXPECT_EQ(tracker.accumulated_feedback_units, 100);
 }
 
 // =========================================================================
@@ -340,7 +394,7 @@ TEST(M1HardwareLifecycleTest, DoesNotRequireRosOwnedPositionScale)
   EXPECT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 }
 
-TEST(M1HardwareLifecycleTest, ReadsConfigurationBeforeBlockingUnverifiedPositionActivation)
+TEST(M1HardwareLifecycleTest, ReadsConfigurationAndDerivesRadix)
 {
   auto driver = std::make_shared<M1Driver>();
   std::vector<std::vector<uint8_t>> requests;
@@ -359,17 +413,17 @@ TEST(M1HardwareLifecycleTest, ReadsConfigurationBeforeBlockingUnverifiedPosition
   ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
   rclcpp_lifecycle::State state;
   ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
-  EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
   const std::vector<std::vector<uint8_t>> expected{
     {1, 3, 0x3D, 5, 0, 1}, {1, 3, 0x3E, 0x0D, 0, 1},
     {2, 3, 0x3D, 5, 0, 1}, {2, 3, 0x3E, 0x0D, 0, 1}};
-  EXPECT_EQ(requests, expected);  // No Servo-On or motion request.
+  EXPECT_EQ(requests, expected);  // Exactly the 4 configuration reads, no SVON or motion.
   ASSERT_TRUE(hw.get_device_configs());
-  EXPECT_EQ((*hw.get_device_configs())[0].encoder_resolution_pulses_per_rev, 2500);
-  EXPECT_EQ((*hw.get_device_configs())[1].encoder_resolution_pulses_per_rev, 2500);
-  for (const auto & scale : hw.get_position_feedback_scales()) {
-    EXPECT_FALSE(scale.has_value());
-  }
+  EXPECT_EQ((*hw.get_device_configs())[0].encoder_resolution_pulses_per_rev, 2500u);
+  EXPECT_EQ((*hw.get_device_configs())[0].position_command_format, 0u);
+  EXPECT_EQ((*hw.get_device_configs())[1].encoder_resolution_pulses_per_rev, 2500u);
+  EXPECT_EQ((*hw.get_device_configs())[1].position_command_format, 0u);
+  ASSERT_TRUE(hw.get_runtime_radix().has_value());
+  EXPECT_EQ(*hw.get_runtime_radix(), 10000u);
   for (auto & interface : hw.export_state_interfaces()) {
     EXPECT_TRUE(std::isnan(interface.get_optional<double>().value()));
   }
@@ -404,10 +458,12 @@ TEST(M1HardwareLifecycleTest, ConfigurationFailureDoesNotPublishPartialOrStaleSn
     rclcpp_lifecycle::State state;
     ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
     ASSERT_TRUE(hw.get_device_configs());
+    ASSERT_TRUE(hw.get_runtime_radix());
     fail = true;
     calls = 0;
     EXPECT_EQ(hw.on_configure(state), CallbackReturn::FAILURE);
     EXPECT_FALSE(hw.get_device_configs());
+    EXPECT_FALSE(hw.get_runtime_radix());
     EXPECT_FALSE(driver->is_connected());
     EXPECT_EQ(calls, failing_read);
     EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
@@ -415,6 +471,7 @@ TEST(M1HardwareLifecycleTest, ConfigurationFailureDoesNotPublishPartialOrStaleSn
     fail = false;
     EXPECT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);  // Reconnect/re-read.
     EXPECT_TRUE(hw.get_device_configs());
+    EXPECT_TRUE(hw.get_runtime_radix());
     driver->disconnect();  // Captured stack values outlive all possible transactions.
   }
 }
@@ -426,42 +483,240 @@ TEST(M1HardwareLifecycleTest, CleanupInvalidatesConfiguration)
   rclcpp_lifecycle::State state;
   ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
   ASSERT_TRUE(hw.get_device_configs());
+  ASSERT_TRUE(hw.get_runtime_radix());
   EXPECT_EQ(hw.on_cleanup(state), CallbackReturn::SUCCESS);
   EXPECT_FALSE(hw.get_device_configs());
+  EXPECT_FALSE(hw.get_runtime_radix());
   EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
 }
 
-TEST(M1HardwareLifecycleTest, InvalidOrMissingScaleOnEitherDriveBlocksActivation)
+TEST(M1HardwareLifecycleTest, ConfigurationRejectsZeroEncoderResolution)
 {
-  const std::vector<std::optional<double>> invalid{
-    std::nullopt, 0.0, -1.0, std::numeric_limits<double>::quiet_NaN(),
-    std::numeric_limits<double>::infinity()};
-  for (size_t side : {0u, 1u}) {
-    for (auto scale : invalid) {
-      auto driver = std::make_shared<FixtureM1Driver>();
-      size_t transactions = 0;
-      driver->set_transact_override([&transactions](const std::vector<uint8_t> &) {
-          ++transactions;
-          return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
-        });
-      M1Hardware hw(driver);
-      std::array<std::optional<double>, 2> test_scales{4096.0, 8192.0};
-      test_scales[side] = scale;
-      hw.set_position_feedback_scales_for_testing(test_scales);
-      ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
-      rclcpp_lifecycle::State state;
-      ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
-      EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
-      EXPECT_EQ(transactions, 0u);
-    }
-  }
+  auto driver = std::make_shared<M1Driver>();
+  driver->set_transact_override([](const std::vector<uint8_t> & req) {
+      if (req.size() == 6 && req[1] == 0x03) {
+        const uint16_t value = 0;
+        return Result<std::vector<uint8_t>>::success(
+          {req[0], 0x03, 0x02, static_cast<uint8_t>(value >> 8),
+            static_cast<uint8_t>(value & 0xFF)});
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  EXPECT_EQ(hw.on_configure(state), CallbackReturn::FAILURE);
+  EXPECT_FALSE(hw.get_device_configs().has_value());
+  EXPECT_FALSE(hw.get_runtime_radix().has_value());
 }
 
-TEST(M1HardwareLifecycleTest, UsesPerDriveFixtureScaleAndDoesNotReadConfigInControlLoop)
+TEST(M1HardwareLifecycleTest, ConfigurationRejectsUnsupportedFormat)
+{
+  auto driver = std::make_shared<M1Driver>();
+  driver->set_transact_override([](const std::vector<uint8_t> & req) {
+      if (req.size() == 6 && req[1] == 0x03) {
+        const uint16_t value = (req[2] == 0x3D) ? 2500 : 1;
+        return Result<std::vector<uint8_t>>::success(
+          {req[0], 0x03, 0x02, static_cast<uint8_t>(value >> 8),
+            static_cast<uint8_t>(value & 0xFF)});
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  EXPECT_EQ(hw.on_configure(state), CallbackReturn::FAILURE);
+  EXPECT_FALSE(hw.get_device_configs().has_value());
+  EXPECT_FALSE(hw.get_runtime_radix().has_value());
+}
+
+TEST(M1HardwareLifecycleTest, ConfigurationRejectsPairResolutionMismatch)
+{
+  auto driver = std::make_shared<M1Driver>();
+  driver->set_transact_override([](const std::vector<uint8_t> & req) {
+      if (req.size() == 6 && req[1] == 0x03) {
+        uint16_t value = 0;
+        if (req[2] == 0x3D) {
+          value = (req[0] == 1) ? 2500 : 2000;
+        }
+        return Result<std::vector<uint8_t>>::success(
+          {req[0], 0x03, 0x02, static_cast<uint8_t>(value >> 8),
+            static_cast<uint8_t>(value & 0xFF)});
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  EXPECT_EQ(hw.on_configure(state), CallbackReturn::FAILURE);
+  EXPECT_FALSE(hw.get_device_configs().has_value());
+  EXPECT_FALSE(hw.get_runtime_radix().has_value());
+}
+
+TEST(M1HardwareLifecycleTest, ActivationBlockedWithoutConfiguration)
+{
+  auto driver = std::make_shared<FixtureM1Driver>();
+  size_t transactions = 0;
+  driver->set_transact_override([&transactions](const std::vector<uint8_t> &) {
+      ++transactions;
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
+  EXPECT_EQ(transactions, 0u);
+}
+
+TEST(M1HardwareLifecycleTest, ActivationEstablishesServoOffBaselineBeforeEnable)
+{
+  auto driver = std::make_shared<FixtureM1Driver>();
+  std::vector<std::string> sequence;
+  driver->set_transact_override([&sequence](const std::vector<uint8_t> & req) {
+      if (req.size() >= 2 && req[1] == 0x03) {
+        sequence.push_back("read_state");
+        std::vector<uint8_t> rsp(35, 0);
+        rsp[0] = 0x65;
+        rsp[1] = 0x03;
+        rsp[2] = 32;
+        // Driver 1 (Right): index=0, pos=100
+        rsp[13] = 0x00; rsp[14] = 0x00;
+        rsp[15] = 0x00; rsp[16] = 100;
+        // Driver 2 (Left): index=-1, pos=500
+        rsp[29] = 0xFF; rsp[30] = 0xFF;
+        rsp[31] = 0x01; rsp[32] = 0xF4;
+        return Result<std::vector<uint8_t>>::success(rsp);
+      }
+      if (req.size() >= 2 && req[1] == 0x17) {
+        sequence.push_back("enable");
+        std::vector<uint8_t> rsp(35, 0);
+        rsp[0] = 0x65;
+        rsp[1] = 0x17;
+        rsp[2] = 32;
+        return Result<std::vector<uint8_t>>::success(rsp);
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  ASSERT_EQ(hw.on_activate(state), CallbackReturn::SUCCESS);
+
+  ASSERT_GE(sequence.size(), 2u);
+  EXPECT_EQ(sequence[0], "read_state");
+  EXPECT_EQ(sequence[1], "enable");
+
+  const auto right_tracker = hw.get_right_position_tracker();
+  const auto left_tracker = hw.get_left_position_tracker();
+  EXPECT_TRUE(right_tracker.initialized);
+  EXPECT_EQ(right_tracker.previous_sample.index, 0);
+  EXPECT_EQ(right_tracker.previous_sample.pos, 100);
+  EXPECT_EQ(right_tracker.accumulated_feedback_units, 0);
+
+  EXPECT_TRUE(left_tracker.initialized);
+  EXPECT_EQ(left_tracker.previous_sample.index, -1);
+  EXPECT_EQ(left_tracker.previous_sample.pos, 500);
+  EXPECT_EQ(left_tracker.accumulated_feedback_units, 0);
+}
+
+TEST(M1HardwareLifecycleTest, ActivationAbortsBeforeEnableOnPreCheckFailure)
+{
+  auto driver = std::make_shared<FixtureM1Driver>();
+  bool enable_called = false;
+  driver->set_transact_override([&enable_called](const std::vector<uint8_t> & req) {
+      if (req.size() >= 2 && req[1] == 0x03) {
+        return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+      }
+      if (req.size() >= 2 && req[1] == 0x17) {
+        enable_called = true;
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  EXPECT_EQ(hw.on_activate(state), CallbackReturn::ERROR);
+  EXPECT_FALSE(enable_called);
+}
+
+TEST(M1HardwareLifecycleTest, ActivationAbortsBeforeEnableOnPreCheckAlarm)
+{
+  auto driver = std::make_shared<FixtureM1Driver>();
+  bool enable_called = false;
+  driver->set_transact_override([&enable_called](const std::vector<uint8_t> & req) {
+      if (req.size() >= 2 && req[1] == 0x03) {
+        std::vector<uint8_t> rsp(35, 0);
+        rsp[0] = 0x65;
+        rsp[1] = 0x03;
+        rsp[2] = 32;
+        rsp[6] = 0x01;  // Alarm on Right drive
+        return Result<std::vector<uint8_t>>::success(rsp);
+      }
+      if (req.size() >= 2 && req[1] == 0x17) {
+        enable_called = true;
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  EXPECT_EQ(hw.on_activate(state), CallbackReturn::ERROR);
+  EXPECT_FALSE(enable_called);
+}
+
+TEST(M1HardwareLifecycleTest, StaleStateProtectionInReadAndWrite)
 {
   auto driver = std::make_shared<FixtureM1Driver>();
   M1Hardware hw(driver);
-  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  ASSERT_EQ(hw.on_activate(state), CallbackReturn::SUCCESS);
+
+  const rclcpp::Time now(0);
+  const rclcpp::Duration dt(0, 20000000);
+
+  // First read consumes cached active_state from on_activate
+  EXPECT_EQ(hw.read(now, dt), return_type::OK);
+
+  // Second consecutive read fails to prevent reusing stale feedback
+  EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
+
+  // Write replenishes valid cached state
+  EXPECT_EQ(hw.write(now, dt), return_type::OK);
+  EXPECT_EQ(hw.read(now, dt), return_type::OK);
+  EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
+
+  // Write failure clears valid cached state
+  driver->set_transact_override([](const std::vector<uint8_t> &) {
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+    });
+  EXPECT_EQ(hw.write(now, dt), return_type::ERROR);
+  EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
+
+  // Write returning alarm clears valid cached state
+  driver->set_transact_override([](const std::vector<uint8_t> &) {
+      std::vector<uint8_t> rsp(35, 0);
+      rsp[0] = 0x65;
+      rsp[1] = 0x17;
+      rsp[2] = 32;
+      rsp[6] = 0x01;  // Right drive alarm
+      return Result<std::vector<uint8_t>>::success(rsp);
+    });
+  EXPECT_EQ(hw.write(now, dt), return_type::ERROR);
+  EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
+}
+
+TEST(M1HardwareLifecycleTest, ControlLoopPositionAndVelocityConversion)
+{
+  auto driver = std::make_shared<FixtureM1Driver>();
+  M1Hardware hw(driver);
   ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
   rclcpp_lifecycle::State state;
   ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
@@ -476,13 +731,16 @@ TEST(M1HardwareLifecycleTest, UsesPerDriveFixtureScaleAndDoesNotReadConfigInCont
       response[0] = 0x65;
       response[1] = 0x17;
       response[2] = 32;
-      // Right = -4096; Left = +8192: one shaft revolution per explicit fixture.
+      // Right (ID 1, sign -1): Index = -1, Pos = 0 -> -10000 units -> +pi/10 rad wheel displacement
       response[13] = 0xFF;
       response[14] = 0xFF;
-      response[15] = 0xF0;
-      response[29] = 0;
-      response[30] = 0;
-      response[31] = 0x20;
+      response[15] = 0x00;
+      response[16] = 0x00;
+      // Left (ID 2, sign +1): Index = 1, Pos = 0 -> +10000 units -> +pi/10 rad wheel displacement
+      response[29] = 0x00;
+      response[30] = 0x01;
+      response[31] = 0x00;
+      response[32] = 0x00;
       return Result<std::vector<uint8_t>>::success(response);
     });
   ASSERT_EQ(hw.write(now, dt), return_type::OK);
@@ -565,7 +823,6 @@ TEST(M1HardwareLifecycleTest, FullLifecycleMockSuccess)
 
   // 1. Configure
   EXPECT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
-  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
 
   // 2. Activate
   EXPECT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
@@ -600,7 +857,6 @@ TEST(M1HardwareLifecycleTest, WriteAndReadFeedbackLoop)
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
 
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
-  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   auto cmd_ifaces = hw.export_command_interfaces();
@@ -647,7 +903,6 @@ TEST(M1HardwareLifecycleTest, InvalidCommandRejection)
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
 
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
-  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   auto cmd_ifaces = hw.export_command_interfaces();
@@ -1115,7 +1370,6 @@ TEST_F(DiffDriveIntegrationTest, CommandSubstitutionProhibitionPolicy)
   rclcpp_lifecycle::State inactive(
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
-  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   auto cmd_ifaces = hw.export_command_interfaces();
@@ -1149,7 +1403,6 @@ TEST_F(DiffDriveIntegrationTest, SafeStopChainOnDeactivate)
   rclcpp_lifecycle::State inactive(
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
-  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   // Verify hardware is active and commands can be written

@@ -37,33 +37,50 @@
 namespace mobile_base_control
 {
 
-/// Structure to track continuous relative motor position across int32 rollover.
+/// Structure to track continuous relative motor position using Dexmart M1 Format-0 feedback.
 struct PositionTracker
 {
   bool initialized{false};
-  int32_t previous_raw{0};
-  int64_t accumulated_steps{0};
+  Format0PositionSample previous_sample{};
+  int64_t accumulated_feedback_units{0};
 
   void reset() noexcept
   {
     initialized = false;
-    previous_raw = 0;
-    accumulated_steps = 0;
+    previous_sample = Format0PositionSample{};
+    accumulated_feedback_units = 0;
   }
 
-  void update(int32_t current_raw) noexcept
+  void initialize(const Format0PositionSample & sample) noexcept
   {
-    if (!initialized) {
-      previous_raw = current_raw;
-      accumulated_steps = 0;
-      initialized = true;
-      return;
+    previous_sample = sample;
+    accumulated_feedback_units = 0;
+    initialized = true;
+  }
+
+  bool update(const Format0PositionSample & current, uint32_t radix) noexcept
+  {
+    if (!initialized || radix == 0) {
+      return false;
     }
-    // 2's complement difference accurately handles rollover between -2^31 and 2^31-1
-    const int32_t delta = static_cast<int32_t>(
-      static_cast<uint32_t>(current_raw) - static_cast<uint32_t>(previous_raw));
-    accumulated_steps += static_cast<int64_t>(delta);
-    previous_raw = current_raw;
+
+    int32_t index_delta =
+      static_cast<int32_t>(current.index) - static_cast<int32_t>(previous_sample.index);
+
+    if (index_delta > 32767) {
+      index_delta -= 65536;
+    } else if (index_delta < -32768) {
+      index_delta += 65536;
+    }
+
+    const int64_t delta =
+      static_cast<int64_t>(index_delta) * static_cast<int64_t>(radix) +
+      static_cast<int64_t>(current.pos) -
+      static_cast<int64_t>(previous_sample.pos);
+
+    accumulated_feedback_units += delta;
+    previous_sample = current;
+    return true;
   }
 };
 
@@ -149,11 +166,35 @@ public:
     double gear_ratio,
     int motor_sign) noexcept;
 
+  static double feedback_units_to_wheel_rad(
+    int64_t accumulated_feedback_units,
+    uint32_t feedback_units_per_rev,
+    double gear_ratio,
+    int motor_sign) noexcept;
+
   static double motor_steps_to_wheel_rad(
     int64_t accumulated_steps,
     double position_steps_per_rev,
     double gear_ratio,
-    int motor_sign) noexcept;
+    int motor_sign) noexcept
+  {
+    if (position_steps_per_rev <= 0.0) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    return feedback_units_to_wheel_rad(
+      accumulated_steps,
+      static_cast<uint32_t>(std::lround(position_steps_per_rev)),
+      gear_ratio,
+      motor_sign);
+  }
+
+  // Named semantic constant: 4 quadrature counts per single-phase pulse.
+  // Verified on current physical hardware:
+  // 2500 single-phase pulses/rev -> 10000 feedback units/rev.
+  // Note: Vendor documentation does not state a universal rule that every M1 model/firmware
+  // always uses encoder_resolution * 4 as feedback units/rev; this relationship is supported
+  // by current physical hardware verification and protocol observations.
+  static constexpr int64_t kQuadratureCountsPerPulse = 4;
 
   // Configuration accessor & testing injection seam
   const M1HardwareConfig & get_config() const noexcept {return config_;}
@@ -162,19 +203,19 @@ public:
   {
     return device_configs_;
   }
+  const std::optional<uint32_t> & get_runtime_radix() const noexcept
+  {
+    return runtime_radix_;
+  }
+  const PositionTracker & get_left_position_tracker() const noexcept
+  {
+    return left_position_tracker_;
+  }
+  const PositionTracker & get_right_position_tracker() const noexcept
+  {
+    return right_position_tracker_;
+  }
   void set_driver_for_testing(std::shared_ptr<M1Driver> driver) noexcept;
-  // Synthetic scale injection seam for testing. In production, position feedback
-  // scaling remains unverified and motion is blocked before Servo-On.
-  // Order: [0]=Right (ID 1), [1]=Left (ID 2).
-  void set_position_feedback_scales_for_testing(
-    const std::array<std::optional<double>, 2> & scales) noexcept
-  {
-    position_feedback_scales_ = scales;
-  }
-  const std::array<std::optional<double>, 2> & get_position_feedback_scales() const noexcept
-  {
-    return position_feedback_scales_;
-  }
 
 private:
   hardware_interface::CallbackReturn parse_parameters();
@@ -183,8 +224,7 @@ private:
   M1HardwareConfig config_;
   std::shared_ptr<M1Driver> driver_;
   std::optional<std::array<M1DeviceConfig, 2>> device_configs_;
-  // Position feedback scaling: [0]=Right (ID 1), [1]=Left (ID 2). Unverified in production.
-  std::array<std::optional<double>, 2> position_feedback_scales_{std::nullopt, std::nullopt};
+  std::optional<uint32_t> runtime_radix_{std::nullopt};
 
   // Command storage: [0]=Left, [1]=Right
   double hw_commands_[2]{0.0, 0.0};

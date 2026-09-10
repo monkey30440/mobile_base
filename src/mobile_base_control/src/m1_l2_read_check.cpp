@@ -104,7 +104,8 @@ int main(int argc, char ** argv)
               << (st.bus_voltage_raw / 100.0) << " V" << std::endl;
     std::cout << "  Current       : " << std::fixed << std::setprecision(2)
               << (st.current_raw / 100.0) << " A" << std::endl;
-    std::cout << "  Position Steps: " << st.position_steps << " steps" << std::endl;
+    std::cout << "  Position Index: " << st.position_sample.index << std::endl;
+    std::cout << "  Position Step : " << st.position_sample.pos << std::endl;
     std::cout << "  Error Check   : 0x" << std::hex << std::setw(4) << std::setfill('0')
               << st.error_check << std::dec << std::endl;
   }

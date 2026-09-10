@@ -233,7 +233,8 @@ int run_control_check(
         out << "  Driver ID " << st.driver_id << ": Status=" << st.status
             << " Alarm=" << st.alarm << " RPM=" << st.actual_rpm
             << " Bus=" << std::fixed << std::setprecision(2) << (st.bus_voltage_raw / 100.0) << "V"
-            << " Pos=" << st.position_steps << " steps\n";
+            << " Index=" << st.position_sample.index
+            << " Pos=" << st.position_sample.pos << "\n";
       }
     };
 

@@ -58,6 +58,14 @@ add_executable(m1_l2_read_check
 target_link_libraries(m1_l2_read_check m1_driver)
 target_compile_features(m1_l2_read_check PUBLIC cxx_std_17)
 
+# Level 2 Unicast Register Read Diagnostic Tool
+add_executable(m1_unicast_read_check
+  src/m1_unicast_read_check_main.cpp
+  src/m1_unicast_read_check_core.cpp
+)
+target_link_libraries(m1_unicast_read_check m1_driver)
+target_compile_features(m1_unicast_read_check PUBLIC cxx_std_17)
+
 # Level 3/4 Controlled Write Validation Harness
 add_executable(m1_control_check
   src/m1_control_check_main.cpp
@@ -131,6 +139,7 @@ install(
     m1_driver
     m1_hardware
     m1_l2_read_check
+    m1_unicast_read_check
     m1_control_check
     m1_latency_check
     m1_fc17_latency_check
@@ -183,6 +192,12 @@ if(BUILD_TESTING)
     test/test_m1_control_check.cpp
   )
   target_link_libraries(test_m1_control_check m1_driver)
+
+  ament_add_gtest(test_m1_unicast_read_check
+    test/test_m1_unicast_read_check.cpp
+    src/m1_unicast_read_check_core.cpp
+  )
+  target_link_libraries(test_m1_unicast_read_check m1_driver)
 
   ament_add_gtest(test_m1_latency_stats
     test/test_m1_latency_stats.cpp

@@ -91,11 +91,31 @@ struct MotorCommand
   int16_t target_rpm{0};
 };
 
+struct Format0PositionSample
+{
+  int16_t index{0};
+  uint16_t pos{0};
+};
+
+inline bool operator==(
+  const Format0PositionSample & lhs,
+  const Format0PositionSample & rhs) noexcept
+{
+  return lhs.index == rhs.index && lhs.pos == rhs.pos;
+}
+
+inline bool operator!=(
+  const Format0PositionSample & lhs,
+  const Format0PositionSample & rhs) noexcept
+{
+  return !(lhs == rhs);
+}
+
 struct MotorState
 {
   int driver_id{0};
   int16_t actual_rpm{0};
-  int32_t position_steps{0};
+  Format0PositionSample position_sample{};
   uint16_t status{0};
   uint16_t alarm{0};
   uint16_t bus_voltage_raw{0};  // unit: 0.01 V
@@ -108,6 +128,40 @@ struct ExchangeResult
   std::array<MotorState, 2> states{};
 };
 
+constexpr uint16_t REG_ENCODER_RESOLUTION = 0x3D05;  // 01-06: encoder pulses/rev in RAM
+constexpr uint16_t REG_POSITION_FORMAT = 0x3E0D;     // 02-14: position command format in RAM
+
+enum class M1ConfigField
+{
+  NONE = 0,
+  ENCODER_RESOLUTION,
+  POSITION_FORMAT
+};
+
+inline const char * m1_config_field_to_string(M1ConfigField field) noexcept
+{
+  switch (field) {
+    case M1ConfigField::ENCODER_RESOLUTION:
+      return "encoder resolution";
+    case M1ConfigField::POSITION_FORMAT:
+      return "position command format";
+    default:
+      return "";
+  }
+}
+
+inline uint16_t m1_config_field_to_register(M1ConfigField field) noexcept
+{
+  switch (field) {
+    case M1ConfigField::ENCODER_RESOLUTION:
+      return REG_ENCODER_RESOLUTION;
+    case M1ConfigField::POSITION_FORMAT:
+      return REG_POSITION_FORMAT;
+    default:
+      return 0;
+  }
+}
+
 /// M1-owned configuration snapshot; never populated from ROS parameters.
 struct M1DeviceConfig
 {
@@ -116,6 +170,51 @@ struct M1DeviceConfig
   uint16_t encoder_resolution_pulses_per_rev{0};
   // 02-14: position COMMAND format. Its effect on MD2 feedback is unverified.
   uint16_t position_command_format{0};
+};
+
+template<>
+struct Result<M1DeviceConfig>
+{
+  bool ok{false};
+  ErrorCode error{ErrorCode::NONE};
+  M1DeviceConfig value{};
+  int failed_driver_id{0};
+  M1ConfigField failed_field{M1ConfigField::NONE};
+
+  uint16_t failed_register() const noexcept
+  {
+    return m1_config_field_to_register(failed_field);
+  }
+
+  const char * failed_context() const noexcept
+  {
+    return m1_config_field_to_string(failed_field);
+  }
+
+  static Result<M1DeviceConfig> success(M1DeviceConfig val = M1DeviceConfig{})
+  {
+    Result<M1DeviceConfig> r;
+    r.ok = true;
+    r.error = ErrorCode::NONE;
+    r.value = std::move(val);
+    r.failed_driver_id = 0;
+    r.failed_field = M1ConfigField::NONE;
+    return r;
+  }
+
+  static Result<M1DeviceConfig> failure(
+    ErrorCode err,
+    int driver_id = 0,
+    M1ConfigField field = M1ConfigField::NONE)
+  {
+    Result<M1DeviceConfig> r;
+    r.ok = false;
+    r.error = err;
+    r.value = M1DeviceConfig{};
+    r.failed_driver_id = driver_id;
+    r.failed_field = field;
+    return r;
+  }
 };
 
 struct TransactionTiming
@@ -140,10 +239,9 @@ inline int16_t decode_s16(uint16_t val) noexcept
   return static_cast<int16_t>(val);
 }
 
-inline int32_t decode_s32(uint16_t hi, uint16_t lo) noexcept
+inline Format0PositionSample decode_format0_position(uint16_t hi, uint16_t lo) noexcept
 {
-  const uint32_t u = (static_cast<uint32_t>(hi) << 16) | static_cast<uint32_t>(lo);
-  return static_cast<int32_t>(u);
+  return Format0PositionSample{decode_s16(hi), lo};
 }
 
 Result<uint16_t> build_driver_bitmask(const std::vector<int> & ids);
