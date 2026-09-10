@@ -1,0 +1,3802 @@
+{
+  "port": "/dev/fihRobotBaseMotor",
+  "baudrate": 230400,
+  "parity": "N",
+  "stop_bits": 1,
+  "function_code": 3,
+  "scope": "document-defined EEP/RAM configuration; no monitor or control commands",
+  "devices": [
+    {
+      "slave_id": 1,
+      "read_ok": 264,
+      "read_errors": 0,
+      "parameters": [
+        {
+          "id": "01-01",
+          "name": "馬達/Sensor 類型",
+          "eep": {
+            "address": "0x0100",
+            "raw_uint16": 12,
+            "raw_hex": "0x000C"
+          },
+          "ram": {
+            "address": "0x3D00",
+            "raw_uint16": 12,
+            "raw_hex": "0x000C"
+          }
+        },
+        {
+          "id": "01-02",
+          "name": "Hall 序列",
+          "eep": {
+            "address": "0x0101",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D01",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-03",
+          "name": "馬達極數",
+          "eep": {
+            "address": "0x0102",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          },
+          "ram": {
+            "address": "0x3D02",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          }
+        },
+        {
+          "id": "01-04",
+          "name": "無載全轉速",
+          "eep": {
+            "address": "0x0103",
+            "raw_uint16": 4188,
+            "raw_hex": "0x105C"
+          },
+          "ram": {
+            "address": "0x3D03",
+            "raw_uint16": 4188,
+            "raw_hex": "0x105C"
+          }
+        },
+        {
+          "id": "01-05",
+          "name": "馬達 CW 定義",
+          "eep": {
+            "address": "0x0104",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D04",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-06",
+          "name": "編碼器解析度",
+          "eep": {
+            "address": "0x0105",
+            "raw_uint16": 2500,
+            "raw_hex": "0x09C4"
+          },
+          "ram": {
+            "address": "0x3D05",
+            "raw_uint16": 2500,
+            "raw_hex": "0x09C4"
+          }
+        },
+        {
+          "id": "01-10",
+          "name": "Drive Enable 設定",
+          "eep": {
+            "address": "0x0109",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x3D09",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "01-11",
+          "name": "控制模式",
+          "eep": {
+            "address": "0x010A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D0A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-12",
+          "name": "速度控制方法",
+          "eep": {
+            "address": "0x010B",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          },
+          "ram": {
+            "address": "0x3D0B",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          }
+        },
+        {
+          "id": "01-13",
+          "name": "位置控制方法",
+          "eep": {
+            "address": "0x010C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D0C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-14",
+          "name": "信號低於閥值行為",
+          "eep": {
+            "address": "0x010D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D0D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-15",
+          "name": "停止時保持力",
+          "eep": {
+            "address": "0x010E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x3D0E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "01-16",
+          "name": "編碼器霍爾 Offset",
+          "eep": {
+            "address": "0x010F",
+            "raw_uint16": 1166,
+            "raw_hex": "0x048E"
+          },
+          "ram": {
+            "address": "0x3D0F",
+            "raw_uint16": 1166,
+            "raw_hex": "0x048E"
+          }
+        },
+        {
+          "id": "02-01",
+          "name": "調速上限",
+          "eep": {
+            "address": "0x0200",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          },
+          "ram": {
+            "address": "0x3E00",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          }
+        },
+        {
+          "id": "02-02",
+          "name": "調速下限",
+          "eep": {
+            "address": "0x0201",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          },
+          "ram": {
+            "address": "0x3E01",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          }
+        },
+        {
+          "id": "02-07",
+          "name": "調 Duty 上限",
+          "eep": {
+            "address": "0x0206",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x3E06",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": "02-08",
+          "name": "調 Duty 下限",
+          "eep": {
+            "address": "0x0207",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E07",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-09",
+          "name": "外部輸入調整信號範圍",
+          "eep": {
+            "address": "0x0208",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E08",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-10",
+          "name": "外部輸入調整信號增益",
+          "eep": {
+            "address": "0x0209",
+            "raw_uint16": 708,
+            "raw_hex": "0x02C4"
+          },
+          "ram": {
+            "address": "0x3E09",
+            "raw_uint16": 708,
+            "raw_hex": "0x02C4"
+          }
+        },
+        {
+          "id": "02-11",
+          "name": "外部輸入調整信號閥值",
+          "eep": {
+            "address": "0x020A",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          },
+          "ram": {
+            "address": "0x3E0A",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          }
+        },
+        {
+          "id": "02-12",
+          "name": "調整信號閥值對應轉速",
+          "eep": {
+            "address": "0x020B",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          },
+          "ram": {
+            "address": "0x3E0B",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          }
+        },
+        {
+          "id": "02-14",
+          "name": "位置命令格式",
+          "eep": {
+            "address": "0x020D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E0D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-15",
+          "name": "轉速顯示更新率",
+          "eep": {
+            "address": "0x020E",
+            "raw_uint16": 3,
+            "raw_hex": "0x0003"
+          },
+          "ram": {
+            "address": "0x3E0E",
+            "raw_uint16": 3,
+            "raw_hex": "0x0003"
+          }
+        },
+        {
+          "id": "02-18",
+          "name": "功率輸出額度",
+          "eep": {
+            "address": "0x0211",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x3E11",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": "02-19",
+          "name": "PWM 頻率",
+          "eep": {
+            "address": "0x0212",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E12",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-22",
+          "name": "Low Speed RPM",
+          "eep": {
+            "address": "0x0215",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E15",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0300",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F00",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0301",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F01",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0302",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F02",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0303",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F03",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0304",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F04",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0305",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F05",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0306",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F06",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0307",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F07",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x0308",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F08",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x0309",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F09",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x030A",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F0A",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x030B",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F0B",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": "03-13",
+          "name": "轉矩限制堵轉 Alarm",
+          "eep": {
+            "address": "0x030C",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          },
+          "ram": {
+            "address": "0x3F0C",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          }
+        },
+        {
+          "id": "03-14",
+          "name": "超過轉矩限制允許時間",
+          "eep": {
+            "address": "0x030D",
+            "raw_uint16": 300,
+            "raw_hex": "0x012C"
+          },
+          "ram": {
+            "address": "0x3F0D",
+            "raw_uint16": 300,
+            "raw_hex": "0x012C"
+          }
+        },
+        {
+          "id": "03-15",
+          "name": "低於轉矩限制回復時間",
+          "eep": {
+            "address": "0x030E",
+            "raw_uint16": 600,
+            "raw_hex": "0x0258"
+          },
+          "ram": {
+            "address": "0x3F0E",
+            "raw_uint16": 600,
+            "raw_hex": "0x0258"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0400",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4000",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0401",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4001",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0402",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4002",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0403",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4003",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0404",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4004",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩加速時間",
+          "eep": {
+            "address": "0x0405",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4005",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩加速時間",
+          "eep": {
+            "address": "0x0406",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4006",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩加速時間",
+          "eep": {
+            "address": "0x0407",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4007",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x0408",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4008",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x0409",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4009",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x040A",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x400A",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x040B",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x400B",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040C",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400C",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040D",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400D",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040F",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400F",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "05-02",
+          "name": "初期運轉禁止報警",
+          "eep": {
+            "address": "0x0501",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4101",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-03",
+          "name": "馬達回授信號保護功能",
+          "eep": {
+            "address": "0x0502",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4102",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "05-04",
+          "name": "過速報警轉速",
+          "eep": {
+            "address": "0x0503",
+            "raw_uint16": 4300,
+            "raw_hex": "0x10CC"
+          },
+          "ram": {
+            "address": "0x4103",
+            "raw_uint16": 4300,
+            "raw_hex": "0x10CC"
+          }
+        },
+        {
+          "id": "05-07",
+          "name": "編碼器異常偵測設定",
+          "eep": {
+            "address": "0x0506",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x4106",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": "05-10",
+          "name": "過電壓保護",
+          "eep": {
+            "address": "0x0509",
+            "raw_uint16": 6300,
+            "raw_hex": "0x189C"
+          },
+          "ram": {
+            "address": "0x4109",
+            "raw_uint16": 6300,
+            "raw_hex": "0x189C"
+          }
+        },
+        {
+          "id": "05-11",
+          "name": "過電壓回復(放電電壓)",
+          "eep": {
+            "address": "0x050A",
+            "raw_uint16": 6000,
+            "raw_hex": "0x1770"
+          },
+          "ram": {
+            "address": "0x410A",
+            "raw_uint16": 6000,
+            "raw_hex": "0x1770"
+          }
+        },
+        {
+          "id": "05-12",
+          "name": "低電壓保護",
+          "eep": {
+            "address": "0x050B",
+            "raw_uint16": 1400,
+            "raw_hex": "0x0578"
+          },
+          "ram": {
+            "address": "0x410B",
+            "raw_uint16": 1400,
+            "raw_hex": "0x0578"
+          }
+        },
+        {
+          "id": "05-13",
+          "name": "低電壓回復",
+          "eep": {
+            "address": "0x050C",
+            "raw_uint16": 1450,
+            "raw_hex": "0x05AA"
+          },
+          "ram": {
+            "address": "0x410C",
+            "raw_uint16": 1450,
+            "raw_hex": "0x05AA"
+          }
+        },
+        {
+          "id": "05-15",
+          "name": "過電流保護(過載保護)",
+          "eep": {
+            "address": "0x050E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x410E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-16",
+          "name": "過功率保護",
+          "eep": {
+            "address": "0x050F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x410F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-17",
+          "name": "RS485/CAN 通訊逾時",
+          "eep": {
+            "address": "0x0510",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4110",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-18",
+          "name": "RS485 異常次數",
+          "eep": {
+            "address": "0x0511",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4111",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-19",
+          "name": "RS232 通訊逾時",
+          "eep": {
+            "address": "0x0512",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4112",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-20",
+          "name": "RS232 異常次數",
+          "eep": {
+            "address": "0x0513",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4113",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-21",
+          "name": "通訊異常保護行為",
+          "eep": {
+            "address": "0x0514",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4114",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-22",
+          "name": "回生放電保護",
+          "eep": {
+            "address": "0x0515",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x4115",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": "05-23",
+          "name": "CAN 通訊逾時",
+          "eep": {
+            "address": "0x0516",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4116",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-26",
+          "name": "Fault Reaction BITF H",
+          "eep": {
+            "address": "0x0519",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4119",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-27",
+          "name": "Fault Reaction BITF L",
+          "eep": {
+            "address": "0x051A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x411A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-28",
+          "name": "Fault Reaction BITF H",
+          "eep": {
+            "address": "0x051B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x411B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-01",
+          "name": "輸入 X0 功能",
+          "eep": {
+            "address": "0x0600",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4200",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-02",
+          "name": "輸入 X1 功能",
+          "eep": {
+            "address": "0x0601",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          },
+          "ram": {
+            "address": "0x4201",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          }
+        },
+        {
+          "id": "06-03",
+          "name": "輸入 X2 功能",
+          "eep": {
+            "address": "0x0602",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          },
+          "ram": {
+            "address": "0x4202",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          }
+        },
+        {
+          "id": "06-04",
+          "name": "X3(常駐 ON 輸入 0)",
+          "eep": {
+            "address": "0x0603",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4203",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-05",
+          "name": "輸入 X4 (A0X)功能",
+          "eep": {
+            "address": "0x0604",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4204",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-06",
+          "name": "輸入 X5 (STO1)功能",
+          "eep": {
+            "address": "0x0605",
+            "raw_uint16": 23,
+            "raw_hex": "0x0017"
+          },
+          "ram": {
+            "address": "0x4205",
+            "raw_uint16": 23,
+            "raw_hex": "0x0017"
+          }
+        },
+        {
+          "id": "06-07",
+          "name": "輸入 X6 (STO2)功能",
+          "eep": {
+            "address": "0x0606",
+            "raw_uint16": 24,
+            "raw_hex": "0x0018"
+          },
+          "ram": {
+            "address": "0x4206",
+            "raw_uint16": 24,
+            "raw_hex": "0x0018"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x0608",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4208",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x0609",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4209",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-15",
+          "name": "SC/CC 模式",
+          "eep": {
+            "address": "0x060E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-16",
+          "name": "輸入作動邏輯",
+          "eep": {
+            "address": "0x060F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          },
+          "ram": {
+            "address": "0x420F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          }
+        },
+        {
+          "id": "06-17",
+          "name": "輸出 Y0 功能",
+          "eep": {
+            "address": "0x0610",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4210",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "06-18",
+          "name": "輸出 Y1 功能",
+          "eep": {
+            "address": "0x0611",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4211",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "06-19",
+          "name": "輸出 Y2 (MB)功能",
+          "eep": {
+            "address": "0x0612",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          },
+          "ram": {
+            "address": "0x4212",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          }
+        },
+        {
+          "id": "06-29",
+          "name": "MBRAKE(抱閘)控制機制",
+          "eep": {
+            "address": "0x061C",
+            "raw_uint16": 50,
+            "raw_hex": "0x0032"
+          },
+          "ram": {
+            "address": "0x421C",
+            "raw_uint16": 50,
+            "raw_hex": "0x0032"
+          }
+        },
+        {
+          "id": "06-30",
+          "name": "轉速到達範圍(VA)",
+          "eep": {
+            "address": "0x061D",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x421D",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": "06-31",
+          "name": "EN-OUT 轉速",
+          "eep": {
+            "address": "0x061E",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x421E",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": "06-32",
+          "name": "輸出作動邏輯",
+          "eep": {
+            "address": "0x061F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          },
+          "ram": {
+            "address": "0x421F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          }
+        },
+        {
+          "id": "07-01",
+          "name": "控制演算法",
+          "eep": {
+            "address": "0x0700",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4300",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "07-02",
+          "name": "控制常數 Kp",
+          "eep": {
+            "address": "0x0701",
+            "raw_uint16": 16,
+            "raw_hex": "0x0010"
+          },
+          "ram": {
+            "address": "0x4301",
+            "raw_uint16": 16,
+            "raw_hex": "0x0010"
+          }
+        },
+        {
+          "id": "07-03",
+          "name": "速度控制常數 1",
+          "eep": {
+            "address": "0x0702",
+            "raw_uint16": 128,
+            "raw_hex": "0x0080"
+          },
+          "ram": {
+            "address": "0x4302",
+            "raw_uint16": 128,
+            "raw_hex": "0x0080"
+          }
+        },
+        {
+          "id": "07-04",
+          "name": "速度控制常數 2",
+          "eep": {
+            "address": "0x0703",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4303",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-01",
+          "name": "NET-X0 輸入功能",
+          "eep": {
+            "address": "0x0900",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4500",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "09-02",
+          "name": "NET-X1 輸入功能",
+          "eep": {
+            "address": "0x0901",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4501",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "09-03",
+          "name": "NET-X2 輸入功能",
+          "eep": {
+            "address": "0x0902",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4502",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-04",
+          "name": "NET-X3 輸入功能",
+          "eep": {
+            "address": "0x0903",
+            "raw_uint16": 8,
+            "raw_hex": "0x0008"
+          },
+          "ram": {
+            "address": "0x4503",
+            "raw_uint16": 8,
+            "raw_hex": "0x0008"
+          }
+        },
+        {
+          "id": "09-05",
+          "name": "NET-X4 輸入功能",
+          "eep": {
+            "address": "0x0904",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          },
+          "ram": {
+            "address": "0x4504",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          }
+        },
+        {
+          "id": "09-06",
+          "name": "NET-X5 輸入功能",
+          "eep": {
+            "address": "0x0905",
+            "raw_uint16": 11,
+            "raw_hex": "0x000B"
+          },
+          "ram": {
+            "address": "0x4505",
+            "raw_uint16": 11,
+            "raw_hex": "0x000B"
+          }
+        },
+        {
+          "id": "09-07",
+          "name": "NET-X6 輸入功能",
+          "eep": {
+            "address": "0x0906",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          },
+          "ram": {
+            "address": "0x4506",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          }
+        },
+        {
+          "id": "09-08",
+          "name": "NET-X7 輸入功能",
+          "eep": {
+            "address": "0x0907",
+            "raw_uint16": 14,
+            "raw_hex": "0x000E"
+          },
+          "ram": {
+            "address": "0x4507",
+            "raw_uint16": 14,
+            "raw_hex": "0x000E"
+          }
+        },
+        {
+          "id": "09-09",
+          "name": "NET-X8 輸入功能",
+          "eep": {
+            "address": "0x0908",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4508",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-10",
+          "name": "NET-X9 輸入功能",
+          "eep": {
+            "address": "0x0909",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4509",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-11",
+          "name": "NET-X10 輸入功能",
+          "eep": {
+            "address": "0x090A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-12",
+          "name": "NET-X11 輸入功能",
+          "eep": {
+            "address": "0x090B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-13",
+          "name": "NET-X12 輸入功能",
+          "eep": {
+            "address": "0x090C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-14",
+          "name": "NET-X13 輸入功能",
+          "eep": {
+            "address": "0x090D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-15",
+          "name": "NET-X14 輸入功能",
+          "eep": {
+            "address": "0x090E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-16",
+          "name": "NET-X 輸入作動邏輯",
+          "eep": {
+            "address": "0x090F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-17",
+          "name": "WatchData 選擇",
+          "eep": {
+            "address": "0x0910",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4510",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-18",
+          "name": "RS485 協議設定",
+          "eep": {
+            "address": "0x0911",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4511",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-19",
+          "name": "RS485/CAN ID",
+          "eep": {
+            "address": "0x0912",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4512",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "09-20",
+          "name": "RS485/CAN Baud-Rate",
+          "eep": {
+            "address": "0x0913",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          },
+          "ram": {
+            "address": "0x4513",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          }
+        },
+        {
+          "id": "09-21",
+          "name": "RTU C3.5 最小值",
+          "eep": {
+            "address": "0x0914",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4514",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-22",
+          "name": "CAN Baud-Rate",
+          "eep": {
+            "address": "0x0915",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          },
+          "ram": {
+            "address": "0x4515",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          }
+        },
+        {
+          "id": "09-26",
+          "name": "CANOpen PDO Mapping",
+          "eep": {
+            "address": "0x0919",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4519",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-27",
+          "name": "CANOpen TPDO Trigger",
+          "eep": {
+            "address": "0x091A",
+            "raw_uint16": 4352,
+            "raw_hex": "0x1100"
+          },
+          "ram": {
+            "address": "0x451A",
+            "raw_uint16": 4352,
+            "raw_hex": "0x1100"
+          }
+        },
+        {
+          "id": "09-28",
+          "name": "CANOpen RPDO Trigger",
+          "eep": {
+            "address": "0x091B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-29",
+          "name": "CANOpen HeartBeat",
+          "eep": {
+            "address": "0x091C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-30",
+          "name": "CANOpen Mode",
+          "eep": {
+            "address": "0x091D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-31",
+          "name": "CAN Mode",
+          "eep": {
+            "address": "0x091E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-32",
+          "name": "STA LED 顯示選擇",
+          "eep": {
+            "address": "0x091F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        }
+      ]
+    },
+    {
+      "slave_id": 2,
+      "read_ok": 264,
+      "read_errors": 0,
+      "parameters": [
+        {
+          "id": "01-01",
+          "name": "馬達/Sensor 類型",
+          "eep": {
+            "address": "0x0100",
+            "raw_uint16": 12,
+            "raw_hex": "0x000C"
+          },
+          "ram": {
+            "address": "0x3D00",
+            "raw_uint16": 12,
+            "raw_hex": "0x000C"
+          }
+        },
+        {
+          "id": "01-02",
+          "name": "Hall 序列",
+          "eep": {
+            "address": "0x0101",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D01",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-03",
+          "name": "馬達極數",
+          "eep": {
+            "address": "0x0102",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          },
+          "ram": {
+            "address": "0x3D02",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          }
+        },
+        {
+          "id": "01-04",
+          "name": "無載全轉速",
+          "eep": {
+            "address": "0x0103",
+            "raw_uint16": 4188,
+            "raw_hex": "0x105C"
+          },
+          "ram": {
+            "address": "0x3D03",
+            "raw_uint16": 4188,
+            "raw_hex": "0x105C"
+          }
+        },
+        {
+          "id": "01-05",
+          "name": "馬達 CW 定義",
+          "eep": {
+            "address": "0x0104",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D04",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-06",
+          "name": "編碼器解析度",
+          "eep": {
+            "address": "0x0105",
+            "raw_uint16": 2500,
+            "raw_hex": "0x09C4"
+          },
+          "ram": {
+            "address": "0x3D05",
+            "raw_uint16": 2500,
+            "raw_hex": "0x09C4"
+          }
+        },
+        {
+          "id": "01-10",
+          "name": "Drive Enable 設定",
+          "eep": {
+            "address": "0x0109",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x3D09",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "01-11",
+          "name": "控制模式",
+          "eep": {
+            "address": "0x010A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D0A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-12",
+          "name": "速度控制方法",
+          "eep": {
+            "address": "0x010B",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          },
+          "ram": {
+            "address": "0x3D0B",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          }
+        },
+        {
+          "id": "01-13",
+          "name": "位置控制方法",
+          "eep": {
+            "address": "0x010C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D0C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-14",
+          "name": "信號低於閥值行為",
+          "eep": {
+            "address": "0x010D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3D0D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "01-15",
+          "name": "停止時保持力",
+          "eep": {
+            "address": "0x010E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x3D0E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "01-16",
+          "name": "編碼器霍爾 Offset",
+          "eep": {
+            "address": "0x010F",
+            "raw_uint16": 1166,
+            "raw_hex": "0x048E"
+          },
+          "ram": {
+            "address": "0x3D0F",
+            "raw_uint16": 1166,
+            "raw_hex": "0x048E"
+          }
+        },
+        {
+          "id": "02-01",
+          "name": "調速上限",
+          "eep": {
+            "address": "0x0200",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          },
+          "ram": {
+            "address": "0x3E00",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          }
+        },
+        {
+          "id": "02-02",
+          "name": "調速下限",
+          "eep": {
+            "address": "0x0201",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          },
+          "ram": {
+            "address": "0x3E01",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          }
+        },
+        {
+          "id": "02-07",
+          "name": "調 Duty 上限",
+          "eep": {
+            "address": "0x0206",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x3E06",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": "02-08",
+          "name": "調 Duty 下限",
+          "eep": {
+            "address": "0x0207",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E07",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-09",
+          "name": "外部輸入調整信號範圍",
+          "eep": {
+            "address": "0x0208",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E08",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-10",
+          "name": "外部輸入調整信號增益",
+          "eep": {
+            "address": "0x0209",
+            "raw_uint16": 708,
+            "raw_hex": "0x02C4"
+          },
+          "ram": {
+            "address": "0x3E09",
+            "raw_uint16": 708,
+            "raw_hex": "0x02C4"
+          }
+        },
+        {
+          "id": "02-11",
+          "name": "外部輸入調整信號閥值",
+          "eep": {
+            "address": "0x020A",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          },
+          "ram": {
+            "address": "0x3E0A",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          }
+        },
+        {
+          "id": "02-12",
+          "name": "調整信號閥值對應轉速",
+          "eep": {
+            "address": "0x020B",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          },
+          "ram": {
+            "address": "0x3E0B",
+            "raw_uint16": 85,
+            "raw_hex": "0x0055"
+          }
+        },
+        {
+          "id": "02-14",
+          "name": "位置命令格式",
+          "eep": {
+            "address": "0x020D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E0D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-15",
+          "name": "轉速顯示更新率",
+          "eep": {
+            "address": "0x020E",
+            "raw_uint16": 3,
+            "raw_hex": "0x0003"
+          },
+          "ram": {
+            "address": "0x3E0E",
+            "raw_uint16": 3,
+            "raw_hex": "0x0003"
+          }
+        },
+        {
+          "id": "02-18",
+          "name": "功率輸出額度",
+          "eep": {
+            "address": "0x0211",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x3E11",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": "02-19",
+          "name": "PWM 頻率",
+          "eep": {
+            "address": "0x0212",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E12",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "02-22",
+          "name": "Low Speed RPM",
+          "eep": {
+            "address": "0x0215",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x3E15",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0300",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F00",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0301",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F01",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0302",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F02",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉速",
+          "eep": {
+            "address": "0x0303",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          },
+          "ram": {
+            "address": "0x3F03",
+            "raw_uint16": 60,
+            "raw_hex": "0x003C"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0304",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F04",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0305",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F05",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0306",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F06",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位 Duty",
+          "eep": {
+            "address": "0x0307",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x3F07",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x0308",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F08",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x0309",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F09",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x030A",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F0A",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": null,
+          "name": "數位轉矩限制",
+          "eep": {
+            "address": "0x030B",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x3F0B",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": "03-13",
+          "name": "轉矩限制堵轉 Alarm",
+          "eep": {
+            "address": "0x030C",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          },
+          "ram": {
+            "address": "0x3F0C",
+            "raw_uint16": 3000,
+            "raw_hex": "0x0BB8"
+          }
+        },
+        {
+          "id": "03-14",
+          "name": "超過轉矩限制允許時間",
+          "eep": {
+            "address": "0x030D",
+            "raw_uint16": 300,
+            "raw_hex": "0x012C"
+          },
+          "ram": {
+            "address": "0x3F0D",
+            "raw_uint16": 300,
+            "raw_hex": "0x012C"
+          }
+        },
+        {
+          "id": "03-15",
+          "name": "低於轉矩限制回復時間",
+          "eep": {
+            "address": "0x030E",
+            "raw_uint16": 600,
+            "raw_hex": "0x0258"
+          },
+          "ram": {
+            "address": "0x3F0E",
+            "raw_uint16": 600,
+            "raw_hex": "0x0258"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0400",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4000",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0401",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4001",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0402",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4002",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0403",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4003",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "加速時間區域（手冊04-04位址與04-05重疊，名稱待確認）",
+          "eep": {
+            "address": "0x0404",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4004",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩加速時間",
+          "eep": {
+            "address": "0x0405",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4005",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩加速時間",
+          "eep": {
+            "address": "0x0406",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4006",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩加速時間",
+          "eep": {
+            "address": "0x0407",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4007",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x0408",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4008",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x0409",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x4009",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x040A",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x400A",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "減速時間",
+          "eep": {
+            "address": "0x040B",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x400B",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040C",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400C",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040D",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400D",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400E",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": null,
+          "name": "緩減速時間",
+          "eep": {
+            "address": "0x040F",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x400F",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "05-02",
+          "name": "初期運轉禁止報警",
+          "eep": {
+            "address": "0x0501",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4101",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-03",
+          "name": "馬達回授信號保護功能",
+          "eep": {
+            "address": "0x0502",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4102",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "05-04",
+          "name": "過速報警轉速",
+          "eep": {
+            "address": "0x0503",
+            "raw_uint16": 4300,
+            "raw_hex": "0x10CC"
+          },
+          "ram": {
+            "address": "0x4103",
+            "raw_uint16": 4300,
+            "raw_hex": "0x10CC"
+          }
+        },
+        {
+          "id": "05-07",
+          "name": "編碼器異常偵測設定",
+          "eep": {
+            "address": "0x0506",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x4106",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": "05-10",
+          "name": "過電壓保護",
+          "eep": {
+            "address": "0x0509",
+            "raw_uint16": 6300,
+            "raw_hex": "0x189C"
+          },
+          "ram": {
+            "address": "0x4109",
+            "raw_uint16": 6300,
+            "raw_hex": "0x189C"
+          }
+        },
+        {
+          "id": "05-11",
+          "name": "過電壓回復(放電電壓)",
+          "eep": {
+            "address": "0x050A",
+            "raw_uint16": 6000,
+            "raw_hex": "0x1770"
+          },
+          "ram": {
+            "address": "0x410A",
+            "raw_uint16": 6000,
+            "raw_hex": "0x1770"
+          }
+        },
+        {
+          "id": "05-12",
+          "name": "低電壓保護",
+          "eep": {
+            "address": "0x050B",
+            "raw_uint16": 1400,
+            "raw_hex": "0x0578"
+          },
+          "ram": {
+            "address": "0x410B",
+            "raw_uint16": 1400,
+            "raw_hex": "0x0578"
+          }
+        },
+        {
+          "id": "05-13",
+          "name": "低電壓回復",
+          "eep": {
+            "address": "0x050C",
+            "raw_uint16": 1450,
+            "raw_hex": "0x05AA"
+          },
+          "ram": {
+            "address": "0x410C",
+            "raw_uint16": 1450,
+            "raw_hex": "0x05AA"
+          }
+        },
+        {
+          "id": "05-15",
+          "name": "過電流保護(過載保護)",
+          "eep": {
+            "address": "0x050E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x410E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-16",
+          "name": "過功率保護",
+          "eep": {
+            "address": "0x050F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x410F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-17",
+          "name": "RS485/CAN 通訊逾時",
+          "eep": {
+            "address": "0x0510",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4110",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-18",
+          "name": "RS485 異常次數",
+          "eep": {
+            "address": "0x0511",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4111",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-19",
+          "name": "RS232 通訊逾時",
+          "eep": {
+            "address": "0x0512",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4112",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-20",
+          "name": "RS232 異常次數",
+          "eep": {
+            "address": "0x0513",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4113",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-21",
+          "name": "通訊異常保護行為",
+          "eep": {
+            "address": "0x0514",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4114",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-22",
+          "name": "回生放電保護",
+          "eep": {
+            "address": "0x0515",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          },
+          "ram": {
+            "address": "0x4115",
+            "raw_uint16": 2000,
+            "raw_hex": "0x07D0"
+          }
+        },
+        {
+          "id": "05-23",
+          "name": "CAN 通訊逾時",
+          "eep": {
+            "address": "0x0516",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4116",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-26",
+          "name": "Fault Reaction BITF H",
+          "eep": {
+            "address": "0x0519",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4119",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-27",
+          "name": "Fault Reaction BITF L",
+          "eep": {
+            "address": "0x051A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x411A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "05-28",
+          "name": "Fault Reaction BITF H",
+          "eep": {
+            "address": "0x051B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x411B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-01",
+          "name": "輸入 X0 功能",
+          "eep": {
+            "address": "0x0600",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4200",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-02",
+          "name": "輸入 X1 功能",
+          "eep": {
+            "address": "0x0601",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          },
+          "ram": {
+            "address": "0x4201",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          }
+        },
+        {
+          "id": "06-03",
+          "name": "輸入 X2 功能",
+          "eep": {
+            "address": "0x0602",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          },
+          "ram": {
+            "address": "0x4202",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          }
+        },
+        {
+          "id": "06-04",
+          "name": "X3(常駐 ON 輸入 0)",
+          "eep": {
+            "address": "0x0603",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4203",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-05",
+          "name": "輸入 X4 (A0X)功能",
+          "eep": {
+            "address": "0x0604",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4204",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-06",
+          "name": "輸入 X5 (STO1)功能",
+          "eep": {
+            "address": "0x0605",
+            "raw_uint16": 23,
+            "raw_hex": "0x0017"
+          },
+          "ram": {
+            "address": "0x4205",
+            "raw_uint16": 23,
+            "raw_hex": "0x0017"
+          }
+        },
+        {
+          "id": "06-07",
+          "name": "輸入 X6 (STO2)功能",
+          "eep": {
+            "address": "0x0606",
+            "raw_uint16": 24,
+            "raw_hex": "0x0018"
+          },
+          "ram": {
+            "address": "0x4206",
+            "raw_uint16": 24,
+            "raw_hex": "0x0018"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x0608",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4208",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x0609",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4209",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": null,
+          "name": "常駐 ON 輸入區域（手冊ID/位址不一致）",
+          "eep": {
+            "address": "0x060D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-15",
+          "name": "SC/CC 模式",
+          "eep": {
+            "address": "0x060E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x420E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "06-16",
+          "name": "輸入作動邏輯",
+          "eep": {
+            "address": "0x060F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          },
+          "ram": {
+            "address": "0x420F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          }
+        },
+        {
+          "id": "06-17",
+          "name": "輸出 Y0 功能",
+          "eep": {
+            "address": "0x0610",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4210",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "06-18",
+          "name": "輸出 Y1 功能",
+          "eep": {
+            "address": "0x0611",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4211",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "06-19",
+          "name": "輸出 Y2 (MB)功能",
+          "eep": {
+            "address": "0x0612",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          },
+          "ram": {
+            "address": "0x4212",
+            "raw_uint16": 13,
+            "raw_hex": "0x000D"
+          }
+        },
+        {
+          "id": "06-29",
+          "name": "MBRAKE(抱閘)控制機制",
+          "eep": {
+            "address": "0x061C",
+            "raw_uint16": 50,
+            "raw_hex": "0x0032"
+          },
+          "ram": {
+            "address": "0x421C",
+            "raw_uint16": 50,
+            "raw_hex": "0x0032"
+          }
+        },
+        {
+          "id": "06-30",
+          "name": "轉速到達範圍(VA)",
+          "eep": {
+            "address": "0x061D",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          },
+          "ram": {
+            "address": "0x421D",
+            "raw_uint16": 100,
+            "raw_hex": "0x0064"
+          }
+        },
+        {
+          "id": "06-31",
+          "name": "EN-OUT 轉速",
+          "eep": {
+            "address": "0x061E",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          },
+          "ram": {
+            "address": "0x421E",
+            "raw_uint16": 1000,
+            "raw_hex": "0x03E8"
+          }
+        },
+        {
+          "id": "06-32",
+          "name": "輸出作動邏輯",
+          "eep": {
+            "address": "0x061F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          },
+          "ram": {
+            "address": "0x421F",
+            "raw_uint16": 65535,
+            "raw_hex": "0xFFFF"
+          }
+        },
+        {
+          "id": "07-01",
+          "name": "控制演算法",
+          "eep": {
+            "address": "0x0700",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4300",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "07-02",
+          "name": "控制常數 Kp",
+          "eep": {
+            "address": "0x0701",
+            "raw_uint16": 16,
+            "raw_hex": "0x0010"
+          },
+          "ram": {
+            "address": "0x4301",
+            "raw_uint16": 16,
+            "raw_hex": "0x0010"
+          }
+        },
+        {
+          "id": "07-03",
+          "name": "速度控制常數 1",
+          "eep": {
+            "address": "0x0702",
+            "raw_uint16": 128,
+            "raw_hex": "0x0080"
+          },
+          "ram": {
+            "address": "0x4302",
+            "raw_uint16": 128,
+            "raw_hex": "0x0080"
+          }
+        },
+        {
+          "id": "07-04",
+          "name": "速度控制常數 2",
+          "eep": {
+            "address": "0x0703",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4303",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-01",
+          "name": "NET-X0 輸入功能",
+          "eep": {
+            "address": "0x0900",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          },
+          "ram": {
+            "address": "0x4500",
+            "raw_uint16": 1,
+            "raw_hex": "0x0001"
+          }
+        },
+        {
+          "id": "09-02",
+          "name": "NET-X1 輸入功能",
+          "eep": {
+            "address": "0x0901",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4501",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "09-03",
+          "name": "NET-X2 輸入功能",
+          "eep": {
+            "address": "0x0902",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4502",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-04",
+          "name": "NET-X3 輸入功能",
+          "eep": {
+            "address": "0x0903",
+            "raw_uint16": 8,
+            "raw_hex": "0x0008"
+          },
+          "ram": {
+            "address": "0x4503",
+            "raw_uint16": 8,
+            "raw_hex": "0x0008"
+          }
+        },
+        {
+          "id": "09-05",
+          "name": "NET-X4 輸入功能",
+          "eep": {
+            "address": "0x0904",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          },
+          "ram": {
+            "address": "0x4504",
+            "raw_uint16": 10,
+            "raw_hex": "0x000A"
+          }
+        },
+        {
+          "id": "09-06",
+          "name": "NET-X5 輸入功能",
+          "eep": {
+            "address": "0x0905",
+            "raw_uint16": 11,
+            "raw_hex": "0x000B"
+          },
+          "ram": {
+            "address": "0x4505",
+            "raw_uint16": 11,
+            "raw_hex": "0x000B"
+          }
+        },
+        {
+          "id": "09-07",
+          "name": "NET-X6 輸入功能",
+          "eep": {
+            "address": "0x0906",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          },
+          "ram": {
+            "address": "0x4506",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          }
+        },
+        {
+          "id": "09-08",
+          "name": "NET-X7 輸入功能",
+          "eep": {
+            "address": "0x0907",
+            "raw_uint16": 14,
+            "raw_hex": "0x000E"
+          },
+          "ram": {
+            "address": "0x4507",
+            "raw_uint16": 14,
+            "raw_hex": "0x000E"
+          }
+        },
+        {
+          "id": "09-09",
+          "name": "NET-X8 輸入功能",
+          "eep": {
+            "address": "0x0908",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4508",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-10",
+          "name": "NET-X9 輸入功能",
+          "eep": {
+            "address": "0x0909",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4509",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-11",
+          "name": "NET-X10 輸入功能",
+          "eep": {
+            "address": "0x090A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450A",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-12",
+          "name": "NET-X11 輸入功能",
+          "eep": {
+            "address": "0x090B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-13",
+          "name": "NET-X12 輸入功能",
+          "eep": {
+            "address": "0x090C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-14",
+          "name": "NET-X13 輸入功能",
+          "eep": {
+            "address": "0x090D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-15",
+          "name": "NET-X14 輸入功能",
+          "eep": {
+            "address": "0x090E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-16",
+          "name": "NET-X 輸入作動邏輯",
+          "eep": {
+            "address": "0x090F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x450F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-17",
+          "name": "WatchData 選擇",
+          "eep": {
+            "address": "0x0910",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4510",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-18",
+          "name": "RS485 協議設定",
+          "eep": {
+            "address": "0x0911",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4511",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-19",
+          "name": "RS485/CAN ID",
+          "eep": {
+            "address": "0x0912",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          },
+          "ram": {
+            "address": "0x4512",
+            "raw_uint16": 2,
+            "raw_hex": "0x0002"
+          }
+        },
+        {
+          "id": "09-20",
+          "name": "RS485/CAN Baud-Rate",
+          "eep": {
+            "address": "0x0913",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          },
+          "ram": {
+            "address": "0x4513",
+            "raw_uint16": 5,
+            "raw_hex": "0x0005"
+          }
+        },
+        {
+          "id": "09-21",
+          "name": "RTU C3.5 最小值",
+          "eep": {
+            "address": "0x0914",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4514",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-22",
+          "name": "CAN Baud-Rate",
+          "eep": {
+            "address": "0x0915",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          },
+          "ram": {
+            "address": "0x4515",
+            "raw_uint16": 4,
+            "raw_hex": "0x0004"
+          }
+        },
+        {
+          "id": "09-26",
+          "name": "CANOpen PDO Mapping",
+          "eep": {
+            "address": "0x0919",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x4519",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-27",
+          "name": "CANOpen TPDO Trigger",
+          "eep": {
+            "address": "0x091A",
+            "raw_uint16": 4352,
+            "raw_hex": "0x1100"
+          },
+          "ram": {
+            "address": "0x451A",
+            "raw_uint16": 4352,
+            "raw_hex": "0x1100"
+          }
+        },
+        {
+          "id": "09-28",
+          "name": "CANOpen RPDO Trigger",
+          "eep": {
+            "address": "0x091B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451B",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-29",
+          "name": "CANOpen HeartBeat",
+          "eep": {
+            "address": "0x091C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451C",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-30",
+          "name": "CANOpen Mode",
+          "eep": {
+            "address": "0x091D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451D",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-31",
+          "name": "CAN Mode",
+          "eep": {
+            "address": "0x091E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451E",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        },
+        {
+          "id": "09-32",
+          "name": "STA LED 顯示選擇",
+          "eep": {
+            "address": "0x091F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          },
+          "ram": {
+            "address": "0x451F",
+            "raw_uint16": 0,
+            "raw_hex": "0x0000"
+          }
+        }
+      ]
+    }
+  ],
+  "transmitted_frames": [
+    "010301000006c434",
+    "010301090007d5f6",
+    "010302000002c5b3",
+    "0103020600062471",
+    "0103020d00025470",
+    "01030211000295b6",
+    "0103021500019476",
+    "01030300000f058a",
+    "0103040000104536",
+    "01030501000354c7",
+    "01030506000164c7",
+    "01030509000494c7",
+    "0103050e0009e4c3",
+    "010305190003d4c0",
+    "0103060000070480",
+    "01030608000b8547",
+    "0103061c00048547",
+    "010307000004457d",
+    "010309000016c798",
+    "010309190007d653",
+    "01033d000006c864",
+    "01033d090007d9a6",
+    "01033e000002c9e3",
+    "01033e0600062821",
+    "01033e0d00025820",
+    "01033e11000299e6",
+    "01033e1500019826",
+    "01033f00000f09da",
+    "01034000001051c6",
+    "0103410100034037",
+    "0103410600017037",
+    "0103410900048037",
+    "0103410e0009f033",
+    "010341190003c030",
+    "0103420000071070",
+    "01034208000b91b7",
+    "0103421c000491b7",
+    "010343000004518d",
+    "010345000016d108",
+    "010345190007c0c3",
+    "020301000006c407",
+    "020301090007d5c5",
+    "020302000002c580",
+    "0203020600062442",
+    "0203020d00025443",
+    "0203021100029585",
+    "0203021500019445",
+    "02030300000f05b9",
+    "0203040000104505",
+    "02030501000354f4",
+    "02030506000164f4",
+    "02030509000494f4",
+    "0203050e0009e4f0",
+    "020305190003d4f3",
+    "02030600000704b3",
+    "02030608000b8574",
+    "0203061c00048574",
+    "020307000004454e",
+    "020309000016c7ab",
+    "020309190007d660",
+    "02033d000006c857",
+    "02033d090007d995",
+    "02033e000002c9d0",
+    "02033e0600062812",
+    "02033e0d00025813",
+    "02033e11000299d5",
+    "02033e1500019815",
+    "02033f00000f09e9",
+    "02034000001051f5",
+    "0203410100034004",
+    "0203410600017004",
+    "0203410900048004",
+    "0203410e0009f000",
+    "020341190003c003",
+    "0203420000071043",
+    "02034208000b9184",
+    "0203421c00049184",
+    "02034300000451be",
+    "020345000016d13b",
+    "020345190007c0f0"
+  ]
+}
