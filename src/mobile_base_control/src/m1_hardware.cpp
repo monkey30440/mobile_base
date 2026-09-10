@@ -61,6 +61,9 @@ M1Hardware::~M1Hardware()
 
 void M1Hardware::set_driver_for_testing(std::shared_ptr<M1Driver> driver) noexcept
 {
+  device_configs_.reset();
+  is_active_ = false;
+  has_valid_state_ = false;
   driver_ = std::move(driver);
 }
 
@@ -94,13 +97,15 @@ double M1Hardware::motor_rpm_to_wheel_rad_s(
 
 double M1Hardware::motor_steps_to_wheel_rad(
   int64_t accumulated_steps,
-  double motor_steps_per_rev,
+  double position_steps_per_rev,
   double gear_ratio,
   int motor_sign) noexcept
 {
-  const double steps_per_wheel_rev = motor_steps_per_rev * gear_ratio;
-  if (steps_per_wheel_rev <= 0.0) {
-    return 0.0;
+  const double steps_per_wheel_rev = position_steps_per_rev * gear_ratio;
+  if (!std::isfinite(steps_per_wheel_rev) || position_steps_per_rev <= 0.0 ||
+    gear_ratio <= 0.0)
+  {
+    return std::numeric_limits<double>::quiet_NaN();
   }
   return (static_cast<double>(accumulated_steps) / steps_per_wheel_rev) * (2.0 * PI) *
          static_cast<double>(motor_sign);
@@ -191,16 +196,9 @@ hardware_interface::CallbackReturn M1Hardware::parse_parameters()
   }
 
   if (params.find("motor_steps_per_rev") != params.end()) {
-    try {
-      config_.motor_steps_per_rev = std::stod(params.at("motor_steps_per_rev"));
-    } catch (const std::exception & e) {
-      RCLCPP_FATAL(
-        get_logger(), "Invalid motor_steps_per_rev parameter '%s': %s",
-        params.at("motor_steps_per_rev").c_str(), e.what());
-      return hardware_interface::CallbackReturn::ERROR;
-    }
-  } else {
-    RCLCPP_FATAL(get_logger(), "Missing required parameter 'motor_steps_per_rev'");
+    RCLCPP_FATAL(
+      get_logger(), "Remove obsolete ROS parameter 'motor_steps_per_rev'; "
+      "M1 configuration is read from each drive and feedback scaling requires verification");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
@@ -278,10 +276,11 @@ hardware_interface::CallbackReturn M1Hardware::parse_parameters()
       config_.right_wheel_sign);
     return hardware_interface::CallbackReturn::ERROR;
   }
-  if (config_.motor_steps_per_rev <= 0.0) {
-    RCLCPP_FATAL(
-      get_logger(), "motor_steps_per_rev must be positive, got %f",
-      config_.motor_steps_per_rev);
+  if (config_.left_driver_id < 1 || config_.left_driver_id > 8 ||
+    config_.right_driver_id < 1 || config_.right_driver_id > 8 ||
+    config_.left_driver_id == config_.right_driver_id)
+  {
+    RCLCPP_FATAL(get_logger(), "M1 requires two distinct Multi-drive IDs in [1, 8]");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
@@ -317,6 +316,12 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
 {
   RCLCPP_INFO(get_logger(), "Configuring M1Hardware on port '%s'...", config_.serial_port.c_str());
 
+  device_configs_.reset();
+  is_active_ = false;
+  has_valid_state_ = false;
+  std::fill_n(hw_positions_, 2, std::numeric_limits<double>::quiet_NaN());
+  std::fill_n(hw_velocities_, 2, std::numeric_limits<double>::quiet_NaN());
+
   if (!driver_) {
     driver_ = std::make_shared<M1Driver>();
   }
@@ -336,7 +341,27 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
     }
   }
 
-  RCLCPP_INFO(get_logger(), "M1Hardware configured and connected successfully.");
+  std::array<M1DeviceConfig, 2> configs;
+  const std::array<int, 2> ids{config_.right_driver_id, config_.left_driver_id};
+  for (size_t i = 0; i < ids.size(); ++i) {
+    const auto result = driver_->read_device_config(ids[i]);
+    if (!result.ok || result.value.driver_id != ids[i]) {
+      RCLCPP_ERROR(
+        get_logger(), "Cannot read M1 configuration for ID %d: %s",
+        ids[i], result.ok ? "device ID mismatch" : error_code_to_string(result.error));
+      driver_->disconnect();
+      return hardware_interface::CallbackReturn::FAILURE;
+    }
+    configs[i] = result.value;
+    RCLCPP_INFO(
+      get_logger(), "M1 ID %d: 01-06 encoder resolution=%u single-phase pulses/rev; "
+      "02-14 position command format=%u; Multi-drive feedback scale=%s",
+      ids[i], configs[i].encoder_resolution_pulses_per_rev, configs[i].position_command_format,
+      position_feedback_scales_[i].has_value() ? "available" : "UNVERIFIED");
+  }
+  device_configs_ = configs;
+  RCLCPP_INFO(
+    get_logger(), "M1 configuration read successfully; activation checks feedback scale.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -389,7 +414,20 @@ std::vector<hardware_interface::CommandInterface> M1Hardware::export_command_int
 hardware_interface::CallbackReturn M1Hardware::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(get_logger(), "Activating M1Hardware (engaging Servo-On)...");
+  RCLCPP_INFO(get_logger(), "Checking M1Hardware activation prerequisites...");
+
+  if (!device_configs_ || std::any_of(
+      position_feedback_scales_.begin(), position_feedback_scales_.end(),
+      [](const std::optional<double> & scale) {
+        return !scale.has_value() || !std::isfinite(*scale) || *scale <= 0.0;
+      }))
+  {
+    RCLCPP_ERROR(
+      get_logger(), "Activation blocked before Servo-On: Multi-drive position feedback "
+      "format/steps per motor revolution is unverified. 01-06 encoder resolution "
+      "does not establish that scale. Record raw feedback across one shaft revolution.");
+    return hardware_interface::CallbackReturn::FAILURE;
+  }
 
   // 1. Reset commands and position origins
   hw_commands_[0] = 0.0;
@@ -544,6 +582,8 @@ hardware_interface::CallbackReturn M1Hardware::on_cleanup(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(get_logger(), "Cleaning up M1Hardware...");
+  device_configs_.reset();
+  position_feedback_scales_ = {std::nullopt, std::nullopt};
   is_active_ = false;
   has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
@@ -556,6 +596,8 @@ hardware_interface::CallbackReturn M1Hardware::on_shutdown(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(get_logger(), "Shutting down M1Hardware...");
+  device_configs_.reset();
+  position_feedback_scales_ = {std::nullopt, std::nullopt};
   is_active_ = false;
   has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
@@ -572,6 +614,7 @@ hardware_interface::CallbackReturn M1Hardware::on_error(
   RCLCPP_ERROR(
     get_logger(),
     "M1Hardware entered ERROR state, executing best-effort safety cleanup");
+  device_configs_.reset();
   is_active_ = false;
   has_valid_state_ = false;
   if (driver_ && driver_->is_connected()) {
@@ -611,17 +654,21 @@ hardware_interface::return_type M1Hardware::read(
   right_position_tracker_.update(st_right.position_steps);
 
   // Convert accumulated steps -> Continuous wheel position [rad]
-  hw_positions_[0] = motor_steps_to_wheel_rad(
-    left_position_tracker_.accumulated_steps,
-    config_.motor_steps_per_rev,
-    config_.gear_ratio,
-    config_.left_wheel_sign);
+  if (position_feedback_scales_[1].has_value()) {
+    hw_positions_[0] = motor_steps_to_wheel_rad(
+      left_position_tracker_.accumulated_steps,
+      *position_feedback_scales_[1],
+      config_.gear_ratio,
+      config_.left_wheel_sign);
+  }
 
-  hw_positions_[1] = motor_steps_to_wheel_rad(
-    right_position_tracker_.accumulated_steps,
-    config_.motor_steps_per_rev,
-    config_.gear_ratio,
-    config_.right_wheel_sign);
+  if (position_feedback_scales_[0].has_value()) {
+    hw_positions_[1] = motor_steps_to_wheel_rad(
+      right_position_tracker_.accumulated_steps,
+      *position_feedback_scales_[0],
+      config_.gear_ratio,
+      config_.right_wheel_sign);
+  }
 
   // Convert actual RPM -> Wheel angular velocity [rad/s]
   hw_velocities_[0] = motor_rpm_to_wheel_rad_s(

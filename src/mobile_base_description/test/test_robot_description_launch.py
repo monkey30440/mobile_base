@@ -37,7 +37,6 @@ def generate_test_description():
         launch_arguments={
             'use_mock_hardware': 'true',
             'response_timeout_ms': '50',
-            'motor_steps_per_rev': '65535.0',
         }.items(),
     )
 

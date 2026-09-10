@@ -698,6 +698,28 @@ Result<ExchangeResult> M1Driver::disable(int driver_a, int driver_b)
     FC_READ_WRITE_MULTIPLE, ids, tx_res.value.data(), tx_res.value.size());
 }
 
+Result<M1DeviceConfig> M1Driver::read_device_config(int driver_id)
+{
+  // M1-COMM UM-01-S0686, parameter tables 01-06 and 02-14.
+  // Read active RAM, not EEPROM: configure must observe the current device state.
+  const auto encoder = read_register(driver_id, 0x3D05);
+  if (!encoder.ok) {
+    return Result<M1DeviceConfig>::failure(encoder.error);
+  }
+  const auto format = read_register(driver_id, 0x3E0D);
+  if (!format.ok) {
+    return Result<M1DeviceConfig>::failure(format.error);
+  }
+  if (format.value > 1) {
+    return Result<M1DeviceConfig>::failure(ErrorCode::INVALID_RESPONSE);
+  }
+  M1DeviceConfig config;
+  config.driver_id = driver_id;
+  config.encoder_resolution_pulses_per_rev = encoder.value;
+  config.position_command_format = format.value;
+  return Result<M1DeviceConfig>::success(config);
+}
+
 Result<uint16_t> M1Driver::read_register(int driver_id, uint16_t address)
 {
   if (driver_id < 1 || driver_id > 247) {

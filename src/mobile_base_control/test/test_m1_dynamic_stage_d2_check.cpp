@@ -154,12 +154,12 @@ TEST(DynamicStageD2Test, MathematicalSignAndGearConversionRightWheel)
     right_rpm_0_5, gear_ratio, right_sign);
   EXPECT_NEAR(right_actual_vel, 0.4974, 1e-3);
 
-  // 5. Negative motor steps progression -> Positive ROS wheel displacement (+2pi rad)
+  // 5. Synthetic scale fixture only: negative steps -> positive wheel displacement.
   PositionTracker tracker;
   tracker.update(0);
-  tracker.update(-1310700);  // Negative 1,310,700 steps (1 full wheel revolution)
-  const double wheel_rad = (static_cast<double>(tracker.accumulated_steps) / (65535.0 * 20.0)) *
-    (2.0 * M_PI) * static_cast<double>(right_sign);
+  tracker.update(-81920);  // One wheel revolution with an explicit 4096 steps/rev fixture.
+  const double wheel_rad = M1Hardware::motor_steps_to_wheel_rad(
+    tracker.accumulated_steps, 4096.0, gear_ratio, right_sign);
   EXPECT_NEAR(wheel_rad, 2.0 * M_PI, 1e-5);
 }
 

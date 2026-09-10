@@ -887,10 +887,12 @@ Modbus RTU over /dev/ttyUSB0 (230400 bps, 廣播 Group 0x65, FC17 單一交易�
 2. **硬體介面外掛與驅動封裝**：
    - `M1Hardware` (`hardware_interface::SystemInterface` 外掛）：實作 ros2_control 之生命週期（`on_init`, `on_configure`, `on_activate`, `on_deactivate` 等）與即時讀寫迴圈（`read()`, `write()`）。
    - `M1Driver`：以私有封裝之 `libmodbus` 實作序列通訊。採用 Modbus FC17（`FC_READ_WRITE_MULTIPLE`，`0x17` 功能碼）進行單一交易交換（Single Transaction Exchange）：在同一次通訊來回中同時寫入右輪（ID 1）與左輪（ID 2）目標速度並讀回輪端編碼器計數與轉速，以廣播群組 `0x65` 確保雙輪動作同步並壓低通訊延遲。
+   - M1-owned configuration 由 `M1Driver` 在 configure 階段以標準 FC03 個別讀取，`M1Hardware` 僅在左右驅動器皆讀取成功後保留完整 snapshot；即時 read/write 迴圈不重讀設定。ROS 僅提供連線、機構與操作限制參數，不提供 encoder resolution 或 `motor_steps_per_rev`。
+   - Encoder resolution 與 Multi-drive position-feedback scale 為不同語意。尚未建立有效位置換算時，硬體介面保持不可運動，activation 在 Servo-On 前回報失敗；實機位置回授目前仍受此條件阻擋。證據與待驗項目見 [M1 configuration and feedback evidence](../m1_settings/README.md)。
 
 ### Expected Normal Behavior
 
-- 啟動 `base_control.launch.py` 後，`ros2_control_node` 載入 `M1Hardware`，開啟 `/dev/ttyUSB0` 序列通訊並致能馬達。
+- 啟動 `base_control.launch.py` 後，`ros2_control_node` 載入 `M1Hardware`，開啟 `/dev/ttyUSB0` 並讀取兩台 M1 設定。只有位置回授格式與比例已建立且其他 activation 條件滿足時才致能；以下運轉行為以成功 activation 為前提。
 - 當 `/diff_drive_controller/cmd_vel` 收到時戳速度指令時，控制器根據差速幾何計算輪速命令並施加限幅。
 - `M1Hardware` 於每週期（30 Hz）調用 `M1Driver` 發送 FC17 指令至馬達驅動器，並同步讀回最新編碼器讀數。
 - 控制器發布 `/diff_drive_controller/odom`，廣播器發布 `/joint_states`，底盤依指令順暢運行。

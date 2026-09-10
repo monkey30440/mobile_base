@@ -16,11 +16,10 @@
 import importlib.util
 from pathlib import Path
 
-import pytest
+from launch.actions import IncludeLaunchDescription
 
 
 LAUNCH_FILE = Path(__file__).parents[1] / 'launch' / 'base_control.launch.py'
-PARAMS_FILE = Path(__file__).parents[1] / 'config' / 'base_control_params.yaml'
 
 
 def load_launch_module():
@@ -30,20 +29,14 @@ def load_launch_module():
     return module
 
 
-def test_loads_firmware_motor_steps_per_rev_from_control_config():
+def test_launch_does_not_require_or_forward_a_ros_position_scale(monkeypatch, tmp_path):
     module = load_launch_module()
-
-    assert module.load_motor_steps_per_rev(PARAMS_FILE) == '65535.0'
-
-
-def test_rejects_non_positive_motor_steps_per_rev(tmp_path):
-    params_file = tmp_path / 'invalid_params.yaml'
-    params_file.write_text(
-        'mobile_base_hardware:\n'
-        '  ros__parameters:\n'
-        '    motor_steps_per_rev: 0\n'
+    monkeypatch.setattr(
+        module, 'get_package_share_directory', lambda package: str(tmp_path / package)
     )
-    module = load_launch_module()
-
-    with pytest.raises(RuntimeError, match='motor_steps_per_rev must be positive'):
-        module.load_motor_steps_per_rev(params_file)
+    description = module.generate_launch_description()
+    includes = [a for a in description.entities if isinstance(a, IncludeLaunchDescription)]
+    assert len(includes) == 1
+    arguments = dict(includes[0].launch_arguments)
+    assert 'response_timeout_ms' in arguments
+    assert 'motor_steps_per_rev' not in arguments

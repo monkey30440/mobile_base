@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -105,6 +106,16 @@ struct MotorState
 struct ExchangeResult
 {
   std::array<MotorState, 2> states{};
+};
+
+/// M1-owned configuration snapshot; never populated from ROS parameters.
+struct M1DeviceConfig
+{
+  int driver_id{0};
+  // 01-06: single-phase encoder pulses per motor-shaft revolution.
+  uint16_t encoder_resolution_pulses_per_rev{0};
+  // 02-14: position COMMAND format. Its effect on MD2 feedback is unverified.
+  uint16_t position_command_format{0};
 };
 
 struct TransactionTiming
@@ -197,6 +208,8 @@ public:
     int driver_b = static_cast<int>(DriveId::Left));
 
   // Single-register Standard Modbus operations (for configuration & diagnostic)
+  virtual Result<M1DeviceConfig> read_device_config(int driver_id);
+
   Result<uint16_t> read_register(
     int driver_id,
     uint16_t address);

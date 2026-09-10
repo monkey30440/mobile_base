@@ -78,7 +78,6 @@ def urdf_xml_string(xacro_path):
         mappings={
             'use_mock_hardware': 'true',
             'response_timeout_ms': '50',
-            'motor_steps_per_rev': '65535.0',
         },
     )
     return doc.toxml()
@@ -90,7 +89,6 @@ def test_timeout_omission_produces_no_param(xacro_path):
         xacro_path,
         mappings={
             'use_mock_hardware': 'true',
-            'motor_steps_per_rev': '65535.0',
         },
     )
     xml_str = doc.toxml()
@@ -339,7 +337,7 @@ def test_ros2_control_structure(urdf_xml_string):
     assert float(params['gear_ratio']) == 20.0
     assert params['left_wheel_sign'] == '1'
     assert params['right_wheel_sign'] == '-1'
-    assert float(params['motor_steps_per_rev']) == 65535.0
+    assert 'motor_steps_per_rev' not in params
 
     # Check joints in ros2_control
     ctrl_joints = {j.attrib.get('name'): j for j in r2c.findall('joint')}

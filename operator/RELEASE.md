@@ -4,6 +4,10 @@
 
 ## Build
 
+目前 M1 position-feedback scale 尚未驗證，production activation 會在 Servo-On 前失敗；此 image 不可視為已恢復可運動版本。已確認資料與解除阻擋所需實機驗證見 [M1 evidence](../m1_settings/README.md)。
+
+此次更新亦修改 private `mobile_base.urdf.xacro` 與 `mobile_base_ros2_control.xacro`，移除 `motor_steps_per_rev` argument、macro input 與 hardware parameter。這兩個 assets 依 repository policy 不由 Git 追蹤；建置環境必須同步更新其 private copies，再建置 image。舊參數若仍傳入 M1Hardware，初始化會明確拒絕。
+
 在 repository root 執行；此命令不需提供額外 arguments：
 
 ```bash

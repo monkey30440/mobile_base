@@ -19,6 +19,8 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -79,7 +81,6 @@ struct M1HardwareConfig
   int left_wheel_sign{1};    // +1 forward
   int right_wheel_sign{-1};  // -1 forward (native sign inversion)
 
-  double motor_steps_per_rev{0.0};  // Required; configured by the base firmware
   double max_motor_rpm{3000.0};         // Operational motor clamp
 
   std::string left_wheel_name{"driving_wheel_joint_L"};
@@ -150,13 +151,30 @@ public:
 
   static double motor_steps_to_wheel_rad(
     int64_t accumulated_steps,
-    double motor_steps_per_rev,
+    double position_steps_per_rev,
     double gear_ratio,
     int motor_sign) noexcept;
 
   // Configuration accessor & testing injection seam
   const M1HardwareConfig & get_config() const noexcept {return config_;}
+  // Snapshot order: Right, Left. Empty until BOTH configuration reads succeed.
+  const std::optional<std::array<M1DeviceConfig, 2>> & get_device_configs() const noexcept
+  {
+    return device_configs_;
+  }
   void set_driver_for_testing(std::shared_ptr<M1Driver> driver) noexcept;
+  // Synthetic scale injection seam for testing. In production, position feedback
+  // scaling remains unverified and motion is blocked before Servo-On.
+  // Order: [0]=Right (ID 1), [1]=Left (ID 2).
+  void set_position_feedback_scales_for_testing(
+    const std::array<std::optional<double>, 2> & scales) noexcept
+  {
+    position_feedback_scales_ = scales;
+  }
+  const std::array<std::optional<double>, 2> & get_position_feedback_scales() const noexcept
+  {
+    return position_feedback_scales_;
+  }
 
 private:
   hardware_interface::CallbackReturn parse_parameters();
@@ -164,13 +182,18 @@ private:
   // Internal configuration
   M1HardwareConfig config_;
   std::shared_ptr<M1Driver> driver_;
+  std::optional<std::array<M1DeviceConfig, 2>> device_configs_;
+  // Position feedback scaling: [0]=Right (ID 1), [1]=Left (ID 2). Unverified in production.
+  std::array<std::optional<double>, 2> position_feedback_scales_{std::nullopt, std::nullopt};
 
   // Command storage: [0]=Left, [1]=Right
   double hw_commands_[2]{0.0, 0.0};
 
   // State storage: [0]=Left, [1]=Right
-  double hw_positions_[2]{0.0, 0.0};
-  double hw_velocities_[2]{0.0, 0.0};
+  double hw_positions_[2]{
+    std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+  double hw_velocities_[2]{
+    std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
 
   // Position trackers for left and right motors
   PositionTracker left_position_tracker_;

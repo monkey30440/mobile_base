@@ -153,12 +153,12 @@ TEST(DynamicStageD1Test, MathematicalSignAndGearConversion)
     left_rpm_0_5, gear_ratio, left_sign);
   EXPECT_NEAR(left_actual_vel, 0.4974, 1e-3);
 
-  // 5. Position steps conversion (65535 steps/rev * 20 gear = 1310700 steps/wheel rev)
+  // 5. Synthetic scale fixture only: 4096 steps/rev, unrelated to M1 encoder resolution.
   PositionTracker tracker;
   tracker.update(0);
-  tracker.update(1310700);  // 1 full wheel revolution
-  const double wheel_rad = (static_cast<double>(tracker.accumulated_steps) / (65535.0 * 20.0)) *
-    (2.0 * M_PI) * static_cast<double>(left_sign);
+  tracker.update(81920);  // One wheel revolution in this fixture.
+  const double wheel_rad = M1Hardware::motor_steps_to_wheel_rad(
+    tracker.accumulated_steps, 4096.0, gear_ratio, left_sign);
   EXPECT_NEAR(wheel_rad, 2.0 * M_PI, 1e-5);
 }
 

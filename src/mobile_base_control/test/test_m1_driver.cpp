@@ -372,6 +372,90 @@ TEST(M1DriverTest, MockTransactOperations)
   ASSERT_TRUE(wreg_res.ok);
 }
 
+TEST(M1DriverTest, ReadsM1ConfigurationWithoutInferringFeedbackScale)
+{
+  M1Driver driver;
+  for (int id : {1, 2}) {
+    size_t calls = 0;
+    driver.set_transact_override(
+      [id, &calls](const std::vector<uint8_t> & req) {
+        const std::vector<uint8_t> expected = calls++ == 0 ?
+        std::vector<uint8_t>{static_cast<uint8_t>(id), 3, 0x3D, 5, 0, 1} :
+        std::vector<uint8_t>{static_cast<uint8_t>(id), 3, 0x3E, 0x0D, 0, 1};
+        EXPECT_EQ(req, expected);
+        return Result<std::vector<uint8_t>>::success(
+          {static_cast<uint8_t>(id), 3, 2,
+            static_cast<uint8_t>(calls == 1 ? 0x09 : 0),
+            static_cast<uint8_t>(calls == 1 ? 0xC4 : 0)});
+      });
+    const auto config = driver.read_device_config(id);
+    ASSERT_TRUE(config.ok);
+    EXPECT_EQ(config.value.driver_id, id);
+    EXPECT_EQ(config.value.encoder_resolution_pulses_per_rev, 2500);
+    EXPECT_EQ(config.value.position_command_format, 0);
+    EXPECT_EQ(calls, 2u);
+  }
+}
+
+TEST(M1DriverTest, ConfigurationReadPropagatesEitherRegisterFailure)
+{
+  for (size_t failing_read : {1u, 2u}) {
+    for (auto error : {ErrorCode::TIMEOUT, ErrorCode::RECEIVE_FAILED}) {
+      M1Driver driver;
+      size_t calls = 0;
+      driver.set_transact_override(
+        [&](const std::vector<uint8_t> &) {
+          if (++calls == failing_read) {
+            return Result<std::vector<uint8_t>>::failure(error);
+          }
+          return Result<std::vector<uint8_t>>::success({1, 3, 2, 9, 0xC4});
+        });
+      const auto config = driver.read_device_config(1);
+      EXPECT_FALSE(config.ok);
+      EXPECT_EQ(config.error, error);
+      EXPECT_EQ(calls, failing_read);
+      EXPECT_EQ(config.value.driver_id, 0);  // No partial snapshot escapes.
+    }
+  }
+}
+
+TEST(M1DriverTest, ConfigurationReadRejectsMalformedResponses)
+{
+  const std::vector<std::vector<uint8_t>> responses{
+    {1, 0x83, 2}, {2, 3, 2, 9, 0xC4}, {1, 4, 2, 9, 0xC4},
+    {1, 3, 2, 9}, {1, 3, 4, 0, 0, 0, 0}};
+  for (const auto & response : responses) {
+    M1Driver driver;
+    driver.set_transact_override([&](const std::vector<uint8_t> &) {
+        return Result<std::vector<uint8_t>>::success(response);
+      });
+    EXPECT_FALSE(driver.read_device_config(1).ok);
+  }
+}
+
+TEST(M1DriverTest, ConfigurationReadsPreserveOtherValuesWithoutInventingAScale)
+{
+  for (uint16_t encoder : {0, 1024, 65535}) {
+    M1Driver driver;
+    driver.set_transact_override([encoder](const std::vector<uint8_t> & req) {
+        const uint16_t value = req[2] == 0x3D ? encoder : 1;
+        return Result<std::vector<uint8_t>>::success(
+          {req[0], 3, 2, static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value & 0xFF)});
+      });
+    const auto config = driver.read_device_config(2);
+    ASSERT_TRUE(config.ok);
+    EXPECT_EQ(config.value.encoder_resolution_pulses_per_rev, encoder);
+    EXPECT_EQ(config.value.position_command_format, 1);
+  }
+  M1Driver driver;
+  driver.set_transact_override([](const std::vector<uint8_t> & req) {
+      return Result<std::vector<uint8_t>>::success({req[0], 3, 2, 0, 2});
+    });
+  EXPECT_FALSE(driver.read_device_config(1).ok);  // Unsupported 02-14 value.
+  EXPECT_FALSE(driver.read_device_config(0).ok);
+  EXPECT_FALSE(driver.read_device_config(248).ok);
+}
+
 TEST(M1DriverTest, NegativeHandling)
 {
   M1Driver driver;

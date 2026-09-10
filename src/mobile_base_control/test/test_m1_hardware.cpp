@@ -23,6 +23,7 @@
 #include "diff_drive_controller/diff_drive_controller.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "hardware_interface/hardware_info.hpp"
+#include "hardware_interface/component_parser.hpp"
 #include "hardware_interface/resource_manager.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
@@ -50,6 +51,37 @@ namespace
 {
 constexpr double PI = 3.14159265358979323846;
 
+// Test driver fixture returning confirmed M1 configuration registers only.
+class FixtureM1Driver : public M1Driver
+{
+public:
+  size_t config_reads{0};
+
+  Result<mobile_base_control::M1DeviceConfig> read_device_config(int id) override
+  {
+    ++config_reads;
+    mobile_base_control::M1DeviceConfig config;
+    config.driver_id = id;
+    config.encoder_resolution_pulses_per_rev = 2500;
+    config.position_command_format = 0;
+    return Result<mobile_base_control::M1DeviceConfig>::success(config);
+  }
+};
+
+void import_fixture_hardware(
+  hardware_interface::ResourceManager & rm, const std::string & urdf,
+  const std::shared_ptr<rclcpp::Clock> & clock)
+{
+  hardware_interface::HardwareComponentParams params;
+  params.hardware_info = hardware_interface::parse_control_resources_from_urdf(urdf).at(0);
+  params.clock = clock;
+  auto hw = std::make_unique<M1Hardware>(std::make_shared<FixtureM1Driver>());
+  hw->set_position_feedback_scales_for_testing({4096.0, 8192.0});
+  rm.import_component(std::move(hw), params);
+  rclcpp_lifecycle::State active(lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE, "active");
+  ASSERT_EQ(rm.set_component_state("M1Hardware", active), return_type::OK);
+}
+
 hardware_interface::HardwareComponentInterfaceParams create_test_params(
   const std::string & port = "mock",
   int baud = 230400,
@@ -68,7 +100,6 @@ hardware_interface::HardwareComponentInterfaceParams create_test_params(
   info.hardware_parameters["gear_ratio"] = "20.0";
   info.hardware_parameters["left_wheel_sign"] = "1";
   info.hardware_parameters["right_wheel_sign"] = "-1";
-  info.hardware_parameters["motor_steps_per_rev"] = "65535.0";
   info.hardware_parameters["max_motor_rpm"] = "3000.0";
   info.hardware_parameters["left_wheel_name"] = "driving_wheel_joint_L";
   info.hardware_parameters["right_wheel_name"] = "driving_wheel_joint_R";
@@ -164,24 +195,24 @@ TEST(M1HardwareConversionTest, MotorRpmToWheelRadS)
 
 TEST(M1HardwareConversionTest, MotorStepsToWheelRad)
 {
-  const double steps_per_rev = 65535.0;
+  const double steps_per_rev = 4096.0;  // Explicit arithmetic fixture only.
   const double gear = 20.0;
-  // 1 wheel revolution = 1,310,700 motor steps = 2*PI radians
+  // Fixture: 1 wheel revolution = 81,920 motor steps = 2*PI radians
 
   // Left wheel (+1 sign)
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(1310700, steps_per_rev, gear, 1),
+    M1Hardware::motor_steps_to_wheel_rad(81920, steps_per_rev, gear, 1),
     2.0 * PI, 1e-6);
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(-1310700, steps_per_rev, gear, 1),
+    M1Hardware::motor_steps_to_wheel_rad(-81920, steps_per_rev, gear, 1),
     -2.0 * PI, 1e-6);
 
   // Right wheel (-1 sign: positive wheel motion corresponds to negative motor steps)
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(-1310700, steps_per_rev, gear, -1),
+    M1Hardware::motor_steps_to_wheel_rad(-81920, steps_per_rev, gear, -1),
     2.0 * PI, 1e-6);
   EXPECT_NEAR(
-    M1Hardware::motor_steps_to_wheel_rad(1310700, steps_per_rev, gear, -1),
+    M1Hardware::motor_steps_to_wheel_rad(81920, steps_per_rev, gear, -1),
     -2.0 * PI, 1e-6);
 
   // Zero steps
@@ -276,7 +307,7 @@ TEST(PositionTrackerTest, ResetClearsOrigin)
 
 TEST(M1HardwareLifecycleTest, InitParameterParsing)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock", 230400, 100);
   EXPECT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -293,25 +324,178 @@ TEST(M1HardwareLifecycleTest, InitParameterParsing)
 
 TEST(M1HardwareLifecycleTest, MissingTimeoutParameterFails)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock", 230400, 100);
   params.hardware_info.hardware_parameters.erase("timeout_ms");
   params.hardware_info.hardware_parameters.erase("response_timeout_ms");
   EXPECT_EQ(hw.on_init(params), CallbackReturn::ERROR);
 }
 
-TEST(M1HardwareLifecycleTest, MissingMotorStepsPerRevFails)
+TEST(M1HardwareLifecycleTest, DoesNotRequireRosOwnedPositionScale)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock", 230400, 100);
   params.hardware_info.hardware_parameters.erase("motor_steps_per_rev");
 
+  EXPECT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
+}
+
+TEST(M1HardwareLifecycleTest, ReadsConfigurationBeforeBlockingUnverifiedPositionActivation)
+{
+  auto driver = std::make_shared<M1Driver>();
+  std::vector<std::vector<uint8_t>> requests;
+  driver->set_transact_override(
+    [&requests](const std::vector<uint8_t> & req) {
+      requests.push_back(req);
+      if (req.size() == 6 && req[1] == 0x03 && (req[0] == 1 || req[0] == 2)) {
+        const uint16_t value = req[2] == 0x3D ? 2500 : 0;
+        return Result<std::vector<uint8_t>>::success(
+          {req[0], 0x03, 0x02, static_cast<uint8_t>(value >> 8),
+            static_cast<uint8_t>(value & 0xFF)});
+      }
+      return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+    });
+  M1Hardware hw(driver);
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
+  const std::vector<std::vector<uint8_t>> expected{
+    {1, 3, 0x3D, 5, 0, 1}, {1, 3, 0x3E, 0x0D, 0, 1},
+    {2, 3, 0x3D, 5, 0, 1}, {2, 3, 0x3E, 0x0D, 0, 1}};
+  EXPECT_EQ(requests, expected);  // No Servo-On or motion request.
+  ASSERT_TRUE(hw.get_device_configs());
+  EXPECT_EQ((*hw.get_device_configs())[0].encoder_resolution_pulses_per_rev, 2500);
+  EXPECT_EQ((*hw.get_device_configs())[1].encoder_resolution_pulses_per_rev, 2500);
+  for (const auto & scale : hw.get_position_feedback_scales()) {
+    EXPECT_FALSE(scale.has_value());
+  }
+  for (auto & interface : hw.export_state_interfaces()) {
+    EXPECT_TRUE(std::isnan(interface.get_optional<double>().value()));
+  }
+  EXPECT_EQ(hw.write(rclcpp::Time(0), rclcpp::Duration(0, 20000000)), return_type::ERROR);
+}
+
+TEST(M1HardwareLifecycleTest, RejectsLegacyRosScale)
+{
+  M1Hardware hw;
+  auto params = create_test_params();
+  params.hardware_info.hardware_parameters["motor_steps_per_rev"] = "2500";
   EXPECT_EQ(hw.on_init(params), CallbackReturn::ERROR);
+}
+
+TEST(M1HardwareLifecycleTest, ConfigurationFailureDoesNotPublishPartialOrStaleSnapshot)
+{
+  for (size_t failing_read : {1u, 2u, 3u, 4u}) {
+    auto driver = std::make_shared<M1Driver>();
+    size_t calls = 0;
+    bool fail = false;
+    driver->set_transact_override([&](const std::vector<uint8_t> & req) {
+        if (++calls == failing_read && fail) {
+          return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
+        }
+        const uint16_t value = req[2] == 0x3D ? 2500 : 0;
+        return Result<std::vector<uint8_t>>::success(
+          {req[0], 3, 2, static_cast<uint8_t>(value >> 8),
+            static_cast<uint8_t>(value & 0xFF)});
+      });
+    M1Hardware hw(driver);
+    ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+    rclcpp_lifecycle::State state;
+    ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+    ASSERT_TRUE(hw.get_device_configs());
+    fail = true;
+    calls = 0;
+    EXPECT_EQ(hw.on_configure(state), CallbackReturn::FAILURE);
+    EXPECT_FALSE(hw.get_device_configs());
+    EXPECT_FALSE(driver->is_connected());
+    EXPECT_EQ(calls, failing_read);
+    EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
+    EXPECT_EQ(calls, failing_read);
+    fail = false;
+    EXPECT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);  // Reconnect/re-read.
+    EXPECT_TRUE(hw.get_device_configs());
+    driver->disconnect();  // Captured stack values outlive all possible transactions.
+  }
+}
+
+TEST(M1HardwareLifecycleTest, CleanupInvalidatesConfiguration)
+{
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(hw.get_device_configs());
+  EXPECT_EQ(hw.on_cleanup(state), CallbackReturn::SUCCESS);
+  EXPECT_FALSE(hw.get_device_configs());
+  EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
+}
+
+TEST(M1HardwareLifecycleTest, InvalidOrMissingScaleOnEitherDriveBlocksActivation)
+{
+  const std::vector<std::optional<double>> invalid{
+    std::nullopt, 0.0, -1.0, std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::infinity()};
+  for (size_t side : {0u, 1u}) {
+    for (auto scale : invalid) {
+      auto driver = std::make_shared<FixtureM1Driver>();
+      size_t transactions = 0;
+      driver->set_transact_override([&transactions](const std::vector<uint8_t> &) {
+          ++transactions;
+          return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_RESPONSE);
+        });
+      M1Hardware hw(driver);
+      std::array<std::optional<double>, 2> test_scales{4096.0, 8192.0};
+      test_scales[side] = scale;
+      hw.set_position_feedback_scales_for_testing(test_scales);
+      ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+      rclcpp_lifecycle::State state;
+      ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+      EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
+      EXPECT_EQ(transactions, 0u);
+    }
+  }
+}
+
+TEST(M1HardwareLifecycleTest, UsesPerDriveFixtureScaleAndDoesNotReadConfigInControlLoop)
+{
+  auto driver = std::make_shared<FixtureM1Driver>();
+  M1Hardware hw(driver);
+  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  ASSERT_EQ(hw.on_activate(state), CallbackReturn::SUCCESS);
+  const rclcpp::Time now(0);
+  const rclcpp::Duration dt(0, 20000000);
+  ASSERT_EQ(hw.read(now, dt), return_type::OK);
+  driver->set_transact_override([](const std::vector<uint8_t> & req) {
+      EXPECT_EQ(req[0], 0x65);
+      EXPECT_EQ(req[1], 0x17);
+      std::vector<uint8_t> response(35, 0);
+      response[0] = 0x65;
+      response[1] = 0x17;
+      response[2] = 32;
+      // Right = -4096; Left = +8192: one shaft revolution per explicit fixture.
+      response[13] = 0xFF;
+      response[14] = 0xFF;
+      response[15] = 0xF0;
+      response[29] = 0;
+      response[30] = 0;
+      response[31] = 0x20;
+      return Result<std::vector<uint8_t>>::success(response);
+    });
+  ASSERT_EQ(hw.write(now, dt), return_type::OK);
+  ASSERT_EQ(hw.read(now, dt), return_type::OK);
+  const auto interfaces = hw.export_state_interfaces();
+  EXPECT_NEAR(interfaces[0].get_optional<double>().value(), PI / 10.0, 1e-9);
+  EXPECT_NEAR(interfaces[2].get_optional<double>().value(), PI / 10.0, 1e-9);
+  EXPECT_EQ(driver->config_reads, 2u);
 }
 
 TEST(M1HardwareLifecycleTest, InvalidTimeoutParameterFails)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   // Zero timeout
   auto params_zero = create_test_params("mock", 230400, 100);
   params_zero.hardware_info.hardware_parameters["response_timeout_ms"] = "0";
@@ -333,7 +517,7 @@ TEST(M1HardwareLifecycleTest, InvalidTimeoutParameterFails)
 
 TEST(M1HardwareLifecycleTest, ExplicitResponseTimeoutAliasPasses)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock", 230400, 100);
   params.hardware_info.hardware_parameters.erase("timeout_ms");
   params.hardware_info.hardware_parameters["response_timeout_ms"] = "100";
@@ -343,7 +527,7 @@ TEST(M1HardwareLifecycleTest, ExplicitResponseTimeoutAliasPasses)
 
 TEST(M1HardwareLifecycleTest, ExportInterfaces)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock");
   ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -368,7 +552,7 @@ TEST(M1HardwareLifecycleTest, ExportInterfaces)
 
 TEST(M1HardwareLifecycleTest, FullLifecycleMockSuccess)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock");
   ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -381,6 +565,7 @@ TEST(M1HardwareLifecycleTest, FullLifecycleMockSuccess)
 
   // 1. Configure
   EXPECT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
+  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
 
   // 2. Activate
   EXPECT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
@@ -405,7 +590,7 @@ TEST(M1HardwareLifecycleTest, FullLifecycleMockSuccess)
 
 TEST(M1HardwareLifecycleTest, WriteAndReadFeedbackLoop)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock");
   ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -415,6 +600,7 @@ TEST(M1HardwareLifecycleTest, WriteAndReadFeedbackLoop)
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
 
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
+  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   auto cmd_ifaces = hw.export_command_interfaces();
@@ -451,7 +637,7 @@ TEST(M1HardwareLifecycleTest, WriteAndReadFeedbackLoop)
 
 TEST(M1HardwareLifecycleTest, InvalidCommandRejection)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock");
   ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -461,6 +647,7 @@ TEST(M1HardwareLifecycleTest, InvalidCommandRejection)
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
 
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
+  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   auto cmd_ifaces = hw.export_command_interfaces();
@@ -479,7 +666,7 @@ TEST(M1HardwareLifecycleTest, InvalidCommandRejection)
 
 TEST(M1HardwareLifecycleTest, ReadWithoutValidStateFails)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock");
   ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -539,7 +726,6 @@ TEST(M1HardwareIntegrationTest, ResourceManagerURDFLoading)
       <param name="gear_ratio">20.0</param>
       <param name="left_wheel_sign">1</param>
       <param name="right_wheel_sign">-1</param>
-      <param name="motor_steps_per_rev">65535.0</param>
       <param name="max_motor_rpm">3000.0</param>
     </hardware>
     <joint name="driving_wheel_joint_L">
@@ -559,18 +745,14 @@ TEST(M1HardwareIntegrationTest, ResourceManagerURDFLoading)
   auto logger = rclcpp::get_logger("resource_manager_test");
 
   EXPECT_NO_THROW({
-    hardware_interface::ResourceManager rm(urdf, clock, logger, true);
+    hardware_interface::ResourceManager rm(urdf, clock, logger, false);
     EXPECT_TRUE(rm.are_components_initialized());
 
-    // State interfaces should be available after activate_all = true
-    EXPECT_TRUE(rm.state_interface_is_available("driving_wheel_joint_L/position"));
-    EXPECT_TRUE(rm.state_interface_is_available("driving_wheel_joint_L/velocity"));
-    EXPECT_TRUE(rm.state_interface_is_available("driving_wheel_joint_R/position"));
-    EXPECT_TRUE(rm.state_interface_is_available("driving_wheel_joint_R/velocity"));
-
-    // Command interfaces should be available after activate_all = true
-    EXPECT_TRUE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
-    EXPECT_TRUE(rm.command_interface_is_available("driving_wheel_joint_R/velocity"));
+    // The plugin loads without a ROS scale. Unconfigured hardware is unavailable.
+    EXPECT_TRUE(rm.state_interface_exists("driving_wheel_joint_L/position"));
+    EXPECT_TRUE(rm.state_interface_exists("driving_wheel_joint_R/position"));
+    EXPECT_FALSE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
+    EXPECT_FALSE(rm.command_interface_is_available("driving_wheel_joint_R/velocity"));
   });
 }
 
@@ -615,7 +797,6 @@ protected:
       <param name="gear_ratio">20.0</param>
       <param name="left_wheel_sign">1</param>
       <param name="right_wheel_sign">-1</param>
-      <param name="motor_steps_per_rev">65535.0</param>
       <param name="max_motor_rpm">3000.0</param>
     </hardware>
     <joint name="driving_wheel_joint_L">
@@ -681,8 +862,9 @@ TEST_F(DiffDriveIntegrationTest, FullIntegrationLifecycle)
   auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
   auto logger = rclcpp::get_logger("diff_drive_test");
 
-  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
-  ASSERT_TRUE(rm.are_components_initialized());
+  hardware_interface::ResourceManager rm(clock, logger);
+  import_fixture_hardware(rm, get_test_urdf(), clock);
+  ASSERT_TRUE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
 
   auto controller = create_and_configure_controller();
   ASSERT_NE(controller, nullptr);
@@ -711,8 +893,9 @@ TEST_F(DiffDriveIntegrationTest, LinearForwardCommandPath)
   auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
   auto logger = rclcpp::get_logger("diff_drive_test");
 
-  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
-  ASSERT_TRUE(rm.are_components_initialized());
+  hardware_interface::ResourceManager rm(clock, logger);
+  import_fixture_hardware(rm, get_test_urdf(), clock);
+  ASSERT_TRUE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
 
   auto controller = create_and_configure_controller(0.555, 0.08);
   ASSERT_NE(controller, nullptr);
@@ -763,8 +946,9 @@ TEST_F(DiffDriveIntegrationTest, AngularRotationCommandPath)
   auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
   auto logger = rclcpp::get_logger("diff_drive_test");
 
-  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
-  ASSERT_TRUE(rm.are_components_initialized());
+  hardware_interface::ResourceManager rm(clock, logger);
+  import_fixture_hardware(rm, get_test_urdf(), clock);
+  ASSERT_TRUE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
 
   auto controller = create_and_configure_controller(0.555, 0.08);
   ASSERT_NE(controller, nullptr);
@@ -818,8 +1002,9 @@ TEST_F(DiffDriveIntegrationTest, ZeroCommandPath)
   auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
   auto logger = rclcpp::get_logger("diff_drive_test");
 
-  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
-  ASSERT_TRUE(rm.are_components_initialized());
+  hardware_interface::ResourceManager rm(clock, logger);
+  import_fixture_hardware(rm, get_test_urdf(), clock);
+  ASSERT_TRUE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
 
   auto controller = create_and_configure_controller(0.555, 0.08);
   ASSERT_NE(controller, nullptr);
@@ -866,8 +1051,9 @@ TEST_F(DiffDriveIntegrationTest, FeedbackPathPositionProgression)
   auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
   auto logger = rclcpp::get_logger("diff_drive_test");
 
-  hardware_interface::ResourceManager rm(get_test_urdf(), clock, logger, true);
-  ASSERT_TRUE(rm.are_components_initialized());
+  hardware_interface::ResourceManager rm(clock, logger);
+  import_fixture_hardware(rm, get_test_urdf(), clock);
+  ASSERT_TRUE(rm.command_interface_is_available("driving_wheel_joint_L/velocity"));
 
   auto controller = create_and_configure_controller(0.555, 0.08);
   ASSERT_NE(controller, nullptr);
@@ -920,7 +1106,7 @@ TEST_F(DiffDriveIntegrationTest, FeedbackPathPositionProgression)
 
 TEST_F(DiffDriveIntegrationTest, CommandSubstitutionProhibitionPolicy)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock", 230400, 100);
   ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -929,6 +1115,7 @@ TEST_F(DiffDriveIntegrationTest, CommandSubstitutionProhibitionPolicy)
   rclcpp_lifecycle::State inactive(
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
+  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   auto cmd_ifaces = hw.export_command_interfaces();
@@ -953,7 +1140,7 @@ TEST_F(DiffDriveIntegrationTest, CommandSubstitutionProhibitionPolicy)
 
 TEST_F(DiffDriveIntegrationTest, SafeStopChainOnDeactivate)
 {
-  M1Hardware hw;
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
   auto params = create_test_params("mock", 230400, 100);
   ASSERT_EQ(hw.on_init(params), CallbackReturn::SUCCESS);
 
@@ -962,6 +1149,7 @@ TEST_F(DiffDriveIntegrationTest, SafeStopChainOnDeactivate)
   rclcpp_lifecycle::State inactive(
     lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, "inactive");
   ASSERT_EQ(hw.on_configure(unconfigured), CallbackReturn::SUCCESS);
+  hw.set_position_feedback_scales_for_testing({4096.0, 8192.0});
   ASSERT_EQ(hw.on_activate(inactive), CallbackReturn::SUCCESS);
 
   // Verify hardware is active and commands can be written
