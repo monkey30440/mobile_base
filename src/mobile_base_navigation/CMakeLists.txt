@@ -10,7 +10,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
@@ -60,9 +62,46 @@ ament_target_dependencies(navigate_to_station
   rclcpp
 )
 
+# Localization healthy condition BT plugin
+add_library(is_localization_healthy_condition_bt_node SHARED
+  src/is_localization_healthy_condition.cpp
+)
+target_include_directories(is_localization_healthy_condition_bt_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_compile_definitions(is_localization_healthy_condition_bt_node PRIVATE
+  BT_PLUGIN_EXPORT
+)
+ament_target_dependencies(is_localization_healthy_condition_bt_node
+  rclcpp
+  behaviortree_cpp
+  std_msgs
+)
+
+# Wait for localization healthy action BT plugin
+add_library(wait_for_localization_healthy_node_bt_node SHARED
+  src/wait_for_localization_healthy_node.cpp
+)
+target_include_directories(wait_for_localization_healthy_node_bt_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_compile_definitions(wait_for_localization_healthy_node_bt_node PRIVATE
+  BT_PLUGIN_EXPORT
+)
+ament_target_dependencies(wait_for_localization_healthy_node_bt_node
+  rclcpp
+  behaviortree_cpp
+  std_msgs
+)
+
 # Install libraries and headers
 install(
-  TARGETS target_admission_lib
+  TARGETS
+    target_admission_lib
+    is_localization_healthy_condition_bt_node
+    wait_for_localization_healthy_node_bt_node
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -126,6 +165,30 @@ if(BUILD_TESTING)
     nav2_msgs
   )
 
+  ament_add_gtest(test_is_localization_healthy_condition
+    test/test_is_localization_healthy_condition.cpp
+  )
+  target_link_libraries(test_is_localization_healthy_condition
+    is_localization_healthy_condition_bt_node
+  )
+  ament_target_dependencies(test_is_localization_healthy_condition
+    rclcpp
+    behaviortree_cpp
+    std_msgs
+  )
+
+  ament_add_gtest(test_wait_for_localization_healthy_node
+    test/test_wait_for_localization_healthy_node.cpp
+  )
+  target_link_libraries(test_wait_for_localization_healthy_node
+    wait_for_localization_healthy_node_bt_node
+  )
+  ament_target_dependencies(test_wait_for_localization_healthy_node
+    rclcpp
+    behaviortree_cpp
+    std_msgs
+  )
+
   find_package(behaviortree_cpp REQUIRED)
   find_package(nav_msgs REQUIRED)
   find_package(nav2_route REQUIRED)
@@ -139,12 +202,15 @@ if(BUILD_TESTING)
   target_compile_definitions(test_behavior_tree_runtime PRIVATE
     BT_XML_PATH="${CMAKE_CURRENT_SOURCE_DIR}/behavior_trees/route_assisted_nav.xml"
     REAL_ROUTE_GRAPH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../maps/test_site/route_graph.geojson"
+    IS_LOCALIZATION_HEALTHY_LIB="$<TARGET_FILE:is_localization_healthy_condition_bt_node>"
+    WAIT_FOR_LOCALIZATION_HEALTHY_LIB="$<TARGET_FILE:wait_for_localization_healthy_node_bt_node>"
   )
   ament_target_dependencies(test_behavior_tree_runtime
     rclcpp
     behaviortree_cpp
     nav_msgs
     geometry_msgs
+    std_msgs
     nav2_route
     nav2_util
   )
@@ -160,8 +226,12 @@ if(BUILD_TESTING)
 endif()
 
 ament_export_include_directories(include)
-ament_export_libraries(target_admission_lib)
+ament_export_libraries(
+  target_admission_lib
+  is_localization_healthy_condition_bt_node
+  wait_for_localization_healthy_node_bt_node
+)
 ament_export_targets(export_${PROJECT_NAME})
-ament_export_dependencies(rclcpp geometry_msgs)
+ament_export_dependencies(rclcpp geometry_msgs std_msgs behaviortree_cpp)
 
 ament_package()

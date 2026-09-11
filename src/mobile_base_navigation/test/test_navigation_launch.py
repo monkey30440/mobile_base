@@ -29,6 +29,11 @@ def test_nav2_params_contracts():
 
     with open(params_path, 'r', encoding='utf-8') as f:
         params = yaml.safe_load(f)
+    # 0. BT Navigator contract
+    assert 'bt_navigator' in params
+    bt_params = params['bt_navigator']['ros__parameters']
+    assert 'is_localization_healthy_condition_bt_node' in bt_params.get('plugin_lib_names', [])
+    assert 'wait_for_localization_healthy_node_bt_node' in bt_params.get('plugin_lib_names', [])
 
     # 1. Planner contract
     assert 'planner_server' in params
@@ -129,6 +134,11 @@ def test_bt_xml_structure_and_fallback_policy():
     assert 'ConcatenatePaths' in all_tags
     assert 'FollowPath' in all_tags
     assert 'SetBlackboard' in all_tags
+    assert 'RecoveryNode' in all_tags
+    assert 'IsLocalizationHealthy' in all_tags
+    assert 'WaitForLocalizationHealthy' in all_tags
+    assert 'ReinitializeGlobalLocalization' in all_tags
+    assert 'Timeout' in all_tags
 
     # Verify explicit non-overwriting path keys in BT
     compute_route_elem = next(root.iter('ComputeRoute'))

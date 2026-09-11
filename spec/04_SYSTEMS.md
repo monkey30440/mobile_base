@@ -497,7 +497,7 @@ Localization 負責在 Navigation Mode 下：
 - 路網規劃與導航控制（Route-Assisted Navigation）
 - 底盤運動控制（Base Control）
 - 精準對接（Precision Docking）
-- 定位失效後之自主重定位或導航復原行為（Phase 1 暫不實作 Recovery）
+- 定位失效後之自主重定位或導航復原行為（Phase 1 暫不實作 Recovery；Phase 2B 行為樹復原整合詳見 §7）
 
 ### Interfaces and Flow
 
@@ -735,11 +735,15 @@ Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
 ### Implementation
 
 1. **行為樹管線結構** (`src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`)：
-   - 採用 `PipelineSequence`（名稱為 `NavigateRouteAssisted`），以 1.0 Hz 頻率循環評估與更新路徑：
-     - **第一步：Topological Route (`ComputeRoute`)**：`route_server` 根據全局目標與當前位姿在 `route_graph.geojson` 拓撲圖上搜尋最優節點路徑，產出 `raw_route_path`。
-     - **第二步：First Mile Connector**：檢驗當前機器人位姿與 `raw_route_path` 起點（索引 0）之距離。若距離小於等於容許值 0.2 m（`ArePosesNear tolerance="0.2"`），則跳過第一哩接駁；否則調用 `planner_server` 規劃當前位姿至路網起點之無碰撞路徑，並透過 `ConcatenatePaths` 拼接於路網前段（產出 `first_connected_path`）。
-     - **第三步：Last Mile Connector**：檢驗 `first_connected_path` 終點（索引 -1）與目標 Goal 之距離。若距離小於等於 0.2 m，跳過最後一哩；否則調用 `planner_server` 規劃路網終點至目標 Goal 之路徑，拼接產出 `final_route_path`。
-     - **第四步：FollowPath 與停止校驗**：由 `controller_server` 執行 MPPI 演算法追蹤 `final_route_path`。配置 `StoppedGoalChecker`（`xy_goal_tolerance: 0.25` m，`yaw_goal_tolerance: 0.5236` rad，`trans_stopped_velocity: 0.05` m/s，`rot_stopped_velocity: 0.10` rad/s），確保機器人不僅在幾何容許誤差內到達目標，且完全煞停後方回報成功。
+   - 採用外層 `RecoveryNode`（名稱為 `NavigateWithLocalizationRecovery`，`number_of_retries="1"`）管理主導航管線與定位失效恢復分支：
+     - **主導航管線 (`PipelineSequence` 名稱為 `NavigateRouteAssisted`)**：受 `IsLocalizationHealthy` 條件節點守護（訂閱 `/localization/lost`，候選新鮮度參數 `freshness_timeout_s="1.0"`），以 1.0 Hz 頻率循環評估與更新路徑：
+       - **第一步：Topological Route (`ComputeRoute`)**：`route_server` 根據全局目標與當前位姿在 `route_graph.geojson` 拓撲圖上搜尋最優節點路徑，產出 `raw_route_path`。
+       - **第二步：First Mile Connector**：檢驗當前機器人位姿與 `raw_route_path` 起點（索引 0）之距離。若距離小於等於容許值 0.2 m（`ArePosesNear tolerance="0.2"`），則跳過第一哩接駁；否則調用 `planner_server` 規劃當前位姿至路網起點之無碰撞路徑，並透過 `ConcatenatePaths` 拼接於路網前段（產出 `first_connected_path`）。
+       - **第三步：Last Mile Connector**：檢驗 `first_connected_path` 終點（索引 -1）與目標 Goal 之距離。若距離小於等於 0.2 m，跳過最後一哩；否則調用 `planner_server` 規劃路網終點至目標 Goal 之路徑，拼接產出 `final_route_path`。
+       - **第四步：FollowPath 與停止校驗**：由 `controller_server` 執行 MPPI 演算法追蹤 `final_route_path`。配置 `StoppedGoalChecker`（`xy_goal_tolerance: 0.25` m，`yaw_goal_tolerance: 0.5236` rad，`trans_stopped_velocity: 0.05` m/s，`rot_stopped_velocity: 0.10` rad/s），確保機器人不僅在幾何容許誤差內到達目標，且完全煞停後方回報成功。
+     - **定位恢復分支 (`Sequence` 名稱為 `LocalizationRecovery`)**：
+       - **步驟 A**：調用 `ReinitializeGlobalLocalization`（服務 `/amcl/reinitialize_global_localization`），觸發 AMCL 全局撒點重定位（回傳 SUCCESS 僅代表粒子重置請求完成）。
+       - **步驟 B**：透過原生裝飾節點組合（`<Timeout msec="10000">` 包裹 `<Inverter><KeepRunningUntilFailure><Inverter><IsLocalizationHealthy .../></Inverter></KeepRunningUntilFailure></Inverter>`）進行有界時間等待。等待期間回傳 RUNNING；若 LocalizationMonitor 回報健康則回傳 SUCCESS 並重新進入主導航管線（由最新 TF 重建路徑）；若超時則回傳 FAILURE，導航任務失敗。
 
 2. **核心架構原則與事實**：
    - **三段式架構構成**：First Mile、On Route 與 Last Mile 均為 Route-Assisted Navigation 之常態組成環節，非降級備援機制（Not Fallbacks）。
@@ -758,6 +762,7 @@ Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
 - **拓撲路網計算失敗**：若 `ComputeRoute` 無法於路網圖建立路徑，行為樹直接失敗終止，不嘗試自由空間直達規劃。
 - **接駁規劃失敗**：若第一哩或最後一哩遭遇障礙阻擋導致 `ComputePathToPose` 無法成路，導航任務失敗。
 - **前進停滯（Progress Failure）**：若 `SimpleProgressChecker` 偵測在 30.0 秒內機器人位移未達 0.05 m，判定為受困，控制器終止並回報失敗。
+- **定位失效與恢復超時（Localization Recovery Failure）**：導航中若 `IsLocalizationHealthy` 判定定位丟失或狀態逾時，`PipelineSequence` 立即中斷並取消當前 `FollowPath` 運動。系統觸發單次全局撒點重定位，並在有界時間內等待 `LocalizationMonitor` 回報新鮮且健康狀態。若超過恢復時限（預設候選值 10000 ms）仍未恢復，行為樹終止並回報失敗。
 - **任務取消**：客戶端發送取消請求時，行為樹立即中斷執行，`controller_server` 輸出全零速度指令並回傳 CANCELED。
 
 ### Implementation References
@@ -765,7 +770,172 @@ Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
 - Navigation Launch: `src/mobile_base_navigation/launch/navigation.launch.py`
 - Nav2 Parameter Config: `src/mobile_base_navigation/config/nav2_params.yaml`
 - Behavior Tree XML: `src/mobile_base_navigation/behavior_trees/route_assisted_nav.xml`
+- Localization Health BT Condition Header: `src/mobile_base_navigation/include/mobile_base_navigation/is_localization_healthy_condition.hpp`
+- Localization Health BT Condition Source: `src/mobile_base_navigation/src/is_localization_healthy_condition.cpp`
 - Site Resolution Module: `src/mobile_base_bringup/launch/site_resolution.py`
+
+### Localization Loss Recovery (Phase 2B Baseline)
+
+本節記錄依據 SYS-045 規範性要求（在有限恢復時間內嘗試重新建立地圖定位），Route-Assisted Navigation 行為樹整合之有界時間定位失效恢復基線實作與架構規範。
+
+#### 1. 行為樹反應機制與運動中斷 (Reactivity while FollowPath is RUNNING)
+
+- **中斷機制**：
+  在當前 `route_assisted_nav.xml` 中，主導航管線運行於 `<PipelineSequence name="NavigateRouteAssisted">`。在 ROS 2 Jazzy 的 BehaviorTree.CPP / Nav2 實作中，`PipelineSequence` 在下游節點（如 `FollowPath`）處於 `RUNNING` 狀態時，每個 BT tick 均會重新評估前面的所有子節點 **[B. Nav2 Jazzy implementation/API verified]**。
+- **取消與煞停行為**：
+  若置於 `PipelineSequence` 最前端之定位健全條件節點回傳 `FAILURE`，`PipelineSequence` 立即調用 `haltChildren()` 終止後續所有子節點 **[B. Nav2 Jazzy implementation/API verified]**。
+  對於 `FollowPath`（基於 `nav2_behavior_tree::BtActionNode<nav2_msgs::action::FollowPath>`），其 `halt()` 實作會透過 `action_client_->async_cancel_goal()` 向 `controller_server` 發送非同步取消請求 **[B. Nav2 Jazzy implementation/API verified]**。
+  `controller_server` 接收到 Action 取消後，停止軌跡追蹤計算並向底盤輸出全零速度指令 **[B. Nav2 Jazzy implementation/API verified]**。實際物理煞停時間與減速滑行距離取決於底盤機械減速極限與驅動器硬體動態，軟體 Action 取消本身僅停止控制輸出，不構成即時零距離剛性煞停保證 **[C. design inference]**。
+- **最小架構變更**：
+  在 `NavigateRouteAssisted`（`PipelineSequence`）最前端置入單一定位健康條件節點，即可在無需新增自訂控制節點（Control Node）的前提下達成即時中斷運動 **[C. design inference]**。
+
+#### 2. 職責邊界與微型適配器 (SSOT Boundary & Minimal Condition Adapter)
+
+- **單一事實來源 (SSOT)**：
+  Phase 1 之 `localization_monitor` 為系統中唯一依據光達掃描與佔據網格地圖計算匹配品質並判定定位是否丟失之權威組件 **[A. repo/code verified]**。
+  行為樹層級嚴格禁止重複計算光達匹配、禁止重複 Phase 1 門檻判定、禁止消費 `/localization/quality` 建立平行邏輯，亦不實作任何定位演算法或通用健康度框架 **[C. design inference]**。
+- **微型條件適配器 (Condition Adapter)**：
+  查驗 ROS 2 Jazzy 內建之 Nav2 條件節點與 BehaviorTree.CPP v4 節點，缺乏可訂閱布林主題並結合新鮮度與失效防護語義之條件節點 **[B. Nav2 Jazzy implementation/API verified]**。
+  因此僅需新增單一極簡條件外掛：`IsLocalizationHealthy`（`mobile_base_navigation::IsLocalizationHealthyCondition`）**[C. design inference]**。
+  該節點本質上僅為 ROS `/localization/lost` 主題狀態轉換至行為樹 `SUCCESS`/`FAILURE` 狀態之微型轉接器：
+  - 新鮮且 `lost == false` → `SUCCESS`（定位健康）
+  - 明確判定 `lost == true` → `FAILURE`（定位丟失）
+  - 資料逾時（`now - last_msg_time > freshness_timeout_s`）或未曾收到訊息 → `FAILURE`（失效防護）**[C. design inference]**
+- **未驗證候選參數**：
+  `freshness_timeout_s` 為尚未經實機驗證之候選參數，後續需於模擬或實機驗證調校 **[D. requires future simulation/hardware validation]**。
+
+#### 3. 有界時間恢復架構 (Bounded-Time Recovery Architecture)
+
+- **有界時間取代重試次數之設計決策**：
+  MVP 捨棄 `RecoveryNode number_of_retries=N` 模式。AMCL 重定位觸發後，反覆重試並無物理意義，除非定義每次重試的等待時長，這會引入不必要的重試次數與重試等待耦合語義。
+  更符合 MVP / YAGNI 的機制為：**單次觸發全局重定位，在有界恢復時間內等待定位品質恢復；若超時則宣告失敗終止導航** **[C. design inference]**。
+- **執行流與狀態轉換**：
+  1. 正常導航期間，主導航管線持續由 `IsLocalizationHealthy` 守護。
+  2. 定位丟失或狀態過期時，`PipelineSequence` 即刻中斷並終止 `FollowPath`。
+  3. 進入恢復分支，觸發一次 `ReinitializeGlobalLocalization`（調用 AMCL `/amcl/reinitialize_global_localization` 服務）**[B. Nav2 Jazzy implementation/API verified]**。
+     - **語義邊界**：`ReinitializeGlobalLocalization` 回傳 `SUCCESS` 僅代表 AMCL 接收請求並完成粒子重置，**絕對不代表定位已收斂或已恢復** **[B. Nav2 Jazzy implementation/API verified]**。
+  4. 進入**有界時間等待 (Bounded Wait)**：
+     - 在等待期間，恢復分支回傳 `RUNNING`，不佔用重試次數，亦不重複調用重定位服務 **[C. design inference]**。
+     - 若 `LocalizationMonitor` 產出新鮮且 `lost == false` 之證據，恢復分支回傳 `SUCCESS` **[A. repo/code verified]**。
+     - 若超過最大允許恢復時間（`localization_recovery_timeout_s`）仍未恢復，恢復分支回傳 `FAILURE`，導航任務失敗終止 **[C. design inference]**。
+- **超時非成功判定 (Timeout is NOT Success Criterion)**：
+  超時僅代表「允許定位恢復之最大時間上限」。嚴禁引入任意 `Sleep -> SUCCESS` 之非因果判定邏輯 **[C. design inference]**。
+- **未驗證候選參數**：
+  最大恢復時間參數 `localization_recovery_timeout_s` 為尚未經實機驗證之候選參數，不於設計階段預設寫死固定數值，須留待模擬與實機驗證決定 **[D. requires future simulation/hardware validation]**。
+
+#### 4. Jazzy 行為樹等待機制與有界等待實作 (Jazzy BT Waiting Mechanism & Bounded Wait Implementation)
+
+- **現有 BT 組合能力與紀元判定**：
+  經於 ROS 2 Jazzy / BehaviorTree.CPP v4 容器環境實測：
+  - `RetryUntilSuccessful` 應用於同步條件節點時，會在單一 tick 內以緊湊迴圈同步執行，無法跨 tick 產生 `RUNNING` 狀態 **[B. Nav2 Jazzy implementation/API verified]**。
+  - 同期條件節點若僅讀取主題最新快取，可能在恢復啟動前讀到既有之健康狀態而過早宣告成功（Race condition）。
+  - 為保證恢復成功必須依據重定位發起後產出之「新證據」，實作微型狀態動作節點 `WaitForLocalizationHealthy`（`mobile_base_navigation::WaitForLocalizationHealthyNode`，繼承 `BT::StatefulActionNode`）**[A. repo/code verified]**。
+- **微型狀態動作節點語義 (WaitForLocalizationHealthy)**：
+  - `onStart()`：建立恢復紀元（epoch），排空並記錄進入恢復前之訊息計數，忽略任何恢復發起前之既有證據。
+  - `onRunning()`：
+    - 若尚未收到恢復發起後之新證據，持續回傳 `RUNNING`。
+    - 若收到恢復後之新證據但回報 `lost == true`，持續回傳 `RUNNING`。
+    - 若新證據逾期（`now - last_msg_time > freshness_timeout_s`），持續回傳 `RUNNING`。
+    - 僅在收到恢復發起後新產出之證據、回報 `lost == false` 且在新鮮度限制內時，始回傳 `SUCCESS`。
+  - 外層以原生裝飾節點 `<Timeout msec="...">` 包裹，當超時仍未收到新健康證據時，由 Decorator 終止等待並回傳 `FAILURE` **[B. Nav2 Jazzy implementation/API verified]**。
+
+#### 5. 復原成功與失效語義 (Recovery Success & Failure Semantics)
+
+- **恢復後重新取得位姿與重建路徑**：
+  定位恢復成功（`lost == false`）後，主導航管線重新啟動。
+  `GetCurrentPose` 重新由 TF 查詢最新之 `map -> base_footprint` 全局位姿 **[A. repo/code verified]**。
+  接駁規劃器使用恢復後之最新位姿重新規劃第一哩與完整路徑，覆寫黑板變數 `{final_route_path}` 後傳入 `FollowPath` **[B. Nav2 Jazzy implementation/API verified]**。
+  前次中斷之 `FollowPath` Action 早已取消，系統在可觀測行為上絕不盲目沿用失效前之舊軌跡 **[B. Nav2 Jazzy implementation/API verified]**。
+- **失效結果傳播 (SYS-017 / SYS-045)**：
+  恢復超時導致導航失敗時，應提供明確失敗原因。
+  坐標轉換可解析性（TF availability）與定位估計正確性（Localization correctness）為本質相異之失效情境，**嚴禁將定位失效標記為 `TF_ERROR`** **[C. design inference]**。
+  優先重用 Nav2 原生之 Action Result 錯誤傳播機制（`bt_navigator` 之 `error_code_names` 與 Action Result 之 `error_code` 欄位）**[B. Nav2 Jazzy implementation/API verified]**；僅在實作分析證明現有機制語義不足時，始定義最小之定位失效專屬標識 **[C. design inference]**。
+
+#### 6. 範疇紀律與非目標 (Scope Discipline & Non-Goals)
+
+- **靜止狀態收斂限制與未來候選**：
+  AMCL 預設需運動門檻（`update_min_d: 0.1` m, `update_min_a: 0.1` rad）觸發權重更新 **[A. repo/code verified]**。在靜止無運動時，全局撒點未必能立即收斂；但遵循 MVP / YAGNI，Phase 2 第一步不引入未經驗證之運動風險 **[C. design inference]**。
+- **Phase 2 MVP 排除項目**：
+  - 不引入底盤旋轉（`<Spin>`），不啟動 `nav2_behaviors/behavior_server` **[C. design inference]**。
+  - 不引入 AMCL `request_nomotion_update` 服務調用 **[C. design inference]**。
+  - 不引入自訂復原協調器（Recovery Coordinator）或獨立狀態機 **[C. design inference]**。
+  - 不引入自訂 Action Server、自訂定位演算法或替換 AMCL **[C. design inference]**。
+  - 不引入自訂 ROS 訊息或服務型別 **[C. design inference]**。
+  - 不反覆呼叫 `ReinitializeGlobalLocalization` **[C. design inference]**。
+  - 不引入 Sleep-as-success **[C. design inference]**。
+  原地旋轉（`<Spin>`）或 `request_nomotion_update` 僅保留為後續模擬/實機驗證若證明靜止撒點不足時之未來評估選項 **[D. requires future simulation/hardware validation]**。
+
+---
+
+#### 7. 實作之緊湊行為樹結構 (Implemented Compact Behavior Tree Structure)
+
+整合定位守護與有界時間恢復之緊湊 XML 結構如下（移除與現行 `route_assisted_nav.xml` 重複之路網內部細節）：
+
+```xml
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <!-- 外層控制結構：主導航管線與定位失效有界時間恢復 -->
+    <RecoveryNode name="NavigateWithLocalizationRecovery" number_of_retries="1">
+
+      <!-- 子節點 1：受定位守護之主導航管線 -->
+      <PipelineSequence name="NavigateRouteAssisted">
+        <!-- 步驟 0：即時定位健全度守護（每 tick 評估，候選預設 freshness_timeout_s="1.0"，未經實機驗證） -->
+        <IsLocalizationHealthy
+          topic="/localization/lost"
+          freshness_timeout_s="1.0"/>
+
+        <!-- 步驟 1-3：三段式路徑週期規劃（1.0 Hz） -->
+        <RateController hz="1.0">
+          <Sequence name="ComputeRouteAssistedPath">
+            <!-- ComputeRoute -> GetCurrentPose -> FirstMile -> LastMile -->
+            <!-- 恢復後由 GetCurrentPose 依最新 TF 位姿重新計算 final_route_path -->
+          </Sequence>
+        </RateController>
+
+        <!-- 步驟 4：路徑追蹤控制（定位失效時即刻中斷取消） -->
+        <FollowPath path="{final_route_path}" controller_id="FollowPath" goal_checker_id="stopped_goal_checker"/>
+      </PipelineSequence>
+
+      <!-- 子節點 2：單次重定位觸發與有界時間等待分支 -->
+      <Sequence name="LocalizationRecovery">
+        <!-- 步驟 A：單次觸發 AMCL 全局均勻撒點重定位（SUCCESS 僅代表重置請求完成） -->
+        <ReinitializeGlobalLocalization service_name="/amcl/reinitialize_global_localization"/>
+
+        <!-- 步驟 B：單次調用後有界時間等待新產出之定位健康證據（healthy -> SUCCESS, timeout -> FAILURE） -->
+        <!-- 注意：freshness_timeout_s (1.0 s) 與 Timeout msec (10000 ms) 為工程候選預設值，尚未經實機驗證調校 -->
+        <Timeout msec="10000">
+          <WaitForLocalizationHealthy
+            topic="/localization/lost"
+            freshness_timeout_s="1.0"/>
+        </Timeout>
+      </Sequence>
+
+    </RecoveryNode>
+  </BehaviorTree>
+</root>
+```
+
+---
+
+#### 8. Phase 2 實作基線與驗證邊界 (Phase 2 Implementation Baseline & Validation Boundaries)
+
+- **已實作組件 (Implemented Components)**：
+  1. `mobile_base_navigation::IsLocalizationHealthyCondition`（`is_localization_healthy_condition_bt_node` 外掛函式庫）：微型 BT 同步條件節點，訂閱 `/localization/lost` (`std_msgs::msg::Bool`)，結合節點時間戳驗證新鮮度，提供正常導航管線即時守護之 `SUCCESS`/`FAILURE` 判定 **[A. repo/code verified]**。
+  2. `mobile_base_navigation::WaitForLocalizationHealthyNode`（`wait_for_localization_healthy_node_bt_node` 外掛函式庫）：微型 BT 狀態動作節點（`StatefulActionNode`），在恢復分支建立恢復紀元，排空並忽略恢復前既有證據，僅在新產出之定位健康證據報告 `lost == false` 且新鮮時回傳 `SUCCESS`，等待期間維持 `RUNNING` **[A. repo/code verified]**。
+  3. `route_assisted_nav.xml`：外層整合 `RecoveryNode`（`number_of_retries="1"`），包含 `PipelineSequence` 定位守護與 `LocalizationRecovery` 單次全局重定位有界等待分支（候選預設 `freshness_timeout_s="1.0"`、`msec="10000"`，未經實機驗證）**[A. repo/code verified]**。
+  4. `config/nav2_params.yaml`：於 `bt_navigator.ros__parameters.plugin_lib_names` 註冊 `is_localization_healthy_condition_bt_node` 與 `wait_for_localization_healthy_node_bt_node` **[A. repo/code verified]**。
+  5. 單元與行為樹整合測試：`test_is_localization_healthy_condition`、`test_wait_for_localization_healthy_node` 與 `test_behavior_tree_runtime`（驗證正常守護、忽略恢復前證據、新證據恢復、超時失敗與單次重定位語義）**[A. repo/code verified]**。
+- **重用之成熟組件 (Reused Components)**：
+  1. `nav2_behavior_tree::RecoveryNode`（控制管線中斷後之恢復流程）**[B. Nav2 Jazzy implementation/API verified]**
+  2. `nav2_behavior_tree::PipelineSequence`（即時中斷與重算管線）**[B. Nav2 Jazzy implementation/API verified]**
+  3. `nav2_behavior_tree::ReinitializeGlobalLocalizationService`（AMCL 重定位觸發）**[B. Nav2 Jazzy implementation/API verified]**
+  4. BehaviorTree.CPP v4 原生裝飾節點（`Timeout`）**[B. Nav2 Jazzy implementation/API verified]**
+  5. `nav2_amcl` 的 `/amcl/reinitialize_global_localization` 服務 **[B. Nav2 Jazzy implementation/API verified]**
+  6. `bt_navigator` 原生之 Action Result 錯誤回報機制 **[B. Nav2 Jazzy implementation/API verified]**
+- **尚未經驗證之候選參數 (Candidate Parameters Requiring Future Validation)**：
+  - `freshness_timeout_s`（XML 候選預設值 1.0 s，未經模擬或實機調校）**[D. requires future simulation/hardware validation]**
+  - `localization_recovery_timeout_ms`（XML 候選預設值 10000 ms，未經模擬或實機調校）**[D. requires future simulation/hardware validation]**
+  - 原地旋轉（`<Spin>`）或 `request_nomotion_update`（若後續實機驗證證明靜止撒點不足以收斂時之評估項目）**[D. requires future simulation/hardware validation]**
 
 ## 8. Precision Docking
 

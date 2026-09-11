@@ -19,6 +19,9 @@ bt_navigator:
     error_code_names:
       - compute_path_error_code
       - follow_path_error_code
+    plugin_lib_names:
+      - is_localization_healthy_condition_bt_node
+      - wait_for_localization_healthy_node_bt_node
 
 route_server:
   ros__parameters:

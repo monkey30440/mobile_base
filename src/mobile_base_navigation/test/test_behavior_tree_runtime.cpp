@@ -15,6 +15,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -22,6 +23,7 @@
 #include "behaviortree_cpp/bt_factory.h"
 #include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "nav2_route/nav2_route/plugins/graph_file_loaders/geojson_graph_file_loader.hpp"
 #include "nav2_route/types.hpp"
 #include "nav2_route/route_planner.hpp"
@@ -33,6 +35,10 @@
 
 #ifndef REAL_ROUTE_GRAPH_PATH
 #define REAL_ROUTE_GRAPH_PATH "../../maps/test_site/route_graph.geojson"
+#endif
+
+#ifndef IS_LOCALIZATION_HEALTHY_LIB
+#define IS_LOCALIZATION_HEALTHY_LIB "libis_localization_healthy_condition_bt_node.so"
 #endif
 
 class BehaviorTreeRuntimeTest : public ::testing::Test
@@ -74,7 +80,11 @@ TEST_F(BehaviorTreeRuntimeTest, FactoryPluginRegistrationAndTreeInstantiate)
     "/opt/ros/jazzy/lib/libnav2_are_poses_near_condition_bt_node.so",
     "/opt/ros/jazzy/lib/libnav2_concatenate_paths_action_bt_node.so",
     "/opt/ros/jazzy/lib/libnav2_pipeline_sequence_bt_node.so",
-    "/opt/ros/jazzy/lib/libnav2_rate_controller_bt_node.so"
+    "/opt/ros/jazzy/lib/libnav2_rate_controller_bt_node.so",
+    "/opt/ros/jazzy/lib/libnav2_recovery_node_bt_node.so",
+    "/opt/ros/jazzy/lib/libnav2_reinitialize_global_localization_service_bt_node.so",
+    IS_LOCALIZATION_HEALTHY_LIB,
+    WAIT_FOR_LOCALIZATION_HEALTHY_LIB
   };
 
   for (const auto & lib : plugin_libs) {
@@ -148,6 +158,7 @@ TEST_F(BehaviorTreeRuntimeTest, PathConcatenationDataflow)
   blackboard->set<nav_msgs::msg::Path>("p2", path2);
 
   auto tree = factory.createTreeFromText(xml, blackboard);
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
   BT::NodeStatus status = tree.tickOnce();
   EXPECT_EQ(status, BT::NodeStatus::SUCCESS);
 
@@ -194,6 +205,7 @@ TEST_F(BehaviorTreeRuntimeTest, GetPoseFromPathDataflow)
   blackboard->set<nav_msgs::msg::Path>("p_in", path);
 
   auto tree = factory.createTreeFromText(xml, blackboard);
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
   BT::NodeStatus status = tree.tickOnce();
   EXPECT_EQ(status, BT::NodeStatus::SUCCESS);
 
@@ -266,4 +278,148 @@ TEST_F(BehaviorTreeRuntimeTest, RealSiteComputeRouteSearch)
   EXPECT_EQ(route_ba.edges[0]->start->nodeid, 1u);
   EXPECT_EQ(route_ba.edges[0]->end->nodeid, 0u);
   EXPECT_NEAR(route_ba.route_cost, 2.0f, 1e-3);
+}
+
+class MockReinitGlobalLocalization : public BT::SyncActionNode
+{
+public:
+  MockReinitGlobalLocalization(const std::string & name, const BT::NodeConfig & config)
+  : BT::SyncActionNode(name, config) {}
+
+  static BT::PortsList providedPorts()
+  {
+    return {
+      BT::InputPort<std::string>("service_name", "AMCL service name")
+    };
+  }
+
+  BT::NodeStatus tick() override
+  {
+    call_count++;
+    return BT::NodeStatus::SUCCESS;
+  }
+
+  static void reset()
+  {
+    call_count = 0;
+  }
+
+  static inline int call_count = 0;
+};
+
+class MockFollowPathAction : public BT::SyncActionNode
+{
+public:
+  MockFollowPathAction(const std::string & name, const BT::NodeConfig & config)
+  : BT::SyncActionNode(name, config) {}
+
+  static BT::PortsList providedPorts()
+  {
+    return {
+      BT::InputPort<nav_msgs::msg::Path>("path", "Path to follow"),
+      BT::InputPort<std::string>("controller_id", "Controller ID"),
+      BT::InputPort<std::string>("goal_checker_id", "Goal checker ID"),
+      BT::OutputPort<std::string>("error_code_id", "Error code ID"),
+    };
+  }
+
+  BT::NodeStatus tick() override
+  {
+    tick_count++;
+    return BT::NodeStatus::SUCCESS;
+  }
+
+  static void reset()
+  {
+    tick_count = 0;
+  }
+
+  static inline int tick_count = 0;
+};
+
+TEST_F(BehaviorTreeRuntimeTest, LocalizationRecoveryBoundedWaitSemantics)
+{
+  BT::BehaviorTreeFactory factory;
+  factory.registerFromPlugin(WAIT_FOR_LOCALIZATION_HEALTHY_LIB);
+  factory.registerNodeType<MockReinitGlobalLocalization>("ReinitializeGlobalLocalization");
+
+  const std::string xml =
+    "<root BTCPP_format=\"4\" main_tree_to_execute=\"MainTree\">"
+    "  <BehaviorTree ID=\"MainTree\">"
+    "    <Sequence name=\"LocalizationRecovery\">"
+    "      <ReinitializeGlobalLocalization"
+    "        service_name=\"/amcl/reinitialize_global_localization\"/>"
+    "      <Timeout msec=\"200\">"
+    "        <WaitForLocalizationHealthy"
+    "          topic=\"/bt_test/localization/lost\" freshness_timeout_s=\"0.5\"/>"
+    "      </Timeout>"
+    "    </Sequence>"
+    "  </BehaviorTree>"
+    "</root>";
+
+  auto blackboard = BT::Blackboard::create();
+  blackboard->set<rclcpp::Node::SharedPtr>("node", node_);
+
+  auto loc_pub = node_->create_publisher<std_msgs::msg::Bool>(
+    "/bt_test/localization/lost", 10);
+  MockReinitGlobalLocalization::reset();
+
+  auto tree = factory.createTreeFromText(xml, blackboard);
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  // Wait until subscriber is discovered by publisher
+  auto disc_start = std::chrono::steady_clock::now();
+  while (loc_pub->get_subscription_count() == 0 &&
+    (std::chrono::steady_clock::now() - disc_start) < std::chrono::milliseconds(500))
+  {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  // 0. Pre-condition: publish healthy message BEFORE recovery begins
+  std_msgs::msg::Bool msg;
+  msg.data = false;
+  loc_pub->publish(msg);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  // 1. Initial tick -> Reinitialize called once, timeout wait returns RUNNING
+  // Pre-recovery healthy message MUST NOT satisfy recovery!
+  BT::NodeStatus status = tree.tickOnce();
+  EXPECT_EQ(status, BT::NodeStatus::RUNNING);
+  EXPECT_EQ(MockReinitGlobalLocalization::call_count, 1);
+
+  // 2. Second tick while still waiting -> Timeout wait remains RUNNING,
+  // Reinitialize NOT repeatedly invoked!
+  status = tree.tickOnce();
+  EXPECT_EQ(status, BT::NodeStatus::RUNNING);
+  EXPECT_EQ(MockReinitGlobalLocalization::call_count, 1);
+
+  // 3. New post-reinitialize healthy evidence published -> recovery subtree returns SUCCESS
+  msg.data = false;
+  loc_pub->publish(msg);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  status = tree.tickOnce();
+  EXPECT_EQ(status, BT::NodeStatus::SUCCESS);
+  EXPECT_EQ(MockReinitGlobalLocalization::call_count, 1);
+
+  // 4. Test timeout expiration leading to FAILURE
+  tree.haltTree();
+  MockReinitGlobalLocalization::reset();
+
+  // Make localization unhealthy
+  msg.data = true;
+  loc_pub->publish(msg);
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+  status = tree.tickOnce();
+  EXPECT_EQ(status, BT::NodeStatus::RUNNING);
+  EXPECT_EQ(MockReinitGlobalLocalization::call_count, 1);
+
+  // Wait for 200ms timeout to expire
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+  // Tick again -> timeout expired -> subtree returns FAILURE
+  status = tree.tickOnce();
+  EXPECT_EQ(status, BT::NodeStatus::FAILURE);
+  EXPECT_EQ(MockReinitGlobalLocalization::call_count, 1);
 }
