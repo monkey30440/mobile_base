@@ -73,6 +73,12 @@ Requirement 描述系統必須滿足之可觀察行為、限制與驗證邊界�
 
 ---
 
+## SYS-045 定位失效恢復
+
+導航期間，系統應持續判斷目前地圖定位是否仍足以支援安全導航；當定位持續無法可靠使用時，系統應停止目前自主導航運動並嘗試重新建立地圖定位。重新定位成功後，系統應使用恢復後之目前位姿重新建立後續導航；若在有限次數之恢復嘗試後仍無法建立可靠定位，系統應終止導航並回報定位失敗原因。定位可靠性判定門檻、持續時間及最大恢復嘗試次數應由後續整合與驗證決定。
+
+---
+
 ## SYS-011 路徑規劃
 
 系統應根據目前位姿與目前導航階段之目標位姿，產生安全可行之路徑供該導航階段使用。無法產生有效路徑時，系統不得開始該階段之路徑追蹤，並應回報規劃失敗。
@@ -265,6 +271,7 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 | SYS-032 | UC-002 | CAP-002 |
 | SYS-033 | UC-002 | CAP-002 |
 | SYS-010 | UC-002 | CAP-002 |
+| SYS-045 | UC-002 | CAP-002 |
 | SYS-011 | UC-002 | CAP-002 |
 | SYS-013 | UC-002 | CAP-002 |
 | SYS-014 | UC-002 | CAP-002 |
@@ -311,6 +318,7 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 | SYS-007 | Localization | — |
 | SYS-008 | Navigation Target Admission | — |
 | SYS-010 | Localization | — |
+| SYS-045 | Localization | — |
 | SYS-011 | Route-Assisted Navigation | — |
 | SYS-013 | Route-Assisted Navigation | — |
 | SYS-014 | Route-Assisted Navigation | — |

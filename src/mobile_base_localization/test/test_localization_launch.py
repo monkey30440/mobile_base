@@ -94,6 +94,34 @@ def test_amcl_params_yaml_configuration():
     assert map_params['topic_name'] == 'map'
 
 
+def test_localization_monitor_yaml_configuration():
+    """Verify that localization_monitor.yaml contains required parameters."""
+    pkg_dir = Path(__file__).resolve().parent.parent
+    config_path = pkg_dir / 'config' / 'localization_monitor.yaml'
+    assert config_path.exists(), f'Configuration file not found: {config_path}'
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f)
+
+    assert 'localization_monitor' in data, 'localization_monitor block missing from configuration'
+    assert 'ros__parameters' in data['localization_monitor'], 'ros__parameters missing'
+    params = data['localization_monitor']['ros__parameters']
+
+    required_params = [
+        'match_dist_m',
+        'occupied_threshold',
+        'min_valid_beams',
+        'beam_stride',
+        'lost_ratio',
+        'recover_ratio',
+        'lost_hold_s',
+        'recover_hold_s',
+        'tf_timeout_s',
+    ]
+    for param in required_params:
+        assert param in params, f'Parameter {param} missing from localization_monitor.yaml'
+
+
 def test_localization_launch_structure():
     """Verify localization.launch.py composes map_server, amcl, lifecycle_manager."""
     pkg_dir = Path(__file__).resolve().parent.parent
@@ -128,11 +156,21 @@ def test_localization_launch_structure():
     assert 'map_server' in node_dict, 'map_server Node must be in launch'
     assert 'amcl' in node_dict, 'amcl Node must be in launch'
     assert 'lifecycle_manager_localization' in node_dict, 'lifecycle_manager must be in launch'
+    assert 'localization_monitor' in node_dict, 'localization_monitor Node must be in launch'
 
     # Verify package bindings
     assert node_dict['map_server']._Node__package == 'nav2_map_server'
     assert node_dict['amcl']._Node__package == 'nav2_amcl'
     assert node_dict['lifecycle_manager_localization']._Node__package == 'nav2_lifecycle_manager'
+    assert node_dict['localization_monitor']._Node__package == 'mobile_base_localization'
+    assert node_dict['localization_monitor']._Node__node_executable == 'localization_monitor'
+
+    # Verify LocalizationMonitor parameter isolation (only receives its own monitor config)
+    loc_mon_params = node_dict['localization_monitor']._Node__parameters
+    assert len(loc_mon_params) == 1, (
+        f'LocalizationMonitor must receive only its own parameters, '
+        f'got {len(loc_mon_params)} parameter items'
+    )
 
     # Verify lifecycle node list in lifecycle manager
     lm_params = node_dict['lifecycle_manager_localization']._Node__parameters

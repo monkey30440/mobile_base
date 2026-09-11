@@ -489,7 +489,7 @@ Map Package (maps/<timestamp>/)
 ### Responsibility
 
 Localization 負責在 Navigation Mode 下：
-載入所選定之 Map Package → 發布二維佔據網格靜態地圖 → 結合前向光達掃描與系統里程估測 AMR 於地圖中之位姿 → 作為唯一權威發布 Navigation Mode 下之 `map -> odom` 動態坐標轉換與定位位姿。
+載入所選定之 Map Package → 發布二維佔據網格靜態地圖 → 結合前向光達掃描與系統里程估測 AMR 於地圖中之位姿 → 作為唯一權威發布 Navigation Mode 下之 `map -> odom` 動態坐標轉換與定位位姿；並透過 `localization_monitor` 觀測即時光達與靜態地圖之一致性，發布定位品質與失效狀態（SYS-045 Phase 1，純觀測節點，不發布 TF 亦不發布運動控制命令）。
 
 本區域不包含：
 - 地圖建圖（Mapping）
@@ -497,6 +497,7 @@ Localization 負責在 Navigation Mode 下：
 - 路網規劃與導航控制（Route-Assisted Navigation）
 - 底盤運動控制（Base Control）
 - 精準對接（Precision Docking）
+- 定位失效後之自主重定位或導航復原行為（Phase 1 暫不實作 Recovery）
 
 ### Interfaces and Flow
 
@@ -507,25 +508,33 @@ Map Package (map.yaml, map.pgm)
    map_server (nav2_map_server)
        │
        ├─────────────────────────────────────────► /map (nav_msgs/msg/OccupancyGrid)
-       │
-       ▼ (地圖佔據網格)
-      amcl (nav2_amcl) ◄─────── /initialpose (geometry_msgs/msg/PoseWithCovarianceStamped)
-       ▲           ▲            (外部可選初始位姿覆寫)
-       │           │
+       │                                                │
+       ▼ (地圖佔據網格)                                   │
+      amcl (nav2_amcl) ◄─────── /initialpose            │
+       ▲           ▲            (外部可選初始位姿覆寫)    │
+       │           │                                    │
        │           └─────────── 動態 TF: odom -> base_footprint (State Estimation EKF)
        │                        靜態機構 TF: base_footprint -> ... -> base_lidar_link_FL_1
-       │
-       └─────────────────────── /scan_front (sensor_msgs/msg/LaserScan, Sensor Ingestion)
-       │
+       │                                                │
+       ├─────────────────────── /scan_front (sensor_msgs/msg/LaserScan, Sensor Ingestion)
+       │                                                │
        ├─────────────────────────────────────────► 動態 TF: map -> odom
        ├─────────────────────────────────────────► /amcl_pose (geometry_msgs/msg/PoseWithCovarianceStamped)
-       └─────────────────────────────────────────► /particle_cloud (nav2_msgs/msg/ParticleCloud)
+       ├─────────────────────────────────────────► /particle_cloud (nav2_msgs/msg/ParticleCloud)
+       │
+       ▼
+   localization_monitor (mobile_base_localization)
+       ├── 查詢 TF: map -> scan_frame (at scan stamp)
+       ├── 訂閱 /map (Transient Local) 與 /scan_front (SensorData)
+       ├── 發布 /localization/quality (std_msgs/msg/Float32)
+       └── 發布 /localization/lost (std_msgs/msg/Bool)
 ```
 
 1. **輸入介面與資料流**：
    - **Map Package**：包含 `map.yaml` 與 `map.pgm`。於系統啟動時透過 `site_resolution.py` 解析（依 `site` 參數）或由 CLI 引數 `map` 顯式傳入，由 `map_server` 讀取並反序列化。
-   - `/scan_front` (`sensor_msgs/msg/LaserScan`)：來自 Sensor Ingestion 之前向光達測距掃描（`frame_id: base_lidar_link_FL_1`）。AMCL 僅訂閱前向光達，不使用後向光達。
+   - `/scan_front` (`sensor_msgs/msg/LaserScan`)：來自 Sensor Ingestion 之前向光達測距掃描（`frame_id: base_lidar_link_FL_1`）。AMCL 與 `localization_monitor` 訂閱前向光達。
    - **動態 TF `odom -> base_footprint`**：由 State Estimation（EKF）發布。AMCL 透過 TF Buffer 查詢此轉換以及底盤至感測器之靜態機構 TF（`base_footprint -> ... -> base_lidar_link_FL_1`），不直接訂閱 `/odometry/filtered` 主題。
+   - **TF `map -> scan.header.frame_id`**：由 `localization_monitor` 依光達掃描時間戳查詢，將掃描端點轉換至地圖坐標系。
    - **Initial Pose**：
      - **預設初始位姿**：由部署設定提供（`set_initial_pose: true`，預設為 `x=0.0`、`y=0.0`、`z=0.0`、`yaw=0.0`）。
      - **外部覆寫位姿**：`/initialpose` (`geometry_msgs/msg/PoseWithCovarianceStamped`)，供 RViz2 或上層系統在預設不適用時顯式發布，重設粒子群分佈。
@@ -535,13 +544,16 @@ Map Package (map.yaml, map.pgm)
    - **動態 TF `map -> odom`**：由 `amcl` 節點週期性廣播。在 Navigation Mode 下，AMCL 是 `map -> odom` 動態坐標轉換的唯一權威發布者。
    - `/amcl_pose` (`geometry_msgs/msg/PoseWithCovarianceStamped`）：AMCL 估測之機器人全局位姿與協方差矩陣。
    - `/particle_cloud` (`nav2_msgs/msg/ParticleCloud`）：AMCL 當前粒子群分佈狀態。
+   - `/localization/quality` (`std_msgs/msg/Float32`）：由 `localization_monitor` 計算之光達掃描於地圖中之內點比例（inlier ratio）。
+   - `/localization/lost` (`std_msgs/msg/Bool`）：由 `localization_monitor` 發布之定位失效狀態（true 為失效，false 為正常；啟動未獲有效判定前不發布 false）。
 
 ### Implementation
 
 1. **節點組成與生命週期管理**：
    - `map_server` (`nav2_map_server/map_server`，Lifecycle Node）：負責解析 `map.yaml` 並提供地圖資料主題與服務。
    - `amcl` (`nav2_amcl/amcl`，Lifecycle Node）：自適應蒙地卡羅粒子濾波定位節點，採用似然場模型（`laser_model_type: "likelihood_field"`）與差速運動模型（`nav2_amcl::DifferentialMotionModel`）。
-   - `lifecycle_manager_localization` (`nav2_lifecycle_manager/lifecycle_manager`）：統籌管理 `map_server` 與 `amcl` 生命週期狀態轉換（`autostart: true`）。
+   - `lifecycle_manager_localization` (`nav2_lifecycle_manager/lifecycle_manager`）：統籌管理 `map_server` 與 `amcl` 生命週期狀態轉換（`autostart: true`，生命週期節點清單受測試保護，僅管理 `map_server` 與 `amcl`）。
+   - `localization_monitor` (`mobile_base_localization/localization_monitor`，標準 ROS 2 節點）：純觀測節點，不納入 lifecycle 管理，不發布任何 TF，亦不發布運動命令。使用 OpenCV `cv::distanceTransform` 建立佔據網格距離場，比對光達掃描端點並依遲滯時間判定定位失效。
 
 2. **坐標框架與配置事實**：
    - `global_frame_id`: `map`
@@ -550,6 +562,18 @@ Map Package (map.yaml, map.pgm)
    - `scan_topic`: `/scan_front`
    - `tf_broadcast`: `true`
    - `set_initial_pose`: `true`，`initial_pose: {x: 0.0, y: 0.0, z: 0.0, yaw: 0.0}`
+   - **MVP 地圖約束**：要求地圖原點朝向 yaw == 0（不支援任意旋轉地圖；若 yaw 非零則拒絕地圖並記錄錯誤）。
+   - **LocalizationMonitor 候選預設參數**：
+     - `match_dist_m`: 0.15
+     - `occupied_threshold`: 65
+     - `min_valid_beams`: 30
+     - `beam_stride`: 1
+     - `lost_ratio`: 0.35
+     - `recover_ratio`: 0.60
+     - `lost_hold_s`: 1.5
+     - `recover_hold_s`: 1.5
+     - `tf_timeout_s`: 0.1
+     （以上門檻值為工程候選預設值，尚未經實機或模擬環境調校驗證）
 
 ### Expected Normal Behavior
 
@@ -558,16 +582,22 @@ Map Package (map.yaml, map.pgm)
 - `amcl` 依配置之預設初始位姿完成粒子初始化，或於收到 `/initialpose` 時重設粒子分佈。
 - 當機器人移動且前向光達接收掃描資料時，`amcl` 依據差速模型與似然場連續更新粒子權重，並持續廣播 `map -> odom` 動態 TF。
 - 結合 State Estimation 維護之 `odom -> base_footprint`，下游導航演算法可完整解析 `map -> base_footprint` 之全局坐標鏈。
+- `localization_monitor` 接收 `/map` 後計算距離場，每收到 `/scan_front` 查詢 `map -> scan_front` TF 計算匹配品質，並在有效判定產生後發布 `/localization/quality` 與 `/localization/lost`。
 
 ### Failure Behavior
 
 - 若指定之 `map.yaml` 檔案不存在或損毀，`map_server` 無法通過 configure 階段，生命週期管理器回報錯誤，定位子系統無法進入活躍（ACTIVE）狀態。
 - 若前向光達掃描 `/scan_front` 中斷或 TF `odom -> base_footprint` 丟失，`amcl` 無法更新粒子權重；若超過轉換容許逾時（`transform_tolerance`），`amcl` 輸出警告日誌並停止發布最新之 `map -> odom` 動態坐標轉換與 `/amcl_pose`。
+- 若地圖原點 orientation yaw 非零，`localization_monitor` 拒絕該地圖並輸出錯誤日誌，不發布品質與失效狀態（維持內部 UNKNOWN）。
+- 若光達與地圖匹配率持續低於 `lost_ratio` 達 `lost_hold_s`，`localization_monitor` 發布 `/localization/lost: true`。
 
 ### Implementation References
 
 - Localization Launch: `src/mobile_base_localization/launch/localization.launch.py`
 - AMCL Configuration: `src/mobile_base_localization/config/amcl_params.yaml`
+- Localization Monitor Configuration: `src/mobile_base_localization/config/localization_monitor.yaml`
+- Localization Monitor Header: `src/mobile_base_localization/include/mobile_base_localization/localization_monitor.hpp`
+- Localization Monitor Source: `src/mobile_base_localization/src/localization_monitor.cpp`
 - Site Resolution Module: `src/mobile_base_bringup/launch/site_resolution.py`
 - Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
 

@@ -31,6 +31,10 @@ def generate_launch_description():
         pkg_share, 'config', 'amcl_params.yaml'
     ])
 
+    default_monitor_config_path = PathJoinSubstitution([
+        pkg_share, 'config', 'localization_monitor.yaml'
+    ])
+
     stdout_linebuf_envvar = SetEnvironmentVariable(
         'RCUTILS_LOGGING_BUFFERED_STREAM', '1'
     )
@@ -46,6 +50,12 @@ def generate_launch_description():
         'params_file',
         default_value=default_config_path,
         description='Full path to the AMCL/localization parameter YAML file'
+    )
+
+    declare_monitor_params_file_cmd = DeclareLaunchArgument(
+        'monitor_params_file',
+        default_value=default_monitor_config_path,
+        description='Full path to the localization monitor parameter YAML file'
     )
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
@@ -68,6 +78,7 @@ def generate_launch_description():
 
     map_yaml_file = LaunchConfiguration('map')
     params_file = LaunchConfiguration('params_file')
+    monitor_params_file = LaunchConfiguration('monitor_params_file')
     use_sim_time = LaunchConfiguration('use_sim_time')
     autostart = LaunchConfiguration('autostart')
     log_level = LaunchConfiguration('log_level')
@@ -82,6 +93,16 @@ def generate_launch_description():
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
+            root_key='',
+            param_rewrites=param_substitutions,
+            convert_types=True,
+        ),
+        allow_substs=True,
+    )
+
+    configured_monitor_params = ParameterFile(
+        RewrittenYaml(
+            source_file=monitor_params_file,
             root_key='',
             param_rewrites=param_substitutions,
             convert_types=True,
@@ -122,6 +143,17 @@ def generate_launch_description():
                 ],
                 arguments=['--ros-args', '--log-level', log_level],
             ),
+            # Localization Monitor Node (Observation-only, non-lifecycle)
+            Node(
+                package='mobile_base_localization',
+                executable='localization_monitor',
+                name='localization_monitor',
+                output='screen',
+                parameters=[
+                    configured_monitor_params,
+                ],
+                arguments=['--ros-args', '--log-level', log_level],
+            ),
         ]
     )
 
@@ -129,6 +161,7 @@ def generate_launch_description():
         stdout_linebuf_envvar,
         declare_map_yaml_cmd,
         declare_params_file_cmd,
+        declare_monitor_params_file_cmd,
         declare_use_sim_time_cmd,
         declare_autostart_cmd,
         declare_log_level_cmd,
