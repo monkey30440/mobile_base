@@ -691,3 +691,196 @@ TEST(M1DriverTest, DetailedTimingLeavesRxDurationUnavailableAfterPartialResponse
   EXPECT_EQ(timings[0].rx_duration_us, -1.0);
   EXPECT_FALSE(timings[0].transport_ok);
 }
+
+TEST(M1DriverTest, InterSlaveQuietIntervalEnforcement)
+{
+  M1Driver driver;
+  ASSERT_TRUE(driver.connect("mock", 230400, 50).ok);
+
+  driver.set_transact_override(
+    [](const std::vector<uint8_t> & req) -> Result<std::vector<uint8_t>> {
+      if (req.empty()) {
+        return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_ARGUMENT);
+      }
+      const uint8_t slave = req[0];
+      const uint8_t fc = req.size() > 1 ? req[1] : 0x03;
+      if (slave == 0x65) {
+        return Result<std::vector<uint8_t>>::success(
+          create_dummy_md2_response(fc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+      }
+      return Result<std::vector<uint8_t>>::success({slave, fc, 0x02, 0x09, 0xC4});
+    });
+
+  using Clock = std::chrono::steady_clock;
+
+  // 1. First transaction after connect() has no delay
+  {
+    const auto t0 = Clock::now();
+    auto r1 = driver.read_register(1, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r1.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_LT(elapsed_us, 1800);
+  }
+
+  // 2. ID1 -> ID1: no enforced delay
+  {
+    const auto t0 = Clock::now();
+    auto r2 = driver.read_register(1, 0x3E0D);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r2.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_LT(elapsed_us, 1800);
+  }
+
+  // 3. ID1 -> ID2: quiet interval enforced
+  {
+    const auto t0 = Clock::now();
+    auto r2 = driver.read_register(2, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r2.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_GE(elapsed_us, 2000);
+  }
+
+  // 4. ID2 -> ID2: no enforced delay
+  {
+    const auto t0 = Clock::now();
+    auto r2 = driver.read_register(2, 0x3E0D);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r2.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_LT(elapsed_us, 1800);
+  }
+
+  // 5. ID2 -> ID1: quiet interval enforced
+  {
+    const auto t0 = Clock::now();
+    auto r1 = driver.read_register(1, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r1.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_GE(elapsed_us, 2000);
+  }
+
+  // 6. ID1 -> 0x65: quiet interval enforced
+  {
+    const auto t0 = Clock::now();
+    auto res = driver.exchange_zero(1, 2);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(res.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_GE(elapsed_us, 2000);
+  }
+
+  // 7. 0x65 -> 0x65: no enforced delay
+  {
+    const auto t0 = Clock::now();
+    auto res = driver.exchange_zero(1, 2);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(res.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_LT(elapsed_us, 1800);
+  }
+
+  // 8. 0x65 -> ID1: quiet interval enforced
+  {
+    const auto t0 = Clock::now();
+    auto r1 = driver.read_register(1, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r1.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_GE(elapsed_us, 2000);
+  }
+
+  // 9. Elapsed-time enforcement: no delay added if >= 2.0 ms already elapsed between requests
+  std::this_thread::sleep_for(std::chrono::milliseconds(3));
+  {
+    const auto t0 = Clock::now();
+    auto r2 = driver.read_register(2, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r2.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_LT(elapsed_us, 1800);
+  }
+}
+
+TEST(M1DriverTest, InterSlaveQuietIntervalLifecycleAndFailures)
+{
+  M1Driver driver;
+  ASSERT_TRUE(driver.connect("mock", 230400, 50).ok);
+
+  bool fail_next = false;
+  ErrorCode fail_code = ErrorCode::TIMEOUT;
+
+  driver.set_transact_override(
+    [&](const std::vector<uint8_t> & req) -> Result<std::vector<uint8_t>> {
+      if (req.empty()) {
+        return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_ARGUMENT);
+      }
+      if (fail_next) {
+        fail_next = false;
+        return Result<std::vector<uint8_t>>::failure(fail_code);
+      }
+      const uint8_t slave = req[0];
+      const uint8_t fc = req.size() > 1 ? req[1] : 0x03;
+      return Result<std::vector<uint8_t>>::success({slave, fc, 0x02, 0x09, 0xC4});
+    });
+
+  using Clock = std::chrono::steady_clock;
+
+  // Disconnect / Reconnect resets state: previous session does not delay new session
+  auto r1 = driver.read_register(1, 0x3D05);
+  ASSERT_TRUE(r1.ok);
+  ASSERT_TRUE(driver.disconnect().ok);
+  ASSERT_TRUE(driver.connect("mock", 230400, 50).ok);
+  {
+    const auto t0 = Clock::now();
+    auto r2 = driver.read_register(2, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r2.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_LT(elapsed_us, 1800);
+  }
+
+  // Slave switch after timeout error enforces quiet interval
+  fail_next = true;
+  fail_code = ErrorCode::TIMEOUT;
+  auto r_to = driver.read_register(1, 0x3D05);
+  ASSERT_FALSE(r_to.ok);
+  {
+    const auto t0 = Clock::now();
+    auto r2 = driver.read_register(2, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r2.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_GE(elapsed_us, 2000);
+  }
+
+  // Slave switch after send failure enforces quiet interval
+  fail_next = true;
+  fail_code = ErrorCode::SEND_FAILED;
+  auto r_sf = driver.read_register(1, 0x3D05);
+  ASSERT_FALSE(r_sf.ok);
+  {
+    const auto t0 = Clock::now();
+    auto r2 = driver.read_register(2, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_TRUE(r2.ok);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_GE(elapsed_us, 2000);
+  }
+
+  // Disconnected driver returns NOT_CONNECTED immediately without delay
+  ASSERT_TRUE(driver.disconnect().ok);
+  driver.set_transact_override(nullptr);
+  {
+    const auto t0 = Clock::now();
+    auto r_dc = driver.read_register(1, 0x3D05);
+    const auto t1 = Clock::now();
+    ASSERT_FALSE(r_dc.ok);
+    EXPECT_EQ(r_dc.error, ErrorCode::NOT_CONNECTED);
+    const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    EXPECT_LT(elapsed_us, 1000);
+  }
+}

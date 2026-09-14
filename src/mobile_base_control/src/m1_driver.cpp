@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -294,6 +295,9 @@ struct M1Driver::Impl
   TransactFn transact_override;
   bool detailed_timing_enabled{false};
   std::vector<TransactionTiming> detailed_timings;
+  int last_slave_id{-1};
+  TimingClock::time_point last_transaction_end{};
+  bool has_previous_transaction{false};
 };
 
 M1Driver::M1Driver()
@@ -358,6 +362,8 @@ Result<void> M1Driver::connect(
 
   if (device == "mock") {
     impl_->is_mock = true;
+    impl_->last_slave_id = -1;
+    impl_->has_previous_transaction = false;
     return Result<void>::success();
   }
 
@@ -382,6 +388,8 @@ Result<void> M1Driver::connect(
   modbus_flush(ctx);
 
   impl_->ctx = ctx;
+  impl_->last_slave_id = -1;
+  impl_->has_previous_transaction = false;
   return Result<void>::success();
 }
 
@@ -394,14 +402,24 @@ Result<void> M1Driver::disconnect()
       impl_->ctx = nullptr;
     }
     impl_->is_mock = false;
+    impl_->last_slave_id = -1;
+    impl_->has_previous_transaction = false;
   }
   return Result<void>::success();
 }
 
 Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & request_without_crc)
 {
+  if (!impl_ || (!impl_->ctx && !impl_->is_mock && !impl_->transact_override)) {
+    return Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED);
+  }
+
+  if (request_without_crc.empty()) {
+    return Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_ARGUMENT);
+  }
+
   const auto transaction_start = TimingClock::now();
-  const bool capture_timing = impl_ != nullptr && impl_->detailed_timing_enabled &&
+  const bool capture_timing = impl_->detailed_timing_enabled &&
     request_without_crc.size() >= 2 && request_without_crc[1] == FC_READ_WRITE_MULTIPLE;
   ActiveSerialTiming serial_timing;
   if (capture_timing && impl_->ctx != nullptr) {
@@ -410,6 +428,9 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
   }
   const auto finish = [&](Result<std::vector<uint8_t>> result) {
       const auto transaction_end = TimingClock::now();
+      impl_->last_slave_id = static_cast<int>(request_without_crc[0]);
+      impl_->last_transaction_end = transaction_end;
+      impl_->has_previous_transaction = true;
       active_serial_timing = nullptr;
       if (capture_timing) {
         TransactionTiming timing;
@@ -433,8 +454,13 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
       return result;
     };
 
-  if (!impl_) {
-    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED));
+  const int target_slave_id = static_cast<int>(request_without_crc[0]);
+  if (impl_->has_previous_transaction && impl_->last_slave_id != target_slave_id) {
+    const auto now = TimingClock::now();
+    const auto elapsed = now - impl_->last_transaction_end;
+    if (elapsed < kInterSlaveQuietInterval) {
+      std::this_thread::sleep_for(kInterSlaveQuietInterval - elapsed);
+    }
   }
 
   if (impl_->transact_override) {
@@ -501,14 +527,6 @@ Result<std::vector<uint8_t>> M1Driver::transact(const std::vector<uint8_t> & req
       append_driver(0, 0, rpm2, 0, 0);
       return finish(Result<std::vector<uint8_t>>::success(std::move(rsp)));
     }
-  }
-
-  if (impl_->ctx == nullptr) {
-    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::NOT_CONNECTED));
-  }
-
-  if (request_without_crc.empty()) {
-    return finish(Result<std::vector<uint8_t>>::failure(ErrorCode::INVALID_ARGUMENT));
   }
 
   // In libmodbus RTU, setting the expected slave ID allows confirmation matching

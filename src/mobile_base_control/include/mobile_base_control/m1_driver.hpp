@@ -16,6 +16,7 @@
 #define MOBILE_BASE_CONTROL__M1_DRIVER_HPP_
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -261,6 +262,18 @@ using TransactFn = std::function<Result<std::vector<uint8_t>>(const std::vector<
 class M1Driver
 {
 public:
+  /// Minimum quiet interval enforced when consecutive Modbus transactions address
+  /// different slaves.
+  ///
+  /// In RS-485 half-duplex Modbus RTU communication, switching addressed slave IDs
+  /// (e.g. ID1 -> ID2, ID2 -> ID1, or between unicast and multidrive group 0x65)
+  /// requires sufficient inter-frame bus silence. Hardware testing showed that
+  /// back-to-back requests to a different slave can receive no response unless
+  /// sufficient bus silence is provided: intervals <= 1.0 ms were unreliable,
+  /// whereas intervals >= 1.5 ms were reliable across test sweeps. 2.0 ms is
+  /// chosen as a conservative production margin.
+  static constexpr std::chrono::microseconds kInterSlaveQuietInterval{2000};
+
   M1Driver();
   virtual ~M1Driver();
 
