@@ -1,8 +1,7 @@
 # Copyright 2026 Antigravity Team.
 #
 # S3 State Estimation Subsystem EKF configuration using robot_localization.
-# Fuses Kinematic-ICP planar pose (odom0) and TDK IMU yaw rate (imu0).
-# Wheel odometry is already incorporated by Kinematic-ICP as its motion prior.
+# Test configuration: fuse wheel odometry only.
 # Publishes /odometry/filtered and acts as the sole authority for odom -> base_footprint TF.
 
 ekf_filter_node:
@@ -21,8 +20,8 @@ ekf_filter_node:
     base_link_frame: "base_footprint"
     world_frame: "odom"
 
-    # odom0: Kinematic-ICP laser odometry (fusing planar pose: x, y, yaw)
-    odom0: "/lidar_odometry"
+    # odom0: Wheel odometry (fusing planar pose: x, y, yaw)
+    odom0: "/diff_drive_controller/odom"
     odom0_config:
       [
         true,  true,  false,   # x, y, z
@@ -35,17 +34,20 @@ ekf_filter_node:
     odom0_differential: false
     odom0_relative: false
 
-    # imu0: S2 TDK IMU (fusing yaw_rate only; orientation strictly excluded)
-    imu0: "/imu/data_raw"
-    imu0_config:
-      [
-        false, false, false,
-        false, false, false,
-        false, false, false,
-        false, false, true,    # yaw rate
-        false, false, false    # no acceleration
-      ]
-    imu0_queue_size: 10
-    imu0_differential: false
-    imu0_relative: false
-    imu0_remove_gravitational_acceleration: true
+    # Original Kinematic-ICP input retained for restoring the production baseline:
+    # odom0: "/lidar_odometry"
+
+    # Original IMU input retained for restoring the production baseline:
+    # imu0: "/imu/data_raw"
+    # imu0_config:
+    #   [
+    #     false, false, false,
+    #     false, false, false,
+    #     false, false, false,
+    #     false, false, true,    # yaw rate
+    #     false, false, false    # no acceleration
+    #   ]
+    # imu0_queue_size: 10
+    # imu0_differential: false
+    # imu0_relative: false
+    # imu0_remove_gravitational_acceleration: true
