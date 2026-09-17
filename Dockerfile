@@ -29,6 +29,7 @@ RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
         ros-jazzy-ros2-control \
         ros-jazzy-ros2-controllers \
         ros-jazzy-sick-scan-xd \
+        ros-jazzy-sophus \
         ros-jazzy-foxglove-bridge \
         ros-jazzy-teleop-twist-keyboard \
         ros-jazzy-rviz2 \

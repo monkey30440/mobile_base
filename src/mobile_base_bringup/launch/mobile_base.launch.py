@@ -114,27 +114,41 @@ def launch_setup(context, *args, **kwargs):
             'mobile_base_perception',
             'sick_dual_lidar.launch.py',
         ),
+        # _python_launch(
+        #     'kinematic_icp',
+        #     'kinematic_icp.launch.py',
+        #     launch_arguments={
+        #         'use_sim_time': LaunchConfiguration('use_sim_time'),
+        #         'params_file': os.path.join(
+        #             get_package_share_directory('kinematic_icp'),
+        #             'config',
+        #             'kinematic_icp_ros.yaml',
+        #         ),
+        #         'lidar_odom_frame': LaunchConfiguration('lidar_odom_frame'),
+        #         'publish_odom_tf': LaunchConfiguration('publish_odom_tf'),
+        #         'invert_odom_tf': LaunchConfiguration('invert_odom_tf'),
+        #         'lidar_topic': LaunchConfiguration('lidar_topic'),
+        #         'wheel_odom_topic': LaunchConfiguration('wheel_odom_topic'),
+        #     },
+        # ),
         _python_launch(
             'kinematic_icp',
-            'kinematic_icp.launch.py',
+            'online_node.launch.py',
             launch_arguments={
                 'use_sim_time': LaunchConfiguration('use_sim_time'),
-                'params_file': os.path.join(
-                    get_package_share_directory('kinematic_icp'),
-                    'config',
-                    'kinematic_icp_ros.yaml',
-                ),
-                'lidar_odom_frame': LaunchConfiguration('lidar_odom_frame'),
-                'publish_odom_tf': LaunchConfiguration('publish_odom_tf'),
-                'invert_odom_tf': LaunchConfiguration('invert_odom_tf'),
-                'lidar_topic': LaunchConfiguration('lidar_topic'),
-                'wheel_odom_topic': LaunchConfiguration('wheel_odom_topic'),
+                'lidar_topic': '/scan_front',
+                'use_2d_lidar': 'true',
+                'wheel_odom_frame': 'odom',
+                'base_frame': 'base_footprint',
+                'lidar_odom_frame': 'odom_lidar',
+                'publish_odom_tf': 'true',
+                'invert_odom_tf': 'true',
             },
         ),
-        _python_launch(
-            'mobile_base_state_estimation',
-            'ekf.launch.py',
-        ),
+        # _python_launch(
+        #     'mobile_base_state_estimation',
+        #     'ekf.launch.py',
+        # ),
         IncludeLaunchDescription(
             AnyLaunchDescriptionSource(
                 os.path.join(
@@ -309,32 +323,32 @@ def generate_launch_description():
         description='Use mock hardware plugin instead of real M1 hardware',
     )
 
-    # 5. Odometry & Kinematic-ICP Arguments
-    lidar_odom_frame_arg = DeclareLaunchArgument(
-        'lidar_odom_frame',
-        default_value='odom',
-        description='Odometry parent frame ID for Kinematic-ICP',
-    )
-    publish_odom_tf_arg = DeclareLaunchArgument(
-        'publish_odom_tf',
-        default_value='false',
-        description='Whether Kinematic-ICP should publish odom TF',
-    )
-    invert_odom_tf_arg = DeclareLaunchArgument(
-        'invert_odom_tf',
-        default_value='false',
-        description='Whether Kinematic-ICP should invert published odom TF',
-    )
-    lidar_topic_arg = DeclareLaunchArgument(
-        'lidar_topic',
-        default_value='/scan_front',
-        description='Sensor topic for Kinematic-ICP',
-    )
-    wheel_odom_topic_arg = DeclareLaunchArgument(
-        'wheel_odom_topic',
-        default_value='/diff_drive_controller/odom',
-        description='Wheel odometry input topic for Kinematic-ICP',
-    )
+    # # 5. Odometry & Kinematic-ICP Arguments
+    # lidar_odom_frame_arg = DeclareLaunchArgument(
+    #     'lidar_odom_frame',
+    #     default_value='odom',
+    #     description='Odometry parent frame ID for Kinematic-ICP',
+    # )
+    # publish_odom_tf_arg = DeclareLaunchArgument(
+    #     'publish_odom_tf',
+    #     default_value='false',
+    #     description='Whether Kinematic-ICP should publish odom TF',
+    # )
+    # invert_odom_tf_arg = DeclareLaunchArgument(
+    #     'invert_odom_tf',
+    #     default_value='false',
+    #     description='Whether Kinematic-ICP should invert published odom TF',
+    # )
+    # lidar_topic_arg = DeclareLaunchArgument(
+    #     'lidar_topic',
+    #     default_value='/scan_front',
+    #     description='Sensor topic for Kinematic-ICP',
+    # )
+    # wheel_odom_topic_arg = DeclareLaunchArgument(
+    #     'wheel_odom_topic',
+    #     default_value='/diff_drive_controller/odom',
+    #     description='Wheel odometry input topic for Kinematic-ICP',
+    # )
 
     return LaunchDescription([
         variant_arg,
@@ -355,10 +369,10 @@ def generate_launch_description():
         baud_rate_arg,
         response_timeout_ms_arg,
         use_mock_hardware_arg,
-        lidar_odom_frame_arg,
-        publish_odom_tf_arg,
-        invert_odom_tf_arg,
-        lidar_topic_arg,
-        wheel_odom_topic_arg,
+        # lidar_odom_frame_arg,
+        # publish_odom_tf_arg,
+        # invert_odom_tf_arg,
+        # lidar_topic_arg,
+        # wheel_odom_topic_arg,
         OpaqueFunction(function=launch_setup),
     ])

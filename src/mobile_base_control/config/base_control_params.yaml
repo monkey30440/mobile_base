@@ -17,7 +17,7 @@ diff_drive_controller:
 
     use_stamped_vel: true
     cmd_vel_timeout: 3600.0 #0.5
-    enable_odom_tf: false
+    enable_odom_tf: true #false
     open_loop: false
     position_feedback: true
 
