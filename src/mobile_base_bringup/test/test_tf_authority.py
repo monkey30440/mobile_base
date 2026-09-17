@@ -153,7 +153,7 @@ def test_s4_mapping_mode_map_to_odom_authority():
     assert slam_params['transform_publish_period'] > 0.0  # 20 Hz map -> odom TF
 
     # 2. Check Mapping launch file does not launch AMCL
-    mapping_launch_path = ws_root / 'src' / 'mobile_base_bringup' / 'launch' / 'mapping.launch.py'
+    mapping_launch_path = ws_root / 'src' / 'mobile_base_mapping' / 'launch' / 'mapping.launch.py'
     assert mapping_launch_path.exists()
     with open(mapping_launch_path, 'r', encoding='utf-8') as f:
         mapping_launch_content = f.read()

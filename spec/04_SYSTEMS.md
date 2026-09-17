@@ -507,7 +507,6 @@ Map Package (maps/<timestamp>/)
 - Map Save Script: `src/mobile_base_bringup/scripts/save_map.sh`
 - Map Readback Validator Source: `src/mobile_base_mapping/test/validate_map_readback.cpp`
 - Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
-- Mapping Compatibility Wrapper Launch: `src/mobile_base_bringup/launch/mapping.launch.py`
 
 ## 5. Localization
 
@@ -1220,11 +1219,11 @@ Observability 負責底盤運行資料之收集與轉發：
 | **1. Robot Model** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup，由 `base_control.launch.py` 啟動 `robot_description.launch.py` |
 | **2. Sensor Ingestion** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup (`tdk_imu.launch.py`, `sick_dual_lidar.launch.py`) |
 | **3. State Estimation** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup (`ekf.launch.py`) |
-| **4. Mapping** | 啟用 (Active) | 未啟用 (Inactive) | `mobile_base.launch.py` 於 `mode:='mapping'` 時啟動 (`mapping.launch.py`) |
+| **4. Mapping** | 啟用 (Active) | 未啟用 (Inactive) | `mobile_base.launch.py` 於 `mode:='mapping'` 時啟動 `mobile_base_mapping/launch/mapping.launch.py` |
 | **5. Localization** | 未啟用 (Inactive) | 啟用 (Active) | `mobile_base.launch.py` 於 `mode:='navigation'` 時啟動 (`localization.launch.py`) |
 | **6. Navigation Target Admission** | 未啟用 (Inactive) | 可用 (Available) | 獨立 CLI 工具 (`navigate_to_station`) 或外部 Action Client |
-| **7. Route-Assisted Navigation** | 未啟用 (Inactive) | 啟用 (Active) | `mobile_base.launch.py` 於 `mode:='navigation'` 時啟動 (`navigation.launch.py`) |
-| **8. Precision Docking** | 未啟用 (Inactive) | 啟用 (Active) | 納入 `navigation.launch.py` 作為受管生命週期節點 (`docking_server`) |
+| **7. Route-Assisted Navigation** | 未啟用 (Inactive) | 啟用 (Active) | `mobile_base.launch.py` 於 `mode:='navigation'` 時啟動 `mobile_base_navigation/launch/navigation.launch.py` |
+| **8. Precision Docking** | 未啟用 (Inactive) | 啟用 (Active) | 納入 `mobile_base_navigation/launch/navigation.launch.py` 作為受管生命週期節點 (`docking_server`) |
 | **9. Base Control** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup，由 `base_control.launch.py` 啟動 |
 | **10. Observability** | 可用 (Available) | 可用 (Available) | 獨立啟動邊界 (`observability_adapter.launch.py`, `fluent_bit.launch.py`)，非 canonical bringup 自動啟動 |
 
