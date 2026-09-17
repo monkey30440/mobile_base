@@ -20,22 +20,48 @@
 #include <cstdint>
 #include <memory>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/macros.hpp"
+#include "rclcpp/publisher.hpp"
+#include "rclcpp/timer.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
 #include "mobile_base_control/m1_driver.hpp"
 
 namespace mobile_base_control
 {
+
+/// Observation types for M1 REP-107 diagnostic reporting.
+enum class ObservationType
+{
+  UNINITIALIZED,
+  SUCCESS,
+  COMMUNICATION_FAILURE
+};
+
+/// Internal representation of latest M1 diagnostic observation.
+struct DiagnosticObservation
+{
+  ObservationType type{ObservationType::UNINITIALIZED};
+  ErrorCode error_code{ErrorCode::NONE};
+  uint16_t left_alarm{0};
+  uint16_t right_alarm{0};
+  uint16_t left_status{0};
+  uint16_t right_status{0};
+  uint16_t bus_voltage_raw{0};
+  uint16_t left_current_raw{0};
+  uint16_t right_current_raw{0};
+};
 
 /// Structure to track continuous relative motor position using Dexmart M1 Format-0 feedback.
 struct PositionTracker
@@ -219,6 +245,7 @@ public:
 
 private:
   hardware_interface::CallbackReturn parse_parameters();
+  void publish_diagnostics();
 
   // Internal configuration
   M1HardwareConfig config_;
@@ -243,6 +270,12 @@ private:
   ExchangeResult latest_motor_state_{};
   bool has_valid_state_{false};
   bool is_active_{false};
+
+  // REP-107 Diagnostics (Option A)
+  mutable std::mutex observation_mutex_;
+  DiagnosticObservation latest_observation_{};
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostic_publisher_;
+  rclcpp::TimerBase::SharedPtr diagnostic_timer_;
 };
 
 }  // namespace mobile_base_control
