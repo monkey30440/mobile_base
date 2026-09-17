@@ -57,16 +57,19 @@ def test_ekf_yaml_configuration():
     assert params['base_link_frame'] == 'base_footprint'
     assert params['map_frame'] == 'map'
 
-    # odom0 (Kinematic-ICP planar pose only)
-    assert params['odom0'] == '/lidar_odometry'
+    # odom0 (Wheel odometry: vx only)
+    assert params['odom0'] == '/diff_drive_controller/odom'
     expected_odom0_config = [
-        True,  True,  False,
-        False, False, True,
         False, False, False,
+        False, False, False,
+        True,  False, False,
         False, False, False,
         False, False, False
     ]
     assert params['odom0_config'] == expected_odom0_config
+    assert params['odom0_config'][6] is True   # vx
+    assert params['odom0_config'][5] is False  # wheel yaw
+    assert params['odom0_config'][11] is False # wheel yaw rate
     assert 'odom1' not in params
 
     # imu0 (TDK IMU) - yaw rate only; orientation and acceleration excluded
@@ -79,6 +82,7 @@ def test_ekf_yaml_configuration():
         False, False, False
     ]
     assert params['imu0_config'] == expected_imu0_config
+    assert params['imu0_config'][11] is True   # wz
     assert params['imu0_remove_gravitational_acceleration'] is True
 
 

@@ -74,11 +74,6 @@ def test_navigation_launch_delegates_to_canonical_mobile_base_launch(monkeypatch
         'baud_rate',
         'response_timeout_ms',
         'use_mock_hardware',
-        'lidar_odom_frame',
-        'publish_odom_tf',
-        'invert_odom_tf',
-        'lidar_topic',
-        'wheel_odom_topic',
     }
     assert expected_args.issubset(set(arguments))
 
@@ -109,11 +104,6 @@ def test_navigation_launch_delegates_to_canonical_mobile_base_launch(monkeypatch
     assert 'baud_rate' in forwarded_args
     assert 'response_timeout_ms' in forwarded_args
     assert 'use_mock_hardware' in forwarded_args
-    assert 'lidar_odom_frame' in forwarded_args
-    assert 'publish_odom_tf' in forwarded_args
-    assert 'invert_odom_tf' in forwarded_args
-    assert 'lidar_topic' in forwarded_args
-    assert 'wheel_odom_topic' in forwarded_args
 
 
 def test_package_declares_navigation_runtime_dependencies():
@@ -128,7 +118,7 @@ def test_package_declares_navigation_runtime_dependencies():
     assert 'mobile_base_control' in runtime_dependencies
     assert 'mobile_base_perception' in runtime_dependencies
     assert 'mobile_base_state_estimation' in runtime_dependencies
-    assert 'kinematic_icp' in runtime_dependencies
+    assert 'kinematic_icp' not in runtime_dependencies
     assert 'rf2o_laser_odometry' not in runtime_dependencies
     assert 'nav2_map_server' in runtime_dependencies
     assert 'foxglove_bridge' in runtime_dependencies

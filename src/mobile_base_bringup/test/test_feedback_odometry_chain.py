@@ -83,7 +83,7 @@ def test_wheel_odometry_contract():
 
 
 def test_fused_odometry_ekf_contract():
-    """Verify canonical Kinematic-ICP and IMU fusion plus sole TF authority."""
+    """Verify canonical wheel odometry and IMU fusion plus sole TF authority."""
     ws_root = get_workspace_root()
     ekf_yaml = (
         ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml'
@@ -93,9 +93,13 @@ def test_fused_odometry_ekf_contract():
         ekf_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
 
     # Fused streams
-    assert ekf_params['odom0'] == '/lidar_odometry'
+    assert ekf_params['odom0'] == '/diff_drive_controller/odom'
     assert 'odom1' not in ekf_params
     assert ekf_params['imu0'] == '/imu/data_raw'
+    assert ekf_params['odom0_config'][6] is True   # vx
+    assert ekf_params['odom0_config'][5] is False  # wheel yaw
+    assert ekf_params['odom0_config'][11] is False # wheel yaw rate
+    assert ekf_params['imu0_config'][11] is True   # wz
 
     # Frames and TF authority
     assert ekf_params['publish_tf'] is True
@@ -111,7 +115,7 @@ def test_fused_odometry_ekf_contract():
 
 
 def test_tf_authority_odometry_prohibitions():
-    """Verify neither diff-drive nor Kinematic-ICP publishes the EKF-owned TF."""
+    """Verify diff_drive_controller does not publish the EKF-owned TF."""
     ws_root = get_workspace_root()
 
     # 1. diff_drive_controller TF disabled
@@ -122,17 +126,6 @@ def test_tf_authority_odometry_prohibitions():
     with open(ctrl_yaml, 'r', encoding='utf-8') as f:
         ctrl_params = yaml.safe_load(f)['diff_drive_controller']['ros__parameters']
     assert ctrl_params['enable_odom_tf'] is False
-
-    # 2. Kinematic-ICP TF disabled
-    kicp_yaml = (
-        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' /
-        'kinematic_icp_ros.yaml'
-    )
-    assert kicp_yaml.exists(), f'File not found: {kicp_yaml}'
-    with open(kicp_yaml, 'r', encoding='utf-8') as f:
-        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
-    assert kicp_params['publish_odom_tf'] is False
-    assert kicp_params['lidar_odom_frame'] == 'odom'
 
 
 def test_feedback_failure_and_stale_data_contract():

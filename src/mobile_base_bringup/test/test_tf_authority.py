@@ -135,16 +135,6 @@ def test_s3_odom_to_base_footprint_sole_authority():
         'diff_drive_controller must have enable_odom_tf: false to prevent duplicate TF'
     )
 
-    # 3. Check Kinematic-ICP parameters - MUST NOT publish odom TF
-    kicp_config_path = (
-        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' /
-        'kinematic_icp_ros.yaml'
-    )
-    assert kicp_config_path.exists()
-    with open(kicp_config_path, 'r', encoding='utf-8') as f:
-        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
-    assert kicp_params['publish_odom_tf'] is False
-
 
 def test_s4_mapping_mode_map_to_odom_authority():
     """Verify S4 Mapping Mode configuration: slam_toolbox publishes map -> odom, AMCL absent."""
@@ -229,42 +219,36 @@ def test_sensor_and_perception_frame_ids_match_urdf():
     assert 'base_imu_link' in imu_content
 
 
-def test_kinematic_icp_frame_semantics_and_tf_authority():
-    """Verify canonical Kinematic-ICP frame semantics and sole EKF TF authority."""
+def test_ekf_frame_semantics_and_tf_authority():
+    """Verify canonical EKF frame semantics and sole odom -> base_footprint TF authority."""
     ws_root = get_workspace_root()
 
-    # 1. Kinematic-ICP configuration
-    kicp_config_path = (
-        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' / 'kinematic_icp_ros.yaml'
-    )
-    assert kicp_config_path.exists()
-    with open(kicp_config_path, 'r', encoding='utf-8') as f:
-        kicp_data = yaml.safe_load(f)
-        kicp_params = (
-            kicp_data.get('/**') or kicp_data.get('kinematic_icp_online_node')
-        )['ros__parameters']
-
-    assert kicp_params['lidar_odom_frame'] == 'odom'
-    assert kicp_params['base_frame'] == 'base_footprint'
-    assert kicp_params['publish_odom_tf'] is False
-    assert kicp_params['invert_odom_tf'] is False
-
-    # 2. Canonical EKF configuration
-    ekf_kicp_config_path = (
+    # 1. Canonical EKF configuration
+    ekf_config_path = (
         ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml'
     )
-    assert ekf_kicp_config_path.exists()
-    with open(ekf_kicp_config_path, 'r', encoding='utf-8') as f:
-        ekf_kicp_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
+    assert ekf_config_path.exists()
+    with open(ekf_config_path, 'r', encoding='utf-8') as f:
+        ekf_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
 
-    assert ekf_kicp_params['publish_tf'] is True
-    assert ekf_kicp_params['world_frame'] == 'odom'
-    assert ekf_kicp_params['odom_frame'] == 'odom'
-    assert ekf_kicp_params['base_link_frame'] == 'base_footprint'
-    assert ekf_kicp_params['odom0'] == '/lidar_odometry'
+    assert ekf_params['publish_tf'] is True
+    assert ekf_params['world_frame'] == 'odom'
+    assert ekf_params['odom_frame'] == 'odom'
+    assert ekf_params['base_link_frame'] == 'base_footprint'
+    assert ekf_params['odom0'] == '/diff_drive_controller/odom'
+    assert ekf_params['imu0'] == '/imu/data_raw'
+
+    # 2. Base Control TF disabled
+    ctrl_config_path = (
+        ws_root / 'src' / 'mobile_base_control' / 'config' / 'base_control_params.yaml'
+    )
+    assert ctrl_config_path.exists()
+    with open(ctrl_config_path, 'r', encoding='utf-8') as f:
+        ctrl_params = yaml.safe_load(f)['diff_drive_controller']['ros__parameters']
+    assert ctrl_params['enable_odom_tf'] is False
 
     # 3. Protect that no active configuration introduces odom_lidar
-    for config_file in (kicp_config_path, ekf_kicp_config_path):
+    for config_file in (ctrl_config_path, ekf_config_path):
         with open(config_file, 'r', encoding='utf-8') as f:
             content = f.read()
         assert 'odom_lidar' not in content, (

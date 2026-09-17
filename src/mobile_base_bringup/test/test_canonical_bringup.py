@@ -176,12 +176,6 @@ def test_canonical_launch_description_declared_arguments(bringup_module):
         'baud_rate',
         'response_timeout_ms',
         'use_mock_hardware',
-        # Kinematic-ICP / odometry
-        'lidar_odom_frame',
-        'publish_odom_tf',
-        'invert_odom_tf',
-        'lidar_topic',
-        'wheel_odom_topic',
     }
 
     assert expected_args.issubset(set(args))
@@ -243,11 +237,6 @@ def test_canonical_mapping_composition(bringup_module):
         'serial_port': '/dev/ttyUSB0',
         'baud_rate': '230400',
         'response_timeout_ms': '50',
-        'lidar_odom_frame': 'odom',
-        'publish_odom_tf': 'false',
-        'invert_odom_tf': 'false',
-        'lidar_topic': '/scan_front',
-        'wheel_odom_topic': '/diff_drive_controller/odom',
         'mapping_params_file': '/opt/ros/share/mobile_base_mapping/config/slam_toolbox.yaml',
         'use_foxglove': 'false',
     })
@@ -260,7 +249,6 @@ def test_canonical_mapping_composition(bringup_module):
         'mobile_base_control/launch/base_control.launch.py',
         'mobile_base_perception/launch/tdk_imu.launch.py',
         'mobile_base_perception/launch/sick_dual_lidar.launch.py',
-        'kinematic_icp/launch/kinematic_icp.launch.py',
         'mobile_base_state_estimation/launch/ekf.launch.py',
         'mobile_base_mapping/launch/mapping.launch.py',
         'foxglove_bridge/launch/foxglove_bridge_launch.xml',
@@ -305,11 +293,6 @@ def test_canonical_navigation_composition(bringup_module, monkeypatch, tmp_path)
         'serial_port': '/dev/ttyUSB0',
         'baud_rate': '230400',
         'response_timeout_ms': '50',
-        'lidar_odom_frame': 'odom',
-        'publish_odom_tf': 'false',
-        'invert_odom_tf': 'false',
-        'lidar_topic': '/scan_front',
-        'wheel_odom_topic': '/diff_drive_controller/odom',
         'localization_params_file': loc_params,
         'nav2_params_file': nav_params,
         'bt_xml': bt_xml,
@@ -326,7 +309,6 @@ def test_canonical_navigation_composition(bringup_module, monkeypatch, tmp_path)
         'mobile_base_control/launch/base_control.launch.py',
         'mobile_base_perception/launch/tdk_imu.launch.py',
         'mobile_base_perception/launch/sick_dual_lidar.launch.py',
-        'kinematic_icp/launch/kinematic_icp.launch.py',
         'mobile_base_state_estimation/launch/ekf.launch.py',
         'mobile_base_localization/launch/localization.launch.py',
         'mobile_base_navigation/launch/navigation.launch.py',

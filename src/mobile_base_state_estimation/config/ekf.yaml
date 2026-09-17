@@ -1,7 +1,7 @@
 # Copyright 2026 Antigravity Team.
 #
 # S3 State Estimation Subsystem EKF configuration using robot_localization.
-# Test configuration: fuse wheel odometry only.
+# Fuses wheel odometry (/diff_drive_controller/odom) and IMU (/imu/data_raw).
 # Publishes /odometry/filtered and acts as the sole authority for odom -> base_footprint TF.
 
 ekf_filter_node:
@@ -20,13 +20,15 @@ ekf_filter_node:
     base_link_frame: "base_footprint"
     world_frame: "odom"
 
-    # odom0: Wheel odometry (fusing planar pose: x, y, yaw)
+    # odom0: Wheel odometry from diff_drive_controller
+    # Fuses only forward velocity vx.
+    # Wheel x, y, yaw, and yaw rate (vyaw) are excluded.
     odom0: "/diff_drive_controller/odom"
     odom0_config:
       [
-        true,  true,  false,   # x, y, z
-        false, false, true,    # roll, pitch, yaw
-        false, false, false,   # vx, vy, vz
+        false, false, false,   # x, y, z
+        false, false, false,   # roll, pitch, yaw
+        true,  false, false,   # vx, vy, vz
         false, false, false,   # vroll, vpitch, vyaw
         false, false, false    # ax, ay, az
       ]
@@ -34,20 +36,20 @@ ekf_filter_node:
     odom0_differential: false
     odom0_relative: false
 
-    # Original Kinematic-ICP input retained for restoring the production baseline:
-    # odom0: "/lidar_odometry"
-
-    # Original IMU input retained for restoring the production baseline:
-    # imu0: "/imu/data_raw"
-    # imu0_config:
-    #   [
-    #     false, false, false,
-    #     false, false, false,
-    #     false, false, false,
-    #     false, false, true,    # yaw rate
-    #     false, false, false    # no acceleration
-    #   ]
-    # imu0_queue_size: 10
-    # imu0_differential: false
-    # imu0_relative: false
-    # imu0_remove_gravitational_acceleration: true
+    # imu0: TDK 6-axis IMU from mobile_base_perception
+    # The current EKF baseline intentionally fuses only IMU angular_velocity.z.
+    # IMU orientation fusion may be evaluated later after runtime verification of orientation validity, reference, and covariance.
+    # Linear acceleration is excluded to avoid drift from vibration and accelerometer bias.
+    imu0: "/imu/data_raw"
+    imu0_config:
+      [
+        false, false, false,   # x, y, z
+        false, false, false,   # roll, pitch, yaw
+        false, false, false,   # vx, vy, vz
+        false, false, true,    # vroll, vpitch, vyaw (wz)
+        false, false, false    # ax, ay, az
+      ]
+    imu0_queue_size: 10
+    imu0_differential: false
+    imu0_relative: false
+    imu0_remove_gravitational_acceleration: true

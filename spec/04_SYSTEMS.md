@@ -299,74 +299,100 @@ imu_driver_node (tdk_ros2_imu)
 
 ### Responsibility
 
-State Estimation 負責在不依賴全域地圖的前提下，持續估測機器人在二維平面上的運動狀態與連續里程，並透過分層架構結合雷達匹配與感測融合：由 Kinematic-ICP 以輪速里程為運動學先驗配準二維雷達點雲，產出雷達里程估算；再由擴展卡爾曼濾波器（EKF）融合雷達里程與 IMU 偏航角速度，輸出連續的平面濾波狀態（`/odometry/filtered`），並發布 `odom -> base_footprint` 動態座標轉換。
+State Estimation 負責在不依賴全域地圖的前提下，持續估測機器人在二維平面上的運動狀態與連續里程，並透過卡爾曼濾波（EKF）融合輪端里程計與 6 軸慣性感測器（IMU）：由 Base Control（`diff_drive_controller` 依據差速運動學推算）提供輪端前向速度 $v_x$，由 Sensor Ingestion（`tdk_imu_node`）提供 IMU 偏航角速度 $w_z$，再由擴展卡爾曼濾波器（`ekf_node`）融合兩者（wheel-derived vx + IMU wz -> EKF），輸出連續且濾波之平面里程狀態（`/odometry/filtered`），並作為系統中唯一發布 `odom -> base_footprint` 動態座標轉換之擁有者（Sole TF Authority）。
+
+Kinematic-ICP（KICP）已自系統架構中完全移除，不在此架構中。
 
 ### Interfaces and Flow
 
 ```text
-/diff_drive_controller/odom ────┐ (nav_msgs/msg/Odometry, Wheel Motion Prior)
+    Wheel Encoder
+          │
+          ▼ (wheel motion feedback)
+    diff_drive_controller
+          │ (differential-drive kinematics)
+          │ /diff_drive_controller/odom
+          ├─────────────┐
+          │             │
+          │            EKF ◀──── IMU (/imu/data_raw, wz)
+          │             │
+          │             ▼
+          │       /odometry/filtered
+          │             │
+          │             │ TF: odom -> base_footprint (Sole TF Authority)
+          │             ▼
+          │       SLAM Toolbox ◀──── 2D LiDAR (/scan_front)
+          │             │
+          │             ▼
+          │        TF: map -> odom
+          │
+          └─ wheel odom topic only; MUST NOT publish odom TF
+```
+
+```text
+/diff_drive_controller/odom ────┐ (nav_msgs/msg/Odometry, Wheel-derived: vx)
 (Base Control)                  │
                                 ▼
-/scan_front ───────────────► kinematic_icp_online_node (kinematic_icp)
-(sensor_msgs/msg/LaserScan)     │
-(Sensor Ingestion)              ▼
-                         /lidar_odometry (nav_msgs/msg/Odometry)
-                                │ (odom0: x, y, yaw)
-                                ▼
-/imu/data_raw ─────────────► ekf_filter_node (robot_localization)
-(sensor_msgs/msg/Imu)           │ (imu0: vyaw)
+/imu/data_raw ──────────────► ekf_filter_node (robot_localization)
+(sensor_msgs/msg/Imu)           │ (imu0: vyaw / wz)
 (Sensor Ingestion)              │
                                 ├──► /odometry/filtered (nav_msgs/msg/Odometry)
                                 │
                                 └──► /tf (Dynamic TF)
-                                     └── odom -> base_footprint
+                                     └── odom -> base_footprint (Sole Authority)
 ```
 
 - **輸入資料流**：
-  - `/scan_front`（`sensor_msgs/msg/LaserScan`）：來自 Sensor Ingestion，由前左 2D 光達提供平面掃描量測（`frame_id: base_lidar_link_FL_1`），供 Kinematic-ICP 進行點雲配準。
-  - `/diff_drive_controller/odom`（`nav_msgs/msg/Odometry`）：來自 Base Control，提供輪端差速里程估算，作為 Kinematic-ICP 幀間點雲配準的運動學先驗（Kinematic Prior）。
-  - `/imu/data_raw`（`sensor_msgs/msg/Imu`）：來自 Sensor Ingestion，由 6 軸 IMU 提供慣性量測（`frame_id: base_imu_link`），供 EKF 融合繞 Z 軸之偏航角速度（`vyaw`）。
+  - `/diff_drive_controller/odom`（`nav_msgs/msg/Odometry`）：來自 Base Control。輪端編碼器直接提供輪動回授（wheel motion feedback），`diff_drive_controller` 依據差速運動學（differential-drive kinematics）推算輪端里程，提供前向線速度 $v_x$ 作為 EKF 的 `odom0` 輸入量測。`diff_drive_controller` 為 EKF 量測提供者，非最終 TF 擁有者。
+  - `/imu/data_raw`（`sensor_msgs/msg/Imu`）：來自 Sensor Ingestion，由 6 軸 IMU 提供慣性量測（`frame_id: base_imu_link`），供 EKF 融合繞 Z 軸之偏航角速度（`angular_velocity.z` / `vyaw` / $w_z$）。IMU 為 EKF 量測提供者。
 - **輸出資料流**：
-  - `/lidar_odometry`（`nav_msgs/msg/Odometry`）：由 `kinematic_icp_online_node` 輸出之雷達里程估計，包含相對於 `odom` 框架的平面位姿（$x, y, \text{yaw}$）。
-  - `/odometry/filtered`（`nav_msgs/msg/Odometry`）：由 `ekf_filter_node` 發布之濾波狀態估測結果，供下游 Mapping、Localization 與 Navigation 模組使用。
+  - `/odometry/filtered`（`nav_msgs/msg/Odometry`）：由 `ekf_filter_node` 發布之融合濾波里程狀態（Fused Local Odometry），供下游 Mapping、Localization 與 Navigation 模組使用。
   - 動態 TF（`odom -> base_footprint`）：由 `ekf_filter_node` 於 `/tf` 上發布。
-- **TF 所有權與邊界**：
-  - `diff_drive_controller` 配置 `enable_odom_tf: false`。
-  - `kinematic_icp_online_node` 配置 `publish_odom_tf: false`。
-  - `ekf_filter_node` 配置 `publish_tf: true`。
-  - 在目前 production 執行路徑中，EKF 是 `odom -> base_footprint` 動態 TF 的唯一 publisher。
-  - 下游邊界劃分：機器人本體與感測器內部幾何（`base_footprint` 以下）由 Robot Model（`robot_state_publisher`）負責；全域地圖到里程框架之轉換（`map -> odom`）由 Mapping Mode 下的 Mapping（`slam_toolbox`）或 Navigation Mode 下的 Localization（`amcl`）發布；State Estimation 不發布 `map -> odom`，亦不執行地圖載入或全域重定位。
+- **TF 所有權與邊界（TF Ownership Audit）**：
+  - `map -> odom`：在 Mapping Mode 下唯一由 `slam_toolbox`（`async_slam_toolbox_node`）發布；在 Navigation Mode 下唯一由 `amcl` 發布。
+  - `odom -> base_footprint`：唯一由 `robot_localization` EKF（`ekf_filter_node`）發布。
+  - `base_footprint -> sensors / robot links`：由 `robot_state_publisher` 依據 URDF 幾何模型發布於 `/tf_static` 與 `/tf`。
+  - `diff_drive_controller` 配置 `enable_odom_tf: false`，嚴格禁止發布 `odom -> base_footprint`。
+  - 系統嚴格禁止任何 `static_transform_publisher` 發布 `map -> odom` 或 `odom -> base_footprint`。
+  - SLAM Toolbox 使用 EKF 發布的 `odom -> base_footprint` TF 與 LaserScan 執行掃描配準與迴路閉合，並發布 `map -> odom`。
 
 ### Implementation
 
-1. **Kinematic-ICP 雷達里程估測（Kinematic-ICP Online Node）**：
-   - **套件與節點**：使用 `kinematic_icp` 套件之 `kinematic_icp_online_node`，由 `src/kinematic_icp/ros/launch/kinematic_icp.launch.py` 啟動，套用配置檔 `src/kinematic_icp/ros/config/kinematic_icp_ros.yaml`。
-   - **二維點雲配準**：配置 `use_2d_lidar: true`，訂閱前光達 `/scan_front`。節點將 2D 雷達掃描轉換為局部點雲並執行體素化降採樣（`voxel_size: 0.1`）與點雲配準。
-   - **輪速先驗整合（Kinematic Prior）**：訂閱輪式里程計 `/diff_drive_controller/odom`，以輪速里程之運動增量作為點雲配準初值先驗。
-   - **座標框架與輸出**：設定 `lidar_odom_frame: "odom"` 與 `base_frame: "base_footprint"`，輸出未濾波之雷達里程計主題 `/lidar_odometry`；配置 `publish_odom_tf: false`，不發布 TF。
-
-2. **擴展卡爾曼濾波融合（EKF State Estimation）**：
-   - **套件與節點**：使用 `robot_localization` 套件之 `ekf_node`，具現化為節點 `ekf_filter_node`，由 `src/mobile_base_state_estimation/launch/ekf.launch.py` 啟動，套用配置檔 `src/mobile_base_state_estimation/config/ekf.yaml`。
-   - **運行模式與頻率**：配置 `two_d_mode: true`，約束於二維平面運動；目前配置之運行頻率為 50 Hz（`frequency: 50.0`）。
+1. **擴展卡爾曼濾波融合（EKF State Estimation）**：
+   - **套件與節點**：使用現有 `mobile_base_state_estimation` 套件，透過 `robot_localization` 之 `ekf_node`（具現化為節點 `ekf_filter_node`），由 `src/mobile_base_state_estimation/launch/ekf.launch.py` 啟動，套用配置檔 `src/mobile_base_state_estimation/config/ekf.yaml`。
+   - **運行模式與頻率**：配置 `two_d_mode: true`，約束為平面差速 AMR 運動；運行頻率為 50 Hz（`frequency: 50.0`），感測器逾時時間為 100 ms（`sensor_timeout: 0.1`）。
    - **觀測量融合配置**：
-     - `odom0`（`/lidar_odometry`）：融合平面位置與航向角（$x, y, \text{yaw}$）。
-     - `imu0`（`/imu/data_raw`）：融合繞 Z 軸之偏航角速度（`vyaw`）。
+     - `odom0`（`/diff_drive_controller/odom`）：僅融合差速運動學推算之前向速度 $v_x$。未融合位置 $x, y$、輪端推算之 $\text{yaw}$ 與偏航角速度 $v_{\text{yaw}}$。
+     - `imu0`（`/imu/data_raw`）：僅融合繞 Z 軸之偏航角速度（`angular_velocity.z` / `vyaw` / $w_z$）。The current EKF baseline intentionally fuses only IMU angular_velocity.z. IMU orientation fusion may be evaluated later after runtime verification of orientation validity, reference, and covariance. 線性加速度量測亦排除以防止積分飄移。
    - **輸出狀態**：發布濾波里程主題 `/odometry/filtered`（`nav_msgs/msg/Odometry`）。
+   - **坐標變換發布**：配置 `publish_tf: true`，發布動態 TF `odom -> base_footprint`。配置 `world_frame: "odom"` 與 `odom_frame: "odom"`，確保發布之父框架嚴格為 `odom`。
+
+2. **整合架構與邊界規範**：
+   - **Canonical 狀態估計管線**：
+     ```text
+     /diff_drive_controller/odom (vx) ──────┐
+                                            ▼
+     /imu/data_raw (wz) ──────────────────► ekf_filter_node
+                                            │
+                                            ├──► /odometry/filtered
+                                            └──► TF: odom -> base_footprint
+     ```
+   - **移除 Kinematic-ICP**：原第三方雷達里程計及相關相依已被完整移除，系統不再發布或訂閱 `/lidar_odometry`。
 
 3. **動態 TF 所有權（Dynamic TF Ownership）**：
    - `diff_drive_controller` 配置 `enable_odom_tf: false`。
-   - `kinematic_icp_online_node` 配置 `publish_odom_tf: false`。
-   - `ekf_filter_node` 配置 `publish_tf: true`，指定 `odom_frame: "odom"`、`base_link_frame: "base_footprint"` 與 `world_frame: "odom"`。
+   - `ekf_filter_node` 配置 `publish_tf: true`，指定 `map_frame: "map"`、`odom_frame: "odom"`、`base_link_frame: "base_footprint"` 與 `world_frame: "odom"`。
    - 在目前 production 執行路徑中，EKF 是 `odom -> base_footprint` 動態 TF 的唯一 publisher。
 
 4. **系統整合與模式通用性（Canonical Bringup Integration）**：
-   - 在標準系統啟動流程（`src/mobile_base_bringup/launch/mobile_base.launch.py`）中，`kinematic_icp.launch.py` 與 `ekf.launch.py` 均註冊於共通實體清單（`common_entities`）。
-   - State Estimation 在 Mapping Mode 與 Navigation Mode 下皆保持運作，提供一致的里程推算基底。
+   - 在標準系統啟動流程（`src/mobile_base_bringup/launch/mobile_base.launch.py`）中，`ekf.launch.py` 註冊於共通實體清單（`common_entities`），於控制器與感測器就緒後啟動且僅啟動一次。
+   - State Estimation 在 Mapping Mode 與 Navigation Mode 下皆保持運作，提供一致且唯一的里程座標基準。
 
 ### Expected Normal Behavior
 
-- `/lidar_odometry` 持續提供 local LiDAR odometry。
-- `/odometry/filtered` 持續提供 filtered planar odometry。
+- `/diff_drive_controller/odom` 以 30 Hz 持續提供輪端差速推算之里程量測（$v_x$）。
+- `/imu/data_raw` 以 100~200 Hz 持續提供 IMU 角速度量測（$w_z$）。
+- `/odometry/filtered` 以 50 Hz 持續提供 filtered planar odometry。
 - EKF 持續發布 `odom -> base_footprint` 動態 TF。
 - 系統無第二個 `odom -> base_footprint` publisher。
 - State Estimation 不發布 `map -> odom`。
@@ -374,11 +400,10 @@ State Estimation 負責在不依賴全域地圖的前提下，持續估測機器
 
 ### Implementation References
 
-- Kinematic-ICP Launch: `src/kinematic_icp/ros/launch/kinematic_icp.launch.py`
-- Kinematic-ICP Parameter Config: `src/kinematic_icp/ros/config/kinematic_icp_ros.yaml`
 - State Estimation Launch: `src/mobile_base_state_estimation/launch/ekf.launch.py`
 - State Estimation Parameter Config: `src/mobile_base_state_estimation/config/ekf.yaml`
 - Base Control Parameter Config (Wheel Odometry Source): `src/mobile_base_control/config/base_control_params.yaml`
+- IMU Parameter Config: `src/mobile_base_perception/config/tdk_imu.yaml`
 - Canonical Bringup Launch: `src/mobile_base_bringup/launch/mobile_base.launch.py`
 
 ## 4. Mapping
@@ -1052,11 +1077,11 @@ Modbus RTU over /dev/ttyUSB0 (230400 bps, 廣播 Group 0x65, FC17 單一交易�
        ├──► 同時寫入: 馬達 1 (右輪) 與馬達 2 (左輪) 目標轉速
        └──► 同時讀回: 馬達 1 (右輪) 與馬達 2 (左輪) 編碼器位置與轉速
        │
-       ├─────────────────────────────────────────► /diff_drive_controller/odom (nav_msgs/msg/Odometry)
-       │                                           (輪式里程計先驗，enable_odom_tf: false)
-       │
-       └─────────────────────────────────────────► /joint_states (sensor_msgs/msg/JointState)
-                                                   (由 joint_state_broadcaster 發布至 TF)
+        ├─────────────────────────────────────────► /diff_drive_controller/odom (nav_msgs/msg/Odometry)
+        │                                           (輪式里程計量測，enable_odom_tf: false)
+        │
+        └─────────────────────────────────────────► /joint_states (sensor_msgs/msg/JointState)
+                                                    (由 joint_state_broadcaster 發布至 TF)
 ```
 
 1. **速度指令輸入介面**：
@@ -1064,7 +1089,7 @@ Modbus RTU over /dev/ttyUSB0 (230400 bps, 廣播 Group 0x65, FC17 單一交易�
    - 生產環境中未部署 `twist_mux`，所有指令來源（Mapping Mode 之手動遙控、Navigation Mode 之 `controller_server` 或 `docking_server`）直接對接此單一主題。
 
 2. **回授輸出介面**：
-   - `/diff_drive_controller/odom` (`nav_msgs/msg/Odometry`）：以 30 Hz 發布輪式里程計估測，作為 State Estimation 中 Kinematic-ICP 之運動先驗（Motion Prior）。
+   - `/diff_drive_controller/odom` (`nav_msgs/msg/Odometry`）：以 30 Hz 發布輪式里程計估測，作為 State Estimation 中 robot_localization EKF 之量測輸入。
    - `/joint_states` (`sensor_msgs/msg/JointState`）：由 `joint_state_broadcaster` 以 30 Hz 發布左輪（`driving_wheel_joint_L`）與右輪（`driving_wheel_joint_R`）關節位置與速度，供 `robot_state_publisher` 更新機構動態轉換。
 
 3. **硬體通訊介面**：
@@ -1194,7 +1219,7 @@ Observability 負責底盤運行資料之收集與轉發：
 |---|---|---|---|
 | **1. Robot Model** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup，由 `base_control.launch.py` 啟動 `robot_description.launch.py` |
 | **2. Sensor Ingestion** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup (`tdk_imu.launch.py`, `sick_dual_lidar.launch.py`) |
-| **3. State Estimation** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup (`kinematic_icp.launch.py`, `ekf.launch.py`) |
+| **3. State Estimation** | 啟用 (Active) | 啟用 (Active) | 納入 Common Bringup (`ekf.launch.py`) |
 | **4. Mapping** | 啟用 (Active) | 未啟用 (Inactive) | `mobile_base.launch.py` 於 `mode:='mapping'` 時啟動 (`mapping.launch.py`) |
 | **5. Localization** | 未啟用 (Inactive) | 啟用 (Active) | `mobile_base.launch.py` 於 `mode:='navigation'` 時啟動 (`localization.launch.py`) |
 | **6. Navigation Target Admission** | 未啟用 (Inactive) | 可用 (Available) | 獨立 CLI 工具 (`navigate_to_station`) 或外部 Action Client |

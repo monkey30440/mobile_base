@@ -57,11 +57,6 @@ def test_mapping_launch_delegates_to_canonical_mobile_base_launch(monkeypatch):
     }
     assert set(arguments) == {
         'use_foxglove',
-        'lidar_odom_frame',
-        'publish_odom_tf',
-        'invert_odom_tf',
-        'lidar_topic',
-        'wheel_odom_topic',
     }
     assert arguments['use_foxglove'].default_value[0].text == 'false'
 
@@ -79,11 +74,6 @@ def test_mapping_launch_delegates_to_canonical_mobile_base_launch(monkeypatch):
     assert forwarded_args['platform'] == 'real'
     assert forwarded_args['variant'] == 'default'
     assert 'use_foxglove' in forwarded_args
-    assert 'lidar_odom_frame' in forwarded_args
-    assert 'publish_odom_tf' in forwarded_args
-    assert 'invert_odom_tf' in forwarded_args
-    assert 'lidar_topic' in forwarded_args
-    assert 'wheel_odom_topic' in forwarded_args
 
 
 def test_package_declares_direct_launch_import_dependencies():
@@ -95,5 +85,5 @@ def test_package_declares_direct_launch_import_dependencies():
     }
     assert 'ament_index_python' in runtime_dependencies
     assert 'mobile_base_description' in runtime_dependencies
-    assert 'kinematic_icp' in runtime_dependencies
+    assert 'kinematic_icp' not in runtime_dependencies
     assert 'rf2o_laser_odometry' not in runtime_dependencies

@@ -72,15 +72,6 @@ def test_lidar_routing_contracts_a_through_d():
         slam_params = yaml.safe_load(f)['async_slam_toolbox_node']['ros__parameters']
     assert slam_params['scan_topic'] == '/scan_front'
 
-    # Requirement B: kinematic_icp lidar_topic == /scan_front
-    kicp_config = (
-        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' / 'kinematic_icp_ros.yaml'
-    )
-    assert kicp_config.exists()
-    with open(kicp_config, 'r', encoding='utf-8') as f:
-        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
-    assert kicp_params['lidar_topic'] == '/scan_front'
-
     # Requirements C and D: Nav2 local/global costmaps
     nav2_config = ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml'
     assert nav2_config.exists()
@@ -125,7 +116,6 @@ def test_no_production_runtime_reliance_on_merged_or_filtered_scan():
         ws_root / 'src' / 'mobile_base_mapping' / 'config' / 'slam_toolbox.yaml',
         ws_root / 'src' / 'mobile_base_localization' / 'config' / 'amcl_params.yaml',
         ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml',
-        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' / 'kinematic_icp_ros.yaml',
         ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml',
         ws_root / 'src' / 'mobile_base_perception' / 'config' / 'tdk_imu.yaml',
         ws_root / 'src' / 'mobile_base_control' / 'config' / 'base_control_params.yaml',
@@ -215,36 +205,33 @@ def test_imu_data_contract_and_ekf_consumer():
     assert ekf_params['imu0_config'][12] is False  # ax
 
 
-def test_kinematic_icp_odometry_contract_and_ekf_consumer():
-    """Verify Kinematic-ICP uses front scan and wheel prior and feeds EKF pose."""
+def test_wheel_odometry_contract_and_ekf_consumer():
+    """Verify wheel odometry configuration and EKF consumer contract."""
     ws_root = get_workspace_root()
 
-    # 1. Kinematic-ICP configuration
-    kicp_config = (
-        ws_root / 'src' / 'kinematic_icp' / 'ros' / 'config' /
-        'kinematic_icp_ros.yaml'
+    # 1. Base Control diff_drive_controller configuration
+    ctrl_config = (
+        ws_root / 'src' / 'mobile_base_control' / 'config' / 'base_control_params.yaml'
     )
-    assert kicp_config.exists()
-    with open(kicp_config, 'r', encoding='utf-8') as f:
-        kicp_params = yaml.safe_load(f)['/**']['ros__parameters']
+    assert ctrl_config.exists()
+    with open(ctrl_config, 'r', encoding='utf-8') as f:
+        ctrl_params = yaml.safe_load(f)['diff_drive_controller']['ros__parameters']
 
-    assert kicp_params['lidar_topic'] == '/scan_front'
-    assert kicp_params['wheel_odom_topic'] == '/diff_drive_controller/odom'
-    assert kicp_params['lidar_odom_frame'] == 'odom'
-    assert kicp_params['base_frame'] == 'base_footprint'
-    assert kicp_params['publish_odom_tf'] is False
-    assert kicp_params['invert_odom_tf'] is False
+    assert ctrl_params['enable_odom_tf'] is False
+    assert ctrl_params['position_feedback'] is True
+    assert ctrl_params['open_loop'] is False
 
     # 2. Consumer in S3 robot_localization EKF
     ekf_yaml = ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml'
     assert ekf_yaml.exists()
     with open(ekf_yaml, 'r', encoding='utf-8') as f:
         ekf_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
-    assert ekf_params['odom0'] == '/lidar_odometry'
-    assert ekf_params['odom0_config'][0] is True   # x
-    assert ekf_params['odom0_config'][1] is True   # y
-    assert ekf_params['odom0_config'][5] is True   # yaw
-    assert not any(ekf_params['odom0_config'][6:12])  # no Kinematic-ICP twist
+    assert ekf_params['odom0'] == '/diff_drive_controller/odom'
+    assert ekf_params['odom0_config'][6] is True   # vx
+    assert ekf_params['odom0_config'][5] is False  # wheel yaw
+    assert ekf_params['odom0_config'][11] is False # wheel yaw rate
+    assert ekf_params['odom0_config'][0] is False  # no x position fusion
+    assert ekf_params['odom0_config'][1] is False  # no y position fusion
     assert 'odom1' not in ekf_params
 
 

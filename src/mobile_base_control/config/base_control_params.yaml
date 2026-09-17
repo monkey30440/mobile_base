@@ -16,8 +16,10 @@ diff_drive_controller:
     wheel_radius: 0.080
 
     use_stamped_vel: true
-    cmd_vel_timeout: 3600.0 #0.5
-    enable_odom_tf: true #false
+    cmd_vel_timeout: 3600 #0.5
+    enable_odom_tf: false
+    odom_frame_id: "odom"
+    base_frame_id: "base_footprint"
     open_loop: false
     position_feedback: true
 
