@@ -282,7 +282,7 @@ def generate_launch_description():
     # 3. Common Runtime Arguments
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
-        default_value='false',
+        default_value='False',
         description='Use simulation clock if true',
     )
     use_foxglove_arg = DeclareLaunchArgument(
