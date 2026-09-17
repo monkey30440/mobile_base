@@ -24,6 +24,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     """Generate launch description for dual SICK picoScan150 LiDAR acquisition."""
     sick_scan_pkg = get_package_share_directory('sick_scan_xd')
+    perception_pkg = get_package_share_directory('mobile_base_perception')
 
     # Declare launch arguments
     front_hostname_arg = DeclareLaunchArgument(
@@ -78,6 +79,13 @@ def generate_launch_description():
     rear_topic = LaunchConfiguration('rear_topic')
     front_raw_topic = '/sick_internal/front_scan_raw'
     rear_raw_topic = '/sick_internal/rear_scan_raw'
+    front_normalized_topic = '/sick_internal/front_scan_normalized'
+    rear_normalized_topic = '/sick_internal/rear_scan_normalized'
+
+    # Path to laser box filter configuration
+    box_filter_config = PathJoinSubstitution([
+        perception_pkg, 'config', 'laser_box_filter.yaml'
+    ])
 
     # Path to upstream SICK picoScan template launch file
     picoscan_launch_file = PathJoinSubstitution([
@@ -155,7 +163,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'input_topic': front_raw_topic,
-            'output_topic': front_topic,
+            'output_topic': front_normalized_topic,
         }],
     )
 
@@ -166,8 +174,32 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'input_topic': rear_raw_topic,
-            'output_topic': rear_topic,
+            'output_topic': rear_normalized_topic,
         }],
+    )
+
+    front_box_filter = Node(
+        package='laser_filters',
+        executable='scan_to_scan_filter_chain',
+        name='front_box_filter',
+        output='screen',
+        parameters=[box_filter_config],
+        remappings=[
+            ('scan', front_normalized_topic),
+            ('scan_filtered', front_topic),
+        ],
+    )
+
+    rear_box_filter = Node(
+        package='laser_filters',
+        executable='scan_to_scan_filter_chain',
+        name='rear_box_filter',
+        output='screen',
+        parameters=[box_filter_config],
+        remappings=[
+            ('scan', rear_normalized_topic),
+            ('scan_filtered', rear_topic),
+        ],
     )
 
     return LaunchDescription([
@@ -182,4 +214,6 @@ def generate_launch_description():
         rear_lidar_node,
         front_scan_normalizer,
         rear_scan_normalizer,
+        front_box_filter,
+        rear_box_filter,
     ])

@@ -41,6 +41,11 @@ def test_front_lidar_data_contract():
     assert "'front_frame_id'" in content
     assert "default_value='/scan_front'" in content
     assert "default_value='base_lidar_link_FL'" in content
+    # Verify Front pipeline: raw -> normalizer -> normalized -> box filter -> /scan_front
+    assert "'front_scan_handedness_normalizer'" in content
+    assert "'front_box_filter'" in content
+    assert "'/sick_internal/front_scan_raw'" in content
+    assert "'/sick_internal/front_scan_normalized'" in content
 
 
 def test_rear_lidar_data_contract():
@@ -59,6 +64,11 @@ def test_rear_lidar_data_contract():
     assert "'rear_frame_id'" in content
     assert "default_value='/scan_rear'" in content
     assert "default_value='base_lidar_link_BR'" in content
+    # Verify Rear pipeline: raw -> normalizer -> normalized -> box filter -> /scan_rear
+    assert "'rear_scan_handedness_normalizer'" in content
+    assert "'rear_box_filter'" in content
+    assert "'/sick_internal/rear_scan_raw'" in content
+    assert "'/sick_internal/rear_scan_normalized'" in content
 
 
 def test_lidar_routing_contracts_a_through_d():
@@ -118,6 +128,7 @@ def test_no_production_runtime_reliance_on_merged_or_filtered_scan():
         ws_root / 'src' / 'mobile_base_navigation' / 'config' / 'nav2_params.yaml',
         ws_root / 'src' / 'mobile_base_state_estimation' / 'config' / 'ekf.yaml',
         ws_root / 'src' / 'mobile_base_perception' / 'config' / 'tdk_imu.yaml',
+        ws_root / 'src' / 'mobile_base_perception' / 'config' / 'laser_box_filter.yaml',
         ws_root / 'src' / 'mobile_base_control' / 'config' / 'base_control_params.yaml',
     ]
 

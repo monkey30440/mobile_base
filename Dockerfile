@@ -25,6 +25,7 @@ RUN echo 'Acquire::http::Pipeline-Depth "0";' > /etc/apt/apt.conf.d/99fix \
         ros-jazzy-navigation2 \
         ros-jazzy-nav2-bringup \
         ros-jazzy-slam-toolbox \
+        ros-jazzy-laser-filters \
         ros-jazzy-robot-localization \
         ros-jazzy-ros2-control \
         ros-jazzy-ros2-controllers \
