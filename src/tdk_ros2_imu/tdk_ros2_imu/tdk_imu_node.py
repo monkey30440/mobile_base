@@ -133,6 +133,11 @@ class TdkImuNode(Node):
         message.angular_velocity.x = angular_velocity[0]
         message.angular_velocity.y = angular_velocity[1]
         message.angular_velocity.z = angular_velocity[2]
+        message.angular_velocity_covariance = [
+            1.0e-6, 0.0, 0.0,
+            0.0, 1.0e-6, 0.0,
+            0.0, 0.0, 1.0e-6,
+        ]
         message.linear_acceleration.x = acceleration[0]
         message.linear_acceleration.y = acceleration[1]
         message.linear_acceleration.z = acceleration[2]

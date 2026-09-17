@@ -37,5 +37,7 @@ diff_drive_controller:
     angular.z.max_acceleration: 1.0
     angular.z.max_deceleration: -2.0
 
+    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+
 joint_state_broadcaster:
   ros__parameters: {}
