@@ -76,6 +76,8 @@ def generate_launch_description():
     rear_frame_id = LaunchConfiguration('rear_frame_id')
     front_topic = LaunchConfiguration('front_topic')
     rear_topic = LaunchConfiguration('rear_topic')
+    front_raw_topic = '/sick_internal/front_scan_raw'
+    rear_raw_topic = '/sick_internal/rear_scan_raw'
 
     # Path to upstream SICK picoScan template launch file
     picoscan_launch_file = PathJoinSubstitution([
@@ -99,7 +101,7 @@ def generate_launch_description():
             ['check_udp_receiver_ip:=', '0'],
             ['nodename:=', 'front_lidar_node'],
             ['publish_frame_id:=', front_frame_id],
-            ['publish_laserscan_fullframe_topic:=', front_topic],
+            ['publish_laserscan_fullframe_topic:=', front_raw_topic],
             ['publish_laserscan_segment_topic:=', '/sick_internal/front_scan_segment'],
             ['custom_pointclouds:=', 'none'],
             ['tf_publish_rate:=', '0.0'],
@@ -109,8 +111,8 @@ def generate_launch_description():
             ['imu_enable:=', 'False'],
         ],
         remappings=[
-            ('scan_fullframe', front_topic),
-            ('/scan_fullframe', front_topic),
+            ('scan_fullframe', front_raw_topic),
+            ('/scan_fullframe', front_raw_topic),
         ],
     )
 
@@ -131,7 +133,7 @@ def generate_launch_description():
             ['check_udp_receiver_ip:=', '0'],
             ['nodename:=', 'rear_lidar_node'],
             ['publish_frame_id:=', rear_frame_id],
-            ['publish_laserscan_fullframe_topic:=', rear_topic],
+            ['publish_laserscan_fullframe_topic:=', rear_raw_topic],
             ['publish_laserscan_segment_topic:=', '/sick_internal/rear_scan_segment'],
             ['custom_pointclouds:=', 'none'],
             ['tf_publish_rate:=', '0.0'],
@@ -141,9 +143,31 @@ def generate_launch_description():
             ['imu_enable:=', 'False'],
         ],
         remappings=[
-            ('scan_fullframe', rear_topic),
-            ('/scan_fullframe', rear_topic),
+            ('scan_fullframe', rear_raw_topic),
+            ('/scan_fullframe', rear_raw_topic),
         ],
+    )
+
+    front_scan_normalizer = Node(
+        package='mobile_base_perception',
+        executable='scan_handedness_normalizer.py',
+        name='front_scan_handedness_normalizer',
+        output='screen',
+        parameters=[{
+            'input_topic': front_raw_topic,
+            'output_topic': front_topic,
+        }],
+    )
+
+    rear_scan_normalizer = Node(
+        package='mobile_base_perception',
+        executable='scan_handedness_normalizer.py',
+        name='rear_scan_handedness_normalizer',
+        output='screen',
+        parameters=[{
+            'input_topic': rear_raw_topic,
+            'output_topic': rear_topic,
+        }],
     )
 
     return LaunchDescription([
@@ -156,4 +180,6 @@ def generate_launch_description():
         rear_topic_arg,
         front_lidar_node,
         rear_lidar_node,
+        front_scan_normalizer,
+        rear_scan_normalizer,
     ])

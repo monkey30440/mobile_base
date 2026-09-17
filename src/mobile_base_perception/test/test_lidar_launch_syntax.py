@@ -18,8 +18,9 @@ import importlib.util
 import os
 
 from ament_index_python.packages import get_package_share_directory
-from launch import LaunchDescription
+from launch import LaunchContext, LaunchDescription
 from launch_ros.actions import Node
+from launch_ros.utilities import evaluate_parameters
 import pytest
 
 
@@ -34,7 +35,7 @@ def _load_launch_module(launch_file_path: str):
 
 
 def test_launch_description_generation():
-    """Verify sick_dual_lidar.launch.py builds valid LaunchDescription with 2 distinct nodes."""
+    """Verify dual drivers feed handedness normalizers before public topics."""
     pkg_share = get_package_share_directory('mobile_base_perception')
     launch_file = os.path.join(pkg_share, 'launch', 'sick_dual_lidar.launch.py')
 
@@ -43,12 +44,19 @@ def test_launch_description_generation():
     assert isinstance(ld, LaunchDescription), 'Generated object is not a LaunchDescription'
 
     node_actions = [a for a in ld.entities if isinstance(a, Node)]
-    assert len(node_actions) == 2, f'Expected 2 Node actions, found {len(node_actions)}'
+    assert len(node_actions) == 4, f'Expected 4 Node actions, found {len(node_actions)}'
 
     node_names = {node._Node__node_name for node in node_actions}
-    assert node_names == {'front_lidar_node', 'rear_lidar_node'}, f'Bad nodes: {node_names}'
+    assert node_names == {
+        'front_lidar_node',
+        'rear_lidar_node',
+        'front_scan_handedness_normalizer',
+        'rear_scan_handedness_normalizer',
+    }, f'Bad nodes: {node_names}'
 
-    for node in node_actions:
+    driver_nodes = [n for n in node_actions if n._Node__package == 'sick_scan_xd']
+    assert len(driver_nodes) == 2
+    for node in driver_nodes:
         assert node._Node__package == 'sick_scan_xd', f'Node not sick_scan_xd: {node}'
         assert node._Node__node_executable == 'sick_generic_caller', f'Node not generic: {node}'
 
@@ -64,6 +72,19 @@ def test_launch_description_generation():
         assert '0.0' in argument_text
         assert 'tick_to_timestamp_mode:=' in argument_text
         assert "tick_to_timestamp_mode:=', '1'" in argument_text
+
+    normalizer_nodes = [
+        n for n in node_actions if n._Node__package == 'mobile_base_perception'
+    ]
+    assert len(normalizer_nodes) == 2
+    context = LaunchContext()
+    context.launch_configurations['front_topic'] = '/scan_front'
+    context.launch_configurations['rear_topic'] = '/scan_rear'
+    for node in normalizer_nodes:
+        assert node._Node__node_executable == 'scan_handedness_normalizer.py'
+        parameters = evaluate_parameters(context, node._Node__parameters)[0]
+        assert parameters['input_topic'].startswith('/sick_internal/')
+        assert parameters['output_topic'] in {'/scan_front', '/scan_rear'}
 
     # Verify no dual_laser_merger or static_transform_publisher is launched in #10
     forbidden_packages = {'dual_laser_merger', 'tf2_ros'}
