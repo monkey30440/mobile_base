@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <limits>
 #include <memory>
 #include <string>
@@ -25,8 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include "diagnostic_msgs/msg/diagnostic_status.hpp"
-#include "diagnostic_msgs/msg/key_value.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -324,24 +321,6 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
   has_valid_state_ = false;
   std::fill_n(hw_positions_, 2, std::numeric_limits<double>::quiet_NaN());
   std::fill_n(hw_velocities_, 2, std::numeric_limits<double>::quiet_NaN());
-  {
-    std::lock_guard<std::mutex> lock(observation_mutex_);
-    latest_observation_ = DiagnosticObservation{};
-  }
-
-  // Initialize REP-107 diagnostics publisher and 1 Hz timer on internal node if available
-  auto node = get_node();
-  if (node) {
-    if (!diagnostic_publisher_) {
-      diagnostic_publisher_ = node->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
-        "/diagnostics", rclcpp::SystemDefaultsQoS());
-    }
-    if (!diagnostic_timer_) {
-      diagnostic_timer_ = node->create_wall_timer(
-        std::chrono::seconds(1),
-        [this]() {publish_diagnostics();});
-    }
-  }
 
   if (!driver_) {
     driver_ = std::make_shared<M1Driver>();
@@ -694,10 +673,6 @@ hardware_interface::CallbackReturn M1Hardware::on_cleanup(
   right_position_tracker_.reset();
   is_active_ = false;
   has_valid_state_ = false;
-  {
-    std::lock_guard<std::mutex> lock(observation_mutex_);
-    latest_observation_ = DiagnosticObservation{};
-  }
   if (driver_ && driver_->is_connected()) {
     driver_->disconnect();
   }
@@ -841,12 +816,6 @@ hardware_interface::return_type M1Hardware::write(
   const MotorCommand cmd_left{config_.left_driver_id, left_rpm};
 
   if (!driver_ || !driver_->is_connected()) {
-    {
-      std::lock_guard<std::mutex> lock(observation_mutex_);
-      latest_observation_ = DiagnosticObservation{};
-      latest_observation_.type = ObservationType::COMMUNICATION_FAILURE;
-      latest_observation_.error_code = ErrorCode::NOT_CONNECTED;
-    }
     RCLCPP_ERROR(get_logger(), "write() failed: driver is not connected");
     return hardware_interface::return_type::ERROR;
   }
@@ -854,12 +823,6 @@ hardware_interface::return_type M1Hardware::write(
   // 4. Perform single Multi-drive 2.0 FC17 exchange transaction (Model A2)
   auto exchange_res = driver_->exchange(cmd_right, cmd_left);
   if (!exchange_res.ok) {
-    {
-      std::lock_guard<std::mutex> lock(observation_mutex_);
-      latest_observation_ = DiagnosticObservation{};
-      latest_observation_.type = ObservationType::COMMUNICATION_FAILURE;
-      latest_observation_.error_code = exchange_res.error;
-    }
     has_valid_state_ = false;
     RCLCPP_ERROR(
       get_logger(),
@@ -874,20 +837,6 @@ hardware_interface::return_type M1Hardware::write(
   // 5. Update cached latest motor state
   latest_motor_state_ = exchange_res.value;
 
-  // Preserve complete SUCCESS diagnostic observation before alarm check and return
-  {
-    std::lock_guard<std::mutex> lock(observation_mutex_);
-    latest_observation_.type = ObservationType::SUCCESS;
-    latest_observation_.error_code = ErrorCode::NONE;
-    latest_observation_.left_alarm = latest_motor_state_.states[1].alarm;
-    latest_observation_.right_alarm = latest_motor_state_.states[0].alarm;
-    latest_observation_.left_status = latest_motor_state_.states[1].status;
-    latest_observation_.right_status = latest_motor_state_.states[0].status;
-    latest_observation_.bus_voltage_raw = latest_motor_state_.states[0].bus_voltage_raw;
-    latest_observation_.left_current_raw = latest_motor_state_.states[1].current_raw;
-    latest_observation_.right_current_raw = latest_motor_state_.states[0].current_raw;
-  }
-
   // 6. Device health check on returned state
   if (latest_motor_state_.states[0].alarm != 0 || latest_motor_state_.states[1].alarm != 0) {
     has_valid_state_ = false;
@@ -901,118 +850,6 @@ hardware_interface::return_type M1Hardware::write(
 
   has_valid_state_ = true;
   return hardware_interface::return_type::OK;
-}
-
-void M1Hardware::publish_diagnostics()
-{
-  if (!diagnostic_publisher_) {
-    return;
-  }
-
-  DiagnosticObservation obs;
-  {
-    std::lock_guard<std::mutex> lock(observation_mutex_);
-    obs = latest_observation_;
-  }
-
-  if (obs.type == ObservationType::UNINITIALIZED) {
-    return;
-  }
-
-  auto node = get_node();
-  const rclcpp::Time now = node ? node->now() : rclcpp::Time(0, 0, RCL_ROS_TIME);
-
-  diagnostic_msgs::msg::DiagnosticArray msg;
-  msg.header.stamp = now;
-
-  diagnostic_msgs::msg::DiagnosticStatus status;
-  status.name = "M1 Motor Controller";
-  status.hardware_id = info_.name.empty() ? "m1_motor_controller" : info_.name;
-
-  switch (obs.type) {
-    case ObservationType::UNINITIALIZED:
-      return;
-    case ObservationType::COMMUNICATION_FAILURE: {
-        status.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
-        status.message = "Communication with M1 failed";
-
-        diagnostic_msgs::msg::KeyValue kv_err;
-        kv_err.key = "communication_error";
-        kv_err.value = error_code_to_string(obs.error_code);
-        status.values.push_back(kv_err);
-        break;
-      }
-    case ObservationType::SUCCESS: {
-        const bool left_has_alarm = (obs.left_alarm != 0);
-        const bool right_has_alarm = (obs.right_alarm != 0);
-
-        if (!left_has_alarm && !right_has_alarm) {
-          status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-          status.message = "No active alarm";
-        } else {
-          status.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
-          if (left_has_alarm && right_has_alarm) {
-            status.message = "Alarms on both axes";
-          } else if (left_has_alarm) {
-            status.message = "Left axis alarm";
-          } else {
-            status.message = "Right axis alarm";
-          }
-        }
-
-        diagnostic_msgs::msg::KeyValue kv;
-
-        kv.key = "left_alarm";
-        kv.value = std::to_string(obs.left_alarm);
-        status.values.push_back(kv);
-
-        kv.key = "right_alarm";
-        kv.value = std::to_string(obs.right_alarm);
-        status.values.push_back(kv);
-
-        kv.key = "left_status";
-        kv.value = std::to_string(obs.left_status);
-        status.values.push_back(kv);
-
-        kv.key = "right_status";
-        kv.value = std::to_string(obs.right_status);
-        status.values.push_back(kv);
-
-        kv.key = "bus_voltage_raw";
-        kv.value = std::to_string(obs.bus_voltage_raw);
-        status.values.push_back(kv);
-
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%.2f V", static_cast<double>(obs.bus_voltage_raw) * 0.01);
-        kv.key = "bus_voltage";
-        kv.value = buf;
-        status.values.push_back(kv);
-
-        kv.key = "left_current_raw";
-        kv.value = std::to_string(obs.left_current_raw);
-        status.values.push_back(kv);
-
-        std::snprintf(buf, sizeof(buf), "%.2f A", static_cast<double>(obs.left_current_raw) * 0.01);
-        kv.key = "left_current";
-        kv.value = buf;
-        status.values.push_back(kv);
-
-        kv.key = "right_current_raw";
-        kv.value = std::to_string(obs.right_current_raw);
-        status.values.push_back(kv);
-
-        std::snprintf(buf, sizeof(buf), "%.2f A",
-          static_cast<double>(obs.right_current_raw) * 0.01);
-        kv.key = "right_current";
-        kv.value = buf;
-        status.values.push_back(kv);
-
-        break;
-      }
-  }
-
-  msg.status.push_back(status);
-  diagnostic_publisher_->publish(msg);
 }
 
 }  // namespace mobile_base_control
