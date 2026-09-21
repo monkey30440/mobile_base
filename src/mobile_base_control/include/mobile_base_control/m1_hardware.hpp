@@ -20,19 +20,24 @@
 #include <cstdint>
 #include <memory>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/macros.hpp"
+#include "rclcpp/publisher.hpp"
+#include "rclcpp/timer.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
 #include "mobile_base_control/m1_driver.hpp"
+#include "mobile_base_control/m1_diagnostics.hpp"
 
 namespace mobile_base_control
 {
@@ -215,10 +220,17 @@ public:
   {
     return right_position_tracker_;
   }
+  M1DiagnosticObservation get_diagnostic_observation() const;
   void set_driver_for_testing(std::shared_ptr<M1Driver> driver) noexcept;
 
 private:
   hardware_interface::CallbackReturn parse_parameters();
+  void initialize_diagnostics();
+  void clear_diagnostic_state();
+  void set_diagnostic_communication_ok();
+  void set_diagnostic_error(ErrorCode error);
+  void set_diagnostic_state(const ExchangeResult & state);
+  void publish_diagnostics();
 
   // Internal configuration
   M1HardwareConfig config_;
@@ -243,6 +255,11 @@ private:
   ExchangeResult latest_motor_state_{};
   bool has_valid_state_{false};
   bool is_active_{false};
+
+  mutable std::mutex diagnostic_mutex_;
+  M1DiagnosticObservation diagnostic_observation_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostic_publisher_;
+  rclcpp::TimerBase::SharedPtr diagnostic_timer_;
 };
 
 }  // namespace mobile_base_control

@@ -8,6 +8,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(controller_interface REQUIRED)
 find_package(controller_manager REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(diff_drive_controller REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(hardware_interface REQUIRED)
@@ -35,6 +36,7 @@ target_compile_features(m1_driver PUBLIC cxx_std_17)
 
 # m1_hardware library (ros2_control SystemInterface plugin)
 add_library(m1_hardware SHARED
+  src/m1_diagnostics.cpp
   src/m1_hardware.cpp
 )
 target_include_directories(m1_hardware PUBLIC
@@ -43,6 +45,8 @@ target_include_directories(m1_hardware PUBLIC
 )
 target_link_libraries(m1_hardware PUBLIC
   m1_driver
+  diagnostic_msgs::diagnostic_msgs__rosidl_generator_cpp
+  diagnostic_msgs::diagnostic_msgs__rosidl_typesupport_cpp
   hardware_interface::hardware_interface
   pluginlib::pluginlib
   rclcpp::rclcpp
@@ -262,6 +266,14 @@ if(BUILD_TESTING)
     diff_drive_controller::diff_drive_controller
     geometry_msgs::geometry_msgs__rosidl_generator_cpp
   )
+
+  ament_add_gtest(test_m1_diagnostics
+    test/test_m1_diagnostics.cpp
+  )
+  target_link_libraries(test_m1_diagnostics
+    m1_hardware
+    diagnostic_msgs::diagnostic_msgs__rosidl_generator_cpp
+  )
 endif()
 
 ament_export_include_directories(include)
@@ -270,6 +282,7 @@ ament_export_targets(export_${PROJECT_NAME})
 ament_export_dependencies(
   controller_interface
   controller_manager
+  diagnostic_msgs
   diff_drive_controller
   geometry_msgs
   hardware_interface

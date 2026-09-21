@@ -488,6 +488,17 @@ TEST(M1HardwareLifecycleTest, CleanupInvalidatesConfiguration)
   EXPECT_FALSE(hw.get_device_configs());
   EXPECT_FALSE(hw.get_runtime_radix());
   EXPECT_EQ(hw.on_activate(state), CallbackReturn::FAILURE);
+  EXPECT_FALSE(hw.get_diagnostic_observation().motor_state_time.has_value());
+}
+
+TEST(M1HardwareLifecycleTest, DiagnosticObservationStartsUnknown)
+{
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
+  ASSERT_EQ(hw.on_init(create_test_params()), CallbackReturn::SUCCESS);
+
+  const auto observation = hw.get_diagnostic_observation();
+  EXPECT_FALSE(observation.communication_observed);
+  EXPECT_FALSE(observation.motor_state_time.has_value());
 }
 
 TEST(M1HardwareLifecycleTest, ConfigurationRejectsZeroEncoderResolution)
@@ -508,6 +519,11 @@ TEST(M1HardwareLifecycleTest, ConfigurationRejectsZeroEncoderResolution)
   EXPECT_EQ(hw.on_configure(state), CallbackReturn::FAILURE);
   EXPECT_FALSE(hw.get_device_configs().has_value());
   EXPECT_FALSE(hw.get_runtime_radix().has_value());
+  const auto observation = hw.get_diagnostic_observation();
+  EXPECT_TRUE(observation.communication_observed);
+  EXPECT_EQ(observation.communication, ErrorCode::NONE);
+  EXPECT_FALSE(observation.right_alarm.has_value());
+  EXPECT_FALSE(observation.left_alarm.has_value());
 }
 
 TEST(M1HardwareLifecycleTest, ConfigurationRejectsUnsupportedFormat)
@@ -678,6 +694,8 @@ TEST(M1HardwareLifecycleTest, StaleStateProtectionInReadAndWrite)
   rclcpp_lifecycle::State state;
   ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
   ASSERT_EQ(hw.on_activate(state), CallbackReturn::SUCCESS);
+  const auto activation_observation = hw.get_diagnostic_observation();
+  ASSERT_TRUE(activation_observation.motor_state_time.has_value());
 
   const rclcpp::Time now(0);
   const rclcpp::Duration dt(0, 20000000);
@@ -689,7 +707,11 @@ TEST(M1HardwareLifecycleTest, StaleStateProtectionInReadAndWrite)
   EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
 
   // Write replenishes valid cached state
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
   EXPECT_EQ(hw.write(now, dt), return_type::OK);
+  const auto write_observation = hw.get_diagnostic_observation();
+  ASSERT_TRUE(write_observation.motor_state_time.has_value());
+  EXPECT_GT(*write_observation.motor_state_time, *activation_observation.motor_state_time);
   EXPECT_EQ(hw.read(now, dt), return_type::OK);
   EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
 
@@ -698,6 +720,9 @@ TEST(M1HardwareLifecycleTest, StaleStateProtectionInReadAndWrite)
       return Result<std::vector<uint8_t>>::failure(ErrorCode::TIMEOUT);
     });
   EXPECT_EQ(hw.write(now, dt), return_type::ERROR);
+  const auto failure_observation = hw.get_diagnostic_observation();
+  EXPECT_TRUE(failure_observation.communication_observed);
+  EXPECT_EQ(failure_observation.communication, ErrorCode::TIMEOUT);
   EXPECT_EQ(hw.read(now, dt), return_type::ERROR);
 
   // Write returning alarm clears valid cached state
@@ -840,9 +865,23 @@ TEST(M1HardwareLifecycleTest, FullLifecycleMockSuccess)
 
   // 5. Deactivate
   EXPECT_EQ(hw.on_deactivate(active), CallbackReturn::SUCCESS);
+  EXPECT_FALSE(hw.get_diagnostic_observation().motor_state_time.has_value());
 
   // 6. Cleanup
   EXPECT_EQ(hw.on_cleanup(inactive), CallbackReturn::SUCCESS);
+}
+
+TEST(M1HardwareLifecycleTest, ErrorTransitionInvalidatesDiagnosticMotorState)
+{
+  M1Hardware hw(std::make_shared<FixtureM1Driver>());
+  ASSERT_EQ(hw.on_init(create_test_params("mock")), CallbackReturn::SUCCESS);
+  rclcpp_lifecycle::State state;
+  ASSERT_EQ(hw.on_configure(state), CallbackReturn::SUCCESS);
+  ASSERT_EQ(hw.on_activate(state), CallbackReturn::SUCCESS);
+  ASSERT_TRUE(hw.get_diagnostic_observation().motor_state_time.has_value());
+
+  EXPECT_EQ(hw.on_error(state), CallbackReturn::SUCCESS);
+  EXPECT_FALSE(hw.get_diagnostic_observation().motor_state_time.has_value());
 }
 
 TEST(M1HardwareLifecycleTest, WriteAndReadFeedbackLoop)

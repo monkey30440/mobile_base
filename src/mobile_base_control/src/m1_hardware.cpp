@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -36,6 +37,80 @@ constexpr double PI = 3.14159265358979323846;
 constexpr double RAD_S_TO_RPM = 60.0 / (2.0 * PI);
 constexpr double RPM_TO_RAD_S = (2.0 * PI) / 60.0;
 }  // namespace
+
+void M1Hardware::initialize_diagnostics()
+{
+  {
+    std::lock_guard<std::mutex> lock(diagnostic_mutex_);
+    diagnostic_observation_ = M1DiagnosticObservation{};
+    diagnostic_observation_.right_driver_id = config_.right_driver_id;
+    diagnostic_observation_.left_driver_id = config_.left_driver_id;
+  }
+
+  const auto node = get_node();
+  if (!node) {
+    RCLCPP_WARN(get_logger(), "M1 diagnostics disabled: hardware node is unavailable");
+    return;
+  }
+  diagnostic_publisher_ = node->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
+    "/diagnostics", rclcpp::SystemDefaultsQoS());
+  diagnostic_timer_ = node->create_wall_timer(
+    std::chrono::seconds(1), [this]() {publish_diagnostics();});
+}
+
+void M1Hardware::set_diagnostic_error(ErrorCode error)
+{
+  std::lock_guard<std::mutex> lock(diagnostic_mutex_);
+  diagnostic_observation_.communication_observed = true;
+  diagnostic_observation_.communication = error;
+}
+
+void M1Hardware::clear_diagnostic_state()
+{
+  std::lock_guard<std::mutex> lock(diagnostic_mutex_);
+  diagnostic_observation_.right_alarm.reset();
+  diagnostic_observation_.left_alarm.reset();
+  diagnostic_observation_.motor_state_time.reset();
+}
+
+void M1Hardware::set_diagnostic_communication_ok()
+{
+  std::lock_guard<std::mutex> lock(diagnostic_mutex_);
+  diagnostic_observation_.communication_observed = true;
+  diagnostic_observation_.communication = ErrorCode::NONE;
+}
+
+void M1Hardware::set_diagnostic_state(const ExchangeResult & state)
+{
+  std::lock_guard<std::mutex> lock(diagnostic_mutex_);
+  diagnostic_observation_.communication_observed = true;
+  diagnostic_observation_.communication = ErrorCode::NONE;
+  diagnostic_observation_.right_driver_id = state.states[0].driver_id;
+  diagnostic_observation_.right_alarm = state.states[0].alarm;
+  diagnostic_observation_.left_driver_id = state.states[1].driver_id;
+  diagnostic_observation_.left_alarm = state.states[1].alarm;
+  diagnostic_observation_.motor_state_time = M1DiagnosticClock::now();
+}
+
+void M1Hardware::publish_diagnostics()
+{
+  if (!diagnostic_publisher_) {
+    return;
+  }
+
+  diagnostic_msgs::msg::DiagnosticArray array;
+  const auto node = get_node();
+  array.header.stamp = node ? node->now() : rclcpp::Time(0, 0, RCL_ROS_TIME);
+  array.status.push_back(
+    make_m1_diagnostic_status(get_diagnostic_observation(), M1DiagnosticClock::now()));
+  diagnostic_publisher_->publish(array);
+}
+
+M1DiagnosticObservation M1Hardware::get_diagnostic_observation() const
+{
+  std::lock_guard<std::mutex> lock(diagnostic_mutex_);
+  return diagnostic_observation_;
+}
 
 M1Hardware::M1Hardware()
 : driver_(std::make_shared<M1Driver>())
@@ -65,6 +140,14 @@ void M1Hardware::set_driver_for_testing(std::shared_ptr<M1Driver> driver) noexce
   runtime_radix_.reset();
   is_active_ = false;
   has_valid_state_ = false;
+  {
+    std::lock_guard<std::mutex> lock(diagnostic_mutex_);
+    diagnostic_observation_.communication_observed = false;
+    diagnostic_observation_.communication = ErrorCode::NONE;
+    diagnostic_observation_.right_alarm.reset();
+    diagnostic_observation_.left_alarm.reset();
+    diagnostic_observation_.motor_state_time.reset();
+  }
   driver_ = std::move(driver);
 }
 
@@ -299,6 +382,8 @@ hardware_interface::CallbackReturn M1Hardware::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
+  initialize_diagnostics();
+
   RCLCPP_INFO(
     get_logger(),
     "M1Hardware initialized: Left='%s' (ID %d, sign %+d), Right='%s' (ID %d, sign %+d), "
@@ -321,6 +406,7 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
   has_valid_state_ = false;
   std::fill_n(hw_positions_, 2, std::numeric_limits<double>::quiet_NaN());
   std::fill_n(hw_velocities_, 2, std::numeric_limits<double>::quiet_NaN());
+  clear_diagnostic_state();
 
   if (!driver_) {
     driver_ = std::make_shared<M1Driver>();
@@ -332,6 +418,7 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
       config_.baud_rate,
       config_.timeout_ms);
     if (!conn_res.ok) {
+      set_diagnostic_error(conn_res.error);
       RCLCPP_ERROR(
         get_logger(),
         "Failed to connect to M1 serial port '%s': error %s",
@@ -339,12 +426,18 @@ hardware_interface::CallbackReturn M1Hardware::on_configure(
         error_code_to_string(conn_res.error));
       return hardware_interface::CallbackReturn::FAILURE;
     }
+    set_diagnostic_communication_ok();
   }
 
   std::array<M1DeviceConfig, 2> configs;
   const std::array<int, 2> ids{config_.right_driver_id, config_.left_driver_id};
   for (size_t i = 0; i < ids.size(); ++i) {
     const auto result = driver_->read_device_config(ids[i]);
+    if (result.ok) {
+      set_diagnostic_communication_ok();
+    } else {
+      set_diagnostic_error(result.error);
+    }
     if (!result.ok || result.value.driver_id != ids[i]) {
       if (!result.ok) {
         if (result.failed_field != M1ConfigField::NONE) {
@@ -504,6 +597,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
   right_position_tracker_.reset();
 
   if (!driver_ || !driver_->is_connected()) {
+    set_diagnostic_error(ErrorCode::NOT_CONNECTED);
     RCLCPP_ERROR(get_logger(), "Cannot activate: driver is not connected");
     return hardware_interface::CallbackReturn::ERROR;
   }
@@ -518,6 +612,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
   if (!pre_res.ok) {
+    set_diagnostic_error(pre_res.error);
     RCLCPP_ERROR(
       get_logger(),
       "Activation pre-check read_state failed: error %s",
@@ -527,10 +622,12 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
 
   const auto & st_right_pre = pre_res.value.states[0];
   const auto & st_left_pre = pre_res.value.states[1];
+  set_diagnostic_state(pre_res.value);
 
   if (st_right_pre.driver_id != config_.right_driver_id ||
     st_left_pre.driver_id != config_.left_driver_id)
   {
+    clear_diagnostic_state();
     RCLCPP_ERROR(
       get_logger(),
       "Activation pre-check driver ID mismatch: expected Right ID %d, got %d; "
@@ -553,6 +650,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
   right_position_tracker_.initialize(st_right_pre.position_sample);
   left_position_tracker_.initialize(st_left_pre.position_sample);
   if (!right_position_tracker_.initialized || !left_position_tracker_.initialized) {
+    clear_diagnostic_state();
     RCLCPP_ERROR(
       get_logger(),
       "Activation aborted: failed to initialize Servo-OFF position baselines");
@@ -564,9 +662,11 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
   for (int attempt = 0; attempt < 3; ++attempt) {
     auto enable_res = driver_->enable(config_.right_driver_id, config_.left_driver_id);
     if (enable_res.ok) {
+      set_diagnostic_state(enable_res.value);
       enable_ok = true;
       break;
     }
+    set_diagnostic_error(enable_res.error);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
   if (!enable_ok) {
@@ -582,6 +682,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
     std::this_thread::sleep_for(std::chrono::milliseconds(config_.activate_poll_interval_ms));
     auto poll_res = driver_->read_state(config_.right_driver_id, config_.left_driver_id);
     if (!poll_res.ok) {
+      set_diagnostic_error(poll_res.error);
       RCLCPP_WARN(
         get_logger(),
         "Activation poll attempt %d failed: %s",
@@ -592,6 +693,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
 
     const auto & st_right = poll_res.value.states[0];
     const auto & st_left = poll_res.value.states[1];
+    set_diagnostic_state(poll_res.value);
 
     if (st_right.alarm != 0 || st_left.alarm != 0) {
       RCLCPP_ERROR(
@@ -611,6 +713,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
   }
 
   if (!activated) {
+    clear_diagnostic_state();
     RCLCPP_ERROR(
       get_logger(),
       "Activation timed out waiting for drivers to enter active state; sending disable cleanup");
@@ -619,6 +722,7 @@ hardware_interface::CallbackReturn M1Hardware::on_activate(
   }
 
   latest_motor_state_ = active_state;
+  set_diagnostic_state(active_state);
   has_valid_state_ = true;
   is_active_ = true;
 
@@ -639,10 +743,13 @@ hardware_interface::CallbackReturn M1Hardware::on_deactivate(
     // 1. Stop primitive (JG 0)
     auto stop_res = driver_->stop(config_.right_driver_id, config_.left_driver_id);
     if (!stop_res.ok) {
+      set_diagnostic_error(stop_res.error);
       RCLCPP_WARN(
         get_logger(),
         "Stop command during deactivation failed (%s), continuing best-effort cleanup",
         error_code_to_string(stop_res.error));
+    } else {
+      set_diagnostic_state(stop_res.value);
     }
 
     // 2. Bounded zero-RPM confirmation delay
@@ -651,14 +758,18 @@ hardware_interface::CallbackReturn M1Hardware::on_deactivate(
     // 3. Disable primitive (SVOFF)
     auto disable_res = driver_->disable(config_.right_driver_id, config_.left_driver_id);
     if (!disable_res.ok) {
+      set_diagnostic_error(disable_res.error);
       RCLCPP_WARN(
         get_logger(),
         "Disable command during deactivation failed (%s), continuing best-effort cleanup",
         error_code_to_string(disable_res.error));
+    } else {
+      set_diagnostic_state(disable_res.value);
     }
   }
 
   has_valid_state_ = false;
+  clear_diagnostic_state();
   RCLCPP_INFO(get_logger(), "M1Hardware deactivated successfully.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -673,6 +784,7 @@ hardware_interface::CallbackReturn M1Hardware::on_cleanup(
   right_position_tracker_.reset();
   is_active_ = false;
   has_valid_state_ = false;
+  clear_diagnostic_state();
   if (driver_ && driver_->is_connected()) {
     driver_->disconnect();
   }
@@ -689,6 +801,7 @@ hardware_interface::CallbackReturn M1Hardware::on_shutdown(
   right_position_tracker_.reset();
   is_active_ = false;
   has_valid_state_ = false;
+  clear_diagnostic_state();
   if (driver_ && driver_->is_connected()) {
     driver_->stop(config_.right_driver_id, config_.left_driver_id);
     driver_->disable(config_.right_driver_id, config_.left_driver_id);
@@ -709,6 +822,7 @@ hardware_interface::CallbackReturn M1Hardware::on_error(
   right_position_tracker_.reset();
   is_active_ = false;
   has_valid_state_ = false;
+  clear_diagnostic_state();
   if (driver_ && driver_->is_connected()) {
     driver_->stop(config_.right_driver_id, config_.left_driver_id);
     driver_->disable(config_.right_driver_id, config_.left_driver_id);
@@ -816,6 +930,7 @@ hardware_interface::return_type M1Hardware::write(
   const MotorCommand cmd_left{config_.left_driver_id, left_rpm};
 
   if (!driver_ || !driver_->is_connected()) {
+    set_diagnostic_error(ErrorCode::NOT_CONNECTED);
     RCLCPP_ERROR(get_logger(), "write() failed: driver is not connected");
     return hardware_interface::return_type::ERROR;
   }
@@ -823,6 +938,7 @@ hardware_interface::return_type M1Hardware::write(
   // 4. Perform single Multi-drive 2.0 FC17 exchange transaction (Model A2)
   auto exchange_res = driver_->exchange(cmd_right, cmd_left);
   if (!exchange_res.ok) {
+    set_diagnostic_error(exchange_res.error);
     has_valid_state_ = false;
     RCLCPP_ERROR(
       get_logger(),
@@ -836,6 +952,7 @@ hardware_interface::return_type M1Hardware::write(
 
   // 5. Update cached latest motor state
   latest_motor_state_ = exchange_res.value;
+  set_diagnostic_state(exchange_res.value);
 
   // 6. Device health check on returned state
   if (latest_motor_state_.states[0].alarm != 0 || latest_motor_state_.states[1].alarm != 0) {
