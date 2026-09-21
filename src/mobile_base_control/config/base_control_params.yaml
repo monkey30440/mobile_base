@@ -2,6 +2,18 @@ controller_manager:
   ros__parameters:
     update_rate: 30
 
+    # Calibrated thresholds based on M1 blocking serial exchange baseline
+    diagnostics:
+      threshold:
+        hardware_components:
+          execution_time:
+            mean_error:
+              warn: 15000.0
+              error: 20000.0
+            standard_deviation:
+              warn: 1000.0
+              error: 2000.0
+
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
