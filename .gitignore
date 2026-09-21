@@ -4,8 +4,6 @@
 !/src/mobile_base_description/meshes/README.md
 /src/mobile_base_description/urdf/*
 !/src/mobile_base_description/urdf/README.md
-/src/mobile_base_control/docs/
-/src/tdk_ros2_imu/docs
 
 # Local environment and secrets
 .env
