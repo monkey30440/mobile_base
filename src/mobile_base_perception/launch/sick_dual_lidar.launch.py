@@ -164,6 +164,8 @@ def generate_launch_description():
         parameters=[{
             'input_topic': front_raw_topic,
             'output_topic': front_normalized_topic,
+            'diagnostic_name': 'Front LiDAR',
+            'hardware_id': 'front_lidar',
         }],
     )
 
@@ -175,6 +177,8 @@ def generate_launch_description():
         parameters=[{
             'input_topic': rear_raw_topic,
             'output_topic': rear_normalized_topic,
+            'diagnostic_name': 'Rear LiDAR',
+            'hardware_id': 'rear_lidar',
         }],
     )
 

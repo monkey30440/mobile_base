@@ -16,11 +16,9 @@
 
 import importlib.util
 import os
-from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext, LaunchDescription
-from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.utilities import evaluate_parameters
 import pytest
@@ -95,12 +93,16 @@ def test_launch_description_generation():
     front_norm_params = evaluate_parameters(context, front_norm._Node__parameters)[0]
     assert front_norm_params['input_topic'] == '/sick_internal/front_scan_raw'
     assert front_norm_params['output_topic'] == '/sick_internal/front_scan_normalized'
+    assert front_norm_params['diagnostic_name'] == 'Front LiDAR'
+    assert front_norm_params['hardware_id'] == 'front_lidar'
 
     rear_norm = normalizer_nodes['rear_scan_handedness_normalizer']
     assert rear_norm._Node__node_executable == 'scan_handedness_normalizer.py'
     rear_norm_params = evaluate_parameters(context, rear_norm._Node__parameters)[0]
     assert rear_norm_params['input_topic'] == '/sick_internal/rear_scan_raw'
     assert rear_norm_params['output_topic'] == '/sick_internal/rear_scan_normalized'
+    assert rear_norm_params['diagnostic_name'] == 'Rear LiDAR'
+    assert rear_norm_params['hardware_id'] == 'rear_lidar'
 
     # 3. Filter nodes
     filter_nodes = {
