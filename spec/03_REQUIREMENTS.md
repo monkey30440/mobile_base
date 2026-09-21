@@ -195,7 +195,11 @@ Observability Component Failure、Network Unavailable 或 Server Unavailable 不
 
 ## SYS-004 IMU 感知
 
-系統應提供 IMU 量測資料供定位使用。
+系統應提供 IMU 量測資料供定位使用，並提供符合 REP-107 之 IMU
+diagnostic status 供人工診斷。當 serial communication 發生已知 failure 時應回報
+ERROR；未發生已知 communication failure，但尚無有效 IMU packet 或最後有效
+packet 已逾 100 ms 時應回報 STALE；serial communication 正常且有效 packet
+仍在 100 ms（含）以內時應回報 OK。
 
 ---
 

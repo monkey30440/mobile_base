@@ -16,6 +16,9 @@
 
 import time
 
+from diagnostic_msgs.msg import DiagnosticArray
+from diagnostic_msgs.msg import DiagnosticStatus
+from diagnostic_msgs.msg import KeyValue
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -34,7 +37,44 @@ from tdk_ros2_imu.protocol import PacketStreamParser
 
 
 _POLL_PERIOD_SECONDS = 0.005
+_DIAGNOSTIC_PERIOD_SECONDS = 0.05
+_STALE_TIMEOUT_SECONDS = 0.1
 _CHECKSUM_WARNING_PERIOD_SECONDS = 5.0
+_COMMUNICATION_FAILURES = {'SERIAL_OPEN_FAILED', 'SERIAL_EXCEPTION'}
+
+
+def make_imu_diagnostic_status(
+        communication: str,
+        last_valid_packet_time: float | None,
+        checksum_error_count: int,
+        now: float) -> DiagnosticStatus:
+    """Build the REP-107 status for the current IMU state."""
+    status = DiagnosticStatus()
+    status.name = 'IMU'
+    status.hardware_id = 'tdk_imu'
+
+    if communication in _COMMUNICATION_FAILURES:
+        status.level = DiagnosticStatus.ERROR
+        status.message = 'Serial communication failed'
+    elif (
+        communication != 'OK'
+        or last_valid_packet_time is None
+        or now - last_valid_packet_time > _STALE_TIMEOUT_SECONDS
+    ):
+        status.level = DiagnosticStatus.STALE
+        status.message = 'Valid IMU data is unavailable or stale'
+    else:
+        status.level = DiagnosticStatus.OK
+        status.message = 'Operating normally'
+
+    status.values = [
+        KeyValue(key='communication', value=communication),
+        KeyValue(
+            key='checksum_error_count',
+            value=str(checksum_error_count),
+        ),
+    ]
+    return status
 
 
 class TdkImuNode(Node):
@@ -57,11 +97,19 @@ class TdkImuNode(Node):
 
         self._parser = PacketStreamParser()
         self._last_checksum_warning_time = 0.0
+        self._last_valid_packet_receive_time = None
+        self._communication = 'UNKNOWN'
         self._publisher = self.create_publisher(
             Imu, '/tdk/imu', qos_profile_sensor_data
         )
+        self._diagnostic_publisher = self.create_publisher(
+            DiagnosticArray, '/diagnostics', 10
+        )
         self._serial = None
-        self._timer = None
+        self._poll_timer = None
+        self._diagnostic_timer = self.create_timer(
+            _DIAGNOSTIC_PERIOD_SECONDS, self._publish_diagnostics
+        )
 
         try:
             self._serial = serial.Serial(
@@ -70,13 +118,16 @@ class TdkImuNode(Node):
                 timeout=0,
             )
         except (OSError, serial.SerialException) as error:
+            self._communication = 'SERIAL_OPEN_FAILED'
             self.get_logger().fatal(
                 f'Failed to open IMU serial port {self._port}: {error}'
             )
-            self.destroy_node()
-            raise RuntimeError('failed to open IMU serial port') from error
+            return
 
-        self._timer = self.create_timer(_POLL_PERIOD_SECONDS, self._poll_serial)
+        self._communication = 'OK'
+        self._poll_timer = self.create_timer(
+            _POLL_PERIOD_SECONDS, self._poll_serial
+        )
         self.get_logger().info(
             f'Publishing {self._port} at {self._baud_rate} baud '
             f'on /tdk/imu with frame_id={self._frame_id}'
@@ -98,7 +149,9 @@ class TdkImuNode(Node):
             serial_data = self._serial.read(bytes_available)
         except (OSError, serial.SerialException) as error:
             self.get_logger().fatal(f'IMU serial connection failed: {error}')
-            raise RuntimeError('IMU serial connection failed') from error
+            self._communication = 'SERIAL_EXCEPTION'
+            self._stop_serial_polling()
+            return
 
         checksum_errors_before = self._parser.checksum_error_count
         samples = self._parser.feed(serial_data)
@@ -106,7 +159,22 @@ class TdkImuNode(Node):
             self._warn_checksum_error()
 
         for sample in samples:
+            self._last_valid_packet_receive_time = time.monotonic()
             self._publish_sample(sample)
+
+    def _make_diagnostic_status(self) -> DiagnosticStatus:
+        return make_imu_diagnostic_status(
+            communication=self._communication,
+            last_valid_packet_time=self._last_valid_packet_receive_time,
+            checksum_error_count=self._parser.checksum_error_count,
+            now=time.monotonic(),
+        )
+
+    def _publish_diagnostics(self) -> None:
+        message = DiagnosticArray()
+        message.header.stamp = self.get_clock().now().to_msg()
+        message.status = [self._make_diagnostic_status()]
+        self._diagnostic_publisher.publish(message)
 
     def _warn_checksum_error(self) -> None:
         now = time.monotonic()
@@ -145,12 +213,26 @@ class TdkImuNode(Node):
 
     def destroy_node(self) -> None:
         """Stop polling and close the serial port before node destruction."""
-        if self._timer is not None:
-            self._timer.cancel()
-            self._timer = None
-        if self._serial is not None and self._serial.is_open:
-            self._serial.close()
+        self._stop_serial_polling()
+        if self._diagnostic_timer is not None:
+            self._diagnostic_timer.cancel()
+            self._diagnostic_timer = None
         super().destroy_node()
+
+    def _stop_serial_polling(self) -> None:
+        if self._poll_timer is not None:
+            self._poll_timer.cancel()
+            self._poll_timer = None
+        if self._serial is not None:
+            try:
+                if self._serial.is_open:
+                    self._serial.close()
+            except (OSError, serial.SerialException) as error:
+                self.get_logger().error(
+                    f'Failed to close IMU serial port: {error}'
+                )
+            finally:
+                self._serial = None
 
 
 def main(args=None) -> None:

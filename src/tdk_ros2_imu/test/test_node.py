@@ -17,6 +17,7 @@
 import struct
 from unittest.mock import MagicMock, patch
 
+from diagnostic_msgs.msg import DiagnosticStatus
 import pytest
 import rclpy
 from rclpy.parameter import Parameter
@@ -49,11 +50,21 @@ def _make_packet():
     return packet_without_checksum + bytes((checksum,))
 
 
-def test_serial_open_failure_raises_runtime_error():
-    """Verify serial open exception raises RuntimeError and terminates node."""
+def test_serial_open_failure_keeps_diagnostics_alive():
+    """Verify an open failure returns a live node reporting ERROR."""
     with patch('serial.Serial', side_effect=serial.SerialException('Port not found')):
-        with pytest.raises(RuntimeError, match='failed to open IMU serial port'):
-            TdkImuNode()
+        node = TdkImuNode()
+        try:
+            node._diagnostic_publisher = MagicMock()
+            node._publish_diagnostics()
+
+            status = node._diagnostic_publisher.publish.call_args[0][0].status[0]
+            assert status.level == DiagnosticStatus.ERROR
+            assert node._communication == 'SERIAL_OPEN_FAILED'
+            assert node._poll_timer is None
+            assert node._diagnostic_timer is not None
+        finally:
+            node.destroy_node()
 
 
 def test_parameter_validation():
@@ -105,19 +116,76 @@ def test_parameter_validation():
             node._validate_parameters()
 
 
-def test_poll_serial_disconnect_raises_runtime_error():
-    """Verify runtime serial disconnect/error triggers RuntimeError."""
+@pytest.mark.parametrize(
+    'serial_error',
+    [serial.SerialException('USB device disconnected'), OSError('I/O error')],
+)
+def test_poll_serial_failure_stops_polling_and_keeps_error_diagnostics(
+        serial_error):
+    """Verify failed serial I/O is closed and never polled again."""
     mock_serial = MagicMock()
+    mock_serial.is_open = True
     mock_serial.in_waiting = 10
-    mock_serial.read.side_effect = serial.SerialException('USB device disconnected')
+    mock_serial.read.side_effect = serial_error
 
     with patch('serial.Serial', return_value=mock_serial):
         node = TdkImuNode()
         try:
-            with pytest.raises(RuntimeError, match='IMU serial connection failed'):
-                node._poll_serial()
+            poll_timer = MagicMock()
+            diagnostic_timer = node._diagnostic_timer
+            node._poll_timer = poll_timer
+
+            node._poll_serial()
+
+            poll_timer.cancel.assert_called_once_with()
+            mock_serial.close.assert_called_once_with()
+            assert node._poll_timer is None
+            assert node._diagnostic_timer is diagnostic_timer
+            assert node._communication == 'SERIAL_EXCEPTION'
+            assert node._make_diagnostic_status().level == DiagnosticStatus.ERROR
         finally:
             node.destroy_node()
+
+
+def test_serial_close_failure_does_not_terminate_error_diagnostics():
+    """Verify a secondary close failure cannot escape the timer callback."""
+    mock_serial = MagicMock()
+    mock_serial.is_open = True
+    mock_serial.in_waiting = 10
+    mock_serial.read.side_effect = serial.SerialException('Read failed')
+    mock_serial.close.side_effect = OSError('Close failed')
+
+    with patch('serial.Serial', return_value=mock_serial):
+        node = TdkImuNode()
+        try:
+            node._poll_serial()
+
+            assert node._serial is None
+            assert node._poll_timer is None
+            assert node._make_diagnostic_status().level == DiagnosticStatus.ERROR
+        finally:
+            node.destroy_node()
+
+
+def test_destroy_node_cancels_timers_and_closes_serial():
+    """Verify shutdown releases both timers and the serial device."""
+    mock_serial = MagicMock()
+    mock_serial.is_open = True
+
+    with patch('serial.Serial', return_value=mock_serial):
+        node = TdkImuNode()
+        poll_timer = MagicMock()
+        diagnostic_timer = MagicMock()
+        node._poll_timer = poll_timer
+        node._diagnostic_timer = diagnostic_timer
+
+        node.destroy_node()
+
+        poll_timer.cancel.assert_called_once_with()
+        diagnostic_timer.cancel.assert_called_once_with()
+        mock_serial.close.assert_called_once_with()
+        assert node._poll_timer is None
+        assert node._diagnostic_timer is None
 
 
 def test_poll_serial_publishes_valid_imu_message():
@@ -130,8 +198,13 @@ def test_poll_serial_publishes_valid_imu_message():
     with patch('serial.Serial', return_value=mock_serial):
         node = TdkImuNode()
         try:
+            assert node._communication == 'OK'
+            assert node._diagnostic_timer.timer_period_ns == 50_000_000
             node._publisher = MagicMock()
-            node._poll_serial()
+            with patch(
+                    'tdk_ros2_imu.tdk_imu_node.time.monotonic',
+                    return_value=42.0):
+                node._poll_serial()
 
             assert node._publisher.publish.call_count == 1
             msg = node._publisher.publish.call_args[0][0]
@@ -141,7 +214,40 @@ def test_poll_serial_publishes_valid_imu_message():
             assert msg.linear_acceleration.y == pytest.approx(-0.2 * 9.80665)
             assert msg.linear_acceleration.z == pytest.approx(1.0 * 9.80665)
             assert tuple(msg.linear_acceleration_covariance) == (0.0,) * 9
-            assert tuple(msg.angular_velocity_covariance) == (0.0,) * 9
+            assert tuple(msg.angular_velocity_covariance) == (
+                1.0e-6, 0.0, 0.0,
+                0.0, 1.0e-6, 0.0,
+                0.0, 0.0, 1.0e-6,
+            )
             assert tuple(msg.orientation_covariance) == (0.0,) * 9
+            assert node._last_valid_packet_receive_time == 42.0
+        finally:
+            node.destroy_node()
+
+
+def test_checksum_failure_does_not_refresh_freshness_or_raise_level():
+    """Verify bad packets only increment the parser debugging counter."""
+    mock_serial = MagicMock()
+    packet = bytearray(_make_packet())
+    packet[-1] ^= 0xff
+    mock_serial.in_waiting = len(packet)
+    mock_serial.read.return_value = bytes(packet)
+
+    with patch('serial.Serial', return_value=mock_serial):
+        node = TdkImuNode()
+        try:
+            node._last_valid_packet_receive_time = 20.0
+            node._poll_serial()
+
+            assert node._parser.checksum_error_count == 1
+            assert node._last_valid_packet_receive_time == 20.0
+            with patch(
+                    'tdk_ros2_imu.tdk_imu_node.time.monotonic',
+                    return_value=20.050):
+                assert node._make_diagnostic_status().level == DiagnosticStatus.OK
+            with patch(
+                    'tdk_ros2_imu.tdk_imu_node.time.monotonic',
+                    return_value=20.101):
+                assert node._make_diagnostic_status().level == DiagnosticStatus.STALE
         finally:
             node.destroy_node()

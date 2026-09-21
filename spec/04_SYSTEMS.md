@@ -244,10 +244,9 @@ Physical IMU (TDK IIM-42652)
        │ (USB Serial)
        ▼
 imu_driver_node (tdk_ros2_imu)
-       │
-       ▼
-/imu/data_raw (sensor_msgs/msg/Imu, frame_id: base_imu_link)
-       └──► State Estimation
+       ├──► /imu/data_raw (sensor_msgs/msg/Imu, frame_id: base_imu_link)
+       │         └──► State Estimation
+       └──► /diagnostics (diagnostic_msgs/msg/DiagnosticArray, 20 Hz)
 ```
 
 - **雙光達獨立資料流**：前左與後右光達分別由獨立的驅動節點讀取並發布至 `/scan_front` 與 `/scan_rear`。生產環境中不存在虛擬雷達合併節點（`dual_laser_merger`），亦無全域合併主題（`/scan`）；下游消費者直接依需求訂閱所需之雷達主題。
@@ -275,6 +274,11 @@ imu_driver_node (tdk_ros2_imu)
    - **主題映射與 Frame**：
      - 節點預設主題經 Launch 重新映射為 `/imu/data_raw`（`sensor_msgs/msg/Imu`）。
      - 座標框架標註為 `frame_id: "base_imu_link"`。
+   - **REP-107 diagnostics**：節點以 20 Hz 發布 `/diagnostics`，status identity
+     固定為 `name: "IMU"`、`hardware_id: "tdk_imu"`。serial 已開啟且最後一筆
+     parser 驗證成功之 packet age 不超過 100 ms 時回報 OK；尚未取得有效 packet
+     或 packet age 超過 100 ms 時回報 STALE；serial open/read 明確失敗時回報
+     ERROR 並停止 IMU polling，但節點及 diagnostics publisher 保持存活至 restart。
 
 3. **系統整合啟動（Canonical Bringup Integration）**：
    - 在標準系統啟動流程（`src/mobile_base_bringup/launch/mobile_base.launch.py`）中，`tdk_imu.launch.py` 與 `sick_dual_lidar.launch.py` 納入通用實體清單（`common_entities`），於 Mapping Mode 與 Navigation Mode 下皆保持運行。
@@ -284,6 +288,9 @@ imu_driver_node (tdk_ros2_imu)
 - 系統啟動後，`/scan_front` 持續提供前光達 LaserScan 訊息。
 - 系統啟動後，`/scan_rear` 持續提供後光達 LaserScan 訊息。
 - 系統啟動後，`/imu/data_raw` 持續提供原始 IMU 量測訊息。
+- IMU serial communication 正常且有效 packet 新鮮時，`/diagnostics` 之 `IMU`
+  status 維持 OK；有效 packet 缺失或逾 100 ms 時回報 STALE，已知 serial
+  communication failure 時回報 ERROR。
 - 運行期各感測訊息之 `header.frame_id` 與 Robot Model 定義之感測器座標框架（`base_lidar_link_FL_1`、`base_lidar_link_BR_1`、`base_imu_link`）一致。
 - 前後雙光達感測串流維持完全獨立，系統無 `dual_laser_merger` 亦無合併 `/scan` 主題。
 - Sensor Ingestion 不負責任何 TF 廣播、里程推算或位姿估算。
