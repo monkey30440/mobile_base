@@ -20,10 +20,12 @@ services:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
       - TOPIC_NAMESPACE=${TOPIC_NAMESPACE}
       - MOBILE_BASE_INFLUXDB_TOKEN=${MOBILE_BASE_INFLUXDB_TOKEN:-}
+      - XAUTHORITY=/tmp/.Xauthority
 
     volumes:
       - .:/workspaces/mobile_base
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY}:/tmp/.Xauthority:ro
 
     devices:
       - /dev/fihRobotBaseMotor:/dev/ttyUSB0
