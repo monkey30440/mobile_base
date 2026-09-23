@@ -207,12 +207,12 @@ def generate_launch_description():
     )
     mode_arg = DeclareLaunchArgument(
         'mode',
-        default_value='mapping',
+        default_value='navigation',
         description='Operating mode (mapping | navigation)',
     )
     site_arg = DeclareLaunchArgument(
         'site',
-        default_value='',
+        default_value='20260922_160139_Minsheng',
         description='Site name under maps/ for navigation resources (e.g. test_site)',
     )
 
@@ -256,7 +256,7 @@ def generate_launch_description():
     )
     use_foxglove_arg = DeclareLaunchArgument(
         'use_foxglove',
-        default_value='false',
+        default_value='true',
         description='Start Foxglove Bridge for optional visualization',
     )
     autostart_arg = DeclareLaunchArgument(

@@ -140,6 +140,12 @@ def test_bt_xml_structure_and_fallback_policy():
     assert 'ReinitializeGlobalLocalization' in all_tags
     assert 'Timeout' in all_tags
 
+    reinitialize_elem = next(root.iter('ReinitializeGlobalLocalization'))
+    assert (
+        reinitialize_elem.attrib.get('service_name')
+        == '/reinitialize_global_localization'
+    )
+
     # Verify explicit non-overwriting path keys in BT
     compute_route_elem = next(root.iter('ComputeRoute'))
     assert compute_route_elem.attrib.get('path') == '{raw_route_path}'
@@ -189,25 +195,23 @@ def test_test_route_graph_geojson_fixture():
         assert 'endid' in props
 
 
-def test_real_site_route_graph_geojson():
-    real_graph_path = os.path.abspath(
-        os.path.join(
-            get_package_source_dir(), '..', '..', 'maps', 'test_site', 'route_graph.geojson'
-        )
+def test_route_graph_geojson_fixture_contract():
+    fixture_path = os.path.abspath(
+        os.path.join(get_package_source_dir(), 'test', 'test_data', 'test_route_graph.geojson')
     )
-    assert os.path.exists(real_graph_path), f'real route graph not found at {real_graph_path}'
+    assert os.path.exists(fixture_path), f'test route graph not found at {fixture_path}'
 
-    with open(real_graph_path, 'r', encoding='utf-8') as f:
+    with open(fixture_path, 'r', encoding='utf-8') as f:
         graph = json.load(f)
 
     assert graph.get('type') == 'FeatureCollection'
     features = graph.get('features', [])
-    assert len(features) == 4
+    assert len(features) == 5
 
     points = [f for f in features if f['geometry']['type'] == 'Point']
     lines = [f for f in features if f['geometry']['type'] == 'MultiLineString']
 
-    assert len(points) == 2
+    assert len(points) == 3
     assert len(lines) == 2
 
     # Verify node IDs and coordinates
@@ -217,9 +221,6 @@ def test_real_site_route_graph_geojson():
         assert props.get('frame') == 'map'
         coords = pt['geometry']['coordinates']
         assert len(coords) == 2
-        # Verify coordinates fall within safe test_site map area
-        assert -3.9 <= coords[0] <= 4.4
-        assert -5.9 <= coords[1] <= 3.7
 
     # Verify edge connectivity
     for line in lines:
@@ -227,8 +228,8 @@ def test_real_site_route_graph_geojson():
         assert 'id' in props
         assert 'startid' in props
         assert 'endid' in props
-        assert props.get('startid') in [0, 1]
-        assert props.get('endid') in [0, 1]
+        assert props.get('startid') in [0, 1, 2]
+        assert props.get('endid') in [0, 1, 2]
 
 
 def _collect_nodes(entities):

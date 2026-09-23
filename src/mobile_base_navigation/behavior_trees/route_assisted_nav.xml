@@ -55,7 +55,7 @@
 
       <Sequence name="LocalizationRecovery">
         <!-- Step A: Single trigger of AMCL global relocalization (SUCCESS indicates particles reset) -->
-        <ReinitializeGlobalLocalization service_name="/amcl/reinitialize_global_localization"/>
+        <ReinitializeGlobalLocalization service_name="/reinitialize_global_localization"/>
         <!-- Step B: Bounded wait for new post-reinitialize recovery evidence (candidate timeout 10000 ms, unvalidated) -->
         <Timeout msec="10000">
           <WaitForLocalizationHealthy topic="/localization/lost" freshness_timeout_s="1.0"/>

@@ -33,8 +33,8 @@
 #define BT_XML_PATH "behavior_trees/route_assisted_nav.xml"
 #endif
 
-#ifndef REAL_ROUTE_GRAPH_PATH
-#define REAL_ROUTE_GRAPH_PATH "../../maps/test_site/route_graph.geojson"
+#ifndef TEST_ROUTE_GRAPH_PATH
+#define TEST_ROUTE_GRAPH_PATH "test/test_data/test_route_graph.geojson"
 #endif
 
 #ifndef IS_LOCALIZATION_HEALTHY_LIB
@@ -217,7 +217,7 @@ TEST_F(BehaviorTreeRuntimeTest, GetPoseFromPathDataflow)
   EXPECT_DOUBLE_EQ(end_pose.pose.position.x, 3.5);
 }
 
-TEST_F(BehaviorTreeRuntimeTest, RealSiteRouteGraphNativeLoader)
+TEST_F(BehaviorTreeRuntimeTest, TestFixtureRouteGraphNativeLoader)
 {
   nav2_route::GeoJsonGraphFileLoader loader;
   auto lc_node = std::make_shared<nav2_util::LifecycleNode>("test_route_loader_node");
@@ -226,11 +226,11 @@ TEST_F(BehaviorTreeRuntimeTest, RealSiteRouteGraphNativeLoader)
   nav2_route::Graph graph;
   nav2_route::GraphToIDMap map_ids;
 
-  std::string filepath = REAL_ROUTE_GRAPH_PATH;
+  std::string filepath = TEST_ROUTE_GRAPH_PATH;
   bool success = loader.loadGraphFromFile(graph, map_ids, filepath);
-  ASSERT_TRUE(success) << "Failed to load real-site route graph from " << filepath;
+  ASSERT_TRUE(success) << "Failed to load test route graph from " << filepath;
 
-  EXPECT_EQ(graph.size(), 2u);
+  EXPECT_EQ(graph.size(), 3u);
   size_t total_edges = 0;
   for (const auto & n : graph) {
     total_edges += n.neighbors.size();
@@ -238,7 +238,7 @@ TEST_F(BehaviorTreeRuntimeTest, RealSiteRouteGraphNativeLoader)
   EXPECT_EQ(total_edges, 2u);
 }
 
-TEST_F(BehaviorTreeRuntimeTest, RealSiteComputeRouteSearch)
+TEST_F(BehaviorTreeRuntimeTest, TestFixtureComputeRouteSearch)
 {
   nav2_route::GeoJsonGraphFileLoader loader;
   auto lc_node = std::make_shared<nav2_util::LifecycleNode>("test_route_search_node");
@@ -247,7 +247,7 @@ TEST_F(BehaviorTreeRuntimeTest, RealSiteComputeRouteSearch)
   nav2_route::Graph graph;
   nav2_route::GraphToIDMap map_ids;
 
-  std::string filepath = REAL_ROUTE_GRAPH_PATH;
+  std::string filepath = TEST_ROUTE_GRAPH_PATH;
   ASSERT_TRUE(loader.loadGraphFromFile(graph, map_ids, filepath));
 
   nav2_route::RoutePlanner planner;
@@ -255,29 +255,19 @@ TEST_F(BehaviorTreeRuntimeTest, RealSiteComputeRouteSearch)
 
   std::vector<unsigned int> blocked_ids;
 
-  // A -> B (startid: 0, endid: 1)
-  nav2_route::RouteRequest req_ab;
-  req_ab.start_nodeid = 0;
-  req_ab.goal_nodeid = 1;
-  req_ab.use_poses = false;
-  auto route_ab = planner.findRoute(graph, map_ids[0], map_ids[1], blocked_ids, req_ab);
-  EXPECT_EQ(route_ab.edges.size(), 1u);
-  EXPECT_EQ(route_ab.edges[0]->edgeid, 2u);
-  EXPECT_EQ(route_ab.edges[0]->start->nodeid, 0u);
-  EXPECT_EQ(route_ab.edges[0]->end->nodeid, 1u);
-  EXPECT_NEAR(route_ab.route_cost, 2.0f, 1e-3);
-
-  // B -> A (startid: 1, endid: 0)
-  nav2_route::RouteRequest req_ba;
-  req_ba.start_nodeid = 1;
-  req_ba.goal_nodeid = 0;
-  req_ba.use_poses = false;
-  auto route_ba = planner.findRoute(graph, map_ids[1], map_ids[0], blocked_ids, req_ba);
-  EXPECT_EQ(route_ba.edges.size(), 1u);
-  EXPECT_EQ(route_ba.edges[0]->edgeid, 3u);
-  EXPECT_EQ(route_ba.edges[0]->start->nodeid, 1u);
-  EXPECT_EQ(route_ba.edges[0]->end->nodeid, 0u);
-  EXPECT_NEAR(route_ba.route_cost, 2.0f, 1e-3);
+  nav2_route::RouteRequest request;
+  request.start_nodeid = 0;
+  request.goal_nodeid = 2;
+  request.use_poses = false;
+  auto route = planner.findRoute(graph, map_ids[0], map_ids[2], blocked_ids, request);
+  ASSERT_EQ(route.edges.size(), 2u);
+  EXPECT_EQ(route.edges[0]->edgeid, 3u);
+  EXPECT_EQ(route.edges[0]->start->nodeid, 0u);
+  EXPECT_EQ(route.edges[0]->end->nodeid, 1u);
+  EXPECT_EQ(route.edges[1]->edgeid, 4u);
+  EXPECT_EQ(route.edges[1]->start->nodeid, 1u);
+  EXPECT_EQ(route.edges[1]->end->nodeid, 2u);
+  EXPECT_NEAR(route.route_cost, 4.0f, 1e-3);
 }
 
 class MockReinitGlobalLocalization : public BT::SyncActionNode
@@ -348,7 +338,7 @@ TEST_F(BehaviorTreeRuntimeTest, LocalizationRecoveryBoundedWaitSemantics)
     "  <BehaviorTree ID=\"MainTree\">"
     "    <Sequence name=\"LocalizationRecovery\">"
     "      <ReinitializeGlobalLocalization"
-    "        service_name=\"/amcl/reinitialize_global_localization\"/>"
+    "        service_name=\"/reinitialize_global_localization\"/>"
     "      <Timeout msec=\"200\">"
     "        <WaitForLocalizationHealthy"
     "          topic=\"/bt_test/localization/lost\" freshness_timeout_s=\"0.5\"/>"

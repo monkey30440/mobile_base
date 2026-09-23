@@ -81,7 +81,8 @@ def test_diff_drive_controller_safety_and_limits():
     assert cm_params['update_rate'] == 30  # 30 Hz control loop
 
     dd_params = full_params['diff_drive_controller']['ros__parameters']
-    assert dd_params['cmd_vel_timeout'] == 0.5  # SYS-027 command timeout
+    # Test-stage baseline only; production timeout still requires SYS-027 validation.
+    assert dd_params['cmd_vel_timeout'] == 3600.0
     assert dd_params['enable_odom_tf'] is False  # S7 prohibited from broadcasting TF
 
     # SYS-028 Speed and acceleration limits

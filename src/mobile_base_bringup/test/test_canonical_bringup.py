@@ -181,8 +181,10 @@ def test_canonical_launch_description_declared_arguments(bringup_module):
     assert expected_args.issubset(set(args))
     assert args['variant'].default_value[0].text == 'default'
     assert args['platform'].default_value[0].text == 'real'
-    assert args['mode'].default_value[0].text == 'mapping'
-    assert args['use_foxglove'].default_value[0].text == 'false'
+    assert args['mode'].default_value[0].text == 'navigation'
+    assert args['site'].default_value[0].text == '20260922_160139_Minsheng'
+    assert args['map'].default_value[0].text == ''
+    assert args['use_foxglove'].default_value[0].text == 'true'
     assert args['use_sim_time'].default_value[0].text == 'false'
 
 

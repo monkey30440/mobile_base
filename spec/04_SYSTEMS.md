@@ -88,6 +88,18 @@
     Observability ── Logs / Events / Key Telemetry ──► Observability Server
 ```
 
+### 2.3 Canonical Bringup Baseline
+
+規範啟動入口為 `src/mobile_base_bringup/launch/mobile_base.launch.py`。目前 production 預設直接啟動 Navigation Mode，使用 `20260922_160139_Minsheng` 場域並啟動 Foxglove Bridge：
+
+- `mode:=navigation`
+- `site:=20260922_160139_Minsheng`
+- `map:=''`，由 `site_resolution.py` 解析為 `maps/20260922_160139_Minsheng/map.yaml`
+- `route_graph:=''`，由 `site_resolution.py` 解析為 `maps/20260922_160139_Minsheng/route_graph.geojson`
+- `use_foxglove:=true`
+
+`map` 與 `route_graph` 是低階資源覆寫參數；非空時優先於 `site` 解析結果，且必須分別指向有效的地圖 YAML 檔案與 Route Graph GeoJSON 檔案。Mapping 操作仍須顯式指定 `mode:=mapping`。
+
 ---
 
 ## 3. Operational Modes
@@ -773,8 +785,8 @@ Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
        - **第三步：Last Mile Connector**：檢驗 `first_connected_path` 終點（索引 -1）與目標 Goal 之距離。若距離小於等於 0.2 m，跳過最後一哩；否則調用 `planner_server` 規劃路網終點至目標 Goal 之路徑，拼接產出 `final_route_path`。
        - **第四步：FollowPath 與停止校驗**：由 `controller_server` 執行 MPPI 演算法追蹤 `final_route_path`。配置 `StoppedGoalChecker`（`xy_goal_tolerance: 0.25` m，`yaw_goal_tolerance: 0.5236` rad，`trans_stopped_velocity: 0.05` m/s，`rot_stopped_velocity: 0.10` rad/s），確保機器人不僅在幾何容許誤差內到達目標，且完全煞停後方回報成功。
      - **定位恢復分支 (`Sequence` 名稱為 `LocalizationRecovery`)**：
-       - **步驟 A**：調用 `ReinitializeGlobalLocalization`（服務 `/amcl/reinitialize_global_localization`），觸發 AMCL 全局撒點重定位（回傳 SUCCESS 僅代表粒子重置請求完成）。
-       - **步驟 B**：透過原生裝飾節點組合（`<Timeout msec="10000">` 包裹 `<Inverter><KeepRunningUntilFailure><Inverter><IsLocalizationHealthy .../></Inverter></KeepRunningUntilFailure></Inverter>`）進行有界時間等待。等待期間回傳 RUNNING；若 LocalizationMonitor 回報健康則回傳 SUCCESS 並重新進入主導航管線（由最新 TF 重建路徑）；若超時則回傳 FAILURE，導航任務失敗。
+       - **步驟 A**：調用 `ReinitializeGlobalLocalization`（服務 `/reinitialize_global_localization`），觸發 AMCL 全局撒點重定位（回傳 SUCCESS 僅代表粒子重置請求完成）。
+       - **步驟 B**：透過 `<Timeout msec="10000">` 包裹 `WaitForLocalizationHealthy` 進行有界時間等待。等待節點只接受重定位觸發後產生的新鮮健康證據；等待期間回傳 RUNNING，健康時回傳 SUCCESS 並重新進入主導航管線（由最新 TF 重建路徑），超時則回傳 FAILURE 並終止導航任務。
 
 2. **核心架構原則與事實**：
    - **三段式架構構成**：First Mile、On Route 與 Last Mile 均為 Route-Assisted Navigation 之常態組成環節，非降級備援機制（Not Fallbacks）。
@@ -843,7 +855,7 @@ Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
 - **執行流與狀態轉換**：
   1. 正常導航期間，主導航管線持續由 `IsLocalizationHealthy` 守護。
   2. 定位丟失或狀態過期時，`PipelineSequence` 即刻中斷並終止 `FollowPath`。
-  3. 進入恢復分支，觸發一次 `ReinitializeGlobalLocalization`（調用 AMCL `/amcl/reinitialize_global_localization` 服務）**[B. Nav2 Jazzy implementation/API verified]**。
+  3. 進入恢復分支，觸發一次 `ReinitializeGlobalLocalization`（調用 AMCL `/reinitialize_global_localization` 服務）**[B. Nav2 Jazzy implementation/API verified]**。
      - **語義邊界**：`ReinitializeGlobalLocalization` 回傳 `SUCCESS` 僅代表 AMCL 接收請求並完成粒子重置，**絕對不代表定位已收斂或已恢復** **[B. Nav2 Jazzy implementation/API verified]**。
   4. 進入**有界時間等待 (Bounded Wait)**：
      - 在等待期間，恢復分支回傳 `RUNNING`，不佔用重試次數，亦不重複調用重定位服務 **[C. design inference]**。
@@ -930,7 +942,7 @@ Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
       <!-- 子節點 2：單次重定位觸發與有界時間等待分支 -->
       <Sequence name="LocalizationRecovery">
         <!-- 步驟 A：單次觸發 AMCL 全局均勻撒點重定位（SUCCESS 僅代表重置請求完成） -->
-        <ReinitializeGlobalLocalization service_name="/amcl/reinitialize_global_localization"/>
+        <ReinitializeGlobalLocalization service_name="/reinitialize_global_localization"/>
 
         <!-- 步驟 B：單次調用後有界時間等待新產出之定位健康證據（healthy -> SUCCESS, timeout -> FAILURE） -->
         <!-- 注意：freshness_timeout_s (1.0 s) 與 Timeout msec (10000 ms) 為工程候選預設值，尚未經實機驗證調校 -->
@@ -961,7 +973,7 @@ Canonical Goal Pose (geometry_msgs/msg/PoseStamped)
   2. `nav2_behavior_tree::PipelineSequence`（即時中斷與重算管線）**[B. Nav2 Jazzy implementation/API verified]**
   3. `nav2_behavior_tree::ReinitializeGlobalLocalizationService`（AMCL 重定位觸發）**[B. Nav2 Jazzy implementation/API verified]**
   4. BehaviorTree.CPP v4 原生裝飾節點（`Timeout`）**[B. Nav2 Jazzy implementation/API verified]**
-  5. `nav2_amcl` 的 `/amcl/reinitialize_global_localization` 服務 **[B. Nav2 Jazzy implementation/API verified]**
+  5. `nav2_amcl` 的 `/reinitialize_global_localization` 服務 **[B. Nav2 Jazzy implementation/API verified]**
   6. `bt_navigator` 原生之 Action Result 錯誤回報機制 **[B. Nav2 Jazzy implementation/API verified]**
 - **尚未經驗證之候選參數 (Candidate Parameters Requiring Future Validation)**：
   - `freshness_timeout_s`（XML 候選預設值 1.0 s，未經模擬或實機調校）**[D. requires future simulation/hardware validation]**
@@ -1112,7 +1124,7 @@ Modbus RTU over /dev/ttyUSB0 (230400 bps, 廣播 Group 0x65, FC17 單一交易�
      - 速度與加速度限制：最大線速度 1.0 m/s，最小線速度 -0.5 m/s，最大線加速度 0.5 m/s²，最大減速度 -1.0 m/s²；最大角速度 1.5 rad/s，最大角加速度 1.0 rad/s²，最大角減速度 -2.0 rad/s²。
      - `use_stamped_vel: true`。
      - `enable_odom_tf: false`：嚴格禁止由控制器發布 TF，避免與 State Estimation 之 EKF 產生衝突。
-     - `cmd_vel_timeout: 3600.0`：當前實作之配置參數值為 3600.0 秒。
+     - `cmd_vel_timeout: 3600.0`：當前測試階段實作之配置參數值為 3600.0 秒；此值不得視為量產安全基線，量產前須依 SYS-027 完成逾時值與停止行為之整合及實機驗證後修正。
    - `joint_state_broadcaster` (`joint_state_broadcaster/JointStateBroadcaster`）：讀取硬體狀態並發布 `/joint_states`。
 
 2. **硬體介面外掛與驅動封裝**：

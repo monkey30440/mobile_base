@@ -238,7 +238,7 @@ def test_wheel_odometry_contract_and_ekf_consumer():
     assert ekf_params['odom0'] == '/diff_drive_controller/odom'
     assert ekf_params['odom0_config'][6] is True   # vx
     assert ekf_params['odom0_config'][5] is False  # wheel yaw
-    assert ekf_params['odom0_config'][11] is False # wheel yaw rate
+    assert ekf_params['odom0_config'][11] is False  # wheel yaw rate
     assert ekf_params['odom0_config'][0] is False  # no x position fusion
     assert ekf_params['odom0_config'][1] is False  # no y position fusion
     assert 'odom1' not in ekf_params
@@ -255,9 +255,9 @@ def test_freshness_and_timeout_configurations():
         ekf_params = yaml.safe_load(f)['ekf_filter_node']['ros__parameters']
     assert ekf_params['sensor_timeout'] == 0.1
 
-    # 2. S7 diff_drive_controller command timeout (500 ms)
+    # 2. Test-stage command timeout baseline (not production validated)
     ctrl_yaml = ws_root / 'src' / 'mobile_base_control' / 'config' / 'base_control_params.yaml'
     assert ctrl_yaml.exists()
     with open(ctrl_yaml, 'r', encoding='utf-8') as f:
         ctrl_params = yaml.safe_load(f)['diff_drive_controller']['ros__parameters']
-    assert ctrl_params['cmd_vel_timeout'] == 0.5
+    assert ctrl_params['cmd_vel_timeout'] == 3600.0

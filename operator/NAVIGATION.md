@@ -13,13 +13,16 @@ docker compose exec mobile_base bash
 啟動 Navigation：
 
 ```bash
-ros2 launch mobile_base_bringup mobile_base.launch.py \
-  mode:=navigation \
-  site:=<site> \
-  use_foxglove:=true  
+ros2 launch mobile_base_bringup mobile_base.launch.py
 ```
 
-`<site>` 表示操作者選定的場域。
+預設啟動 Navigation Mode，載入 `20260922_160139_Minsheng` 場域，並啟動 Foxglove Bridge。若要使用其他場域，顯式覆寫 `site`：
+
+```bash
+ros2 launch mobile_base_bringup mobile_base.launch.py site:=<site>
+```
+
+`<site>` 表示 `maps/` 下的場域目錄名稱；系統會解析其中的 `map.yaml` 與 `route_graph.geojson`。
 
 ## Initialize
 
@@ -97,11 +100,11 @@ docker compose exec mobile_base bash
 ```bash
 ros2 run mobile_base_navigation navigate_to_station \
   --station <station_id> \
-  --catalog maps/<site>/stations.yaml
+  --catalog maps/20260922_160139_Minsheng/stations.yaml
 ```
 
 - `<station_id>`：目標 Station ID。
-- `<site>`：與 Navigation 啟動時相同的場域。
+- 使用非預設場域時，將 catalog 路徑改為 `maps/<site>/stations.yaml`，其中 `<site>` 須與 Navigation 啟動時相同。
 - 最終結果為 `NAV_SUCCEEDED`、`NAV_ABORTED` 或 `NAV_CANCELED`。
 - 若要取消進行中的 station navigation，在此 terminal 按 `Ctrl-C`。
 

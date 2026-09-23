@@ -164,6 +164,9 @@ if(BUILD_TESTING)
     geometry_msgs
     nav2_msgs
   )
+  set_tests_properties(test_navigate_to_station PROPERTIES
+    ENVIRONMENT "ROS_DOMAIN_ID=119"
+  )
 
   ament_add_gtest(test_is_localization_healthy_condition
     test/test_is_localization_healthy_condition.cpp
@@ -201,7 +204,7 @@ if(BUILD_TESTING)
   )
   target_compile_definitions(test_behavior_tree_runtime PRIVATE
     BT_XML_PATH="${CMAKE_CURRENT_SOURCE_DIR}/behavior_trees/route_assisted_nav.xml"
-    REAL_ROUTE_GRAPH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../maps/test_site/route_graph.geojson"
+    TEST_ROUTE_GRAPH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/test_data/test_route_graph.geojson"
     IS_LOCALIZATION_HEALTHY_LIB="$<TARGET_FILE:is_localization_healthy_condition_bt_node>"
     WAIT_FOR_LOCALIZATION_HEALTHY_LIB="$<TARGET_FILE:wait_for_localization_healthy_node_bt_node>"
   )

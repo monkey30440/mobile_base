@@ -27,7 +27,6 @@ from geometry_msgs.msg import PoseStamped, TransformStamped, TwistStamped
 from lifecycle_msgs.msg import State, Transition
 from lifecycle_msgs.srv import ChangeState, GetState
 from nav2_msgs.action import DockRobot
-import pytest
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
@@ -99,7 +98,7 @@ def _create_minimal_docking_config(tmp_dir: str) -> str:
 
 
 def test_native_apriltag_docking_integration():
-    """Verify Upper Body contract with real Nav2 docking_server: Accepted -> Feedback -> Canceled."""
+    """Verify docking contract: Accepted -> Feedback -> Canceled."""
     tmp_dir = tempfile.mkdtemp(prefix='docking_test_')
     proc = None
     node = None
