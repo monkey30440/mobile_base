@@ -8,6 +8,14 @@ endif()
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/LocalizationState.msg"
+  DEPENDENCIES builtin_interfaces
+)
+rosidl_get_typesupport_target(localization_typesupport ${PROJECT_NAME} rosidl_typesupport_cpp)
+ament_export_dependencies(rosidl_default_runtime)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -40,6 +48,7 @@ ament_target_dependencies(localization_monitor_lib
 )
 target_link_libraries(localization_monitor_lib
   ${OpenCV_LIBRARIES}
+  "${localization_typesupport}"
 )
 
 add_executable(localization_monitor

@@ -15,6 +15,7 @@
 #ifndef MOBILE_BASE_LOCALIZATION__LOCALIZATION_MONITOR_HPP_
 #define MOBILE_BASE_LOCALIZATION__LOCALIZATION_MONITOR_HPP_
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,7 +28,7 @@
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
-#include "std_msgs/msg/bool.hpp"
+#include "mobile_base_localization/msg/localization_state.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "tf2/LinearMath/Transform.h"
 #include "tf2_ros/buffer.h"
@@ -75,9 +76,9 @@ private:
 
 enum class LocalizationHealthState
 {
-  UNKNOWN,
-  OK,
-  LOST
+  UNKNOWN = msg::LocalizationState::UNKNOWN,
+  HEALTHY = msg::LocalizationState::HEALTHY,
+  LOST = msg::LocalizationState::LOST
 };
 
 struct LocalizationLostDetectorConfig
@@ -98,6 +99,7 @@ public:
 
   LocalizationHealthState update(float quality, double current_time);
   LocalizationHealthState get_state() const {return current_state_;}
+  // Invalidate current evidence and continuous timers, preserving any unrecovered LOST.
   void reset();
 
   const LocalizationLostDetectorConfig & get_config() const {return config_;}
@@ -106,6 +108,7 @@ public:
 private:
   LocalizationLostDetectorConfig config_;
   LocalizationHealthState current_state_{LocalizationHealthState::UNKNOWN};
+  bool recovery_pending_{false};
   std::optional<double> low_quality_start_time_;
   std::optional<double> high_quality_start_time_;
   std::optional<double> last_measurement_time_;
@@ -118,12 +121,18 @@ public:
 
 private:
   void map_callback(const nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg);
+  void publish_state();
+  void invalidate();
   void scan_callback(const sensor_msgs::msg::LaserScan::ConstSharedPtr msg);
 
   ScanMapQualityEvaluator evaluator_;
   LocalizationLostDetector detector_;
 
   double tf_timeout_s_{0.1};
+  double measurement_timeout_s_{1.0};
+  std::optional<rclcpp::Time> last_valid_stamp_;
+  std::chrono::steady_clock::time_point last_valid_received_;
+  rclcpp::TimerBase::SharedPtr state_timer_;
 
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -132,7 +141,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
 
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr quality_pub_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr lost_pub_;
+  rclcpp::Publisher<msg::LocalizationState>::SharedPtr state_pub_;
 };
 
 }  // namespace mobile_base_localization

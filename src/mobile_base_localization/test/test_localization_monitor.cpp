@@ -14,7 +14,11 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cmath>
+#include <memory>
+#include <string>
+#include <thread>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -225,20 +229,20 @@ TEST(TestLocalizationMonitor, TransientQualityBelowLostRatioDoesNotDeclareLost)
   LocalizationLostDetector detector(config);
 
   // Establish initial healthy state
-  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::HEALTHY);
 
   // Transient bad measurement at t = 1.0
-  EXPECT_EQ(detector.update(0.20f, 1.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.20f, 1.0), LocalizationHealthState::HEALTHY);
 
   // Another bad measurement at t = 1.8 (< 1.5s hold time from t=1.0)
-  EXPECT_EQ(detector.update(0.20f, 1.8), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.20f, 1.8), LocalizationHealthState::HEALTHY);
 
   // Recovers at t = 2.0
-  EXPECT_EQ(detector.update(0.85f, 2.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.85f, 2.0), LocalizationHealthState::HEALTHY);
 
   // Another bad measurement at t = 2.5 (timer should have been reset)
-  EXPECT_EQ(detector.update(0.10f, 2.5), LocalizationHealthState::OK);
-  EXPECT_EQ(detector.get_state(), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.10f, 2.5), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.get_state(), LocalizationHealthState::HEALTHY);
 }
 
 // 7. sustained low quality declares LOST
@@ -251,11 +255,11 @@ TEST(TestLocalizationMonitor, SustainedLowQualityDeclaresLost)
   config.recover_hold_s = 1.5;
 
   LocalizationLostDetector detector(config);
-  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::HEALTHY);
 
   // Low quality starts at t = 1.0
-  EXPECT_EQ(detector.update(0.20f, 1.0), LocalizationHealthState::OK);
-  EXPECT_EQ(detector.update(0.20f, 2.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.20f, 1.0), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.update(0.20f, 2.0), LocalizationHealthState::HEALTHY);
 
   // At t = 2.6s (1.6s >= 1.5s lost_hold_s), declare LOST
   EXPECT_EQ(detector.update(0.20f, 2.6), LocalizationHealthState::LOST);
@@ -272,8 +276,8 @@ TEST(TestLocalizationMonitor, LostDoesNotImmediatelyRecoverInHysteresisBand)
   config.recover_hold_s = 1.0;
 
   LocalizationLostDetector detector(config);
-  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::OK);
-  EXPECT_EQ(detector.update(0.10f, 1.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.update(0.10f, 1.0), LocalizationHealthState::HEALTHY);
   EXPECT_EQ(detector.update(0.10f, 2.1), LocalizationHealthState::LOST);
 
   // Hysteresis band: quality 0.50 (0.35 <= 0.50 < 0.60)
@@ -283,8 +287,8 @@ TEST(TestLocalizationMonitor, LostDoesNotImmediatelyRecoverInHysteresisBand)
   EXPECT_EQ(detector.get_state(), LocalizationHealthState::LOST);
 }
 
-// 9. sustained quality >= recover_ratio recovers to OK
-TEST(TestLocalizationMonitor, SustainedQualityGeRecoverRatioRecoversToOk)
+// 9. sustained quality >= recover_ratio recovers to HEALTHY
+TEST(TestLocalizationMonitor, SustainedQualityGeRecoverRatioRecoversToHealthy)
 {
   LocalizationLostDetectorConfig config;
   config.lost_ratio = 0.35;
@@ -293,46 +297,27 @@ TEST(TestLocalizationMonitor, SustainedQualityGeRecoverRatioRecoversToOk)
   config.recover_hold_s = 1.5;
 
   LocalizationLostDetector detector(config);
-  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::OK);
-  EXPECT_EQ(detector.update(0.10f, 1.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.90f, 0.0), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.update(0.10f, 1.0), LocalizationHealthState::HEALTHY);
   EXPECT_EQ(detector.update(0.10f, 2.1), LocalizationHealthState::LOST);
 
   // High quality begins at t = 3.0
   EXPECT_EQ(detector.update(0.80f, 3.0), LocalizationHealthState::LOST);
   // At t = 4.0 (1.0s < 1.5s recover_hold_s), still LOST
   EXPECT_EQ(detector.update(0.80f, 4.0), LocalizationHealthState::LOST);
-  // At t = 4.6 (1.6s >= 1.5s recover_hold_s), recovers to OK
-  EXPECT_EQ(detector.update(0.80f, 4.6), LocalizationHealthState::OK);
-  EXPECT_EQ(detector.get_state(), LocalizationHealthState::OK);
+  // At t = 4.6 (1.6s >= 1.5s recover_hold_s), recovers to HEALTHY
+  EXPECT_EQ(detector.update(0.80f, 4.6), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.get_state(), LocalizationHealthState::HEALTHY);
 }
 
-// 10. unavailable measurements do not falsely trigger LOST
-TEST(TestLocalizationMonitor, UnavailableMeasurementsDoNotFalselyTriggerLost)
+// Missing evidence invalidates the detector; the monitor owns the freshness timer.
+TEST(TestLocalizationMonitor, UnavailableMeasurementsResetToUnknown)
 {
-  LocalizationLostDetectorConfig config;
-  config.lost_ratio = 0.35;
-  config.recover_ratio = 0.60;
-  config.lost_hold_s = 1.0;
-  config.recover_hold_s = 1.0;
-
-  LocalizationLostDetector detector(config);
-  // Initial state is UNKNOWN
+  LocalizationLostDetector detector;
+  detector.update(0.8f, 1.0);
+  detector.reset();
   EXPECT_EQ(detector.get_state(), LocalizationHealthState::UNKNOWN);
-
-  // Simulated unavailable measurements: detector.update() is NOT called.
-  // Verify state remains UNKNOWN indefinitely.
-  EXPECT_EQ(detector.get_state(), LocalizationHealthState::UNKNOWN);
-
-  // Now set to OK
-  detector.update(0.80f, 0.0);
-  EXPECT_EQ(detector.get_state(), LocalizationHealthState::OK);
-
-  // During sensor blackout or unavailable scans, detector is not fed low quality.
-  // After a 10-second gap, state must still be OK, NOT LOST.
-  EXPECT_EQ(detector.get_state(), LocalizationHealthState::OK);
-
-  // Single bad scan at t = 10.0 should not immediately trigger LOST
-  EXPECT_EQ(detector.update(0.10f, 10.0), LocalizationHealthState::OK);
+  EXPECT_EQ(detector.update(0.1f, 10.0), LocalizationHealthState::UNKNOWN);
 }
 
 // 11. map origin with unsupported non-zero yaw is rejected
@@ -352,8 +337,8 @@ TEST(TestLocalizationMonitor, MapOriginWithUnsupportedNonZeroYawIsRejected)
   EXPECT_FALSE(evaluator.evaluate(scan, tf).has_value());
 }
 
-// 12. first valid quality >= recover_ratio transitions UNKNOWN -> OK
-TEST(TestLocalizationMonitor, FirstHealthyMeasurementTransitionsUnknownToOk)
+// 12. first valid quality >= recover_ratio transitions UNKNOWN -> HEALTHY
+TEST(TestLocalizationMonitor, FirstHealthyMeasurementTransitionsUnknownToHealthy)
 {
   LocalizationLostDetectorConfig config;
   config.lost_ratio = 0.35;
@@ -364,9 +349,9 @@ TEST(TestLocalizationMonitor, FirstHealthyMeasurementTransitionsUnknownToOk)
   LocalizationLostDetector detector(config);
   EXPECT_EQ(detector.get_state(), LocalizationHealthState::UNKNOWN);
 
-  // First healthy measurement immediately establishes OK without waiting recover_hold_s
-  EXPECT_EQ(detector.update(0.85f, 0.0), LocalizationHealthState::OK);
-  EXPECT_EQ(detector.get_state(), LocalizationHealthState::OK);
+  // First healthy measurement immediately establishes HEALTHY without waiting recover_hold_s
+  EXPECT_EQ(detector.update(0.85f, 0.0), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.get_state(), LocalizationHealthState::HEALTHY);
 }
 
 // 13. invalid beam_stride is rejected (< 1)
@@ -444,4 +429,172 @@ TEST(TestLocalizationMonitor, RejectInvalidNumericParameters)
     config.recover_ratio = 1.5;
     EXPECT_THROW(LocalizationLostDetector detector(config), std::invalid_argument);
   }
+}
+
+TEST(TestLocalizationMonitor, InvalidAndNonAdvancingEvidenceResetsToUnknown)
+{
+  LocalizationLostDetector detector;
+  EXPECT_EQ(detector.update(0.8f, 2.0), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.update(0.8f, 2.0), LocalizationHealthState::UNKNOWN);
+  EXPECT_EQ(detector.update(0.8f, 3.0), LocalizationHealthState::HEALTHY);
+  EXPECT_EQ(detector.update(0.8f, 1.0), LocalizationHealthState::UNKNOWN);
+  EXPECT_EQ(detector.update(std::numeric_limits<float>::quiet_NaN(), 4.0),
+    LocalizationHealthState::UNKNOWN);
+}
+
+class LocalizationMonitorRuntimeTest : public ::testing::Test
+{
+protected:
+  using State = mobile_base_localization::msg::LocalizationState;
+
+  static void SetUpTestSuite() {rclcpp::init(0, nullptr);}
+  static void TearDownTestSuite() {rclcpp::shutdown();}
+
+  void SetUp() override
+  {
+    rclcpp::NodeOptions options;
+    options.parameter_overrides({
+      {"measurement_timeout_s", 0.2}, {"lost_hold_s", 0.05},
+      {"recover_hold_s", 0.05}, {"tf_timeout_s", 0.0}});
+    monitor = std::make_shared<mobile_base_localization::LocalizationMonitorNode>(options);
+    io = std::make_shared<rclcpp::Node>("test_monitor_io");
+    map_pub = io->create_publisher<nav_msgs::msg::OccupancyGrid>(
+      "/map", rclcpp::QoS(1).reliable().transient_local());
+    scan_pub = io->create_publisher<sensor_msgs::msg::LaserScan>("/scan_front", 10);
+    sub = io->create_subscription<State>(
+      "/localization/state", rclcpp::QoS(1).reliable().transient_local(),
+      [this](State::ConstSharedPtr msg) {last = *msg; ++received;});
+    executor.add_node(monitor);
+    executor.add_node(io);
+    pump(150);
+  }
+
+  void TearDown() override
+  {
+    executor.remove_node(monitor);
+    executor.remove_node(io);
+    monitor.reset();
+    io.reset();
+  }
+
+  void pump(int ms)
+  {
+    const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+    do {
+      executor.spin_some();
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    } while (std::chrono::steady_clock::now() < end);
+  }
+
+  void scan(float distance = 1.0f, const std::string & frame = "map", double age = 0.0)
+  {
+    auto msg = create_scan_facing_wall(50, distance);
+    msg.header.frame_id = frame;
+    msg.header.stamp = io->now() - rclcpp::Duration::from_seconds(age);
+    scan_pub->publish(msg);
+    pump(30);
+  }
+
+  rclcpp::Node::SharedPtr monitor, io;
+  rclcpp::executors::SingleThreadedExecutor executor;
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_pub;
+  rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_pub;
+  rclcpp::Subscription<State>::SharedPtr sub;
+  State last;
+  int received{0};
+};
+
+TEST_F(LocalizationMonitorRuntimeTest, StartupAndMissingMapPublishUnknown)
+{
+  ASSERT_GT(received, 0);
+  EXPECT_EQ(last.state, State::UNKNOWN);
+  scan();
+  EXPECT_EQ(last.state, State::UNKNOWN);
+}
+
+TEST_F(LocalizationMonitorRuntimeTest, MeasurementFreshnessAndInvalidInputsAreOwnedByMonitor)
+{
+  map_pub->publish(create_box_map());
+  pump(30);
+  scan();
+  ASSERT_EQ(last.state, State::HEALTHY);
+  const auto stamp = last.measurement_stamp;
+  pump(60);
+  EXPECT_EQ(last.measurement_stamp, stamp);  // Heartbeats do not invent evidence.
+  pump(200);
+  EXPECT_EQ(last.state, State::UNKNOWN);
+  scan();
+  ASSERT_EQ(last.state, State::HEALTHY);
+  scan(1.0f, "missing_tf");
+  EXPECT_EQ(last.state, State::UNKNOWN);
+  scan();
+  ASSERT_EQ(last.state, State::HEALTHY);
+  scan(std::numeric_limits<float>::infinity());
+  EXPECT_EQ(last.state, State::UNKNOWN);
+  scan(1.0f, "map", 1.0);
+  EXPECT_EQ(last.state, State::UNKNOWN);
+  scan(1.0f, "map", -1.0);
+  EXPECT_EQ(last.state, State::UNKNOWN);
+  scan();
+  ASSERT_EQ(last.state, State::HEALTHY);
+  map_pub->publish(create_box_map(100, 100, 0.05, -2.5, -2.5, 0.5));
+  pump(30);
+  EXPECT_EQ(last.state, State::UNKNOWN);
+}
+
+TEST_F(LocalizationMonitorRuntimeTest, SustainedBadEvidenceLostThenHealthyAndUnknown)
+{
+  map_pub->publish(create_box_map());
+  pump(30);
+  scan();
+  ASSERT_EQ(last.state, State::HEALTHY);
+  scan(0.5f);
+  scan(0.5f);
+  scan(0.5f);
+  EXPECT_EQ(last.state, State::LOST);
+  scan();
+  scan();
+  scan();
+  EXPECT_EQ(last.state, State::HEALTHY);
+  pump(260);
+  EXPECT_EQ(last.state, State::UNKNOWN);
+}
+
+TEST(TestLocalizationMonitor, LostHistorySurvivesUnavailableEvidence)
+{
+  LocalizationLostDetectorConfig config;
+  config.lost_hold_s = 1.0;
+  config.recover_hold_s = 2.0;
+  LocalizationLostDetector detector(config);
+  EXPECT_EQ(detector.update(0.8f, 1.0), LocalizationHealthState::HEALTHY);
+  detector.update(0.1f, 2.0);
+  ASSERT_EQ(detector.update(0.1f, 3.0), LocalizationHealthState::LOST);
+  detector.update(0.8f, 4.0);
+  detector.update(0.8f, 5.0);
+  detector.reset();  // Measurement unavailable interrupts the recovery interval.
+  EXPECT_EQ(detector.get_state(), LocalizationHealthState::UNKNOWN);
+  EXPECT_EQ(detector.update(0.8f, 100.0), LocalizationHealthState::UNKNOWN);
+  EXPECT_EQ(detector.update(0.8f, 101.9), LocalizationHealthState::UNKNOWN);
+  EXPECT_EQ(detector.update(0.8f, 102.0), LocalizationHealthState::HEALTHY);
+  detector.reset();  // Completed recovery permits the normal startup rule again.
+  EXPECT_EQ(detector.update(0.8f, 103.0), LocalizationHealthState::HEALTHY);
+}
+
+TEST_F(LocalizationMonitorRuntimeTest, LostRecoveryRequirementSurvivesTfAndScanUnavailability)
+{
+  map_pub->publish(create_box_map());
+  pump(30);
+  scan(0.5f);
+  scan(0.5f);
+  scan(0.5f);
+  ASSERT_EQ(last.state, State::LOST);
+  scan();  // Start, but do not finish, recovery.
+  scan(1.0f, "missing_tf");
+  ASSERT_EQ(last.state, State::UNKNOWN);
+  pump(260);  // Longer than recover_hold_s; must not count as good evidence.
+  scan();
+  EXPECT_EQ(last.state, State::UNKNOWN);
+  scan();
+  scan();
+  EXPECT_EQ(last.state, State::HEALTHY);
 }

@@ -54,9 +54,8 @@ void WaitForLocalizationHealthyNode::initialize()
   }
 
   if (!getInput("topic", topic_)) {
-    topic_ = "/localization/lost";
+    topic_ = "/localization/state";
   }
-  getInput("freshness_timeout_s", freshness_timeout_s_);
 
   last_msg_time_ = rclcpp::Time(0, 0, node_->get_clock()->get_clock_type());
 
@@ -68,9 +67,9 @@ void WaitForLocalizationHealthyNode::initialize()
   rclcpp::SubscriptionOptions sub_options;
   sub_options.callback_group = callback_group_;
 
-  sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+  sub_ = node_->create_subscription<mobile_base_localization::msg::LocalizationState>(
     topic_,
-    rclcpp::QoS(10),
+    rclcpp::QoS(1).reliable().transient_local(),
     std::bind(&WaitForLocalizationHealthyNode::onMessage, this, std::placeholders::_1),
     sub_options);
   callback_group_executor_.spin_some();
@@ -78,11 +77,12 @@ void WaitForLocalizationHealthyNode::initialize()
   initialized_ = true;
 }
 
-void WaitForLocalizationHealthyNode::onMessage(const std_msgs::msg::Bool::SharedPtr msg)
+void WaitForLocalizationHealthyNode::onMessage(
+  const mobile_base_localization::msg::LocalizationState::SharedPtr msg)
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  last_msg_time_ = node_->now();
-  last_lost_ = msg->data;
+  last_msg_time_ = rclcpp::Time(msg->measurement_stamp, node_->get_clock()->get_clock_type());
+  state_ = msg->state;
   msg_count_++;
 }
 
@@ -95,11 +95,11 @@ BT::NodeStatus WaitForLocalizationHealthyNode::onStart()
   // Drain any messages that arrived before this recovery epoch began
   callback_group_executor_.spin_some();
 
-  getInput("freshness_timeout_s", freshness_timeout_s_);
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
     start_msg_count_ = msg_count_;
+    recovery_start_ = node_->now();
   }
 
   return BT::NodeStatus::RUNNING;
@@ -109,7 +109,6 @@ BT::NodeStatus WaitForLocalizationHealthyNode::onRunning()
 {
   callback_group_executor_.spin_some();
 
-  getInput("freshness_timeout_s", freshness_timeout_s_);
 
   std::lock_guard<std::mutex> lock(mutex_);
 
@@ -119,11 +118,11 @@ BT::NodeStatus WaitForLocalizationHealthyNode::onRunning()
   }
 
   const rclcpp::Time now = node_->now();
-  if (now < last_msg_time_ || (now - last_msg_time_).seconds() > freshness_timeout_s_) {
+  if (now < recovery_start_ || last_msg_time_ <= recovery_start_ || last_msg_time_ > now) {
     return BT::NodeStatus::RUNNING;
   }
 
-  if (last_lost_) {
+  if (state_ != mobile_base_localization::msg::LocalizationState::HEALTHY) {
     return BT::NodeStatus::RUNNING;
   }
 

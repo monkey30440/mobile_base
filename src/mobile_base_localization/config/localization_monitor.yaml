@@ -27,3 +27,4 @@ localization_monitor:
     lost_hold_s: 1.5
     recover_hold_s: 1.5
     tf_timeout_s: 0.1
+    measurement_timeout_s: 1.0  # Candidate maximum valid scan age; hardware validation pending

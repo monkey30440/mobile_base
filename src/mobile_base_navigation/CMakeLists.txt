@@ -10,7 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(std_msgs REQUIRED)
+find_package(mobile_base_localization REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
@@ -76,7 +76,7 @@ target_compile_definitions(is_localization_healthy_condition_bt_node PRIVATE
 ament_target_dependencies(is_localization_healthy_condition_bt_node
   rclcpp
   behaviortree_cpp
-  std_msgs
+  mobile_base_localization
 )
 
 # Wait for localization healthy action BT plugin
@@ -93,7 +93,7 @@ target_compile_definitions(wait_for_localization_healthy_node_bt_node PRIVATE
 ament_target_dependencies(wait_for_localization_healthy_node_bt_node
   rclcpp
   behaviortree_cpp
-  std_msgs
+  mobile_base_localization
 )
 
 # Install libraries and headers
@@ -177,7 +177,7 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_is_localization_healthy_condition
     rclcpp
     behaviortree_cpp
-    std_msgs
+    mobile_base_localization
   )
 
   ament_add_gtest(test_wait_for_localization_healthy_node
@@ -189,13 +189,15 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_wait_for_localization_healthy_node
     rclcpp
     behaviortree_cpp
-    std_msgs
+    mobile_base_localization
   )
 
   find_package(behaviortree_cpp REQUIRED)
   find_package(nav_msgs REQUIRED)
   find_package(nav2_route REQUIRED)
   find_package(nav2_util REQUIRED)
+  find_package(tf2_ros REQUIRED)
+  find_package(std_srvs REQUIRED)
   ament_add_gtest(test_behavior_tree_runtime
     test/test_behavior_tree_runtime.cpp
   )
@@ -213,9 +215,13 @@ if(BUILD_TESTING)
     behaviortree_cpp
     nav_msgs
     geometry_msgs
-    std_msgs
+    mobile_base_localization
     nav2_route
     nav2_util
+    tf2_ros
+    std_srvs
+    rclcpp_action
+    nav2_msgs
   )
 
   find_package(ament_cmake_pytest REQUIRED)
@@ -235,6 +241,6 @@ ament_export_libraries(
   wait_for_localization_healthy_node_bt_node
 )
 ament_export_targets(export_${PROJECT_NAME})
-ament_export_dependencies(rclcpp geometry_msgs std_msgs behaviortree_cpp)
+ament_export_dependencies(rclcpp geometry_msgs mobile_base_localization behaviortree_cpp)
 
 ament_package()

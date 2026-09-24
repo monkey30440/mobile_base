@@ -291,3 +291,38 @@ def test_launch_description_composition():
         docking_remap_pairs.append((src, dst))
 
     assert any('/diff_drive_controller/cmd_vel' in dst for src, dst in docking_remap_pairs)
+
+
+def test_localization_recovery_contract():
+    """Only a LOST guard failure can authorize destructive relocalization."""
+    pkg = get_package_source_dir()
+    root = ET.parse(os.path.join(pkg, 'behavior_trees', 'route_assisted_nav.xml')).getroot()
+    recovery = next(root.iter('RecoveryNode'))
+    guard_branch, recovery_branch = list(recovery)
+    assert guard_branch.tag == 'ReactiveSequence'
+    guard = guard_branch[0]
+    assert guard.tag == 'IsLocalizationHealthy'
+    assert guard.attrib['recovery_required'] == '{localization_recovery_required}'
+    assert recovery_branch[0].tag == 'ScriptCondition'
+    assert recovery_branch[0].attrib['code'] == 'localization_recovery_required'
+    for tag in ('IsLocalizationHealthy', 'WaitForLocalizationHealthy'):
+        node = next(root.iter(tag))
+        assert node.attrib['topic'] == '/localization/state'
+        assert 'freshness_timeout_s' not in node.attrib
+    with open(os.path.join(pkg, 'config', 'nav2_params.yaml'), encoding='utf-8') as stream:
+        params = yaml.safe_load(stream)['bt_navigator']['ros__parameters']
+    assert set(params['error_code_names']) == {
+        'compute_route_error_code', 'compute_path_error_code', 'follow_path_error_code'}
+
+
+def test_localization_source_liveness_and_failure_reason_contract():
+    """Keep source liveness separate and retain the unmet failure-reason requirement."""
+    pkg = get_package_source_dir()
+    root = ET.parse(os.path.join(pkg, 'behavior_trees', 'route_assisted_nav.xml')).getroot()
+    guard = next(root.iter('IsLocalizationHealthy'))
+    assert float(guard.attrib['state_publisher_timeout_s']) > 0
+    assert 'freshness_timeout_s' not in guard.attrib
+    requirement_path = os.path.join(pkg, '..', '..', 'spec', '03_REQUIREMENTS.md')
+    with open(requirement_path, encoding='utf-8') as stream:
+        requirement = stream.read().split('## SYS-045 ')[1].split('\n## ')[0]
+    assert '終止導航並回報定位失敗原因' in requirement

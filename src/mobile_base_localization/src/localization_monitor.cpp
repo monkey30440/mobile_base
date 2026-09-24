@@ -215,19 +215,35 @@ void LocalizationLostDetector::set_config(const LocalizationLostDetectorConfig &
 
 LocalizationHealthState LocalizationLostDetector::update(float quality, double current_time)
 {
-  if (last_measurement_time_.has_value() && current_time < *last_measurement_time_) {
+  if (!std::isfinite(quality) || quality < 0.0f || quality > 1.0f ||
+    !std::isfinite(current_time))
+  {
+    reset();
+    return current_state_;
+  }
+  if (last_measurement_time_.has_value() && current_time <= *last_measurement_time_) {
     // Time went backwards (e.g. sim time reset)
-    low_quality_start_time_.reset();
-    high_quality_start_time_.reset();
+    reset();
+    return current_state_;
   }
   last_measurement_time_ = current_time;
 
   if (current_state_ == LocalizationHealthState::UNKNOWN) {
     if (quality >= config_.recover_ratio) {
-      current_state_ = LocalizationHealthState::OK;
       low_quality_start_time_.reset();
-      high_quality_start_time_.reset();
+      if (!recovery_pending_) {
+        current_state_ = LocalizationHealthState::HEALTHY;
+      } else {
+        if (!high_quality_start_time_) {
+          high_quality_start_time_ = current_time;
+        }
+        if (current_time - *high_quality_start_time_ >= config_.recover_hold_s) {
+          current_state_ = LocalizationHealthState::HEALTHY;
+          high_quality_start_time_.reset();
+        }
+      }
     } else if (quality < config_.lost_ratio) {
+      high_quality_start_time_.reset();
       if (!low_quality_start_time_.has_value()) {
         low_quality_start_time_ = current_time;
       } else if ((current_time - *low_quality_start_time_) >= config_.lost_hold_s) {
@@ -238,7 +254,7 @@ LocalizationHealthState LocalizationLostDetector::update(float quality, double c
       low_quality_start_time_.reset();
       high_quality_start_time_.reset();
     }
-  } else if (current_state_ == LocalizationHealthState::OK) {
+  } else if (current_state_ == LocalizationHealthState::HEALTHY) {
     if (quality < config_.lost_ratio) {
       if (!low_quality_start_time_.has_value()) {
         low_quality_start_time_ = current_time;
@@ -254,7 +270,7 @@ LocalizationHealthState LocalizationLostDetector::update(float quality, double c
       if (!high_quality_start_time_.has_value()) {
         high_quality_start_time_ = current_time;
       } else if ((current_time - *high_quality_start_time_) >= config_.recover_hold_s) {
-        current_state_ = LocalizationHealthState::OK;
+        current_state_ = LocalizationHealthState::HEALTHY;
         high_quality_start_time_.reset();
       }
     } else {
@@ -262,6 +278,11 @@ LocalizationHealthState LocalizationLostDetector::update(float quality, double c
     }
   }
 
+  if (current_state_ == LocalizationHealthState::LOST) {
+    recovery_pending_ = true;
+  } else if (current_state_ == LocalizationHealthState::HEALTHY) {
+    recovery_pending_ = false;
+  }
   return current_state_;
 }
 
@@ -308,8 +329,16 @@ LocalizationMonitorNode::LocalizationMonitorNode(const rclcpp::NodeOptions & opt
   det_cfg.recover_hold_s = recover_hold_s;
   detector_.set_config(det_cfg);
 
+  measurement_timeout_s_ = declare_parameter<double>("measurement_timeout_s", 1.0);
+  if (!std::isfinite(measurement_timeout_s_) || measurement_timeout_s_ <= 0.0) {
+    throw std::invalid_argument("measurement_timeout_s must be finite and > 0");
+  }
+
   quality_pub_ = this->create_publisher<std_msgs::msg::Float32>("/localization/quality", 10);
-  lost_pub_ = this->create_publisher<std_msgs::msg::Bool>("/localization/lost", 10);
+  state_pub_ = create_publisher<msg::LocalizationState>(
+    "/localization/state", rclcpp::QoS(1).reliable().transient_local());
+  state_timer_ = create_wall_timer(std::chrono::milliseconds(50), [this]() {publish_state();});
+  publish_state();
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -329,6 +358,7 @@ LocalizationMonitorNode::LocalizationMonitorNode(const rclcpp::NodeOptions & opt
 void LocalizationMonitorNode::map_callback(
   const nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg)
 {
+  invalidate();
   if (!evaluator_.set_map(*msg)) {
     RCLCPP_ERROR(
       this->get_logger(),
@@ -345,8 +375,17 @@ void LocalizationMonitorNode::map_callback(
 void LocalizationMonitorNode::scan_callback(
   const sensor_msgs::msg::LaserScan::ConstSharedPtr msg)
 {
-  if (!evaluator_.has_map()) {
+  const rclcpp::Time stamp(msg->header.stamp, get_clock()->get_clock_type());
+  const auto now = this->now();
+  if (!evaluator_.has_map() || stamp.nanoseconds() <= 0 || stamp > now ||
+    (now - stamp).seconds() > measurement_timeout_s_ ||
+    (last_valid_stamp_ && stamp <= *last_valid_stamp_))
+  {
+    invalidate();
     return;
+  }
+  if (last_valid_stamp_ && (stamp - *last_valid_stamp_).seconds() > measurement_timeout_s_) {
+    invalidate();
   }
 
   geometry_msgs::msg::TransformStamped tf_stamped;
@@ -358,11 +397,13 @@ void LocalizationMonitorNode::scan_callback(
     RCLCPP_DEBUG_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
       "TF lookup map -> %s failed: %s", msg->header.frame_id.c_str(), ex.what());
+    invalidate();
     return;
   }
 
   auto quality = evaluator_.evaluate(*msg, tf_stamped);
   if (!quality.has_value()) {
+    invalidate();
     return;
   }
 
@@ -370,17 +411,36 @@ void LocalizationMonitorNode::scan_callback(
   q_msg.data = quality.value();
   quality_pub_->publish(q_msg);
 
-  double stamp_sec = rclcpp::Time(msg->header.stamp).seconds();
-  if (stamp_sec <= 0.0) {
-    stamp_sec = this->now().seconds();
-  }
+  detector_.update(quality.value(), stamp.seconds());
+  last_valid_stamp_ = stamp;
+  last_valid_received_ = std::chrono::steady_clock::now();
+  publish_state();
+}
 
-  auto state = detector_.update(quality.value(), stamp_sec);
-  if (state != LocalizationHealthState::UNKNOWN) {
-    std_msgs::msg::Bool lost_msg;
-    lost_msg.data = (state == LocalizationHealthState::LOST);
-    lost_pub_->publish(lost_msg);
+void LocalizationMonitorNode::invalidate()
+{
+  detector_.reset();
+  last_valid_stamp_.reset();
+  publish_state();
+}
+
+void LocalizationMonitorNode::publish_state()
+{
+  const auto now = this->now();
+  if (last_valid_stamp_ &&
+    (now < *last_valid_stamp_ || (now - *last_valid_stamp_).seconds() > measurement_timeout_s_ ||
+    std::chrono::duration<double>(std::chrono::steady_clock::now() - last_valid_received_).count() >
+    measurement_timeout_s_))
+  {
+    detector_.reset();
+    last_valid_stamp_.reset();
   }
+  msg::LocalizationState state;
+  state.state = static_cast<uint8_t>(detector_.get_state());
+  if (last_valid_stamp_) {
+    state.measurement_stamp = *last_valid_stamp_;
+  }
+  state_pub_->publish(state);
 }
 
 }  // namespace mobile_base_localization

@@ -17,6 +17,7 @@ bt_navigator:
     navigate_to_pose:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
     error_code_names:
+      - compute_route_error_code
       - compute_path_error_code
       - follow_path_error_code
     plugin_lib_names:

@@ -117,6 +117,7 @@ def test_localization_monitor_yaml_configuration():
         'lost_hold_s',
         'recover_hold_s',
         'tf_timeout_s',
+        'measurement_timeout_s',
     ]
     for param in required_params:
         assert param in params, f'Parameter {param} missing from localization_monitor.yaml'

@@ -14,7 +14,8 @@
 
 #include "mobile_base_navigation/is_localization_healthy_condition.hpp"
 
-#include <chrono>
+#include <cmath>
+
 #include "behaviortree_cpp/bt_factory.h"
 
 namespace mobile_base_navigation
@@ -52,11 +53,13 @@ void IsLocalizationHealthyCondition::initialize()
   }
 
   if (!getInput("topic", topic_)) {
-    topic_ = "/localization/lost";
+    topic_ = "/localization/state";
   }
-  getInput("freshness_timeout_s", freshness_timeout_s_);
 
-  last_msg_time_ = rclcpp::Time(0, 0, node_->get_clock()->get_clock_type());
+  getInput("state_publisher_timeout_s", state_publisher_timeout_s_);
+  if (!std::isfinite(state_publisher_timeout_s_) || state_publisher_timeout_s_ <= 0.0) {
+    throw BT::RuntimeError("state_publisher_timeout_s must be finite and > 0");
+  }
 
   callback_group_ = node_->create_callback_group(
     rclcpp::CallbackGroupType::MutuallyExclusive, false);
@@ -66,20 +69,22 @@ void IsLocalizationHealthyCondition::initialize()
   rclcpp::SubscriptionOptions sub_options;
   sub_options.callback_group = callback_group_;
 
-  sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+  sub_ = node_->create_subscription<mobile_base_localization::msg::LocalizationState>(
     topic_,
-    rclcpp::QoS(10),
+    rclcpp::QoS(1).reliable().transient_local(),
     std::bind(&IsLocalizationHealthyCondition::onMessage, this, std::placeholders::_1),
     sub_options);
 
+  callback_group_executor_.spin_some();
   initialized_ = true;
 }
 
-void IsLocalizationHealthyCondition::onMessage(const std_msgs::msg::Bool::SharedPtr msg)
+void IsLocalizationHealthyCondition::onMessage(
+  const mobile_base_localization::msg::LocalizationState::SharedPtr msg)
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  last_msg_time_ = node_->now();
-  last_lost_ = msg->data;
+  last_state_received_ = std::chrono::steady_clock::now();
+  state_ = msg->state;
   has_msg_ = true;
 }
 
@@ -91,19 +96,16 @@ BT::NodeStatus IsLocalizationHealthyCondition::tick()
 
   callback_group_executor_.spin_some();
 
-  getInput("freshness_timeout_s", freshness_timeout_s_);
 
   std::lock_guard<std::mutex> lock(mutex_);
-  if (!has_msg_) {
-    return BT::NodeStatus::FAILURE;
-  }
-
-  const rclcpp::Time now = node_->now();
-  if (now < last_msg_time_ || (now - last_msg_time_).seconds() > freshness_timeout_s_) {
-    return BT::NodeStatus::FAILURE;
-  }
-
-  if (last_lost_) {
+  // Transport/source availability only. Localization owns scan/TF/measurement validity.
+  const bool publisher_alive = has_msg_ &&
+    std::chrono::duration<double>(
+    std::chrono::steady_clock::now() - last_state_received_).count() <= state_publisher_timeout_s_;
+  const bool lost = publisher_alive &&
+    state_ == mobile_base_localization::msg::LocalizationState::LOST;
+  setOutput("recovery_required", lost);
+  if (!publisher_alive || state_ != mobile_base_localization::msg::LocalizationState::HEALTHY) {
     return BT::NodeStatus::FAILURE;
   }
 

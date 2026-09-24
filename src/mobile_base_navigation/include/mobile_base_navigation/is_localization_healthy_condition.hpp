@@ -15,24 +15,19 @@
 #ifndef MOBILE_BASE_NAVIGATION__IS_LOCALIZATION_HEALTHY_CONDITION_HPP_
 #define MOBILE_BASE_NAVIGATION__IS_LOCALIZATION_HEALTHY_CONDITION_HPP_
 
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
 
 #include "behaviortree_cpp/condition_node.h"
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/bool.hpp"
+#include "mobile_base_localization/msg/localization_state.hpp"
 
 namespace mobile_base_navigation
 {
 
-/**
- * @brief Behavior tree condition node that evaluates localization health
- * based on the /localization/lost topic and message freshness.
- *
- * Returns SUCCESS only when a message has been received within freshness_timeout_s
- * and lost is false. Returns FAILURE otherwise. Never returns RUNNING.
- */
+/** Accepts the Localization subsystem state; latches LOST as the failure cause. */
 class IsLocalizationHealthyCondition : public BT::ConditionNode
 {
 public:
@@ -50,30 +45,31 @@ public:
     return {
       BT::InputPort<std::string>(
         "topic",
-        std::string("/localization/lost"),
-        "Topic for localization lost status"),
+        std::string("/localization/state"),
+        "Topic for authoritative localization state"),
       BT::InputPort<double>(
-        "freshness_timeout_s",
-        1.0,
-        "Maximum age in seconds for localization health evidence to be considered fresh"),
+        "state_publisher_timeout_s", 1.0,
+        "Maximum silence of localization state publisher, not measurement freshness"),
+      BT::OutputPort<bool>("recovery_required", "True only for explicit LOST"),
     };
   }
 
 private:
   void initialize();
-  void onMessage(const std_msgs::msg::Bool::SharedPtr msg);
+  void onMessage(
+    const mobile_base_localization::msg::LocalizationState::SharedPtr msg);
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
   rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_;
+  rclcpp::Subscription<mobile_base_localization::msg::LocalizationState>::SharedPtr sub_;
 
   std::string topic_;
-  double freshness_timeout_s_{1.0};
+  double state_publisher_timeout_s_{1.0};
+  std::chrono::steady_clock::time_point last_state_received_;
 
   std::mutex mutex_;
-  rclcpp::Time last_msg_time_{0, 0, RCL_ROS_TIME};
-  bool last_lost_{false};
+  uint8_t state_{mobile_base_localization::msg::LocalizationState::UNKNOWN};
   bool has_msg_{false};
   bool initialized_{false};
 };

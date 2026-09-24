@@ -21,20 +21,12 @@
 
 #include "behaviortree_cpp/action_node.h"
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/bool.hpp"
+#include "mobile_base_localization/msg/localization_state.hpp"
 
 namespace mobile_base_navigation
 {
 
-/**
- * @brief Behavior tree stateful action node that waits for fresh localization health
- * evidence produced strictly after the recovery attempt begins.
- *
- * Used inside a recovery sequence wrapped by a Timeout decorator.
- * On start, establishes a recovery epoch and ignores any evidence received prior to start.
- * Returns RUNNING while waiting for new post-start evidence or while new evidence is lost=true.
- * Returns SUCCESS only when new post-start evidence reports lost=false and is fresh.
- */
+/** Waits for HEALTHY with a measurement timestamp after this recovery wait began. */
 class WaitForLocalizationHealthyNode : public BT::StatefulActionNode
 {
 public:
@@ -54,32 +46,29 @@ public:
     return {
       BT::InputPort<std::string>(
         "topic",
-        std::string("/localization/lost"),
-        "Topic for localization lost status"),
-      BT::InputPort<double>(
-        "freshness_timeout_s",
-        1.0,
-        "Maximum age in seconds for localization health evidence to be considered fresh"),
+        std::string("/localization/state"),
+        "Topic for authoritative localization state"),
     };
   }
 
 private:
   void initialize();
-  void onMessage(const std_msgs::msg::Bool::SharedPtr msg);
+  void onMessage(
+    const mobile_base_localization::msg::LocalizationState::SharedPtr msg);
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
   rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_;
+  rclcpp::Subscription<mobile_base_localization::msg::LocalizationState>::SharedPtr sub_;
 
   std::string topic_;
-  double freshness_timeout_s_{1.0};
 
   std::mutex mutex_;
   rclcpp::Time last_msg_time_{0, 0, RCL_ROS_TIME};
-  bool last_lost_{true};
+  uint8_t state_{mobile_base_localization::msg::LocalizationState::UNKNOWN};
   uint64_t msg_count_{0};
   uint64_t start_msg_count_{0};
+  rclcpp::Time recovery_start_{0, 0, RCL_ROS_TIME};
   bool initialized_{false};
 };
 
