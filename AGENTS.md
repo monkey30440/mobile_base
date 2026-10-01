@@ -43,3 +43,20 @@
 - Distinguish clearly between implemented, software-validated, and hardware-validated work.
 - Never equate implementation with full verification or claim Feature Freeze unless the documented hardware verification requirements are complete.
 - If validation could not be run, state exactly what remains unverified.
+
+## Agent skills
+
+### Issue tracker
+
+Before reading or writing work tickets, read `docs/agents/issue-tracker.md`.
+This repository uses GitHub Issues.
+
+### Triage labels
+
+Before triaging issues or changing their triage state, read
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Before exploring domain terminology or design decisions, read
+`docs/agents/domain.md`. This repository uses a single-context layout.
