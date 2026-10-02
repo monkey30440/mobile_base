@@ -28,7 +28,8 @@ def crc(data):
 
 class Peer:
     """External Modbus RTU peer: fixed authoritative example RPM feedback."""
-    def __init__(self, require_enable=False, stale_target=0, ignore_istop=False, fail_enable=False, alarm_on_enable=False, enable_delay=0, ignore_svoff=False):
+    def __init__(self, require_enable=False, stale_target=0, ignore_istop=False, fail_enable=False, alarm_on_enable=False, enable_delay=0, ignore_svoff=False, response_delay=0):
+        self.response_delay = response_delay
         self.require_enable = require_enable
         self.enabled = not require_enable
         self.targets = [stale_target, stale_target]
@@ -118,6 +119,7 @@ class Peer:
                 if self.bad_error_check and request[1] == 3:
                     response = response[:-1] + bytes((response[-1] ^ 1,))
                 if not self.silent:
+                    time.sleep(self.response_delay)
                     self.last_response = time.monotonic()
                     os.write(self.master, response + crc(response))
 
@@ -132,7 +134,7 @@ class Peer:
 def workflow(tmp_path, request):
     os.environ['ROS_DOMAIN_ID'] = str(100 + os.getpid() % 100)
     options = getattr(request, 'param', {})
-    peer = Peer(**{k: v for k, v in options.items() if k != 'expect_failure'})
+    peer = Peer(**{k: v for k, v in options.items() if k not in ('expect_failure', 'native_budget')})
     config = {'hardware': {'serial_port': peer.path, 'baud': 115200, 'parity': 'N',
                           'stop_bits': 1, 'response_timeout_seconds': 0.03, 'enable_timeout_seconds': 0.3,
                           'firmware': 'SOFTWARE_PEER_NOT_HARDWARE',
@@ -140,7 +142,11 @@ def workflow(tmp_path, request):
                           'pdo_mapping': 0, 'drive_enable_setting': 1},
               'controller': {'wheel_radius': 0.1, 'wheel_separation': 0.5,
                              'cmd_vel_timeout': 0.3, 'update_rate': 30,
-                             'linear_velocity_limit': 0.5, 'angular_velocity_limit': 1.0}}
+                             'linear_velocity_limit': 0.5, 'angular_velocity_limit': 1.0,
+                             'native_hardware_execution_budget_us': {'mean_warn':15000.0, 'mean_error':20000.0,
+                                                                     'stddev_warn':3000.0, 'stddev_error':5000.0}}}
+    if not options.get('native_budget', False):
+        config['controller'].pop('native_hardware_execution_budget_us')
     for side, drive_id, direction in [('left_', 2, -1), ('right_', 1, 1)]:
         config['hardware'].update({side+'drive_id': drive_id, side+'gear_ratio': 10,
                                    side+'direction': direction,
@@ -345,3 +351,16 @@ def test_native_launch_shutdown_stops_and_deenergizes(workflow):
     wait(lambda: not peer.enabled, seconds=5)
     assert 7 in peer.lifecycle_commands
     assert not peer.alarm_reset_observed
+
+
+@pytest.mark.parametrize('workflow,expected_level', [
+    ({'response_delay': .006, 'native_budget': False}, 2),
+    ({'response_delay': .006, 'native_budget': True}, 0),
+    ({'response_delay': .0205, 'native_budget': True}, 2),
+], indirect=['workflow'])
+def test_native_hardware_execution_budget_preserves_timing_errors(workflow, expected_level):
+    _, _, _, _, diagnostics, wait = workflow
+    wait(lambda: any(s.level in (expected_level, bytes([expected_level]))
+                     and s.name == 'controller_manager: Hardware Components Activity'
+                     and any(v.key == 'M1.read_cycle.execution_time' for v in s.values)
+                     for msg in diagnostics for s in msg.status), seconds=5)

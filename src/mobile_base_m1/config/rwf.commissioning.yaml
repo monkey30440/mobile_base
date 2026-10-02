@@ -34,3 +34,10 @@ controller:
   update_rate: 20
   linear_velocity_limit: 0.03
   angular_velocity_limit: 0.10
+  # Native synchronous RS485 execution budget; microseconds, engineering only.
+  # Mean/stddev alarms are statistical thresholds, not hard deadlines/WCET.
+  native_hardware_execution_budget_us:
+    mean_warn: 15000.0
+    mean_error: 20000.0
+    stddev_warn: 3000.0
+    stddev_error: 5000.0
