@@ -1,59 +1,50 @@
-# Project-private design and vendor reference material
-/src/mobile_base_description/ref/
-/src/mobile_base_description/meshes/*
-!/src/mobile_base_description/meshes/README.md
-/src/mobile_base_description/urdf/*
-!/src/mobile_base_description/urdf/README.md
-
-# Local environment and secrets
+# Local environment and credentials
 .env
 .env.*
 !.env.example
+!.env.*.example
+/.aws/
 
 # ROS 2 / colcon build and runtime output
-/build/
-/install/
-/log/
+build/
+install/
+log/
 *.log
 
-# Release bundles and container image exports
-release/
-
-# Runtime recordings and timestamped site maps
+# ROS recordings
 *.bag
 *.db3
+*.db3-shm
+*.db3-wal
 *.mcap
 rosbag2_*/
-maps/
-!maps/template
 
-# Local code-analysis state
-/.gitnexus/
-
-# Python caches, test state, coverage, and packaging output
+# Python caches, test state, and packaging output
 __pycache__/
 *.py[cod]
-*$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 .coverage.*
 htmlcov/
 *.egg-info/
 .eggs/
 dist/
-sdist/
-wheels/
 
 # Python virtual environments
 .venv/
 venv/
-env/
-ENV/
 
-# CMake and compiler tooling generated outside the colcon build tree
+# CMake generated files
 CMakeCache.txt
 CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
 compile_commands.json
+
+# Local code-analysis state
+/.gitnexus/
 
 # IDE, editor, and operating-system files
 .vscode/
@@ -63,5 +54,3 @@ compile_commands.json
 *~
 .DS_Store
 Thumbs.db
-
-evidence/

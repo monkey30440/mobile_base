@@ -1,12 +1,11 @@
 # Triage Labels
 
-| Canonical role | Tracker label | Meaning |
-|---|---|---|
-| needs-triage | needs-triage | Maintainer evaluation required |
-| needs-info | needs-info | More information required from the reporter |
-| ready-for-agent | ready-for-agent | Fully specified for agent implementation |
-| ready-for-human | ready-for-human | Human implementation required |
-| wontfix | wontfix | Will not be actioned |
+| Role／Label | 意義 |
+|---|---|
+| `needs-triage` | 等待評估 |
+| `needs-info` | 等待資訊 |
+| `ready-for-agent` | 已具體定義，可由 agent 處理 |
+| `ready-for-human` | 需要人工處理 |
+| `wontfix` | 不處理 |
 
-Use these exact label strings when a skill refers to a canonical role.
-Labels do not override the repository's approval and stage boundaries.
+Labels 不取代使用者的階段授權。

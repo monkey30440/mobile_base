@@ -1,35 +1,11 @@
 # Domain Docs
 
-## Entry point and authority
+採 single-context：根目錄 `CONTEXT.md` 與 `docs/adr/`。
 
-Start at `spec/README.md` and read the authoritative documents relevant
-to the task.
+探索時讀取既有 `CONTEXT.md` 及相關 ADRs。
+檔案不存在時直接繼續，不預先建立空文件。
 
-Glossaries record terminology; ADRs record decision rationale. They
-supplement the existing documentation and must not duplicate or override
-its designated authorities.
-
-## Layout
-
-This repository uses a single-context layout:
-
-- `GLOSSARY.md` at the repository root.
-- ADRs under `docs/adr/`.
-
-Read the glossary and ADRs relevant to the task when they exist.
-If they are absent, proceed silently. Create domain documentation lazily
-when terminology or decisions are resolved, subject to `AGENTS.md`.
-
-## Vocabulary
-
-Use the glossary's established terms. When no glossary exists, use
-the vocabulary in the relevant authoritative specification.
-
-If a needed concept is missing, reconsider whether a new term is necessary;
-record a genuine terminology gap for the domain-modeling workflow.
-
-## Conflicts
-
-Surface conflicts with specifications or ADRs explicitly. Resolve them
-through the repository's authority and approval workflow before changing
-the current baseline.
+使用 glossary 已定義的術語。
+術語缺口交由 domain-modeling 處理。
+遇到 ADR 衝突時明確提出，不靜默覆寫。
+文件於實際術語／決策確立時才建立。

@@ -1,0 +1,2520 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- velocity_corrected_2026-08-04: GM24004-01驅動的18個關節velocity已依供應商確認的V_rated 20->15(+-15%)mm/s縮放0.75倍, effort不變 -->
+<robot name="RWF_V2_0702" xmlns:xacro="http://ros.org/wiki/xacro">
+<xacro:arg name="namespace" default=""/>
+<xacro:property name="namespace" value="$(arg namespace)"/>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0.020088 -0.00015211 -0.11461" rpy="0 0 0" />
+      <mass value="54.0" />
+      <inertia ixx="0.60173728" ixy="0.0093494997" ixz="0.00060931233" iyy="0.50814137" iyz="2.8622951E-06" izz="1.0391101" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/base_link.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="caster_swivel_link_FR">
+    <inertial>
+      <origin xyz="0.0103166215360047 -8.65433217867029E-07 -0.0355309429919391" rpy="0 0 0" />
+      <mass value="0.523217710233688" />
+      <inertia ixx="0.00023375113352567" ixy="2.99382486207847E-10" ixz="1.53298155785979E-05" iyy="0.00021511825376467" iyz="6.18262352505086E-10" izz="0.000329081550598341" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_FR.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.776470588235294 0.756862745098039 0.737254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_FR.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_swivel_joint_FR" type="continuous">
+    <origin xyz="0.2575 -0.25 -0.1414" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="caster_swivel_link_FR" />
+    <axis xyz="0 0 1" />
+  </joint>
+  <link name="caster_suspension_link_FR">
+    <inertial>
+      <origin xyz="-0.00442258782149532 -0.00050765965725702 0.00479256342423404" rpy="0 0 0" />
+      <mass value="0.416202852613538" />
+      <inertia ixx="0.000198954565305042" ixy="2.20251568727557E-10" ixz="-1.56523196570275E-06" iyy="0.000149467103139952" iyz="-1.1432230842139E-08" izz="0.000303441735512309" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_FR.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.776470588235294 0.756862745098039 0.737254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_FR.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_suspension_joint_FR" type="revolute">
+    <origin xyz="0.0155 0 -0.076" rpy="0 0 0" />
+    <parent link="caster_swivel_link_FR" />
+    <child link="caster_suspension_link_FR" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="0.19" effort="205" velocity="0" />
+  </joint>
+  <link name="caster_wheel_link_FR_L">
+    <inertial>
+      <origin xyz="-5.55111512312578E-17 1.4122036873232E-13 -9.85322934354826E-16" rpy="0 0 0" />
+      <mass value="0.249018071356541" />
+      <inertia ixx="6.14802760622611E-05" ixy="6.55260417538048E-10" ixz="-5.82792410754633E-18" iyy="0.00010760831770198" iyz="-2.07616300363314E-20" izz="6.14802760622489E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FR_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FR_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_FR_L" type="continuous">
+    <origin xyz="-0.041 0.01318 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_FR" />
+    <child link="caster_wheel_link_FR_L" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="caster_wheel_link_FR_R">
+    <inertial>
+      <origin xyz="2.77555756156289E-17 1.4122036873232E-13 -9.57567358739198E-16" rpy="0 0 0" />
+      <mass value="0.24901807135654" />
+      <inertia ixx="6.14802760622607E-05" ixy="6.55260417579568E-10" ixz="-5.82559921840177E-18" iyy="0.000107608317701979" iyz="3.85910038673716E-22" izz="6.14802760622484E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FR_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FR_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_FR_R" type="continuous">
+    <origin xyz="-0.041 -0.01318 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_FR" />
+    <child link="caster_wheel_link_FR_R" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="caster_swivel_link_BR">
+    <inertial>
+      <origin xyz="0.0103166215360048 -8.65433217756006E-07 -0.0359309429919391" rpy="0 0 0" />
+      <mass value="0.523217710233689" />
+      <inertia ixx="0.00023375113352567" ixy="2.99382486188095E-10" ixz="1.53298155785977E-05" iyy="0.00021511825376467" iyz="6.18262352568383E-10" izz="0.00032908155059834" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_BR.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_BR.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_swivel_joint_BR" type="continuous">
+    <origin xyz="-0.2165 -0.25 -0.141" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="caster_swivel_link_BR" />
+    <axis xyz="0 0 1" />
+  </joint>
+  <link name="caster_suspension_link_BR">
+    <inertial>
+      <origin xyz="-0.00442258782149535 -0.000507659657257076 0.00479256342423402" rpy="0 0 0" />
+      <mass value="0.416202852613538" />
+      <inertia ixx="0.000198954565305042" ixy="2.20251568641037E-10" ixz="-1.56523196570274E-06" iyy="0.000149467103139952" iyz="-1.14322308421104E-08" izz="0.000303441735512309" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_BR.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.776470588235294 0.756862745098039 0.737254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_BR.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_suspension_joint_BR" type="revolute">
+    <origin xyz="0.0155 0 -0.0764" rpy="0 0 0" />
+    <parent link="caster_swivel_link_BR" />
+    <child link="caster_suspension_link_BR" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="0.19" effort="205" velocity="0" />
+  </joint>
+  <link name="caster_wheel_link_BR_L">
+    <inertial>
+      <origin xyz="-5.55111512312578E-17 1.4122036873232E-13 -9.43689570931383E-16" rpy="0 0 0" />
+      <mass value="0.24901807135654" />
+      <inertia ixx="6.14802760622609E-05" ixy="6.55260417627104E-10" ixz="-5.80628766858549E-18" iyy="0.000107608317701979" iyz="-2.76352739996021E-20" izz="6.14802760622486E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BR_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BR_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_BR_L" type="continuous">
+    <origin xyz="-0.041 0.01318 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_BR" />
+    <child link="caster_wheel_link_BR_L" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="caster_wheel_link_BR_R">
+    <inertial>
+      <origin xyz="0 1.4122036873232E-13 -9.92261828258734E-16" rpy="0 0 0" />
+      <mass value="0.24901807135654" />
+      <inertia ixx="6.14802760622609E-05" ixy="6.55260417567863E-10" ixz="-5.82367976137244E-18" iyy="0.000107608317701979" iyz="-1.73955354264652E-20" izz="6.14802760622487E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BR_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BR_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_BR_R" type="continuous">
+    <origin xyz="-0.041 -0.01318 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_BR" />
+    <child link="caster_wheel_link_BR_R" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="caster_swivel_link_FL">
+    <inertial>
+      <origin xyz="0.0103166215360048 -8.6543321792254E-07 -0.035530942991939" rpy="0 0 0" />
+      <mass value="0.523217710233688" />
+      <inertia ixx="0.00023375113352567" ixy="2.9938248621729E-10" ixz="1.5329815578598E-05" iyy="0.00021511825376467" iyz="6.18262352525982E-10" izz="0.00032908155059834" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_FL.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_FL.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_swivel_joint_FL" type="continuous">
+    <origin xyz="0.2575 0.25 -0.1414" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="caster_swivel_link_FL" />
+    <axis xyz="0 0 1" />
+  </joint>
+  <link name="caster_suspension_link_FL">
+    <inertial>
+      <origin xyz="-0.00442258782149543 -0.000507659657256548 0.00479256342423399" rpy="0 0 0" />
+      <mass value="0.416202852613537" />
+      <inertia ixx="0.000198954565305041" ixy="2.20251568828231E-10" ixz="-1.56523196570277E-06" iyy="0.000149467103139951" iyz="-1.14322308421013E-08" izz="0.000303441735512308" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_FL.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.776470588235294 0.756862745098039 0.737254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_FL.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_suspension_joint_FL" type="revolute">
+    <origin xyz="0.0155 0 -0.076" rpy="0 0 0" />
+    <parent link="caster_swivel_link_FL" />
+    <child link="caster_suspension_link_FL" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="0.19" effort="205" velocity="0" />
+  </joint>
+  <link name="caster_wheel_link_FL_L">
+    <inertial>
+      <origin xyz="-5.55111512312578E-17 1.4122036873232E-13 -9.85322934354826E-16" rpy="0 0 0" />
+      <mass value="0.249018071356539" />
+      <inertia ixx="6.14802760622606E-05" ixy="6.55260417578123E-10" ixz="-5.82348900399988E-18" iyy="0.000107608317701979" iyz="7.22132630390686E-21" izz="6.14802760622484E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FL_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FL_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_FL_L" type="continuous">
+    <origin xyz="-0.041 0.01318 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_FL" />
+    <child link="caster_wheel_link_FL_L" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="caster_wheel_link_FL_R">
+    <inertial>
+      <origin xyz="2.77555756156289E-17 1.41248124307936E-13 -9.85322934354826E-16" rpy="0 0 0" />
+      <mass value="0.24901807135654" />
+      <inertia ixx="6.14802760622607E-05" ixy="6.55260417601835E-10" ixz="-5.82572935156205E-18" iyy="0.000107608317701979" iyz="-5.91296096230312E-21" izz="6.14802760622484E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FL_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_FL_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_FL_R" type="continuous">
+    <origin xyz="-0.041 -0.01318 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_FL" />
+    <child link="caster_wheel_link_FL_R" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="caster_swivel_link_BL">
+    <inertial>
+      <origin xyz="0.0103166215360048 -8.65433218061318E-07 -0.035530942991939" rpy="0 0 0" />
+      <mass value="0.52321771023369" />
+      <inertia ixx="0.000233751133525671" ixy="2.99382486264924E-10" ixz="1.5329815578598E-05" iyy="0.000215118253764671" iyz="6.18262352651286E-10" izz="0.000329081550598341" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_BL.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_swivel_link_BL.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_swivel_joint_BL" type="continuous">
+    <origin xyz="-0.2165 0.25 -0.1414" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="caster_swivel_link_BL" />
+    <axis xyz="0 0 1" />
+  </joint>
+  <link name="caster_suspension_link_BL">
+    <inertial>
+      <origin xyz="-0.00442258782149518 -0.000507659657256632 0.00479256342423397" rpy="0 0 0" />
+      <mass value="0.416202852613537" />
+      <inertia ixx="0.000198954565305042" ixy="2.20251568823079E-10" ixz="-1.5652319657028E-06" iyy="0.000149467103139951" iyz="-1.14322308420068E-08" izz="0.000303441735512308" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_BL.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.776470588235294 0.756862745098039 0.737254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_suspension_link_BL.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_suspension_joint_BL" type="revolute">
+    <origin xyz="0.0155 0 -0.076" rpy="0 0 0" />
+    <parent link="caster_swivel_link_BL" />
+    <child link="caster_suspension_link_BL" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="0.19" effort="205" velocity="0" />
+  </joint>
+  <link name="caster_wheel_link_BL_L">
+    <inertial>
+      <origin xyz="-4.00790511889682E-14 -0.00063999999985842 -1.0991207943789E-14" rpy="0 0 0" />
+      <mass value="0.249018071356539" />
+      <inertia ixx="6.14802760622605E-05" ixy="6.55260417475009E-10" ixz="-5.79843593779342E-18" iyy="0.000107608317701978" iyz="-4.04446737890116E-20" izz="6.14802760622482E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BL_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BL_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_BL_L" type="continuous">
+    <origin xyz="-0.041 0.01382 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_BL" />
+    <child link="caster_wheel_link_BL_L" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="caster_wheel_link_BL_R">
+    <inertial>
+      <origin xyz="-4.00790511889682E-14 0.000640000000141611 -1.0991207943789E-14" rpy="0 0 0" />
+      <mass value="0.249018071356541" />
+      <inertia ixx="6.14802760622609E-05" ixy="6.55260417510533E-10" ixz="-5.83095091160399E-18" iyy="0.000107608317701979" iyz="-1.24955370011501E-20" izz="6.14802760622488E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BL_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0.109803921568627 0.0274509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/caster_wheel_link_BL_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="caster_wheel_joint_BL_R" type="continuous">
+    <origin xyz="-0.041 -0.01382 -0.0015" rpy="0 0 0" />
+    <parent link="caster_suspension_link_BL" />
+    <child link="caster_wheel_link_BL_R" />
+    <axis xyz="0 1 0" />
+  </joint>
+  <link name="driving_suspension_link_R">
+    <inertial>
+      <origin xyz="-5.9233E-05 -0.0077888 0.010796" rpy="0 0 0" />
+      <mass value="4.586" />
+      <inertia ixx="0.002155786" ixy="1.1305944E-06" ixz="1.2893531E-06" iyy="0.0031168493" iyz="-3.298968E-05" izz="0.0022463395" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_suspension_link_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.77647 0.75686 0.73725 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_suspension_link_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="driving_slide_joint_R" type="prismatic">
+    <origin xyz="0.0205 -0.1915 -0.176" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="driving_suspension_link_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="0.014" effort="248" velocity="0" />
+  </joint>
+  <link name="driving_wheel_link_R">
+    <inertial>
+      <origin xyz="-2.3082E-17 -0.0046643 -8.3267E-17" rpy="0 0 0" />
+      <mass value="1.27" />
+      <inertia ixx="0.002934296" ixy="4.0302405E-19" ixz="5.7228447E-19" iyy="0.0053520617" iyz="-1.7967305E-18" izz="0.002934296" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_wheel_link_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_wheel_link_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="driving_wheel_joint_R" type="continuous">
+    <origin xyz="0 -0.0855 0" rpy="0 0 0" />
+    <parent link="driving_suspension_link_R" />
+    <child link="driving_wheel_link_R" />
+    <axis xyz="0 1 0" />
+    <limit effort="25.4" velocity="15.7" />
+  </joint>
+  <link name="driving_suspension_link_L">
+    <inertial>
+      <origin xyz="5.9233E-05 0.0077888 0.010796" rpy="0 0 0" />
+      <mass value="4.586" />
+      <inertia ixx="0.002155786" ixy="1.1305944E-06" ixz="-1.2893531E-06" iyy="0.0031168493" iyz="3.298968E-05" izz="0.0022463395" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_suspension_link_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.77647 0.75686 0.73725 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_suspension_link_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="driving_slide_joint_L" type="prismatic">
+    <origin xyz="0.0205 0.1915 -0.176" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="driving_suspension_link_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="0.014" effort="248" velocity="0" />
+  </joint>
+  <link name="driving_wheel_link_L">
+    <inertial>
+      <origin xyz="-1.0336E-12 0.0041643 2.0817E-16" rpy="0 0 0" />
+      <mass value="1.27" />
+      <inertia ixx="0.002934296" ixy="-2.863841E-19" ixz="-7.7597324E-19" iyy="0.0053520617" iyz="-1.9741091E-18" izz="0.002934296" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_wheel_link_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/driving_wheel_link_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="driving_wheel_joint_L" type="continuous">
+    <origin xyz="0 0.086 0" rpy="0 0 0" />
+    <parent link="driving_suspension_link_L" />
+    <child link="driving_wheel_link_L" />
+    <axis xyz="0 1 0" />
+    <limit effort="25.4" velocity="15.7" />
+  </joint>
+  <link name="BASE_FOOTPRINT">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.000000000001" />
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0" />
+    </inertial>
+  </link>
+  <joint name="J_BASE_FOOTPRINT" type="fixed">
+    <origin xyz="0 0 -0.2560" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="BASE_FOOTPRINT" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <link name="base_imu_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.08" />
+      <inertia ixx="6.7E-5" ixy="0" ixz="0" iyy="1.51E-4" iyz="0" izz="2.17E-4" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/base_imu_link.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+  </link>
+  <joint name="base_imu_joint" type="fixed">
+    <origin xyz="0.0437499999999998 -0.00799999999999978 -0.0145899999999999" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="base_imu_link" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <link name="base_lidar_link_FL">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.23" />
+      <inertia ixx="1.98E-4" ixy="0" ixz="0" iyy="1.98E-4" iyz="0" izz="1.38E-4" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/base_lidar_link_FL.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+  </link>
+  <joint name="base_lidar_joint_FL" type="fixed">
+    <origin xyz="0.28771 0.26721 -0.06011" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="base_lidar_link_FL" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <link name="base_lidar_link_BR">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.23" />
+      <inertia ixx="1.98E-4" ixy="0" ixz="0" iyy="1.98E-4" iyz="0" izz="1.38E-4" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/base_lidar_link_BR.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+  </link>
+  <joint name="base_lidar_joint_BR" type="fixed">
+    <origin xyz="-0.24671 -0.26721 -0.06011" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="base_lidar_link_BR" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <link name="L_TORSO_J1">
+    <inertial>
+      <origin xyz="-0.13525 -0.0019 0.24844" rpy="0 0 0" />
+      <mass value="6.49778" />
+      <inertia ixx="0.53559" ixy="0.00319" ixz="-0.27881" iyy="0.68155" iyz="-0.00585" izz="0.17533" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/LEG_J1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/LEG_J1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_L_TORSO_J1" type="revolute">
+    <origin xyz="0 0 0.09" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="L_TORSO_J1" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="2.4" friction="2.7" />
+    <limit lower="-0.611" upper="1.7453" effort="376.0" velocity="0.3142" />
+  </joint>
+  <link name="L_TORSO_J2">
+    <inertial>
+      <origin xyz="0.0967 -0.005 0.1169" rpy="0 0 0" />
+      <mass value="3.113" />
+      <inertia ixx="0.0848" ixy="-0.0012" ixz="0.0541" iyy="0.1207" iyz="-0.0015" izz="0.0642" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/LEG_J2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/LEG_J2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  
+  <joint name="J_L_TORSO_J2" type="revolute">
+    <origin xyz="-0.19121 0 0.35134" rpy="0 0 0" />
+    <parent link="L_TORSO_J1" />
+    <child link="L_TORSO_J2" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="2.4" friction="2.7" />
+    <limit lower="-2.7925" upper="1.1345" effort="376.0" velocity="0.3142" />
+  </joint>
+  <link name="L_TORSO_J3">
+    <inertial>
+      <origin xyz="0.00005 -0.00441 0.06978" rpy="0 0 0" />
+      <mass value="6.8804" />
+      <inertia ixx="0.08224" ixy="-0.00002" ixz="-0.00001" iyy="0.08115" iyz="-0.00005" izz="0.01372" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/LEG_J3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/LEG_J3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_L_TORSO_J3" type="revolute">
+    <origin xyz="0.19121 0 0.23116" rpy="0 0 0" />
+    <parent link="L_TORSO_J2" />
+    <child link="L_TORSO_J3" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="1.5" friction="2.0" />
+    <limit lower="-1.1345" upper="2.705" effort="376.0" velocity="0.3142" />
+  </joint>
+  <link name="L_TORSO_J4">
+    <inertial>
+      <origin xyz="0.0002 -0.0010 0.1519" rpy="0 0 0" />
+      <mass value="6.1661" />
+      <inertia ixx="0.253" ixy="0" ixz="0.0003" iyy="0.2007" iyz="-0.0014" izz="0.067" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/TORSO.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/TORSO.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_L_TORSO_J4" type="revolute">
+    <origin xyz="0 0 0.195" rpy="0 0 0" />
+    <parent link="L_TORSO_J3" />
+    <child link="L_TORSO_J4" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="1.5" friction="2.0" />
+    <limit lower="-3.1416" upper="3.1416" effort="315.0" velocity="2.618" />
+  </joint>
+  <link name="ARM_L_J1">
+    <inertial>
+      <origin xyz="0.0179 0.0698 0.0000" rpy="0 0 0" />
+      <mass value="1.4261" />
+      <inertia ixx="0.0085" ixy="0.0019" ixz="0" iyy="0.0021" iyz="0" izz="0.0091" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_L_J1" type="revolute">
+    <origin xyz="0 0.1545 0.223" rpy="0 0 0" />
+    <parent link="L_TORSO_J4" />
+    <child link="ARM_L_J1" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-3.14159" upper="3.14159" effort="61.4" velocity="2.094" />
+  </joint>
+  <link name="ARM_L_J2">
+    <inertial>
+      <origin xyz="-0.0507 0 -0.1485" rpy="0 0 0" />
+      <mass value="1.9367" />
+      <inertia ixx="0.0521" ixy="0" ixz="0.0168" iyy="0.0578" iyz="0" izz="0.0079" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_L_J2" type="revolute">
+    <origin xyz="0.0595 0.073 0" rpy="0 0 0" />
+    <parent link="ARM_L_J1" />
+    <child link="ARM_L_J2" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-0.17453" upper="3.31613" effort="61.4" velocity="2.094" />
+  </joint>
+  <link name="ARM_L_J3">
+    <inertial>
+      <origin xyz="0.031 0.0177 -0.0777" rpy="0 0 0" />
+      <mass value="1.2774" />
+      <inertia ixx="0.002" ixy="0" ixz="-0.0004" iyy="0.0018" iyz="0" izz="0.0023" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_L_J3" type="revolute">
+    <origin xyz="-0.0595 0 -0.215" rpy="0 0 0" />
+    <parent link="ARM_L_J2" />
+    <child link="ARM_L_J3" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-3.14159" upper="3.14159" effort="61.4" velocity="2.094" />
+  </joint>
+  <link name="ARM_L_J4">
+    <inertial>
+      <origin xyz="-0.0386 0.0088 -0.1346" rpy="0 0 0" />
+      <mass value="1.365" />
+      <inertia ixx="0.0303" ixy="-0.0003" ixz="0.0075" iyy="0.0318" iyz="-0.0003" izz="0.004" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_L_J4" type="revolute">
+    <origin xyz="0.041 0 -0.085" rpy="0 0 0" />
+    <parent link="ARM_L_J3" />
+    <child link="ARM_L_J4" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-2.79253" upper="0.95993" effort="31.7" velocity="2.094" />
+  </joint>
+  <link name="ARM_L_J5">
+    <inertial>
+      <origin xyz="0 0.0211 -0.0561" rpy="0 0 0" />
+      <mass value="1.0582" />
+      <inertia ixx="0.004950" ixy="0.000000" ixz="0.000001" iyy="0.004256" iyz="-0.001327" izz="0.001540" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J5.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_L_J5" type="revolute">
+    <origin xyz="-0.041 0 -0.1945" rpy="0 0 0" />
+    <parent link="ARM_L_J4" />
+    <child link="ARM_L_J5" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-3.14159" upper="3.14159" effort="31.7" velocity="2.094" />
+  </joint>
+  <link name="ARM_L_J6">
+    <inertial>
+      <origin xyz="-0.0025 0.0147 -0.0683" rpy="0 0 0" />
+      <mass value="0.627" />
+      <inertia ixx="0.0042" ixy="0" ixz="0.0001" iyy="0.004" iyz="-0.0002" izz="0.0011" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J6.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J6.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_L_J6" type="revolute">
+    <origin xyz="0 0 -0.0585" rpy="0 0 0" />
+    <parent link="ARM_L_J5" />
+    <child link="ARM_L_J6" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-1.83260" upper="1.83260" effort="31.7" velocity="2.094" />
+  </joint>
+  <link name="ARM_L_J7">
+    <inertial>
+      <origin xyz="-0.00243 0.000205 -0.116" rpy="0 0 0" />
+      <mass value="0.695" />
+      <inertia ixx="1.10E-02" ixy="4.24E-06" ixz="-1.75E-04" iyy="1.13E-02" iyz="5.16E-05" izz="5.44E-04" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J7.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_L_J7.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_L_J7" type="revolute">
+    <origin xyz="0 0 -0.0885" rpy="0 0 0" />
+    <parent link="ARM_L_J6" />
+    <child link="ARM_L_J7" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-1.13446" upper="1.31080" effort="5.1" velocity="2.094" />
+  </joint>
+  <link name="ARM_R_J1">
+    <inertial>
+      <origin xyz="0.0179 -0.0698 0.0000" rpy="0 0 0" />
+      <mass value="1.4261" />
+      <inertia ixx="0.0085" ixy="-0.0019" ixz="0" iyy="0.0021" iyz="0" izz="0.0091" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_R_J1" type="revolute">
+    <origin xyz="0 -0.1545 0.223" rpy="0 0 0" />
+    <parent link="L_TORSO_J4" />
+    <child link="ARM_R_J1" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-3.14159" upper="3.14159" effort="61.4" velocity="2.094" />
+  </joint>
+  <link name="ARM_R_J2">
+    <inertial>
+      <origin xyz="-0.0507 0 -0.1485" rpy="0 0 0" />
+      <mass value="1.9367" />
+      <inertia ixx="0.0521" ixy="0" ixz="0.0168" iyy="0.0578" iyz="0" izz="0.0079" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_R_J2" type="revolute">
+    <origin xyz="0.0595 -0.073 0" rpy="0 0 0" />
+    <parent link="ARM_R_J1" />
+    <child link="ARM_R_J2" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-3.31613" upper="0.17453" effort="61.4" velocity="2.094" />
+  </joint>
+  <link name="ARM_R_J3">
+    <inertial>
+      <origin xyz="0.031 -0.0177 -0.0777" rpy="0 0 0" />
+      <mass value="1.2774" />
+      <inertia ixx="0.002" ixy="0" ixz="-0.0004" iyy="0.0018" iyz="0" izz="0.0023" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_R_J3" type="revolute">
+    <origin xyz="-0.0595 0 -0.215" rpy="0 0 0" />
+    <parent link="ARM_R_J2" />
+    <child link="ARM_R_J3" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-3.14159" upper="3.14159" effort="61.4" velocity="2.094" />
+  </joint>
+  <link name="ARM_R_J4">
+    <inertial>
+      <origin xyz="-0.0386 -0.0088 -0.1346" rpy="0 0 0" />
+      <mass value="1.365" />
+      <inertia ixx="0.0303" ixy="0.0003" ixz="0.0075" iyy="0.0318" iyz="0.0003" izz="0.004" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_R_J4" type="revolute">
+    <origin xyz="0.041 0 -0.085" rpy="0 0 0" />
+    <parent link="ARM_R_J3" />
+    <child link="ARM_R_J4" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-2.79253" upper="0.95993" effort="31.7" velocity="2.094" />
+  </joint>
+  <link name="ARM_R_J5">
+    <inertial>
+      <origin xyz="0 -0.0211 -0.0561" rpy="0 0 0" />
+      <mass value="1.0582" />
+      <inertia ixx="0.004890" ixy="0.000000" ixz="-0.000001" iyy="0.004196" iyz="0.001316" izz="0.001540" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J5.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_R_J5" type="revolute">
+    <origin xyz="-0.041 0 -0.1945" rpy="0 0 0" />
+    <parent link="ARM_R_J4" />
+    <child link="ARM_R_J5" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-3.14159" upper="3.14159" effort="31.7" velocity="2.094" />
+  </joint>
+  <link name="ARM_R_J6">
+    <inertial>
+      <origin xyz="-0.0025 -0.0147 -0.0683" rpy="0 0 0" />
+      <mass value="0.627" />
+      <inertia ixx="0.0042" ixy="0" ixz="0.0001" iyy="0.004" iyz="0.0002" izz="0.0011" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J6.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J6.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_R_J6" type="revolute">
+    <origin xyz="0 0 -0.0585" rpy="0 0 0" />
+    <parent link="ARM_R_J5" />
+    <child link="ARM_R_J6" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-1.83260" upper="1.83260" effort="31.7" velocity="2.094" />
+  </joint>
+  <link name="ARM_R_J7">
+    <inertial>
+      <origin xyz="-0.00243 -0.000205 -0.116" rpy="0 0 0" />
+      <mass value="0.695" />
+      <inertia ixx="1.10E-02" ixy="-4.24E-06" ixz="-1.75E-04" iyy="1.13E-02" iyz="-5.16E-05" izz="5.44E-04" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J7.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/ARM_R_J7.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="J_ARM_R_J7" type="revolute">
+    <origin xyz="0 0 -0.0885" rpy="0 0 0" />
+    <parent link="ARM_R_J6" />
+    <child link="ARM_R_J7" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-1.31" upper="1.13446" effort="5.1" velocity="2.094" />
+  </joint>
+  <link name="L_HEAD_J1">
+    <inertial>
+      <origin xyz="-0.0083 0.0003 -0.0462" rpy="0 0 0" />
+      <mass value="0.3351" />
+      <inertia ixx="0.0017" ixy="0.0000" ixz="0.0002" iyy="0.0017" iyz="0" izz="0.0003" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_HEAD_J1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_HEAD_J1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="HEAD_J1" type="revolute">
+    <origin xyz="0.015 0 0.323" rpy="0 0 0" />
+    <parent link="L_TORSO_J4" />
+    <child link="L_HEAD_J1" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-0.62832" upper="1.0472" effort="6.4" velocity="6.28" />
+  </joint>
+  <link name="L_HEAD_J2">
+    <inertial>
+      <origin xyz="0.0375 0.0000 -0.0175" rpy="0 0 0" />
+      <mass value="0.5663" />
+      <inertia ixx="0.0015" ixy="0.0000" ixz="-0.0005" iyy="0.0023" iyz="0.0000" izz="0.0030" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_HEAD_J2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_HEAD_J2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="HEAD_J2" type="revolute">
+    <origin xyz="-0.0058216 0 0.076309" rpy="0 0 0" />
+    <parent link="L_HEAD_J1" />
+    <child link="L_HEAD_J2" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.1" friction="0.05" />
+    <limit lower="-0.5236" upper="0.5236" effort="2.6" velocity="5.45" />
+  </joint>
+  <!-- ===== RIGHT HAND (R_, corrected coords/axes, attached to ARM_R_J7) ===== -->
+  <link name="R_T_L1">
+    <inertial>
+      <origin xyz="-0.0003985052 -0.0069973476 0.008583276" rpy="0 0 0" />
+      <mass value="0.013241778" />
+      <inertia ixx="2.6005488e-06" ixy="-4.717209e-07" ixz="1.1236365e-07" iyy="2.0607132e-06" iyz="8.1665464e-07" izz="2.1770229e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_T_J1" type="revolute">
+    <origin xyz="0.024282 0.011 -0.10114" rpy="0.111 0.23759 0.44226" />
+    <parent link="ARM_R_J7" />
+    <child link="R_T_L1" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="2.2835" effort="0.0662" velocity="11.0422" />
+    <dynamics damping="3.1e-4" friction="0.02" />
+  </joint>
+  <link name="R_T_L2">
+    <inertial>
+      <origin xyz="0.036829762 0.0021641928 -0.0051182494" rpy="0 0 0" />
+      <mass value="0.091736176" />
+      <inertia ixx="1.2762364e-05" ixy="-4.5733573e-06" ixz="1.7868543e-05" iyy="0.00016992046" iyz="3.0521483e-06" izz="0.00017098199" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_T_J2" type="revolute">
+    <origin xyz="0.0029256 -0.017134 0.013379" rpy="1.3321 0.1484 -0.19182" />
+    <parent link="R_T_L1" />
+    <child link="R_T_L2" />
+    <axis xyz="-0.0051566 0 0.99999" />
+    <limit lower="-1.3809" upper="0" effort="0.2054" velocity="5.4868" />
+    <dynamics damping="2.4e-3" friction="0.058" />
+  </joint>
+  <link name="R_T_L3">
+    <inertial>
+      <origin xyz="0.013479763 0.00023887167 0.0061379936" rpy="0 0 0" />
+      <mass value="0.024209973" />
+      <inertia ixx="2.4453522e-06" ixy="1.8418613e-07" ixz="-2.074495e-06" iyy="9.0521853e-06" iyz="-9.4194253e-08" izz="7.8116632e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_T_J3" type="revolute">
+    <origin xyz="0.070649 -0.0014716 -0.013108" rpy="-0.60992 -0.0098837 -0.18511" />
+    <parent link="R_T_L2" />
+    <child link="R_T_L3" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="1.0573" effort="0.3138" velocity="4.7756" />
+    <dynamics damping="3.5e-3" friction="0.071" />
+  </joint>
+  <link name="R_T_L4">
+    <inertial>
+      <origin xyz="0.010758367 0.00016191759 -0.00049624301" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="-1.1939293e-09" ixz="5.8841175e-08" iyy="2.4655015e-06" iyz="-1.6193912e-09" izz="2.5765446e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_T_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_T_J4" type="revolute">
+    <origin xyz="0.033052 0 0.0088059" rpy="0 0 0" />
+    <parent link="R_T_L3" />
+    <child link="R_T_L4" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="1.3587" effort="0.0279" velocity="3.3182" />
+    <dynamics damping="7.9e-4" friction="0.009" />
+  </joint>
+  <link name="R_F1_L1">
+    <inertial>
+      <origin xyz="0.002362736 0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="-2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F1_J1" type="revolute">
+    <origin xyz="0.032044 -0.0048241 -0.18512" rpy="-1.5152 1.3096 -1.5328" />
+    <parent link="ARM_R_J7" />
+    <child link="R_F1_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="R_F1_L2">
+    <inertial>
+      <origin xyz="0.013694947 0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F1_J2" type="revolute">
+    <origin xyz="0.0029925 0.009075 0.00021213" rpy="-0.018345 -0.068355 0.26243" />
+    <parent link="R_F1_L1" />
+    <child link="R_F1_L2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.3222" upper="1.4912" effort="0.1815" velocity="5.4097" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="R_F1_L3">
+    <inertial>
+      <origin xyz="0.014437554 0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="-8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F1_J3" type="revolute">
+    <origin xyz="0.033 -0.004 0" rpy="0 0 0" />
+    <parent link="R_F1_L2" />
+    <child link="R_F1_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.2966" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="R_F1_L4">
+    <inertial>
+      <origin xyz="0.010758367 0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="-5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F1_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F1_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="R_F1_L3" />
+    <child link="R_F1_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.3175" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+  <link name="R_F2_L1">
+    <inertial>
+      <origin xyz="0.002362736 0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="-2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F2_J1" type="revolute">
+    <origin xyz="0.010351 -0.0048782 -0.19231" rpy="-1.5271 1.309 -1.5329" />
+    <parent link="ARM_R_J7" />
+    <child link="R_F2_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="R_F2_L2">
+    <inertial>
+      <origin xyz="0.013694947 0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F2_J2" type="revolute">
+    <origin xyz="0.0030208 0.009075 -0.00074511" rpy="-0.0070659 -0.025525 0.26956" />
+    <parent link="R_F2_L1" />
+    <child link="R_F2_L2" />
+    <axis xyz="-5.2519E-05 0 1" />
+    <limit lower="-0.3028" upper="1.5151" effort="0.1815" velocity="5.4088" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="R_F2_L3">
+    <inertial>
+      <origin xyz="0.014437554 0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="-8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F2_J3" type="revolute">
+    <origin xyz="0.032968 -0.0042531 0.00082673" rpy="0 -5.2517E-05 -0.0076731" />
+    <parent link="R_F2_L2" />
+    <child link="R_F2_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.2966" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="R_F2_L4">
+    <inertial>
+      <origin xyz="0.010758367 0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="-5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F2_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F2_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="R_F2_L3" />
+    <child link="R_F2_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.3175" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+  <link name="R_F3_L1">
+    <inertial>
+      <origin xyz="0.002362736 0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="-2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F3_J1" type="revolute">
+    <origin xyz="-0.011426 -0.0049342 -0.18552" rpy="-1.6403 1.3085 -1.6354" />
+    <parent link="ARM_R_J7" />
+    <child link="R_F3_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="R_F3_L2">
+    <inertial>
+      <origin xyz="0.013694947 0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F3_J2" type="revolute">
+    <origin xyz="0.003 0.009075 -0.000825" rpy="0 0 0.26179" />
+    <parent link="R_F3_L1" />
+    <child link="R_F3_L2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.2820" upper="1.5423" effort="0.1815" velocity="5.4095" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="R_F3_L3">
+    <inertial>
+      <origin xyz="0.014437554 0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="-8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F3_J3" type="revolute">
+    <origin xyz="0.033 -0.0039998 0.000825" rpy="0 0 0" />
+    <parent link="R_F3_L2" />
+    <child link="R_F3_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.2966" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="R_F3_L4">
+    <inertial>
+      <origin xyz="0.010758367 0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="-5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F3_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F3_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="R_F3_L3" />
+    <child link="R_F3_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.3175" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+  <link name="R_F4_L1">
+    <inertial>
+      <origin xyz="0.002362736 0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="-2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F4_J1" type="revolute">
+    <origin xyz="-0.0333752420360476 -0.00499097042830023 -0.175731122027013" rpy="-1.74489689924331 1.30528622916641 -1.73637378841168" />
+    <parent link="ARM_R_J7" />
+    <child link="R_F4_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="R_F4_L2">
+    <inertial>
+      <origin xyz="0.013694947 0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="R_F4_J2" type="revolute">
+    <origin xyz="0.003 0.009075 -0.000825" rpy="0 0 0.26179" />
+    <parent link="R_F4_L1" />
+    <child link="R_F4_L2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.2608" upper="1.5722" effort="0.1815" velocity="5.4089" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="R_F4_L3">
+    <inertial>
+      <origin xyz="0.014437554 0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="-8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F4_J3" type="revolute">
+    <origin xyz="0.033 -0.0039998 0.000825" rpy="0 0 0" />
+    <parent link="R_F4_L2" />
+    <child link="R_F4_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.2966" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="R_F4_L4">
+    <inertial>
+      <origin xyz="0.010758367 0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="-5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/R_F4_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="R_F4_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="R_F4_L3" />
+    <child link="R_F4_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="1.3175" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+
+  <!-- ===== LEFT HAND (L_, mirrored from right hand across sagittal Y-plane, attached to ARM_L_J7) ===== -->
+  <link name="L_T_L1">
+    <inertial>
+      <origin xyz="-0.0003985052 0.0069973476 0.008583276" rpy="0 0 0" />
+      <mass value="0.013241778" />
+      <inertia ixx="2.6005488e-06" ixy="4.717209e-07" ixz="1.1236365e-07" iyy="2.0607132e-06" iyz="-8.1665464e-07" izz="2.1770229e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_T_J1" type="revolute">
+    <origin xyz="0.024282 -0.011 -0.10114" rpy="-0.111 0.23759 -0.44226" />
+    <parent link="ARM_L_J7" />
+    <child link="L_T_L1" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.2835" upper="0" effort="0.0662" velocity="11.0422" />
+    <dynamics damping="3.1e-4" friction="0.02" />
+  </joint>
+  <link name="L_T_L2">
+    <inertial>
+      <origin xyz="0.036829762 -0.0021641928 -0.0051182494" rpy="0 0 0" />
+      <mass value="0.091736176" />
+      <inertia ixx="1.2762364e-05" ixy="4.5733573e-06" ixz="1.7868543e-05" iyy="0.00016992046" iyz="-3.0521483e-06" izz="0.00017098199" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_T_J2" type="revolute">
+    <origin xyz="0.0029256 0.017134 0.013379" rpy="-1.3321 0.1484 0.19182" />
+    <parent link="L_T_L1" />
+    <child link="L_T_L2" />
+    <axis xyz="-0.0051566 0 0.99999" />
+    <limit lower="0" upper="1.3809" effort="0.2054" velocity="5.4868" />
+    <dynamics damping="2.4e-3" friction="0.058" />
+  </joint>
+  <link name="L_T_L3">
+    <inertial>
+      <origin xyz="0.013479763 -0.00023887167 0.0061379936" rpy="0 0 0" />
+      <mass value="0.024209973" />
+      <inertia ixx="2.4453522e-06" ixy="-1.8418613e-07" ixz="-2.074495e-06" iyy="9.0521853e-06" iyz="9.4194253e-08" izz="7.8116632e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_T_J3" type="revolute">
+    <origin xyz="0.070649 0.0014716 -0.013108" rpy="0.60992 -0.0098837 0.18511" />
+    <parent link="L_T_L2" />
+    <child link="L_T_L3" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="1.0573" effort="0.3138" velocity="4.7756" />
+    <dynamics damping="3.5e-3" friction="0.071" />
+  </joint>
+  <link name="L_T_L4">
+    <inertial>
+      <origin xyz="0.010758367 -0.00016191759 -0.00049624301" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="1.1939293e-09" ixz="5.8841175e-08" iyy="2.4655015e-06" iyz="1.6193912e-09" izz="2.5765446e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_T_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_T_J4" type="revolute">
+    <origin xyz="0.033052 0 0.0088059" rpy="0 0 0" />
+    <parent link="L_T_L3" />
+    <child link="L_T_L4" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="1.3587" effort="0.0279" velocity="3.3182" />
+    <dynamics damping="7.9e-4" friction="0.009" />
+  </joint>
+  <link name="L_F1_L1">
+    <inertial>
+      <origin xyz="0.002362736 -0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="-1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F1_J1" type="revolute">
+    <origin xyz="0.032044 0.0048241 -0.18512" rpy="1.5152 1.3096 1.5328" />
+    <parent link="ARM_L_J7" />
+    <child link="L_F1_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="L_F1_L2">
+    <inertial>
+      <origin xyz="0.013694947 -0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="-5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="-2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F1_J2" type="revolute">
+    <origin xyz="0.0029925 -0.009075 0.00021213" rpy="0.018345 -0.068355 -0.26243" />
+    <parent link="L_F1_L1" />
+    <child link="L_F1_L2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.4912" upper="0.3222" effort="0.1815" velocity="5.4097" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="L_F1_L3">
+    <inertial>
+      <origin xyz="0.014437554 -0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="-2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F1_J3" type="revolute">
+    <origin xyz="0.033 0.004 0" rpy="0 0 0" />
+    <parent link="L_F1_L2" />
+    <child link="L_F1_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.2966" upper="0" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="L_F1_L4">
+    <inertial>
+      <origin xyz="0.010758367 -0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="-1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F1_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F1_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="L_F1_L3" />
+    <child link="L_F1_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.3175" upper="0" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+  <link name="L_F2_L1">
+    <inertial>
+      <origin xyz="0.002362736 -0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="-1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F2_J1" type="revolute">
+    <origin xyz="0.010351 0.0048782 -0.19231" rpy="1.5271 1.309 1.5329" />
+    <parent link="ARM_L_J7" />
+    <child link="L_F2_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="L_F2_L2">
+    <inertial>
+      <origin xyz="0.013694947 -0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="-5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="-2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F2_J2" type="revolute">
+    <origin xyz="0.0030208 -0.009075 -0.00074511" rpy="0.0070659 -0.025525 -0.26956" />
+    <parent link="L_F2_L1" />
+    <child link="L_F2_L2" />
+    <axis xyz="-5.2519E-05 0 1" />
+    <limit lower="-1.5151" upper="0.3028" effort="0.1815" velocity="5.4088" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="L_F2_L3">
+    <inertial>
+      <origin xyz="0.014437554 -0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="-2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F2_J3" type="revolute">
+    <origin xyz="0.032968 0.0042531 0.00082673" rpy="0 -5.2517E-05 0.0076731" />
+    <parent link="L_F2_L2" />
+    <child link="L_F2_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.2966" upper="0" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="L_F2_L4">
+    <inertial>
+      <origin xyz="0.010758367 -0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="-1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F2_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F2_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="L_F2_L3" />
+    <child link="L_F2_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.3175" upper="0" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+  <link name="L_F3_L1">
+    <inertial>
+      <origin xyz="0.002362736 -0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="-1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F3_J1" type="revolute">
+    <origin xyz="-0.011426 0.0049342 -0.18552" rpy="1.6403 1.3085 1.6354" />
+    <parent link="ARM_L_J7" />
+    <child link="L_F3_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="L_F3_L2">
+    <inertial>
+      <origin xyz="0.013694947 -0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="-5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="-2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F3_J2" type="revolute">
+    <origin xyz="0.003 -0.009075 -0.000825" rpy="0 0 -0.26179" />
+    <parent link="L_F3_L1" />
+    <child link="L_F3_L2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.5423" upper="0.2820" effort="0.1815" velocity="5.4095" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="L_F3_L3">
+    <inertial>
+      <origin xyz="0.014437554 -0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="-2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F3_J3" type="revolute">
+    <origin xyz="0.033 0.0039998 0.000825" rpy="0 0 0" />
+    <parent link="L_F3_L2" />
+    <child link="L_F3_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.2966" upper="0" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="L_F3_L4">
+    <inertial>
+      <origin xyz="0.010758367 -0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="-1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F3_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F3_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="L_F3_L3" />
+    <child link="L_F3_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.3175" upper="0" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+  <link name="L_F4_L1">
+    <inertial>
+      <origin xyz="0.002362736 -0.0023693458 -0.0010331964" rpy="0 0 0" />
+      <mass value="0.003271259" />
+      <inertia ixx="1.3294689e-07" ixy="2.3477714e-08" ixz="1.013937e-08" iyy="9.6269918e-08" iyz="-1.182946e-08" izz="1.1203902e-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F4_J1" type="revolute">
+    <origin xyz="-0.0333752420360476 0.00499097042830023 -0.175731122027013" rpy="1.74489689924331 1.30528622916641 1.73637378841168" />
+    <parent link="ARM_L_J7" />
+    <child link="L_F4_L1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.2618" upper="0.2618" effort="0.3823" velocity="4.1662" />
+    <dynamics damping="5.1e-3" friction="0.085" />
+  </joint>
+  <link name="L_F4_L2">
+    <inertial>
+      <origin xyz="0.013694947 -0.001161671 -0.0003366496" rpy="0 0 0" />
+      <mass value="0.021267068" />
+      <inertia ixx="1.3690894e-06" ixy="-5.2426758e-08" ixz="1.000869e-07" iyy="1.0804991e-05" iyz="-2.351659e-08" izz="1.1066101e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-03: GM24005系列F-V曲線可行性檢查(分段線性,空載/額定二點取官方PDF,堵轉點供應商提供)已確認可行,margin範圍15.9%~60.9%(含±15%容忍度最壞情況),見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節;本關節effort/velocity數值未變 -->
+  <joint name="L_F4_J2" type="revolute">
+    <origin xyz="0.003 -0.009075 -0.000825" rpy="0 0 -0.26179" />
+    <parent link="L_F4_L1" />
+    <child link="L_F4_L2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.5722" upper="0.2608" effort="0.1815" velocity="5.4089" />
+    <dynamics damping="3.7e-3" friction="0.072" />
+  </joint>
+  <link name="L_F4_L3">
+    <inertial>
+      <origin xyz="0.014437554 -0.0025263655 -0.00032039905" rpy="0 0 0" />
+      <mass value="0.021375646" />
+      <inertia ixx="1.3307272e-06" ixy="8.375548e-07" ixz="2.027004e-07" iyy="1.0066042e-05" iyz="-2.8399556e-08" izz="1.0349332e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L3.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F4_J3" type="revolute">
+    <origin xyz="0.033 0.0039998 0.000825" rpy="0 0 0" />
+    <parent link="L_F4_L2" />
+    <child link="L_F4_L3" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.2966" upper="0" effort="0.0337" velocity="3.165" />
+    <dynamics damping="9.6e-4" friction="0.011" />
+  </joint>
+  <link name="L_F4_L4">
+    <inertial>
+      <origin xyz="0.010758367 -0.00049624301 0.00016191759" rpy="0 0 0" />
+      <mass value="0.010018335" />
+      <inertia ixx="4.4202598e-07" ixy="5.8841175e-08" ixz="-1.1939293e-09" iyy="2.5765446e-06" iyz="-1.6193912e-09" izz="2.4655015e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L4.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/FIH_AMR_ROBOT_V2.0_0702/L_F4_L4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <!-- 2026-08-04: GM24004-01速度基準2026-08-04校正：額定移速供應商確認為15±15%mm/s(原官方PDF標20mm/s)，velocity已依15/20=0.75倍縮放，effort不變(額定推力10N不變)。GM24004-01的F-V曲線可行性檢查(margin分析)發現本關節在額定規格下margin可能為負，見比對報告RWF_V2_手部參數評估報告_vs_RWF2.0_0702_20260730.html第四節3小節 -->
+  <joint name="L_F4_J4" type="revolute">
+    <origin xyz="0.033 0 0" rpy="0 0 0" />
+    <parent link="L_F4_L3" />
+    <child link="L_F4_L4" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.3175" upper="0" effort="0.0301" velocity="3.6353" />
+    <dynamics damping="8.8e-4" friction="0.01" />
+  </joint>
+</robot>
