@@ -13,12 +13,12 @@ Host 為 NVIDIA Jetson AGX Thor Developer Kit、Ubuntu24.04.5、L4T39.2.1。以�
 - 以隔離 Compose project `mobile-base-ticket47` 執行 up、exec、down；runtime=runc、network=host、privileged=false、UID:GID=1000:1000。沒有 DISPLAY、USB device 或 NVIDIA runtime 仍可啟動及編譯測試。
 - 互動 `bash -ic` 與非互動 `bash -c` 可使用ROS CLI。robot_state_publisher、robot_localization、slam_toolbox、nav2_route／AMCL／MPPI、diagnostic_updater／aggregator、RViz與rqt套件可發現；`ros2 pkg executables nav2_route` 顯示 `route_server`。
 - `colcon list --base-paths /workspace` 當下為空；reference IMU未被誤納入。這個空結果不當作build/test通過。
-- 在容器 `/tmp` 建立真正的臨時ament_cmake package，以g++編譯、連結rclcpp，建立ROS node並透過CTest驗證；`colcon build`、`colcon test` 與 `colcon test-result --verbose` 通過：1 test、0 errors、0 failures。另加入受控失敗JUnit結果，確認test-result回傳nonzero；移除負向probe後重新確認1 test通過。Overlay source後 `ros2 run ticket47_probe probe` 成功。Scratch package及測試結果已移除，未留production package或測試framework。
+- 在容器 `/tmp` 建立真正的臨時ament_cmake package，以g++編譯、連結rclcpp，建立ROS node並透過CTest驗證；`colcon build`、`colcon test` 與 `colcon test-result --verbose` 通過：1 test、0 errors、0 failures。另加入受控失敗JUnit結果，確認test-result回傳nonzero；移除負向probe後重新確認1 test通過。Overlay source後 `ros2 run ticket47_probe probe` 成功。另以該真實package的install overlay暫時接入 `/workspace/install`，新非互動及互動bash均自動發現 `/workspace/install/ticket47_probe`，非互動shell可直接run；兩者均通過。Scratch package、workspace symlink及測試結果已移除，未留production package或測試framework。
 - 容器透過bind mount寫入host workspace，觀測檔案ownership為1000:1000；probe已刪除。
 - 兩個native demo_nodes_cpp程序以ROS_DOMAIN_ID=217通訊；listener收到多筆 `I heard: [Hello World: ...]`。timeout停止node回傳124為預期；無以timeout本身判定通訊通過。
 - `docker compose -p mobile-base-ticket47 down` 成功；該project的 `ps --all` 為空。其他既有容器未被停止或刪除。
 
-本輪scratch驗證命令與logs位於 `/tmp/ticket47-smoke.sh`、`/tmp/ticket47-smoke.log`、`/tmp/ticket47-listener.log`、`/tmp/mobile-base-ticket47-build.log`；這些是本機暫存證據，非永久交付。日常重現入口見 [操作文件](container.md)。
+本輪scratch驗證命令與logs位於 `/tmp/ticket47-smoke.sh`、`/tmp/ticket47-smoke.log`、`/tmp/ticket47-overlay-smoke.log`、`/tmp/ticket47-listener.log`、`/tmp/mobile-base-ticket47-build.log`；這些是本機暫存證據，非永久交付。日常重現入口見 [操作文件](container.md)。
 
 ## REQUIRES HARDWARE VALIDATION
 
