@@ -1,5 +1,6 @@
 services:
   mobile_base:
+    container_name: mobile_base
     # Build-time 設定；UID/GID 應與 host 帳號一致。
     image: mobile_base
     build:
