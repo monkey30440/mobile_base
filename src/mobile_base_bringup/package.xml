@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+<name>mobile_base_bringup</name><version>0.1.0</version>
+<description>V1 native launch composition.</description>
+<maintainer email="maintainers@example.com">mobile_base maintainers</maintainer>
+<license>Apache-2.0</license><buildtool_depend>ament_python</buildtool_depend>
+<exec_depend>launch</exec_depend><exec_depend>launch_ros</exec_depend>
+<exec_depend>nav2_map_server</exec_depend><exec_depend>nav2_route</exec_depend>
+<test_depend>python3-pytest</test_depend><test_depend>rclpy</test_depend>
+<test_depend>lifecycle_msgs</test_depend><test_depend>nav_msgs</test_depend>
+<export><build_type>ament_python</build_type></export></package>
