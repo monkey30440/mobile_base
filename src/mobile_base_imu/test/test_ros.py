@@ -3,6 +3,7 @@ import os
 import pty
 import time
 import math
+import termios
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
@@ -55,4 +56,30 @@ def test_real_serial_topic_invalidity_and_timeout():
         os.close(slave)
         driver.destroy_node()
         observer.destroy_node()
+        rclpy.shutdown()
+
+
+def test_zero_baud_reports_configuration_error_without_touching_serial_settings():
+    rclpy.init()
+    master, slave = pty.openpty()
+    before = termios.tcgetattr(slave)
+    driver = UsbImu(['--ros-args', '-p', f'port:={os.ttyname(slave)}', '-p', 'baud:=0',
+                     '-p', 'protocol_profile:=handboard_v1', '-p', 'acceleration_scale:=9.81',
+                     '-p', 'gyro_scale:=1.0', '-p', 'axes:=[1,2,3]', '-p', 'sample_timeout:=0.25'])
+    observer = Node('imu_invalid_configuration_observer')
+    diagnostics = []
+    observer.create_subscription(DiagnosticArray, '/diagnostics', diagnostics.append, 10)
+    try:
+        deadline = time.monotonic() + .4
+        while time.monotonic() < deadline:
+            rclpy.spin_once(driver, timeout_sec=.005)
+            rclpy.spin_once(observer, timeout_sec=.005)
+        assert termios.tcgetattr(slave) == before
+        assert any('configuration:' in status.message and 'baud' in status.message
+                   for array in diagnostics for status in array.status)
+    finally:
+        driver.destroy_node()
+        observer.destroy_node()
+        os.close(master)
+        os.close(slave)
         rclpy.shutdown()

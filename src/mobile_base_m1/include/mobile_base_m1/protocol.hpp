@@ -6,6 +6,12 @@
 #include <stdexcept>
 #include <string>
 namespace mobile_base_m1 {
+enum class MultiDriveCommand : uint16_t { ImmediateStop=0, Jog=1, ServoOn=6, ServoOff=7 };
+enum class DriveStatus : uint16_t { Stop=0, Run=2, Fault=5, Inhibited=6, Sto=9 };
+inline bool status_is(uint16_t raw, DriveStatus expected) {return raw==static_cast<uint16_t>(expected);}
+inline bool feedback_state_valid(uint16_t status, uint16_t alarm) {
+ return alarm==0 && (status_is(status,DriveStatus::Stop) || status_is(status,DriveStatus::Run) || status_is(status,DriveStatus::Inhibited));
+}
 struct Scale { double motor_revolutions_per_wheel; double direction; double feedback_rpm_per_count; };
 inline void validate(const Scale &s) {
  if (!std::isfinite(s.motor_revolutions_per_wheel) || s.motor_revolutions_per_wheel <= 0 ||
@@ -25,7 +31,7 @@ inline double feedback_velocity(uint16_t raw, const Scale &s) {
  return rpm * s.feedback_rpm_per_count * (2 * std::acos(-1)) / 60 / s.motor_revolutions_per_wheel * s.direction;
 }
 inline double checked_feedback(uint16_t status, uint16_t alarm, uint16_t raw, const Scale &s) {
- if (alarm != 0 || (status != 0 && status != 2 && status != 6)) throw std::runtime_error("drive not ready: status=" + std::to_string(status) + " alarm=" + std::to_string(alarm));
+ if (!feedback_state_valid(status,alarm)) throw std::runtime_error("drive not ready: status=" + std::to_string(status) + " alarm=" + std::to_string(alarm));
  return feedback_velocity(raw, s);
 }
 // Observed on the user-authorized target: each Error_Check is the Modbus

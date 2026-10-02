@@ -39,11 +39,11 @@ class M1System : public hardware_interface::SystemInterface {
  void invalidate() {
   for (const auto &w : wheels_) set_state(w.joint + "/velocity", std::numeric_limits<double>::quiet_NaN());
  }
- bool send(const std::array<int16_t, 2> &rpm, uint16_t command=1) {
+ bool send(const std::array<int16_t, 2> &rpm, MultiDriveCommand command=MultiDriveCommand::Jog) {
   uint16_t data[4];
   const auto first = wheels_[0].id < wheels_[1].id ? 0 : 1;
-  data[0]=command; data[1]=static_cast<uint16_t>(rpm[first]);
-  data[2]=command; data[3]=static_cast<uint16_t>(rpm[1-first]);
+  data[0]=static_cast<uint16_t>(command); data[1]=static_cast<uint16_t>(rpm[first]);
+  data[2]=static_cast<uint16_t>(command); data[3]=static_cast<uint16_t>(rpm[1-first]);
   if(!connected_) return false;
   wait_bus_gap();
   const auto result=modbus_write_registers(bus_, address(8), 4, data);
@@ -53,7 +53,7 @@ class M1System : public hardware_interface::SystemInterface {
  hardware_interface::return_type fail(const std::string &reason) {
   invalidate(); context(reason, false);
   // Best effort zero on both drives; communication failure cannot prove a physical stop.
-  send({0,0},0);
+  send({0,0},MultiDriveCommand::ImmediateStop);
   RCLCPP_ERROR(get_logger(), "%s", reason.c_str());
   return hardware_interface::return_type::ERROR;
  }
@@ -67,32 +67,35 @@ class M1System : public hardware_interface::SystemInterface {
   {std::lock_guard<std::mutex> lock(diagnostics_mutex_);const auto first=wheels_[0].id<wheels_[1].id?0:1;targets_[first]=data[0];targets_[1-first]=data[2];}
   return data[0]==0 && data[2]==0;
  }
+ void capture_feedback_snapshot(const std::array<uint16_t,8> &data) {
+  validate_error_checks(data);
+  std::lock_guard<std::mutex> lock(diagnostics_mutex_);
+  // Capture both drives before conversion/validity checks can throw for either.
+  for(size_t i=0;i<2;++i) {
+   const auto offset=wheels_[i].id<wheels_[1-i].id?0:4;
+   status_[i]=data[offset];alarm_[i]=data[offset+1];error_check_[i]=data[offset+3];
+   if(alarm_[i]!=0 || status_is(status_[i],DriveStatus::Fault))fault_seen_=true;
+  }
+ }
  bool fresh_alarm_free() {
   std::array<uint16_t,8> data;
   wait_bus_gap();
   const auto count=connected_?modbus_read_registers(bus_,address(0),8,data.data()):-1;
   last_transaction_end_=std::chrono::steady_clock::now();
   if(count!=8)return false;
-  try {validate_error_checks(data);}catch(const std::exception &){return false;}
+  try {capture_feedback_snapshot(data);}catch(const std::exception &){return false;}
   std::lock_guard<std::mutex> lock(diagnostics_mutex_);
-  bool safe=true;
-  for(size_t i=0;i<2;++i) {
-   const auto offset=wheels_[i].id<wheels_[1-i].id?0:4;
-   status_[i]=data[offset];alarm_[i]=data[offset+1];error_check_[i]=data[offset+3];
-   if(alarm_[i]!=0 || status_[i]==5)fault_seen_=true;
-   safe &= alarm_[i]==0 && (status_[i]==0 || status_[i]==2 || status_[i]==6);
-  }
-  return safe && !fault_seen_;
+  return !fault_seen_ && feedback_state_valid(status_[0],alarm_[0]) && feedback_state_valid(status_[1],alarm_[1]);
  }
  struct CleanupResult {bool success; std::string detail;};
  CleanupResult safe_off_cleanup() {
-  const auto stop=send({0,0},0);
+  const auto stop=send({0,0},MultiDriveCommand::ImmediateStop);
   if(!fresh_alarm_free())return {false,"ISTOP requested; SVOFF skipped: fresh no-alarm proof unavailable or fault preserved; deenergization unconfirmed"};
-  if(!send({0,0},7))return {false,"ISTOP requested; SVOFF failed; deenergization unconfirmed"};
+  if(!send({0,0},MultiDriveCommand::ServoOff))return {false,"ISTOP requested; SVOFF failed; deenergization unconfirmed"};
   const auto deadline=std::chrono::steady_clock::now()+enable_timeout_;
   while(std::chrono::steady_clock::now()<deadline) {
    if(!fresh_alarm_free())return {false,"SVOFF acknowledged; fresh state unavailable/fault captured; deenergization unconfirmed"};
-   {std::lock_guard<std::mutex> lock(diagnostics_mutex_);if(status_[0]==6 && status_[1]==6)return {stop,stop?"ISTOP/SVOFF acknowledged; inhibited readback, physical stop unverified":"SVOFF inhibited readback; ISTOP unconfirmed, physical stop unverified"};}
+   {std::lock_guard<std::mutex> lock(diagnostics_mutex_);if(status_is(status_[0],DriveStatus::Inhibited) && status_is(status_[1],DriveStatus::Inhibited))return {stop,stop?"ISTOP/SVOFF acknowledged; inhibited readback, physical stop unverified":"SVOFF inhibited readback; ISTOP unconfirmed, physical stop unverified"};}
    std::this_thread::sleep_until(std::min(deadline,std::chrono::steady_clock::now()+gap_));
   }
   return {false,"SVOFF acknowledged; inhibited readback timeout, deenergization unconfirmed"};
@@ -147,9 +150,9 @@ class M1System : public hardware_interface::SystemInterface {
    for(size_t i=0;i<2;++i) updater_->add(wheels_[i].joint, [this,i](diagnostic_updater::DiagnosticStatusWrapper &d) {
     std::lock_guard<std::mutex> lock(diagnostics_mutex_);
     const auto level=!valid_?diagnostic_msgs::msg::DiagnosticStatus::ERROR:
-      (status_[i]==6?diagnostic_msgs::msg::DiagnosticStatus::WARN:diagnostic_msgs::msg::DiagnosticStatus::OK);
-    d.summary(level,valid_ && status_[i]==6?"valid feedback; WAIT/INHIBIT (SERVO OFF or power condition), motion unavailable":reason_);
-    d.add("drive_id",wheels_[i].id); d.add("firmware",firmware_); d.add("motor_status",status_[i]); d.add("alarm_code",alarm_[i]); d.add("protocol_error_check_raw",error_check_[i]); d.add("feedback_valid",valid_); d.add("motion_available",valid_ && status_[i]!=6); d.add("last_lifecycle_target_speed_raw",targets_[i]);
+      (status_is(status_[i],DriveStatus::Inhibited)?diagnostic_msgs::msg::DiagnosticStatus::WARN:diagnostic_msgs::msg::DiagnosticStatus::OK);
+    d.summary(level,valid_ && status_is(status_[i],DriveStatus::Inhibited)?"valid feedback; WAIT/INHIBIT (SERVO OFF or power condition), motion unavailable":reason_);
+    d.add("drive_id",wheels_[i].id); d.add("firmware",firmware_); d.add("motor_status",status_[i]); d.add("alarm_code",alarm_[i]); d.add("protocol_error_check_raw",error_check_[i]); d.add("feedback_valid",valid_); d.add("motion_available",valid_ && !status_is(status_[i],DriveStatus::Inhibited)); d.add("last_lifecycle_target_speed_raw",targets_[i]);
    });
    return CallbackReturn::SUCCESS;
   } catch(const std::exception &e) {RCLCPP_ERROR(get_logger(),"M1 explicit target configuration: %s",e.what()); return CallbackReturn::ERROR;}
@@ -165,15 +168,15 @@ class M1System : public hardware_interface::SystemInterface {
   try {
    {std::lock_guard<std::mutex> lock(diagnostics_mutex_);if(fault_seen_)throw std::runtime_error("previous fault preserved; explicit hardware recovery required before enable");}
    if(!targets_zero())context("stale target observed; activation withheld until ISTOP clears it",true);
-   if(!send({0,0},0))throw std::runtime_error("pre-enable ISTOP failed");
+   if(!send({0,0},MultiDriveCommand::ImmediateStop))throw std::runtime_error("pre-enable ISTOP failed");
    if(!targets_zero())throw std::runtime_error("stale target remains nonzero after ISTOP; servo enable refused");
    servo_attempted=true;
-   if(!send({0,0},6))throw std::runtime_error("Servo ON command failed");
+   if(!send({0,0},MultiDriveCommand::ServoOn))throw std::runtime_error("Servo ON command failed");
    const auto deadline=std::chrono::steady_clock::now()+enable_timeout_;
    while(std::chrono::steady_clock::now()<deadline) {
     if(read(rclcpp::Time(0),rclcpp::Duration(0,0))!=hardware_interface::return_type::OK) return activation_failed(servo_attempted);
     if(!targets_zero())throw std::runtime_error("target speed changed during Servo ON; activation refused");
-    {std::lock_guard<std::mutex> lock(diagnostics_mutex_);if(status_[0]!=6 && status_[1]!=6)return CallbackReturn::SUCCESS;}
+    {std::lock_guard<std::mutex> lock(diagnostics_mutex_);if(!status_is(status_[0],DriveStatus::Inhibited) && !status_is(status_[1],DriveStatus::Inhibited))return CallbackReturn::SUCCESS;}
     std::this_thread::sleep_until(std::min(deadline,std::chrono::steady_clock::now()+gap_));
    }
    throw std::runtime_error("Servo ON readiness timeout; drive remains inhibited");
@@ -183,7 +186,7 @@ class M1System : public hardware_interface::SystemInterface {
   const auto cleanup=safe_off_cleanup(); invalidate(); context("deactivation; "+cleanup.detail,false);
   return cleanup.success?CallbackReturn::SUCCESS:CallbackReturn::ERROR;
  }
- CallbackReturn on_error(const rclcpp_lifecycle::State &) override {send({0,0},0); invalidate(); {std::lock_guard<std::mutex> lock(diagnostics_mutex_); reason_ += "; hardware error, ISTOP requested, physical stop unverified; no automatic re-enable"; valid_=false;} return CallbackReturn::SUCCESS;}
+ CallbackReturn on_error(const rclcpp_lifecycle::State &) override {send({0,0},MultiDriveCommand::ImmediateStop); invalidate(); {std::lock_guard<std::mutex> lock(diagnostics_mutex_); reason_ += "; hardware error, ISTOP requested, physical stop unverified; no automatic re-enable"; valid_=false;} return CallbackReturn::SUCCESS;}
  CallbackReturn on_shutdown(const rclcpp_lifecycle::State &) override {
   const auto cleanup=safe_off_cleanup(); invalidate(); context("shutdown; "+cleanup.detail,false);
   if(bus_)modbus_close(bus_);connected_=false;
@@ -200,10 +203,9 @@ class M1System : public hardware_interface::SystemInterface {
   if(count!=8) return fail(std::string("feedback read failed/timeout: ")+modbus_strerror(errno));
   std::array<double,2> velocities;
   try {
-   validate_error_checks(data);
+   capture_feedback_snapshot(data);
    for(size_t i=0;i<2;++i) {
     size_t offset=((wheels_[i].id<wheels_[1-i].id)?0:4);
-    {std::lock_guard<std::mutex> lock(diagnostics_mutex_);status_[i]=data[offset];alarm_[i]=data[offset+1]; if(alarm_[i]!=0 || status_[i]==5)fault_seen_=true; error_check_[i]=data[offset+3];}
     velocities[i]=checked_feedback(data[offset],data[offset+1],data[offset+2],wheels_[i].scale);
     if(std::abs(feedback_velocity(data[offset+2],{1,1,wheels_[i].scale.feedback_rpm_per_count})*60/(2*std::acos(-1)))>wheels_[i].max_rpm) throw std::runtime_error("feedback exceeds configured motor RPM limit");
    }
@@ -214,7 +216,7 @@ class M1System : public hardware_interface::SystemInterface {
  hardware_interface::return_type write(const rclcpp::Time &,const rclcpp::Duration &) override {
   std::array<int16_t,2> rpm;
   try {for(size_t i=0;i<2;++i) {rpm[i]=command_rpm(get_command(wheels_[i].joint+"/velocity"),wheels_[i].scale);
-   {std::lock_guard<std::mutex> lock(diagnostics_mutex_); if(rpm[i]!=0 && status_[i]==6)throw std::invalid_argument("drive "+std::to_string(wheels_[i].id)+" inhibited; nonzero command rejected");}if(std::abs(rpm[i])>wheels_[i].max_rpm)throw std::invalid_argument("command exceeds configured motor RPM limit");}}
+   {std::lock_guard<std::mutex> lock(diagnostics_mutex_); if(rpm[i]!=0 && status_is(status_[i],DriveStatus::Inhibited))throw std::invalid_argument("drive "+std::to_string(wheels_[i].id)+" inhibited; nonzero command rejected");}if(std::abs(rpm[i])>wheels_[i].max_rpm)throw std::invalid_argument("command exceeds configured motor RPM limit");}}
   catch(const std::exception &e){return fail(e.what());}
   if(!send(rpm))return fail(std::string("velocity write failed/timeout: ")+modbus_strerror(errno));
   return hardware_interface::return_type::OK;

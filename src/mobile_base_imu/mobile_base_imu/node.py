@@ -44,7 +44,8 @@ class UsbImu(Node):
     def validate(config):
         if config['protocol_profile'] != 'handboard_v1':
             return 'configuration: confirm protocol_profile=handboard_v1'
-        if not config['port'] or not hasattr(termios, 'B' + str(config['baud'])):
+        baud = config['baud']
+        if not config['port'] or type(baud) is not int or baud <= 0 or not hasattr(termios, 'B' + str(baud)):
             return 'configuration: explicit port and supported baud required'
         for key in ('acceleration_scale', 'gyro_scale', 'sample_timeout'):
             if not math.isfinite(config[key]) or config[key] <= 0:
