@@ -63,3 +63,14 @@ rate/latency/clock behavior and reconnect/error conditions. Calibrate bias,
 noise/covariance and mounting before accepting estimation performance. Actual
 firmware, scale and axis evidence are unresolved. Unknown covariance is explicitly
 reported rather than invented. No hardware acceptance or Feature Freeze claim.
+
+## Connected-device observation (2026-10-02)
+
+An authorized bounded read-only capture from `/dev/fihRobotBaseIMU` at the guide's
+115200 setting observed 539 XOR-valid 59-byte AA55 packets over 3.001 seconds
+(about 179.6 packets/s received), with one invalid candidate. The first wire
+acceleration triplet was approximately (-0.00823, 0.00457, 0.99653). This confirms
+observed framing/layout compatibility, not firmware identity, units, mounted
+axis directions, timestamp accuracy, bias or calibration. No serial commands or
+firmware writes were sent. This observation is distinct from the adapter's
+software fixture tests; an actual calibrated ROS/estimation run remains pending.
