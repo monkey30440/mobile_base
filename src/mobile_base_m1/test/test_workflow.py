@@ -32,8 +32,12 @@ class Peer:
         self.master, self.slave = pty.openpty()
         self.path = os.ttyname(self.slave)
         self.commands = []
+        self.request_gaps = []
+        self.last_response = None
         self.fault = False
+        self.inhibited = False
         self.silent = False
+        self.bad_error_check = False
         self.running = True
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
@@ -50,13 +54,24 @@ class Peer:
                     break
                 request = bytes(buffer[:length])
                 del buffer[:length]
+                if self.last_response is not None:
+                    self.request_gaps.append(time.monotonic() - self.last_response)
                 if crc(request[:-2]) != request[-2:]:
                     continue
                 if request[1] == 3:
                     # status/alarm/rpm for IDs1 then2; right polarity reversed.
-                    registers = (5 if self.fault else 2, 13 if self.fault else 0,
-                                 120, 2, 0, 65416)
-                    response = bytes((0x65, 3, 12)) + struct.pack('>6H', *registers)
+                    count = struct.unpack('>H', request[4:6])[0]
+                    # Manual p38: each drive contributes n data words plus Error_Check.
+                    # Independently written literal: status2/alarm0/RPM120/prefix-CRC94B5,
+                    # then status2/alarm0/RPM-120/prefix-CRC80CA. Check words are distinct from speed.
+                    response = bytes.fromhex('65 03 10 00 02 00 00 00 78 94 b5 00 02 00 00 ff 88 80 ca')
+                    if self.fault:
+                        response = bytes.fromhex('65 03 10 00 05 00 0d 00 78 97 91 00 02 00 00 ff 88 7c de')
+                    if self.inhibited:
+                        response = bytes.fromhex('65 03 10 00 06 00 00 00 00 76 44 00 06 00 00 00 00 0e 19')
+                    if count == 6:
+                        # n=2: status/alarm/check, without the speed measurement.
+                        response = bytes.fromhex('65 03 0c 00 02 00 00 a5 a5 00 02 00 00 5a 5a')
                 elif request[1] == 16:
                     data = struct.unpack('>4H', request[7:15])
                     self.commands.append((data[1] if data[1] < 32768 else data[1]-65536,
@@ -64,7 +79,10 @@ class Peer:
                     response = request[:6]
                 else:
                     continue
+                if self.bad_error_check and request[1] == 3:
+                    response = response[:-1] + bytes((response[-1] ^ 1,))
                 if not self.silent:
+                    self.last_response = time.monotonic()
                     os.write(self.master, response + crc(response))
 
     def close(self):
@@ -86,7 +104,7 @@ def workflow(tmp_path):
               'controller': {'wheel_radius': 0.1, 'wheel_separation': 0.5,
                              'cmd_vel_timeout': 0.3, 'update_rate': 30,
                              'linear_velocity_limit': 0.5, 'angular_velocity_limit': 1.0}}
-    for side, drive_id, direction in [('left_', 1, 1), ('right_', 2, -1)]:
+    for side, drive_id, direction in [('left_', 2, -1), ('right_', 1, 1)]:
         config['hardware'].update({side+'drive_id': drive_id, side+'gear_ratio': 10,
                                    side+'direction': direction,
                                    side+'feedback_rpm_per_count': 1,
@@ -154,7 +172,7 @@ def test_drive_alarm_invalidates_feedback_and_identifies_source(workflow):
     diagnostics.clear()
     peer.commands.clear()
     peer.fault = True
-    wait(lambda: any(s.level in (2, b'\x02') and 'left_wheel_joint' in s.name
+    wait(lambda: any(s.level in (2, b'\x02') and 'right_wheel_joint' in s.name
                      and 'alarm=13' in s.message
                      and any(v.key == 'drive_id' and v.value == '1' for v in s.values)
                      for msg in diagnostics for s in msg.status), seconds=5)
@@ -167,7 +185,7 @@ def test_serial_response_timeout_is_not_healthy_stale_feedback(workflow):
     peer.commands.clear()
     peer.silent = True
     wait(lambda: any(s.level in (2, b'\x02') and 'left_wheel_joint' in s.name
-                     and 'feedback read failed/timeout' in s.message
+                     and 'failed/timeout' in s.message
                      and any(v.key == 'feedback_valid' and v.value == 'False' for v in s.values)
                      for msg in diagnostics for s in msg.status), seconds=5)
     assert (0, 0) in peer.commands  # request observed; no stop acknowledgement inferred
@@ -180,3 +198,39 @@ def test_unresolved_target_profile_fails_before_hardware_start():
                             capture_output=True, text=True, timeout=8)
     assert result.returncode != 0
     assert 'M1 target fact required:' in result.stdout + result.stderr
+
+
+def test_invalid_per_drive_check_is_rejected_despite_valid_final_frame_crc(workflow):
+    peer, _, _, _, diagnostics, wait = workflow
+    diagnostics.clear()
+    peer.commands.clear()
+    peer.bad_error_check = True
+    wait(lambda: any(s.level in (2, b'\x02') and 'left_wheel_joint' in s.name
+                     and 'Error_Check prefix CRC mismatch' in s.message
+                     for msg in diagnostics for s in msg.status), seconds=5)
+    assert (0, 0) in peer.commands
+
+
+def test_modbus_transactions_respect_documented_rtu_silence(workflow):
+    peer, _, _, _, _, wait = workflow
+    wait(lambda: len(peer.request_gaps) >= 20)
+    # Manual p2: at baud >19200, C3.5 must be at least1.75ms (09-21=0).
+    assert min(peer.request_gaps) >= 0.00175
+
+
+def test_inhibited_drive_feedback_is_valid_but_motion_is_unavailable(workflow):
+    peer, node, publisher, odom, diagnostics, wait = workflow
+    diagnostics.clear()
+    peer.inhibited = True
+    wait(lambda: any(s.level in (1, b'\x01') and 'left_wheel_joint' in s.name
+                     and 'WAIT/INHIBIT' in s.message
+                     and any(v.key == 'feedback_valid' and v.value == 'True' for v in s.values)
+                     for msg in diagnostics for s in msg.status), seconds=5)
+    wait(lambda: abs(odom[-1].twist.twist.linear.x) < 1e-6)
+    diagnostics.clear()
+    command = TwistStamped()
+    command.header.stamp = node.get_clock().now().to_msg()
+    command.twist.linear.x = 0.1
+    publisher.publish(command)
+    wait(lambda: any(s.level in (2, b'\x02') and 'inhibited' in s.message
+                     for msg in diagnostics for s in msg.status), seconds=5)

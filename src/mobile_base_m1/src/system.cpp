@@ -1,5 +1,7 @@
 #include <array>
-#include <atomic>
+#include <chrono>
+#include <thread>
+#include <algorithm>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -20,9 +22,13 @@ class M1System : public hardware_interface::SystemInterface {
  std::string reason_ = "not configured";
  std::array<uint16_t, 2> status_{};
  std::array<uint16_t, 2> alarm_{};
+ std::array<uint16_t, 2> error_check_{};
  bool valid_ = false;
  bool connected_ = false;
  std::string firmware_;
+ std::chrono::microseconds gap_{1750};
+ std::chrono::steady_clock::time_point last_transaction_end_{};
+ void wait_bus_gap() {std::this_thread::sleep_until(last_transaction_end_ + gap_);}
  int address(int index) const {return 0xf000 | (index << 8) | (1 << (wheels_[0].id-1)) | (1 << (wheels_[1].id-1));}
  void context(const std::string &reason, bool valid) {
   std::lock_guard<std::mutex> lock(diagnostics_mutex_); reason_ = reason; valid_ = valid;
@@ -35,7 +41,11 @@ class M1System : public hardware_interface::SystemInterface {
   const auto first = wheels_[0].id < wheels_[1].id ? 0 : 1;
   data[0]=1; data[1]=static_cast<uint16_t>(rpm[first]);
   data[2]=1; data[3]=static_cast<uint16_t>(rpm[1-first]);
-  return connected_ && modbus_write_registers(bus_, address(8), 4, data) == 4;
+  if(!connected_) return false;
+  wait_bus_gap();
+  const auto result=modbus_write_registers(bus_, address(8), 4, data);
+  last_transaction_end_=std::chrono::steady_clock::now();
+  return result==4;
  }
  hardware_interface::return_type fail(const std::string &reason) {
   invalidate(); context(reason, false);
@@ -69,6 +79,8 @@ class M1System : public hardware_interface::SystemInterface {
    int baud=std::stoi(required("baud")); auto parity=required("parity"); int stop=std::stoi(required("stop_bits"));
    auto timeout=std::stod(required("response_timeout_seconds"));
    if(baud<=0 || parity.size()!=1 || (parity!="N"&&parity!="E"&&parity!="O") || (stop!=1&&stop!=2) || !std::isfinite(timeout) || timeout<=0 || timeout>1) throw std::invalid_argument("invalid serial configuration/timeout");
+   const auto bits_per_char=1+8+stop+(parity!="N"?1:0);
+   gap_=std::chrono::microseconds(static_cast<int64_t>(std::ceil(std::max(1750.0,3500000.0*bits_per_char/baud))));
    bus_=modbus_new_rtu(required("serial_port").c_str(),baud,parity[0],8,stop);
    if(!bus_) throw std::runtime_error("cannot create Modbus context");
    modbus_set_slave(bus_,0x65);
@@ -79,8 +91,10 @@ class M1System : public hardware_interface::SystemInterface {
    updater_->setHardwareID("M1 firmware="+firmware_);
    for(size_t i=0;i<2;++i) updater_->add(wheels_[i].joint, [this,i](diagnostic_updater::DiagnosticStatusWrapper &d) {
     std::lock_guard<std::mutex> lock(diagnostics_mutex_);
-    d.summary(valid_?diagnostic_msgs::msg::DiagnosticStatus::OK:diagnostic_msgs::msg::DiagnosticStatus::ERROR,reason_);
-    d.add("drive_id",wheels_[i].id); d.add("firmware",firmware_); d.add("motor_status",status_[i]); d.add("alarm_code",alarm_[i]); d.add("feedback_valid",valid_);
+    const auto level=!valid_?diagnostic_msgs::msg::DiagnosticStatus::ERROR:
+      (status_[i]==6?diagnostic_msgs::msg::DiagnosticStatus::WARN:diagnostic_msgs::msg::DiagnosticStatus::OK);
+    d.summary(level,valid_ && status_[i]==6?"valid feedback; WAIT/INHIBIT (SERVO OFF or power condition), motion unavailable":reason_);
+    d.add("drive_id",wheels_[i].id); d.add("firmware",firmware_); d.add("motor_status",status_[i]); d.add("alarm_code",alarm_[i]); d.add("protocol_error_check_raw",error_check_[i]); d.add("feedback_valid",valid_); d.add("motion_available",valid_ && status_[i]!=6);
    });
    return CallbackReturn::SUCCESS;
   } catch(const std::exception &e) {RCLCPP_ERROR(get_logger(),"M1 explicit target configuration: %s",e.what()); return CallbackReturn::ERROR;}
@@ -102,13 +116,19 @@ class M1System : public hardware_interface::SystemInterface {
  CallbackReturn on_shutdown(const rclcpp_lifecycle::State &) override {const auto zero=send({0,0}); invalidate(); context(zero?"shutdown zero acknowledged; physical stop unverified":"shutdown zero failed; physical stop unverified",false); if(bus_)modbus_close(bus_);connected_=false;return zero?CallbackReturn::SUCCESS:CallbackReturn::ERROR;}
  CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) override {if(bus_)modbus_close(bus_);connected_=false;context("disconnected",false);return CallbackReturn::SUCCESS;}
  hardware_interface::return_type read(const rclcpp::Time &, const rclcpp::Duration &) override {
-  uint16_t data[6];
-  if(!connected_ || modbus_read_registers(bus_,address(0),6,data)!=6) return fail(std::string("feedback read failed/timeout: ")+modbus_strerror(errno));
+  // Manual p38: three measurements plus an opaque Error_Check word per drive.
+  std::array<uint16_t,8> data;
+  if(!connected_) return fail("feedback bus not connected");
+  wait_bus_gap();
+  const auto count=modbus_read_registers(bus_,address(0),8,data.data());
+  last_transaction_end_=std::chrono::steady_clock::now();
+  if(count!=8) return fail(std::string("feedback read failed/timeout: ")+modbus_strerror(errno));
   std::array<double,2> velocities;
   try {
+   validate_error_checks(data);
    for(size_t i=0;i<2;++i) {
-    size_t offset=((wheels_[i].id<wheels_[1-i].id)?0:3);
-    {std::lock_guard<std::mutex> lock(diagnostics_mutex_);status_[i]=data[offset];alarm_[i]=data[offset+1];}
+    size_t offset=((wheels_[i].id<wheels_[1-i].id)?0:4);
+    {std::lock_guard<std::mutex> lock(diagnostics_mutex_);status_[i]=data[offset];alarm_[i]=data[offset+1]; error_check_[i]=data[offset+3];}
     velocities[i]=checked_feedback(data[offset],data[offset+1],data[offset+2],wheels_[i].scale);
     if(std::abs(feedback_velocity(data[offset+2],{1,1,wheels_[i].scale.feedback_rpm_per_count})*60/(2*std::acos(-1)))>wheels_[i].max_rpm) throw std::runtime_error("feedback exceeds configured motor RPM limit");
    }
@@ -118,7 +138,8 @@ class M1System : public hardware_interface::SystemInterface {
  }
  hardware_interface::return_type write(const rclcpp::Time &,const rclcpp::Duration &) override {
   std::array<int16_t,2> rpm;
-  try {for(size_t i=0;i<2;++i) {rpm[i]=command_rpm(get_command(wheels_[i].joint+"/velocity"),wheels_[i].scale);if(std::abs(rpm[i])>wheels_[i].max_rpm)throw std::invalid_argument("command exceeds configured motor RPM limit");}}
+  try {for(size_t i=0;i<2;++i) {rpm[i]=command_rpm(get_command(wheels_[i].joint+"/velocity"),wheels_[i].scale);
+   {std::lock_guard<std::mutex> lock(diagnostics_mutex_); if(rpm[i]!=0 && status_[i]==6)throw std::invalid_argument("drive "+std::to_string(wheels_[i].id)+" inhibited; nonzero command rejected");}if(std::abs(rpm[i])>wheels_[i].max_rpm)throw std::invalid_argument("command exceeds configured motor RPM limit");}}
   catch(const std::exception &e){return fail(e.what());}
   if(!send(rpm))return fail(std::string("velocity write failed/timeout: ")+modbus_strerror(errno));
   return hardware_interface::return_type::OK;
