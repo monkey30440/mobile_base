@@ -14,10 +14,18 @@ RUN sed -i 's|http://repo.download.nvidia.com/|https://repo.download.nvidia.com/
     python3-rosdep \
     python3-pytest \
     python3-vcstool \
+    python3-serial \
+    libmodbus-dev \
     ros-jazzy-foxglove-bridge \
     ros-jazzy-diagnostic-updater \
     ros-jazzy-diagnostic-aggregator \
     ros-jazzy-robot-state-publisher \
+    ros-jazzy-ros2-control \
+    ros-jazzy-ros2-controllers \
+    ros-jazzy-xacro \
+    ros-jazzy-sick-scan-xd \
+    ros-jazzy-ament-cmake-gtest \
+    ros-jazzy-launch-testing-ament-cmake \
     ros-jazzy-robot-localization \
     ros-jazzy-slam-toolbox \
     ros-jazzy-navigation2 \
