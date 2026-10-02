@@ -18,8 +18,8 @@ def setup(context):
     with open(path, encoding='utf8') as stream:
         config = yaml.safe_load(stream)
     hardware = config['hardware']
-    required = ('serial_port', 'baud', 'parity', 'stop_bits', 'response_timeout_seconds',
-                'firmware', 'verified_speed_mode', 'verified_multidrive2', 'pdo_mapping')
+    required = ('serial_port', 'baud', 'parity', 'stop_bits', 'response_timeout_seconds', 'enable_timeout_seconds',
+                'firmware', 'verified_speed_mode', 'verified_multidrive2', 'pdo_mapping', 'drive_enable_setting')
     required += tuple(side + suffix for side in ('left_', 'right_') for suffix in
                       ('drive_id', 'gear_ratio', 'direction', 'feedback_rpm_per_count', 'max_motor_rpm'))
     for key in required:

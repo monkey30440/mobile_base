@@ -7,9 +7,11 @@ hardware:
   parity: null
   stop_bits: null
   response_timeout_seconds: null
+  enable_timeout_seconds: null
   verified_multidrive2: null
   verified_speed_mode: null
   pdo_mapping: null
+  drive_enable_setting: null
   left_drive_id: null
   right_drive_id: null
   left_gear_ratio: null

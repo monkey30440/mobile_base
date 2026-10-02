@@ -28,7 +28,19 @@ def crc(data):
 
 class Peer:
     """External Modbus RTU peer: fixed authoritative example RPM feedback."""
-    def __init__(self):
+    def __init__(self, require_enable=False, stale_target=0, ignore_istop=False, fail_enable=False, alarm_on_enable=False, enable_delay=0, ignore_svoff=False):
+        self.require_enable = require_enable
+        self.enabled = not require_enable
+        self.targets = [stale_target, stale_target]
+        self.ignore_istop = ignore_istop
+        self.ignore_svoff = ignore_svoff
+        self.fail_enable = fail_enable
+        self.enable_delay = enable_delay
+        self.enable_at = None
+        self.alarm_on_enable = alarm_on_enable
+        self.lifecycle_commands = []
+        self.energized_with_stale_target = False
+        self.alarm_reset_observed = False
         self.master, self.slave = pty.openpty()
         self.path = os.ttyname(self.slave)
         self.commands = []
@@ -58,6 +70,9 @@ class Peer:
                     self.request_gaps.append(time.monotonic() - self.last_response)
                 if crc(request[:-2]) != request[-2:]:
                     continue
+                if self.enable_at is not None and time.monotonic() >= self.enable_at:
+                    self.enabled = True
+                    self.enable_at = None
                 if request[1] == 3:
                     # status/alarm/rpm for IDs1 then2; right polarity reversed.
                     count = struct.unpack('>H', request[4:6])[0]
@@ -67,13 +82,34 @@ class Peer:
                     response = bytes.fromhex('65 03 10 00 02 00 00 00 78 94 b5 00 02 00 00 ff 88 80 ca')
                     if self.fault:
                         response = bytes.fromhex('65 03 10 00 05 00 0d 00 78 97 91 00 02 00 00 ff 88 7c de')
-                    if self.inhibited:
+                    if self.inhibited or (self.require_enable and not self.enabled):
                         response = bytes.fromhex('65 03 10 00 06 00 00 00 00 76 44 00 06 00 00 00 00 0e 19')
+                    if (struct.unpack('>H', request[2:4])[0] >> 8) & 15 == 12:
+                        response = bytes((0x65, 3, 8))
+                        for target in self.targets:
+                            response += struct.pack('>H', target & 0xffff)
+                            response += struct.pack('>H', struct.unpack('<H', crc(response))[0])
                     if count == 6:
                         # n=2: status/alarm/check, without the speed measurement.
                         response = bytes.fromhex('65 03 0c 00 02 00 00 a5 a5 00 02 00 00 5a 5a')
                 elif request[1] == 16:
                     data = struct.unpack('>4H', request[7:15])
+                    command = data[0]
+                    self.lifecycle_commands.append(command)
+                    if command == 0 and not self.ignore_istop:
+                        self.targets = [0, 0]
+                    elif command == 1 and self.enabled:
+                        self.targets = [data[1], data[3]]
+                    elif command == 6 and not self.fail_enable:
+                        self.energized_with_stale_target |= any(self.targets)
+                        if self.enable_delay:
+                            self.enable_at = time.monotonic() + self.enable_delay
+                        else:
+                            self.enabled = True
+                        self.fault = self.alarm_on_enable
+                    elif command == 7 and not self.ignore_svoff:
+                        self.alarm_reset_observed |= self.fault
+                        self.enabled = False
                     self.commands.append((data[1] if data[1] < 32768 else data[1]-65536,
                                           data[3] if data[3] < 32768 else data[3]-65536))
                     response = request[:6]
@@ -93,14 +129,15 @@ class Peer:
 
 
 @pytest.fixture
-def workflow(tmp_path):
+def workflow(tmp_path, request):
     os.environ['ROS_DOMAIN_ID'] = str(100 + os.getpid() % 100)
-    peer = Peer()
+    options = getattr(request, 'param', {})
+    peer = Peer(**{k: v for k, v in options.items() if k != 'expect_failure'})
     config = {'hardware': {'serial_port': peer.path, 'baud': 115200, 'parity': 'N',
-                          'stop_bits': 1, 'response_timeout_seconds': 0.03,
+                          'stop_bits': 1, 'response_timeout_seconds': 0.03, 'enable_timeout_seconds': 0.3,
                           'firmware': 'SOFTWARE_PEER_NOT_HARDWARE',
                           'verified_speed_mode': True, 'verified_multidrive2': True,
-                          'pdo_mapping': 0},
+                          'pdo_mapping': 0, 'drive_enable_setting': 1},
               'controller': {'wheel_radius': 0.1, 'wheel_separation': 0.5,
                              'cmd_vel_timeout': 0.3, 'update_rate': 30,
                              'linear_velocity_limit': 0.5, 'angular_velocity_limit': 1.0}}
@@ -120,6 +157,8 @@ def workflow(tmp_path):
     process = subprocess.Popen(['ros2', 'launch', 'mobile_base_m1', 'm1.launch.py',
                                 f'hardware_config:={target}', f'model_file:={model}'],
                                stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+    peer.process = process
+    peer.launch_log = tmp_path / "launch.log"
     rclpy.init()
     node = rclpy.create_node('m1_workflow_observer')
     odom, diagnostics = [], []
@@ -137,10 +176,12 @@ def workflow(tmp_path):
         raise AssertionError((tmp_path / 'launch.log').read_text() + '\nDIAGNOSTICS ' + str([(s.name, s.level, s.message) for msg in diagnostics[-3:] for s in msg.status]))
 
     try:
-        wait(lambda: bool(odom) and publisher.get_subscription_count() > 0)
+        if not options.get('expect_failure'):
+            wait(lambda: bool(odom) and publisher.get_subscription_count() > 0)
         yield peer, node, publisher, odom, diagnostics, wait
     finally:
-        os.killpg(process.pid, signal.SIGINT)
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGINT)
         try:
             process.wait(timeout=8)
         except subprocess.TimeoutExpired:
@@ -234,3 +275,73 @@ def test_inhibited_drive_feedback_is_valid_but_motion_is_unavailable(workflow):
     publisher.publish(command)
     wait(lambda: any(s.level in (2, b'\x02') and 'inhibited' in s.message
                      for msg in diagnostics for s in msg.status), seconds=5)
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'stale_target': 120}], indirect=True)
+def test_activation_clears_stale_target_before_servo_enable(workflow):
+    peer, _, _, _, _, wait = workflow
+    wait(lambda: peer.enabled)
+    assert not peer.energized_with_stale_target
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'enable_delay': 0.1}], indirect=True)
+def test_activation_waits_for_bounded_servo_readiness_transition(workflow):
+    peer, _, _, _, _, _ = workflow
+    assert peer.enabled
+    assert peer.lifecycle_commands.count(6) == 1
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'stale_target': 120,
+                                      'ignore_istop': True, 'expect_failure': True}], indirect=True)
+def test_ignored_stop_never_energizes_stale_motor_target(workflow):
+    peer, _, _, _, _, wait = workflow
+    wait(lambda: 'stale target remains nonzero' in peer.launch_log.read_text(), seconds=4)
+    assert 6 not in peer.lifecycle_commands
+    assert not peer.enabled
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'fail_enable': True,
+                                      'expect_failure': True}], indirect=True)
+def test_unavailable_enable_transition_attempts_no_alarm_safe_off(workflow):
+    peer, _, _, _, _, wait = workflow
+    wait(lambda: 7 in peer.lifecycle_commands, seconds=4)
+    assert not peer.enabled
+    assert peer.lifecycle_commands.count(6) == 1
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True}], indirect=True)
+def test_native_hardware_deactivation_stops_and_deenergizes_without_reset(workflow):
+    peer, _, _, _, _, wait = workflow
+    result = subprocess.run(['ros2', 'control', 'set_hardware_component_state', 'M1', 'inactive'],
+                            capture_output=True, text=True, timeout=8)
+    assert result.returncode == 0, result.stdout + result.stderr
+    wait(lambda: not peer.enabled, seconds=4)
+    assert 7 in peer.lifecycle_commands
+    assert not peer.alarm_reset_observed
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'alarm_on_enable': True,
+                                      'expect_failure': True}], indirect=True)
+def test_alarm_during_enable_is_preserved_without_servo_off_reset(workflow):
+    peer, _, _, _, _, wait = workflow
+    wait(lambda: 'alarm=13' in peer.launch_log.read_text(), seconds=4)
+    assert 7 not in peer.lifecycle_commands
+    assert not peer.alarm_reset_observed
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'ignore_svoff': True}], indirect=True)
+def test_failed_servo_off_deactivation_reports_native_transition_failure(workflow):
+    peer, _, _, _, _, _ = workflow
+    result = subprocess.run(['ros2', 'control', 'set_hardware_component_state', 'M1', 'inactive'],
+                            capture_output=True, text=True, timeout=8)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert peer.enabled
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True}], indirect=True)
+def test_native_launch_shutdown_stops_and_deenergizes(workflow):
+    peer, _, _, _, _, wait = workflow
+    os.killpg(peer.process.pid, signal.SIGINT)
+    wait(lambda: not peer.enabled, seconds=5)
+    assert 7 in peer.lifecycle_commands
+    assert not peer.alarm_reset_observed
