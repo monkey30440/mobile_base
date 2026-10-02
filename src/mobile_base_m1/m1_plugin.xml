@@ -1,0 +1,5 @@
+<library path="m1_system">
+ <class name="mobile_base_m1/M1System" type="mobile_base_m1::M1System" base_class_type="hardware_interface::SystemInterface">
+  <description>M1 Multi-drive2.0 speed-mode wheel adapter; no kinematics, TF or wheel odometry.</description>
+ </class>
+</library>

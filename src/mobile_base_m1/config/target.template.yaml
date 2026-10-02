@@ -1,0 +1,29 @@
+# Fill every null from target facts or measured/calibrated operating conditions.
+# This intentionally cannot start hardware. Never copy software test-fixture numbers.
+hardware:
+  serial_port: /dev/fihRobotBaseMotor  # Operator-confirmed path; verify container mapping.
+  firmware: null
+  baud: null
+  parity: null
+  stop_bits: null
+  response_timeout_seconds: null
+  verified_multidrive2: null
+  verified_speed_mode: null
+  pdo_mapping: null
+  left_drive_id: null
+  right_drive_id: null
+  left_gear_ratio: null
+  right_gear_ratio: null
+  left_direction: null
+  right_direction: null
+  left_feedback_rpm_per_count: null
+  right_feedback_rpm_per_count: null
+  left_max_motor_rpm: null
+  right_max_motor_rpm: null
+controller:
+  wheel_radius: null
+  wheel_separation: null
+  cmd_vel_timeout: null
+  update_rate: null
+  linear_velocity_limit: null
+  angular_velocity_limit: null
