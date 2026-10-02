@@ -29,3 +29,5 @@ controller:
   update_rate: null
   linear_velocity_limit: null
   angular_velocity_limit: null
+  # Optional explicit native statistical budget; omitted/null preserves upstream defaults.
+  native_hardware_execution_budget_us: null

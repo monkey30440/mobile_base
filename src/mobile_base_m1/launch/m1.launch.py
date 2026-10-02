@@ -52,6 +52,14 @@ def setup(context):
     parameters = {'update_rate': int(controller['update_rate']),
                   'base_controller.type': 'diff_drive_controller/DiffDriveController',
                   'joint_state_broadcaster.type': 'joint_state_broadcaster/JointStateBroadcaster'}
+    budget = controller.get('native_hardware_execution_budget_us')
+    if budget is not None:
+        for metric, prefix in (('mean', 'mean_error'), ('stddev', 'standard_deviation')):
+            warn, error = (budget.get(metric + '_' + level) for level in ('warn', 'error'))
+            if any(value is None or not math.isfinite(value) or value <= 0 for value in (warn, error)) or warn >= error:
+                raise RuntimeError('positive ordered native hardware execution budget required: ' + metric)
+            for level, value in (('warn', warn), ('error', error)):
+                parameters['diagnostics.threshold.hardware_components.execution_time.' + prefix + '.' + level] = float(value)
     drive = {'left_wheel_names': [joint_names[0]], 'right_wheel_names': [joint_names[1]],
              'wheel_radius': float(controller['wheel_radius']),
              'wheel_separation': float(controller['wheel_separation']),
