@@ -4,7 +4,7 @@
 # COMMISSIONING ONLY: engineering settings, not validated production limits.
 # Activation can issue ISTOP/SVON/SVOFF; use only after reviewed operator conditions.
 # 1RPM/count is the documented velocity register unit, not encoder pulse scale.
-# Live state6 is inhibited; watchdog05-17=0. No register was written.
+# Live state6 is inhibited; watchdog05-17=0. No persistent parameter was written; later zero-speed gate is documented separately.
 hardware:
   serial_port: /dev/fihRobotBaseMotor
   firmware: "UNIDENTIFIED; bounded commissioning only"
