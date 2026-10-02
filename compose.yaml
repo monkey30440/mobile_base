@@ -1,0 +1,22 @@
+services:
+  dev:
+    image: mobile-base-dev:jazzy
+    build:
+      context: .
+      args:
+        LOCAL_UID: ${LOCAL_UID:-1000}
+        LOCAL_GID: ${LOCAL_GID:-1000}
+    platform: linux/arm64
+    # CPU/headless development does not require the NVIDIA runtime.
+    runtime: runc
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    network_mode: host
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
+    stdin_open: true
+    tty: true
+    init: true
