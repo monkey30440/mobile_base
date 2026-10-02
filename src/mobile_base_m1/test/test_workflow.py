@@ -44,6 +44,7 @@ class Peer:
         self.alarm_reset_observed = False
         self.master, self.slave = pty.openpty()
         self.path = os.ttyname(self.slave)
+        self.requests = []
         self.commands = []
         self.request_gaps = []
         self.last_response = None
@@ -51,6 +52,7 @@ class Peer:
         self.inhibited = False
         self.silent = False
         self.bad_error_check = False
+        self.one_shot_sto_fault = False
         self.running = True
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
@@ -66,6 +68,7 @@ class Peer:
                 if len(buffer) < length:
                     break
                 request = bytes(buffer[:length])
+                self.requests.append(request)
                 del buffer[:length]
                 if self.last_response is not None:
                     self.request_gaps.append(time.monotonic() - self.last_response)
@@ -85,6 +88,12 @@ class Peer:
                         response = bytes.fromhex('65 03 10 00 05 00 0d 00 78 97 91 00 02 00 00 ff 88 7c de')
                     if self.inhibited or (self.require_enable and not self.enabled):
                         response = bytes.fromhex('65 03 10 00 06 00 00 00 00 76 44 00 06 00 00 00 00 0e 19')
+                    if self.one_shot_sto_fault and request[2] == 0xf0:
+                        response = bytes((0x65, 3, 16))
+                        for words in ((5, 13, 0), (9, 0, 0)):
+                            response += struct.pack('>HHH', *words)
+                            response += struct.pack('>H', struct.unpack('<H', crc(response))[0])
+                        self.one_shot_sto_fault = False
                     if (struct.unpack('>H', request[2:4])[0] >> 8) & 15 == 12:
                         response = bytes((0x65, 3, 8))
                         for target in self.targets:
@@ -364,3 +373,42 @@ def test_native_hardware_execution_budget_preserves_timing_errors(workflow, expe
                      and s.name == 'controller_manager: Hardware Components Activity'
                      and any(v.key == 'M1.read_cycle.execution_time' for v in s.values)
                      for msg in diagnostics for s in msg.status), seconds=5)
+
+
+@pytest.mark.parametrize('rate', [.5, True, 0, -1])
+def test_invalid_controller_update_rate_fails_before_serial_requests(tmp_path, rate):
+    peer = Peer()
+    profile = yaml.safe_load((Path(__file__).parents[1] / 'config' / 'rwf.commissioning.yaml').read_text())
+    profile['hardware']['serial_port'] = peer.path
+    profile['controller']['update_rate'] = rate
+    target = tmp_path / 'invalid-rate.yaml'
+    target.write_text(yaml.safe_dump(profile))
+    model = tmp_path / 'model.urdf'
+    model.write_text('<robot name="software_rate_fixture"><link name="base_footprint"/><link name="left"/><link name="right"/>'
+                     '<joint name="left_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="left"/><axis xyz="0 1 0"/></joint>'
+                     '<joint name="right_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="right"/><axis xyz="0 1 0"/></joint></robot>')
+    process = subprocess.Popen(['ros2', 'launch', 'mobile_base_m1', 'm1.launch.py',
+                                f'hardware_config:={target}', f'model_file:={model}'],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    try:
+        output, _ = process.communicate(timeout=5)
+        assert process.returncode != 0
+        assert 'positive integer update_rate required' in output
+        assert not peer.requests
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGINT)
+            process.wait(timeout=8)
+        peer.close()
+
+
+def test_other_drive_alarm_is_latched_before_first_wheel_invalidity_and_shutdown(workflow):
+    peer, _, _, _, _, wait = workflow
+    peer.lifecycle_commands.clear()
+    peer.one_shot_sto_fault = True
+    wait(lambda: 'status=9' in peer.launch_log.read_text(), seconds=4)
+    # Subsequent peer replies are healthy; the captured other-drive alarm must
+    # still prevent SVOFF, whose documented effect can implicitly reset alarms.
+    os.killpg(peer.process.pid, signal.SIGINT)
+    peer.process.wait(timeout=8)
+    assert 7 not in peer.lifecycle_commands

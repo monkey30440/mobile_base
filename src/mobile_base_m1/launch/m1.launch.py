@@ -26,7 +26,10 @@ def setup(context):
         if key not in hardware or hardware[key] is None:
             raise RuntimeError('M1 target fact required: ' + key)
     controller = config['controller']
-    for key in ('wheel_radius', 'wheel_separation', 'cmd_vel_timeout', 'update_rate',
+    rate = controller.get('update_rate')
+    if type(rate) is not int or rate <= 0:
+        raise RuntimeError('positive integer update_rate required')
+    for key in ('wheel_radius', 'wheel_separation', 'cmd_vel_timeout',
                 'linear_velocity_limit', 'angular_velocity_limit'):
         value = controller.get(key)
         if value is None or not math.isfinite(value) or value <= 0:
@@ -49,7 +52,7 @@ def setup(context):
         ET.SubElement(joint, 'command_interface', name='velocity')
         ET.SubElement(joint, 'state_interface', name='velocity')
     description = ET.tostring(robot, encoding='unicode')
-    parameters = {'update_rate': int(controller['update_rate']),
+    parameters = {'update_rate': rate,
                   'base_controller.type': 'diff_drive_controller/DiffDriveController',
                   'joint_state_broadcaster.type': 'joint_state_broadcaster/JointStateBroadcaster'}
     budget = controller.get('native_hardware_execution_budget_us')
