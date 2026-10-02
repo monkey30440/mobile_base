@@ -1,22 +1,29 @@
 services:
-  dev:
-    image: mobile-base-dev:jazzy
+  mobile_base:
+    # Build-time 設定；UID/GID 應與 host 帳號一致。
+    image: mobile_base
     build:
       context: .
       args:
         LOCAL_UID: ${LOCAL_UID:-1000}
         LOCAL_GID: ${LOCAL_GID:-1000}
+
     platform: linux/arm64
-    # CPU/headless development does not require the NVIDIA runtime.
+    # 預設 headless；需要 NVIDIA graphics 時使用 local override。
     runtime: runc
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+
+    # 共用 host 網路，掛載 repository 作為開發 workspace。
     network_mode: host
     working_dir: /workspace
     volumes:
       - .:/workspace
+
+    # ROS 通訊設定，可由 host environment 或 .env 覆寫。
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
+
     stdin_open: true
     tty: true
     init: true

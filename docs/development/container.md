@@ -9,36 +9,36 @@
 ```bash
 export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
 docker compose config --quiet
-docker compose build dev
-docker compose up -d dev
-docker compose exec dev bash
+docker compose build mobile_base
+docker compose up -d mobile_base
+docker compose exec mobile_base bash
 # 也可直接執行非互動 shell：
-docker compose exec -T dev bash -c 'ros2 pkg list'
+docker compose exec -T mobile_base bash -c 'ros2 pkg list'
 docker compose down
 ```
 
 預設 UID/GID=1000；不同帳號須在 build 與 up 時一致設定，變更後重新 build。工作目錄 `/workspace` bind mount repository，build/install/log、maps 與其他 workspace 產物留在 host。HOME 為容器內 `/home/mobile_base`，此目錄不是持久資料存放處。容器以對應 UID/GID 執行，不重設 host 目錄 ownership。
 
-Entrypoint、互動 bash 與 `bash -c` 都接入 Jazzy 與存在時的 workspace overlay。直接 `docker compose exec dev ros2 ...` 不經 bash sourcing，請使用上面的 `bash -c`。新 build 完成後開新 shell，或手動 source install/setup.bash。沒有 production package 時 colcon 成功不代表測試通過。
+互動 bash 與 `bash -c` 都接入 Jazzy 與存在時的 workspace overlay。沒有自訂 entrypoint；直接執行 ROS 命令（例如 `docker compose exec mobile_base ros2 ...`）不經 bash sourcing，請使用上面的 `bash -c`。新 build 完成後開新 shell，或手動 source install/setup.bash。沒有 production package 時 colcon 成功不代表測試通過。
 
 ```bash
 # workspace 有 package 後：
-docker compose exec -T dev bash -c 'colcon list && colcon build --symlink-install'
-docker compose exec -T dev bash -c 'colcon test && colcon test-result --verbose'
+docker compose exec -T mobile_base bash -c 'colcon list && colcon build --symlink-install'
+docker compose exec -T mobile_base bash -c 'colcon test && colcon test-result --verbose'
 ```
 
-`reference/` 只供閱讀；其中 IMU 有 COLCON_IGNORE。新增 package 前再次確認 `colcon list`，不得誤編譯 reference。Docker build context 只包含 Dockerfile 與 docker scripts，不傳送 reference、credentials 或 workspace outputs。
+`reference/` 只供閱讀；其中 IMU 有 COLCON_IGNORE。新增 package 前再次確認 `colcon list`，不得誤編譯 reference。Docker build context 只包含 Dockerfile，不傳送 reference、credentials 或 workspace outputs。
 
 ## ROS smoke check
 
-兩個 terminal 使用相同隔離 domain，驗證 native talker/listener；timeout 結束長駐 node 時返回 124 是預期的停止方式，應在 listener 看到 `I heard`：
+先確認 ROS CLI 與原生套件可使用：
 
 ```bash
-# Terminal 1
-docker compose exec -T -e ROS_DOMAIN_ID=217 dev bash -c 'timeout 20s ros2 run demo_nodes_cpp talker'
-# Terminal 2
-docker compose exec -T -e ROS_DOMAIN_ID=217 dev bash -c 'timeout 10s ros2 run demo_nodes_cpp listener'
+docker compose exec -T mobile_base bash -c 'ros2 pkg prefix robot_state_publisher'
+docker compose exec -T mobile_base bash -c 'ros2 pkg executables nav2_route'
 ```
+
+先前 talker/listener 驗證使用 demo_nodes_cpp；目前精簡 image 不安裝該套件，需要重做 pub/sub smoke test 時，在臨時驗證 image 安裝。
 
 測試後執行 `docker compose down`，確認不殘留此開發容器。
 
@@ -50,7 +50,7 @@ USB 預設不掛入。取得實際穩定 `/dev/serial/by-id/...` 路徑、以 `s
 
 ```yaml
 services:
-  dev:
+  mobile_base:
     devices:
       - /dev/serial/by-id/ACTUAL_MOTOR_ID:/dev/mobile_base_motor
       - /dev/serial/by-id/ACTUAL_IMU_ID:/dev/mobile_base_imu
@@ -58,7 +58,7 @@ services:
       - "ACTUAL_DEVICE_GROUP_GID"
 ```
 
-以 `docker compose -f compose.yaml -f compose.local.yaml up -d dev` 使用，同組裝方式 down。依實際裝置填入，未接 USB 時不要套用；Compose 對缺失 device 應報錯。driver 使用容器內對應路徑。熱插拔後可能需要重新建立容器。不要使用 privileged 或掛入全部 `/dev`。通訊與重新接線驗證留 #35／#36。
+以 `docker compose -f compose.yaml -f compose.local.yaml up -d mobile_base` 使用，同組裝方式 down。依實際裝置填入，未接 USB 時不要套用；Compose 對缺失 device 應報錯。driver 使用容器內對應路徑。熱插拔後可能需要重新建立容器。不要使用 privileged 或掛入全部 `/dev`。通訊與重新接線驗證留 #35／#36。
 
 ## 可選 GUI
 
@@ -68,7 +68,7 @@ Headless 模式不需要 DISPLAY、Xauthority、GPU 或 NVIDIA runtime。RViz/rq
 
 ```yaml
 services:
-  dev:
+  mobile_base:
     environment:
       DISPLAY: ${DISPLAY:?Host DISPLAY required}
       XAUTHORITY: /tmp/mobile-base.xauthority
@@ -79,7 +79,7 @@ services:
       - /absolute/path/to/authorized-cookie:/tmp/mobile-base.xauthority:ro
 ```
 
-啟動後執行 `docker compose -f compose.yaml -f compose.local.yaml exec dev bash -c rviz2`（rqt_console 同理）。預設先用 software OpenGL；本輪未驗證可見 GUI。若 target 實測需要 NVIDIA graphics，先核對 host BSP、driver 與 Container Toolkit 相容性，再於 local override 選 `runtime: nvidia` 並設定 `NVIDIA_VISIBLE_DEVICES: all`、`NVIDIA_DRIVER_CAPABILITIES: graphics,display,utility`。這是待驗證入口，不宣稱選定 image 已與 Orin／Thor GPU 相容。不要為 headless 開發強制 GPU。
+啟動後執行 `docker compose -f compose.yaml -f compose.local.yaml exec mobile_base bash -c rviz2`（rqt_console 同理）。預設先用 software OpenGL；本輪未驗證可見 GUI。若 target 實測需要 NVIDIA graphics，先核對 host BSP、driver 與 Container Toolkit 相容性，再於 local override 選 `runtime: nvidia` 並設定 `NVIDIA_VISIBLE_DEVICES: all`、`NVIDIA_DRIVER_CAPABILITIES: graphics,display,utility`。這是待驗證入口，不宣稱選定 image 已與 Orin／Thor GPU 相容。不要為 headless 開發強制 GPU。
 
 ## 驗證紀錄
 
