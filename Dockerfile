@@ -16,6 +16,10 @@ RUN sed -i 's|http://repo.download.nvidia.com/|https://repo.download.nvidia.com/
     python3-vcstool \
     python3-serial \
     libmodbus-dev \
+    ros-jazzy-fastcdr \
+    ros-jazzy-fastrtps \
+    ros-jazzy-rmw-fastrtps-cpp \
+    ros-jazzy-rmw-fastrtps-shared-cpp \
     ros-jazzy-foxglove-bridge \
     ros-jazzy-diagnostic-updater \
     ros-jazzy-diagnostic-aggregator \
