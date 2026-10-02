@@ -1,0 +1,33 @@
+# RWF target facts: saved user-supplied PELB profiles + bounded live FC03 reads,
+# 2026-10-02; see docs/validation/m1-software.md for provenance and applicability.
+# Radius0.08m/separation0.555m/gear20:1 are operator-confirmed nominal geometry.
+# Firmware/limits/timeouts remain null: THIS PROFILE CANNOT ACTIVATE.
+# 1RPM/count is the documented velocity register unit, not encoder pulse scale.
+# Live state6 is inhibited; watchdog05-17=0. No register was written.
+hardware:
+  serial_port: /dev/fihRobotBaseMotor
+  firmware: null
+  baud: 230400
+  parity: N
+  stop_bits: 1
+  response_timeout_seconds: null
+  verified_multidrive2: true
+  verified_speed_mode: true
+  pdo_mapping: 0
+  left_drive_id: 2
+  right_drive_id: 1
+  left_gear_ratio: 20.0
+  right_gear_ratio: 20.0
+  left_direction: 1.0
+  right_direction: -1.0
+  left_feedback_rpm_per_count: 1.0
+  right_feedback_rpm_per_count: 1.0
+  left_max_motor_rpm: null
+  right_max_motor_rpm: null
+controller:
+  wheel_radius: 0.08
+  wheel_separation: 0.555
+  cmd_vel_timeout: null
+  update_rate: null
+  linear_velocity_limit: null
+  angular_velocity_limit: null
