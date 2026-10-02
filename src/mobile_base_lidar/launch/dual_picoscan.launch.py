@@ -64,7 +64,7 @@ def generate_launch_description():
                               description='Set native sensor echo filter on startup (transient SOPAS write)'),
         DeclareLaunchArgument('echo_filter', default_value='2',
                               description='Native echo selector: 0 FIRST, 1 ALL, 2 LAST; applied only when set_echo_filter=True'),
-        DeclareLaunchArgument('tick_to_timestamp_mode', default_value='0',
+        DeclareLaunchArgument('tick_to_timestamp_mode', default_value='1',
                               description='Native timestamp mode: 0 PLL, 1 first host time plus sensor elapsed ticks'),
         OpaqueFunction(function=start_devices),
     ])
