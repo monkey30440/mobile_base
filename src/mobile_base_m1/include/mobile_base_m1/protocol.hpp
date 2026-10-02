@@ -39,11 +39,14 @@ inline uint16_t prefix_crc(const std::vector<uint8_t> &data) {
  }
  return value;
 }
-inline void validate_error_checks(const std::array<uint16_t,8> &words) {
- std::vector<uint8_t> prefix{0x65,0x03,0x10};
+template<typename Words>
+inline void validate_error_checks(const Words &words, size_t measurements=3) {
+ const auto stride=measurements+1;
+ if(words.size()!=2*stride) throw std::runtime_error("invalid Multi-drive2 register count");
+ std::vector<uint8_t> prefix{0x65,0x03,static_cast<uint8_t>(words.size()*2)};
  for(size_t i=0;i<words.size();++i) {
-  if((i==3 || i==7) && words[i]!=prefix_crc(prefix))
-   throw std::runtime_error("per-drive Error_Check prefix CRC mismatch at drive slot " + std::to_string(i/4));
+  if(((i+1)%stride==0) && words[i]!=prefix_crc(prefix))
+   throw std::runtime_error("per-drive Error_Check prefix CRC mismatch at drive slot " + std::to_string(i/stride));
   prefix.push_back(static_cast<uint8_t>(words[i]>>8));
   prefix.push_back(static_cast<uint8_t>(words[i]&0xff));
  }
