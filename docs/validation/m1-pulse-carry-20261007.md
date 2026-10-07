@@ -50,7 +50,8 @@ native targetRPM0. Position reads occurred only before native launch or after
 native observer/launch exit. No concurrent RS485 owner was introduced. Native
 explicit-zero, lifecycle deactivation and independent stopped readback completed,
 and the dedicated container was removed. Existing development/view containers
-were retained. Operator visual direction/stop response is pending at this checkpoint.
+were retained. Operator confirmed both wheels moved in the AMR forward direction and finally
+stopped. This visual confirmation is separate from native stopped readback.
 
 [Evidence archive](artifacts/m1-pulse-carry-20261007.tar.gz) retains executed
 observer/publisher/profile/model, strict read-only script, pre/post raw responses,
