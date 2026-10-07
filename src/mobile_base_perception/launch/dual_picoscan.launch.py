@@ -93,8 +93,9 @@ def generate_launch_description():
         'ros_qos': 'Native sick_scan_xd QoS selector; choose and record against target consumers',
     }
     return LaunchDescription([
-        DeclareLaunchArgument('lidar_config', default_value='',
-                              description='Explicit flat YAML launch settings; CLI overrides take precedence'),
+        DeclareLaunchArgument('lidar_config',
+                              default_value=str(Path(get_package_share_directory('mobile_base_perception')) / 'config/lidar.yaml'),
+                              description='Defaults to package config/lidar.yaml; CLI overrides take precedence'),
         *[DeclareLaunchArgument(name, default_value='', description=description) for name, description in facts.items()],
         DeclareLaunchArgument('listen_only_mode', default_value='',
                               description='Native passive UDP mode; skips SOPAS initialization'),

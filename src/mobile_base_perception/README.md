@@ -10,7 +10,7 @@ Component verification uses the installed owning-package entries:
 
 ```bash
 ros2 launch mobile_base_perception imu.launch.py imu_config:=/absolute/imu.yaml
-ros2 launch mobile_base_perception dual_picoscan.launch.py lidar_config:=/absolute/lidar.yaml
+ros2 launch mobile_base_perception dual_picoscan.launch.py
 ```
 
 Installed example profiles are in `share/mobile_base_perception/config`:
@@ -27,8 +27,8 @@ hardware-free inspection commands. For argument inspection use `--show-args`.
 Only run one driver per device. No motor controller is started.
 
 `imu.yaml` is native ROS parameter YAML for node `usb_imu`; `lidar.yaml` is a flat
-mapping of the dual-LiDAR launch arguments. Both profiles must be explicitly
-selected. Relative config paths resolve from the caller's working directory;
+mapping of the dual-LiDAR launch arguments. IMU config must be explicitly selected. LiDAR defaults to the package
+config/lidar.yaml; lidar_config:=/another/file.yaml selects another profile. Relative config paths resolve from the caller's working directory;
 `~` is expanded. Missing files fail launch. Native ROS loads/validates IMU YAML
 and the adapter validates its parameters; the LiDAR launch parses its settings
 and retains native driver validation. There is no fallback profile. LiDAR CLI
@@ -163,3 +163,28 @@ The bounded capture script, raw bytes and timestamped summary are retained in
 serial access; no production adapter or fusion runtime was changed.
 
 Diagnostics distinguish angular velocity covariance supplied, unknown or invalid configuration, while retaining the calibration-not-verified limitation. No deployment covariance values are provided; calibration and estimation acceptance remain separate requirements.
+
+## LiDAR default source configuration
+
+For this development workspace, edit
+`/home/zzz/mobile_base/src/mobile_base_perception/config/lidar.yaml` on the host,
+or the same bind-mounted file at
+`/workspace/src/mobile_base_perception/config/lidar.yaml` inside the container.
+Build with native symlink installation:
+
+```bash
+colcon build --packages-select mobile_base_perception --symlink-install
+source install/setup.bash
+ros2 launch mobile_base_perception dual_picoscan.launch.py
+```
+
+The installed config is a symlink to that source file, so YAML edits apply when
+relaunching, without rebuilding. Existing running drivers do not reload edits.
+Ordinary non-symlink installation copies the config as a deployment snapshot;
+source-edit behavior requires this symlink build. No host path is hardcoded in
+the launch. Bare launch now configures/starts the recorded .52/.53 sensors.
+CLI overrides remain supported. For a completely CLI-supplied profile, an
+explicit YAML containing {} supplies no settings. ROS launch CLI does not accept
+an empty lidar_config argument. A missing selected config still fails rather
+than selecting a fallback. This does not fix the separately recorded
+native shutdown failure.
