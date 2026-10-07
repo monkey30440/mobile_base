@@ -141,3 +141,35 @@ The installed Bridge 3.5.0 accepts `foxglove.sdk.v1` for the probe. The obsolete
 `foxglove.websocket.v1` subprotocol was rejected by this server; this was a
 probe compatibility adjustment, not the cause of the user's established UI
 connection symptom. No permanent custom Bridge, filter or republisher is added.
+
+### Stable single-echo observation source (2026-10-07, UI confirmation pending)
+
+The operator confirmed that points returned after the queue correction but the
+ALL-echo LaserScan display still flickered. Queue correction therefore did not
+complete the visual workflow. Interleaved dense/sparse/empty echoes remain in
+one scan topic; no claim is made that scan decay alone fixes this.
+
+For this stationary viewing experiment only, the agent restarted the BR native
+driver with an additional native custom PointCloud2 configuration:
+
+```text
+custom_pointclouds:=br_view
+br_view:=coordinateNotation=0 updateMethod=0 echos=0 layers=1 reflectors=0,1 infringed=0,1 rangeFilter=0.05,120,1 topic=/lidar/br/view_echo0 frameid=base_lidar_link_BR_1_0 publish=1
+```
+
+All other network/native settings stayed as in the viewer; in particular
+`host_set_FREchoFilter=False`. Native SOPAS readback still reports ALL=1.
+The FL driver was not restarted. BR scan topics retain native ALL-echo output;
+no merger, decoder or project-owned republisher is added. The pointcloud uses
+native full-frame first-echo selection and drops invalid ranges for this
+observation. Its optical frame is still separate from the uncalibrated base
+model. The configuration is not installed as a product/default navigation input
+and does not settle the eventual navigation echo policy.
+
+A bounded ROS observation received 75 PointCloud2 messages, each with 1094–1098
+points, fields x/y/z/i and the single expected optical frame. This confirms a
+nonempty single-source stream, not successful Foxglove rendering yet. The
+operator is asked to disable BR scan/segment display and use
+`/lidar/br/view_echo0` with the same native display frame. Precise mounting and
+native teardown evidence remain unchanged. These temporary viewer settings
+end with the observation container; no permanent runtime files were modified.
