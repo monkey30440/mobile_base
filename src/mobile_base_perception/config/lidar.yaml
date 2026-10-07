@@ -1,0 +1,17 @@
+# Flat launch settings, not a ROS node parameter YAML.
+# Operator-confirmed RWF sensor IPs; host/ports from bounded native observations.
+# Reconfirm the actual host interface/IP and exclusive ports before deployment.
+fl_hostname: 192.168.0.52
+br_hostname: 192.168.0.53
+udp_receiver_ip: 192.168.0.51
+fl_udp_port: 2115
+fl_check_udp_port: 2116
+br_udp_port: 2117
+br_check_udp_port: 2118
+ros_qos: 4
+listen_only_mode: false
+# Both native LAST=2, stable native FL_1/BR_1 scans. Transient SOPAS startup writes.
+set_echo_filter: true
+echo_filter: 2
+# Native first-host-time + elapsed ticks; long-run timing is not calibrated.
+tick_to_timestamp_mode: 1

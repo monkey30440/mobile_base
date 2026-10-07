@@ -1,5 +1,6 @@
 """Compose two native drivers; network facts must be supplied by the Operator."""
 from pathlib import Path
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -9,7 +10,33 @@ from launch_ros.actions import Node
 
 
 def start_devices(context):
-    value = lambda name: LaunchConfiguration(name).perform(context)
+    config_path = LaunchConfiguration('lidar_config').perform(context)
+    config = {}
+    if config_path:
+        path = Path(config_path).expanduser().resolve()
+        if not path.is_file():
+            raise RuntimeError('LiDAR configuration file missing: ' + str(path))
+        with path.open(encoding='utf8') as stream:
+            config = yaml.safe_load(stream)
+        allowed = {'fl_hostname', 'br_hostname', 'udp_receiver_ip', 'fl_udp_port',
+                   'br_udp_port', 'fl_check_udp_port', 'br_check_udp_port', 'ros_qos',
+                   'listen_only_mode', 'set_echo_filter', 'echo_filter', 'tick_to_timestamp_mode'}
+        if not isinstance(config, dict) or set(config) - allowed:
+            raise RuntimeError('LiDAR configuration must be a mapping of supported launch arguments')
+    defaults = {'listen_only_mode': 'False', 'set_echo_filter': 'True',
+                'echo_filter': '2', 'tick_to_timestamp_mode': '1'}
+
+    def value(name):
+        selected = LaunchConfiguration(name).perform(context)
+        if not selected:
+            selected = config.get(name, defaults.get(name))
+        if selected is None or str(selected) == '':
+            raise RuntimeError('LiDAR target fact required: ' + name)
+        return str(selected)
+
+    for name in ('fl_hostname', 'br_hostname', 'udp_receiver_ip', 'fl_udp_port',
+                 'br_udp_port', 'fl_check_udp_port', 'br_check_udp_port', 'ros_qos'):
+        value(name)
     ports = [int(value(name)) for name in ('fl_udp_port', 'br_udp_port', 'fl_check_udp_port', 'br_check_udp_port')]
     if len(set(ports)) != len(ports) or any(port < 1 or port > 65535 for port in ports):
         raise RuntimeError('LiDAR receive/check UDP ports must be distinct and in 1..65535')
@@ -66,14 +93,16 @@ def generate_launch_description():
         'ros_qos': 'Native sick_scan_xd QoS selector; choose and record against target consumers',
     }
     return LaunchDescription([
-        *[DeclareLaunchArgument(name, description=description) for name, description in facts.items()],
-        DeclareLaunchArgument('listen_only_mode', default_value='False',
+        DeclareLaunchArgument('lidar_config', default_value='',
+                              description='Explicit flat YAML launch settings; CLI overrides take precedence'),
+        *[DeclareLaunchArgument(name, default_value='', description=description) for name, description in facts.items()],
+        DeclareLaunchArgument('listen_only_mode', default_value='',
                               description='Native passive UDP mode; skips SOPAS initialization'),
-        DeclareLaunchArgument('set_echo_filter', default_value='True',
+        DeclareLaunchArgument('set_echo_filter', default_value='',
                               description='Set native sensor echo filter on startup (transient SOPAS write)'),
-        DeclareLaunchArgument('echo_filter', default_value='2',
+        DeclareLaunchArgument('echo_filter', default_value='',
                               description='Native selector: default LAST (2) gives one stable scan frame per sensor; 0 FIRST, 1 ALL. Set on each startup'),
-        DeclareLaunchArgument('tick_to_timestamp_mode', default_value='1',
+        DeclareLaunchArgument('tick_to_timestamp_mode', default_value='',
                               description='Native timestamp mode: 0 PLL, 1 first host time plus sensor elapsed ticks'),
         OpaqueFunction(function=start_devices),
     ])

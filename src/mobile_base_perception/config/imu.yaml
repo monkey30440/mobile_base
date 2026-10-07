@@ -1,0 +1,16 @@
+# Explicit RWF commissioning profile, not a calibrated production/fusion profile.
+# USB framing/115200 observed in imu-passive-20261007; firmware identity unknown.
+# Units follow HandBoard V1 guide; identity wire axes are the Operator choice.
+# Model owns yaw +90 degrees. Do not apply that mounting rotation here again.
+# 0.3 s is a commissioning timeout, not an accepted production operating limit.
+usb_imu:
+  ros__parameters:
+    port: /dev/fihRobotBaseIMU
+    baud: 115200
+    protocol_profile: handboard_v1
+    acceleration_scale: 9.81
+    gyro_scale: 0.017453292519943295
+    axes: [1, 2, 3]
+    sample_timeout: 0.3
+    # ROS unknown covariance; stationary noise is not deployment calibration.
+    angular_velocity_variances: [0.0, 0.0, 0.0]

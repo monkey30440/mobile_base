@@ -9,10 +9,41 @@ source diagnostics behavior are unchanged.
 Component verification uses the installed owning-package entries:
 
 ```bash
-ros2 run mobile_base_perception usb_imu --ros-args --params-file /absolute/imu.yaml
-ros2 launch mobile_base_perception dual_picoscan.launch.py --show-args
+ros2 launch mobile_base_perception imu.launch.py imu_config:=/absolute/imu.yaml
+ros2 launch mobile_base_perception dual_picoscan.launch.py lidar_config:=/absolute/lidar.yaml
 ros2 launch mobile_base_perception sensor_model.launch.py --show-args
 ```
+
+Installed example profiles are in `share/mobile_base_perception/config`:
+
+```bash
+perception_share="$(ros2 pkg prefix mobile_base_perception)/share/mobile_base_perception"
+ros2 launch mobile_base_perception imu.launch.py imu_config:="$perception_share/config/imu.yaml"
+ros2 launch mobile_base_perception dual_picoscan.launch.py lidar_config:="$perception_share/config/lidar.yaml"
+```
+
+Run each command separately in the correctly provisioned hardware container.
+These commands open the IMU device or start/configure the LiDARs; they are not
+hardware-free inspection commands. For argument inspection use `--show-args`.
+Only run one driver per device. No motor controller is started.
+
+`imu.yaml` is native ROS parameter YAML for node `usb_imu`; `lidar.yaml` is a flat
+mapping of the dual-LiDAR launch arguments. Both profiles must be explicitly
+selected. Relative config paths resolve from the caller's working directory;
+`~` is expanded. Missing files fail launch. Native ROS loads/validates IMU YAML
+and the adapter validates its parameters; the LiDAR launch parses its settings
+and retains native driver validation. There is no fallback profile. LiDAR CLI
+arguments override individual YAML entries; the original all-CLI workflow is
+still supported. Unspecified echo/time options retain the existing LAST/mode1
+behavior. Config files are installed examples, not hot-reloaded settings.
+
+IMU framing/baud have passive target evidence; firmware identity, independent
+unit/axis verification and calibration retain their existing limitations.
+Its 0.3-second timeout is a commissioning choice. Gyro covariance is deliberately
+unknown (zeros), not imported from the temporary stationary-noise experiment.
+This profile is not an accepted deployment EKF uncertainty. LiDAR host IP/ports
+must match the actual current network; native shutdown/long-run timing acceptance
+remains incomplete. Edit a copied profile for different targets or validated tuning.
 
 sensor_model starts native dual LiDAR and one model RSP, without motor control
 or EKF. Do not run it with another model publisher. Native SICK TF and embedded
