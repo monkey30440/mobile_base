@@ -16,7 +16,7 @@ Inspection of native IMU parameter declarations and documented parameters found 
 
 For the selected native estimator, calibrated covariance must arrive in the input message. Disabling IMU fusion avoids unsupported weighting but does not meet the confirmed wheel-plus-IMU fusion responsibility. A generic external republisher would add another runtime owner without resolving calibration.
 
-**Minimal custom responsibility, proposed for explicit adoption:** extend the already necessary project-owned hardware IMU publisher with configuration for calibrated angular-velocity covariance in its published frame and SI units. Publish the configured covariance with the same sample; preserve unknown semantics when calibration is absent. Define validation and deployment requirements at that existing boundary. No separate covariance node, new estimator, bias estimator, or automatic calibration service is justified by this gap.
+**Minimal custom responsibility, adopted by the operator on 2026-10-07:** extend the already necessary project-owned hardware IMU publisher with configuration for calibrated angular-velocity covariance in its published frame and SI units. Publish the configured covariance with the same sample; preserve unknown semantics when calibration is absent. Define validation and deployment requirements at that existing boundary. No separate covariance node, new estimator, bias estimator, or automatic calibration service is justified by this gap.
 
 This note does not authorize choosing numerical covariance values. Native EKF process-noise tuning is also separate from estimating sensor measurement variance.
 
@@ -24,7 +24,7 @@ This note does not authorize choosing numerical covariance values. Native EKF pr
 
 - **REQUIRES CALIBRATION:** gyro measurement covariance in `(rad/s)^2`, bias/noise versus deployment conditions, and estimator tuning/acceptance evidence. A stationary capture alone cannot establish dynamic scale accuracy, axis signs or time alignment.
 - **REQUIRES HARDWARE VALIDATION:** gyro direction and scale during actual chassis rotation, timing assumptions, and fused wheel/IMU behavior. Raised wheel rotation does not rotate the chassis.
-- **UNRESOLVED:** exact covariance configuration interface and deployment behavior when calibration is missing; these need a scoped decision before production fusion. No numerical defaults are confirmed here.
+- **CONFIRMED scoped interface:** optional three positive angular-velocity variances in the published IMU frame and SI units; when omitted, all-zero unknown covariance is retained. Invalid supplied values fail before opening the device. Deployment fusion must not select an unknown-covariance measurement. No numerical deployment values are confirmed here.
 - **CONFIRMED software-only path:** model/TF and native estimator wiring can be exercised using explicitly synthetic, nondeployment test measurements with declared fixture covariance. Passing that test must not be presented as hardware calibration or #35/#36 acceptance.
 
 Native-first result: keep `robot_localization` as estimator and sole odometry TF publisher. The identified gap concerns upstream input quality at the existing IMU adapter, not estimator ownership.
