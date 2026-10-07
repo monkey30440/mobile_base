@@ -17,7 +17,9 @@ These are observed settings, not acceptable independent host receive configurati
 
 ## Frames and echo selection
 
-Upstream 3.9.0 unconditionally appends a layer suffix to LaserScan `header.frame_id`; the single picoScan layer produces `base_lidar_link_FL_1` / `base_lidar_link_BR_1`. Multiple published echoes also append an echo index. `publish_frame_id` remains the physical mounting frame prefix. Exact unsuffixed LaserScan IDs are not provided by this native API. Required resolution is a model-owned identity child alias or a revised frame contract; no custom header rewrite is implemented. Until this is resolved, exact frame acceptance remains open.
+Upstream 3.9.0 unconditionally appends a layer suffix to LaserScan `header.frame_id`; the single picoScan layer produces `base_lidar_link_FL_1` / `base_lidar_link_BR_1`. Multiple published echoes also append an echo index. `publish_frame_id` remains the physical mounting frame prefix. Exact unsuffixed LaserScan IDs are not provided by this native API.
+
+On 2026-10-07 the operator confirmed model-owned child frames for the native scan names, preserving FL LAST and BR ALL echo settings. The observed children to support are `base_lidar_link_FL_1` and `base_lidar_link_BR_1_0`, `base_lidar_link_BR_1_1`, `base_lidar_link_BR_1_2`. `robot_state_publisher` owns these model transforms; the driver retains its native headers. This resolves the naming approach, not transform geometry or hardware acceptance. Identity transforms are not assumed from suffixes: the relationship between the CAD mounting frames and scan coordinate frames still requires source/hardware evidence and extrinsic validation before model acceptance.
 
 By default this launch preserves the device's current echo filter. `set_echo_filter:=True echo_filter:=2` explicitly selects native LAST echo during startup; do not assume changing BR ALL to LAST has already been approved/validated. Echo choice must agree with downstream LaserScan consumption and frame aliases.
 
