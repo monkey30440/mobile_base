@@ -223,3 +223,10 @@ scan device axes now have +Z down; source CAD meshes stay in separately named
 CAD links. Body/IMU TF is preserved. Whole-model visual-only orientation is
 checked via Foxglove Scene Mesh up-axis Z-up, rather than an arbitrary +90-degree
 URDF rotation. See [correction and pending manual gate](../validation/inverted-model-20261007.md).
+
+## Source-link correction (2026-10-07)
+
+Operator rejected additional base_lidar_cad_link_FL/BR frames. The current model
+preserves the source base_lidar_link_FL/BR CAD transforms and geometry and places
+explicit optical orientation on native _1 children only. Earlier extra-CAD-link
+model notes are superseded. See [validation](../validation/source-link-model-20261007.md).

@@ -7,17 +7,16 @@ is excluded. Source geometry, inertials and movable joints are retained.
 BASE_FOOTPRINT is normalized/rerooted as base_footprint; wheel joint names map to
 the canonical left_wheel_joint/right_wheel_joint used by M1.
 
-Native robot_state_publisher is the sole model TF owner. Original sensor CAD
-links are named base_lidar_cad_link_FL/BR and retain source meshes/inertials.
-Their device-oriented children base_lidar_link_FL/BR carry explicit mounting RPY;
-the native scan `_1` children are identity. This separates baked CAD geometry
-from actual device axes without distorting meshes or rewriting scan data. The two native single-
-echo optical frames are base_lidar_link_FL_1 and base_lidar_link_BR_1. Launch
-requires explicitly selected optical roll/pitch/yaw (radians) relative to CAD axes.
-The integrated observation uses nominal roll=180 degrees, pitch=0 and yaw=-45/-135 degrees: the
-operator confirmed both sensors inverted, and coarse bearings constrain yaw; these are not calibrated production extrinsics. Optical
-origin translation follows the CAD mount pending measured calibration. CAD
-translations and other fixed sensor geometry are unchanged.
+Native robot_state_publisher is the sole model TF owner. Original
+base_lidar_link_FL/BR links, meshes, inertials and source joint transforms are
+preserved. No additional CAD links are introduced. Their native scan children
+base_lidar_link_FL_1 and base_lidar_link_BR_1 express the optical orientation
+relative to these source CAD axes. CAD axes are not claimed to be device axes.
+Launch requires explicit optical roll/pitch/yaw (radians). The observation profile
+uses nominal roll=180 degrees, pitch=0 and yaw=-45/-135 degrees: the operator
+confirmed both sensors inverted, and coarse bearings constrain yaw. These are
+not calibrated production extrinsics. Optical translation follows the source
+mount origin pending measured calibration. Scan data is not rewritten.
 
 No joint_state_publisher or fabricated wheel/suspension/caster states are started.
 Movable branches require real appropriate joint feedback; absence of that feedback

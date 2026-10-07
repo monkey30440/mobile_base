@@ -21,18 +21,12 @@ while True:
 for link in original.findall('link'):
     if link.attrib['name'] not in links:continue
     link=copy.deepcopy(link)
-    if link.attrib['name'] in ('base_lidar_link_FL', 'base_lidar_link_BR'):
-        link.attrib['name'] = link.attrib['name'].replace('base_lidar_link_', 'base_lidar_cad_link_')
     if link.attrib['name']=='BASE_FOOTPRINT':link.attrib['name']='base_footprint'
     for mesh in link.findall('.//mesh'):
         mesh.attrib['filename']='package://mobile_base_description/meshes/'+Path(mesh.attrib['filename']).name
     robot.append(link)
 for joint in joints:
     joint=copy.deepcopy(joint)
-    for endpoint in ('parent', 'child'):
-        node = joint.find(endpoint)
-        if node.attrib['link'] in ('base_lidar_link_FL', 'base_lidar_link_BR'):
-            node.attrib['link'] = node.attrib['link'].replace('base_lidar_link_', 'base_lidar_cad_link_')
     if joint.attrib['name']=='J_BASE_FOOTPRINT':
         joint.find('parent').attrib['link']='base_footprint'
         joint.find('child').attrib['link']='base_link'
@@ -42,19 +36,16 @@ for joint in joints:
     robot.append(joint)
 for side in ('FL','BR'):
     mounting = 'base_lidar_link_' + side
-    ET.SubElement(robot, 'link', name=mounting)
-    joint = ET.SubElement(robot, 'joint', name='lidar_mount_joint_' + side, type='fixed')
-    ET.SubElement(joint, 'parent', link='base_lidar_cad_link_' + side)
-    ET.SubElement(joint, 'child', link=mounting)
+    scan = mounting + '_1'
+    ET.SubElement(robot, 'link', name=scan)
+    joint = ET.SubElement(robot, 'joint', name='lidar_scan_joint_' + side, type='fixed')
+    ET.SubElement(joint, 'parent', link=mounting)
+    ET.SubElement(joint, 'child', link=scan)
+    # Supplied CAD links retain their original axes and geometry. Only the
+    # native optical child expresses the measured device mounting orientation.
     ET.SubElement(joint, 'origin', xyz='0 0 0',
                   rpy=' '.join('$(arg ' + side.lower() + '_scan_' + axis + ')'
                                for axis in ('roll', 'pitch', 'yaw')))
-    scan=mounting+'_1'
-    ET.SubElement(robot,'link',name=scan)
-    joint=ET.SubElement(robot,'joint',name='lidar_scan_joint_'+side,type='fixed')
-    ET.SubElement(joint,'parent',link='base_lidar_link_'+side)
-    ET.SubElement(joint,'child',link=scan)
-    ET.SubElement(joint,'origin',xyz='0 0 0',rpy='0 0 0')
 ET.indent(robot)
 output.parent.mkdir(parents=True,exist_ok=True)
 ET.ElementTree(robot).write(output,encoding='unicode',xml_declaration=True)

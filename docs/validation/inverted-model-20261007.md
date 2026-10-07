@@ -1,3 +1,5 @@
+> Superseded model structure: the operator rejected additional CAD links. See [source-link correction](source-link-model-20261007.md). Historical measurements below describe the previous model.
+
 # Inverted LiDAR mounting and Foxglove mesh orientation
 
 2026-10-07 follow-up to the single-echo/model stage. Operator confirmed both

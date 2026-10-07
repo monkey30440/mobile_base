@@ -22,6 +22,14 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
     import xml.etree.ElementTree as ET
     robot = ET.fromstring(model)
     assert robot.find("link[@name='L_TORSO_J1']") is None
+    assert not any('base_lidar_cad_link' in link.attrib['name'] for link in robot.findall('link'))
+    for side in ('FL', 'BR'):
+        mount = robot.find("joint[@name='base_lidar_joint_" + side + "']")
+        assert mount.find('origin').attrib['rpy'] == '0 0 0'
+        assert mount.find('child').attrib['link'] == 'base_lidar_link_' + side
+        link = robot.find("link[@name='base_lidar_link_" + side + "']")
+        assert link.find('visual/origin').attrib == {'xyz': '0 0 0', 'rpy': '0 0 0'}
+        assert link.find('inertial/origin').attrib == {'xyz': '0 0 0', 'rpy': '0 0 0'}
     assert robot.find("joint[@name='left_wheel_joint']").attrib['type'] == 'continuous'
     assert robot.find("joint[@name='driving_slide_joint_L']").attrib['type'] == 'prismatic'
     for mesh in robot.findall('.//mesh'):
@@ -36,12 +44,10 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
     sub=node.create_subscription(String,'/robot_description',lambda m:descriptions.append(m.data),
         QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
     expected={
-        'base_lidar_cad_link_FL':(.28771,.26721,.19589,0.,0.,0.,1.),
-        'base_lidar_cad_link_BR':(-.24671,-.26721,.19589,0.,0.,0.,1.),
         'base_imu_link':(.04375,-.008,.24141,0.,0.,0.,1.),
-        'base_lidar_link_FL':(.28771,.26721,.19589,.923879532511,-.382683432365,0.,0.),
+        'base_lidar_link_FL':(.28771,.26721,.19589,0.,0.,0.,1.),
         'base_lidar_link_FL_1':(.28771,.26721,.19589,.923879532511,-.382683432365,0.,0.),
-        'base_lidar_link_BR':(-.24671,-.26721,.19589,.382683432365,-.923879532511,0.,0.),
+        'base_lidar_link_BR':(-.24671,-.26721,.19589,0.,0.,0.,1.),
         'base_lidar_link_BR_1':(-.24671,-.26721,.19589,.382683432365,-.923879532511,0.,0.),
     }
     try:
@@ -58,7 +64,7 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
             # q and -q encode the same rotation; tf2 may return either.
             assert (actual == pytest.approx(expected_rotation,abs=1e-9) or
                     actual == pytest.approx(tuple(-v for v in expected_rotation),abs=1e-9))
-            if frame.startswith('base_lidar_link_'):
+            if frame.endswith('_1'):
                 assert 1 - 2 * (t.rotation.x**2 + t.rotation.y**2) == pytest.approx(-1,abs=1e-9)
         assert len(node.get_publishers_info_by_topic('/tf_static'))==1
         assert not buffer.can_transform('odom','base_footprint',Time())
