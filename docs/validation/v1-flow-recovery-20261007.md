@@ -1,5 +1,7 @@
 # V1 flow recovery — 2026-10-07
 
+> Historical pause snapshot. The operator subsequently authorized commit/push and resumption; see [resumption](v1-flow-resumption-20261007.md).
+
 Implementation and hardware progression are paused at the operator's request.
 Existing implementation is retained; no code rollback, clean or restart is part
 of this recovery. The operator explicitly allows the current verified results
