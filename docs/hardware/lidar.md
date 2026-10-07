@@ -243,3 +243,12 @@ arguments were removed to prevent double rotation. Source translations and
 visual/inertial origins are unchanged. This supersedes the earlier nominal
 FL yaw -45 degrees and CAD/optical-child frame distinction. Physical alignment
 of the revised model remains an operator acceptance gate.
+
+## Independent live verification (2026-10-07)
+
+Current separate Description/Perception entries were exercised against both real
+sources: FL614 / BR613 scans in25s, approximately25Hz, stable native FL_1/BR_1,
+correct source/QoS and available TF at every observed stamp. Both devices read
+LAST2. Native shutdown remains failed: both children exited−6 after output-stop
+acknowledgements; launch parent0 does not establish success. Read-only follow-up
+confirmed both outputs disabled. See [bounded evidence and limits](../validation/dual-lidar-independent-live-20261007.md).
