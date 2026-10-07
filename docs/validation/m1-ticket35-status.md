@@ -29,3 +29,8 @@ and matching standard Index/Pos register reads establish mode0 representation;
 signed32 concatenation is rejected. Documented10000-step default is supported by
 bounded velocity consistency, with independent scale/wrap/calibration limits
 retained. No position runtime interface or complete wheel TF acceptance yet.
+
+[Fractional pulse carry](m1-pulse-carry-20261007.md) now confirms both directions
+of mode0 Index/Pos carry on the actual drives. Documented10000-step conversion
+is supported for commissioning. Position-state runtime, rollover/reset semantics,
+complete wheel TF and independent mechanical calibration remain open.

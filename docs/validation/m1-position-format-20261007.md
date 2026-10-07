@@ -64,3 +64,8 @@ Next implementation input: preserve native RSP ownership and provide real wheel
 position through the M1 hardware adapter, with explicit mode/scale provenance and
 failure/reset/rollover semantics. Do not fabricate JointState position or publish
 replacement wheel TF. This checkpoint itself does not implement that change.
+
+Follow-up: [fractional pulse carry](m1-pulse-carry-20261007.md) observed both
+Index/Pos carry directions, supporting the documented10000-step commissioning
+conversion. Independent mechanical calibration and full runtime/TF acceptance
+remain separate.
