@@ -142,7 +142,7 @@ The installed Bridge 3.5.0 accepts `foxglove.sdk.v1` for the probe. The obsolete
 probe compatibility adjustment, not the cause of the user's established UI
 connection symptom. No permanent custom Bridge, filter or republisher is added.
 
-### Stable single-echo observation source (2026-10-07, UI confirmation pending)
+### Stable single-echo observation source (2026-10-07, operator confirmed)
 
 The operator confirmed that points returned after the queue correction but the
 ALL-echo LaserScan display still flickered. Queue correction therefore did not
@@ -173,3 +173,43 @@ operator is asked to disable BR scan/segment display and use
 `/lidar/br/view_echo0` with the same native display frame. Precise mounting and
 native teardown evidence remain unchanged. These temporary viewer settings
 end with the observation container; no permanent runtime files were modified.
+
+The operator subsequently confirmed `/lidar/br/view_echo0` is stable in
+Foxglove. This completes the stationary single-echo viewing check only; the
+ALL-echo LaserScan display was not demonstrated stable. BR optical mounting
+direction/calibration and production consumer echo policy remain unresolved.
+
+### Operator coarse BR direction observation (2026-10-07)
+
+After confirming `/lidar/br/view_echo0` stable, the operator followed the
+request to place a scan-height target approximately 1 m along the AMR rearward
+direction from the BR sensor, with no intended lateral offset. The reported
+optical coordinates were x=+0.71 m, y=+0.68 m (quadrant +X/+Y).
+Their bearing is atan2(0.68,0.71)=43.76 degrees; a robot-relative rearward
+bearing of 180 degrees implies optical yaw approximately 136.24 degrees.
+This supports a nominal +135-degree rear-right optical direction, complementing
+the earlier nominal +45-degree FL observation.
+
+This is operator-reported coarse direction evidence, not calibrated mounting
+TF: target alignment, dimensions, placement uncertainty and sensor translation
+were not measured. No production TF or runtime configuration is changed by
+this observation. Exact optical mounting calibration remains required.
+
+### Completed flicker diagnosis (2026-10-07)
+
+See [root-cause verification](../validation/lidar-foxglove-root-cause-20261007.md):
+490 matched ROS/WebSocket messages, controlled queue-depth contrast, and replay
+of the actual installed Foxglove batch/geometry/history code. BR multiplexed
+ALL echoes replace the same topic geometry; the empty third echo clears points
+at zero decay. FL has one echo stream. Native echo0 observation is operator-
+confirmed stable; original ALL scan GUI repair is not claimed.
+
+### Current formal scan contract (2026-10-07 revision)
+
+The user explicitly superseded BR ALL with a production-oriented single native
+scan/frame contract. Both drivers now apply native LAST=2 on startup; frames are
+FL_1/BR_1 under the original mounting links, published by mobile_base_description
+and native RSP. Native bool CLI values use 1/0 (stoi conversion), not True/False.
+See [staged integration evidence and manual gate](../validation/single-echo-model-20261007.md).
+Historical ALL/echo-view experiments above are evidence, not current deployment
+settings. Nominal +45/+135 yaw remains uncalibrated; final GUI alignment is pending.

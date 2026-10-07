@@ -32,7 +32,7 @@ def test_native_sources_are_independently_visible_without_sensor_traffic():
                'fl_hostname:=127.0.0.2', 'br_hostname:=127.0.0.3',
                'udp_receiver_ip:=127.0.0.1', 'fl_udp_port:=32115', 'br_udp_port:=32116',
                'fl_check_udp_port:=32117', 'br_check_udp_port:=32118',
-               'ros_qos:=4', 'listen_only_mode:=True']
+               'ros_qos:=4', 'listen_only_mode:=True', 'set_echo_filter:=True']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                text=True, start_new_session=True)
     rclpy.init()
@@ -54,6 +54,17 @@ def test_native_sources_are_independently_visible_without_sensor_traffic():
             publisher = visible[topic][0]
             assert (publisher.node_name, publisher.node_namespace) == (name, namespace)
             assert publisher.qos_profile.reliability == ReliabilityPolicy.BEST_EFFORT
+            # Check the native driver's public parameter service, not launch text.
+            from rclpy.parameter_client import AsyncParameterClient
+            client = AsyncParameterClient(observer, namespace + '/' + name)
+            assert client.wait_for_services(timeout_sec=3)
+            future = client.get_parameters(['listen_only_mode', 'host_set_FREchoFilter', 'imu_enable'])
+            rclpy.spin_until_future_complete(observer, future, timeout_sec=3)
+            assert future.done()
+            values = future.result().values
+            # sick_scan_xd's native XML/CLI interface exposes string overrides;
+            # its bool conversion requires numeric strings, not True/False.
+            assert [v.string_value for v in values] == ['1', '1', '0']
     finally:
         observer.destroy_node()
         rclpy.shutdown()
