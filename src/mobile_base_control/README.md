@@ -25,14 +25,29 @@ See the raised reverse commissioning record for configure-failure/readback evide
 Then, inside the correctly provisioned hardware container:
 
 ```bash
-ros2 launch mobile_base_control m1.launch.py hardware_config:=/absolute/target.yaml model_file:=/absolute/mobile_base.urdf
+# Terminal 1: model only; loading the profile opens no motor device.
+ros2 launch mobile_base_description description.launch.py hardware_config:=/absolute/target.yaml
+# Terminal 2: starts/activates native hardware and controllers (may Servo ON).
+ros2 launch mobile_base_control m1.launch.py hardware_config:=/absolute/target.yaml
 ros2 control list_controllers
 ros2 topic echo /base_controller/odom
 ros2 topic echo /diagnostics
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -r cmd_vel:=/base_controller/cmd_vel
 ```
 
-`model_file` is the geometry-only deployment URDF containing `left_wheel_joint` / `right_wheel_joint`. This launch inserts the device control fragment and starts the single native robot_state_publisher; a containing bringup must not start another model TF owner. Controller feedback uses velocity, `open_loop=false`, and `enable_odom_tf=false`. Native `/base_controller/cmd_vel` is stamped Twist; `/base_controller/odom` remains the wheel-feedback odometry source. Limits and controller timeout come from the explicit profile.
+Description alone owns the complete model and native RSP. Supply the **same**
+explicit profile to both launches; Description adds the M1 ros2_control declaration
+without starting hardware. Control consumes the native `/robot_description` topic
+and starts no RSP or other package launch. Its `model_file` argument is removed;
+explicit geometry overrides belong to Description. Geometry-only Description
+(without hardware_config) cannot initialize M1; restart Description with the
+selected profile before starting Control. Do not change profiles/model during a
+run or rely on native topic loading to compare two different YAML files. Wrong,
+missing or mismatched configuration is an Operator setup error, not readiness.
+Native logs/spawner failures must be preserved and resolved. Control startup
+without the required description does not establish usable hardware/controllers.
+
+Controller feedback uses velocity, `open_loop=false`, and `enable_odom_tf=false`. Native `/base_controller/cmd_vel` is stamped Twist; `/base_controller/odom` remains the wheel-feedback odometry source. Limits and controller timeout come from the explicit profile.
 
 Before Teleop, cancel Navigation and wait for its native terminal result. Before Navigation, end the Teleop process (Ctrl-C). Do not interpret zero speed, lack of messages, command timeout, controller inactive or zero acknowledgement as session completion or evidence that the physical robot stopped. Use the operator's actual hardware stop procedure and independent observation. Shutdown/deactivation attempts bounded stop/off with readback; error handling requests ISTOP and preserves its cause. A disconnected link cannot guarantee delivery.
 
@@ -85,7 +100,8 @@ Physical signed-index overflow and power-reset behavior are not hardware-accepte
 
 This package replaces mobile_base_m1; its plugin is mobile_base_control/M1System.
 Protocol and public native control workflow tests remain in this package and
-use its installed m1.launch.py entry with explicit hardware_config/model_file.
+use its installed m1.launch.py entry with explicit hardware_config, after
+independently starting Description with the same profile.
 Core device acceptance precedes ticket #38 local estimation integration and
 #39/#41 product Bringup delivery. No calibrated covariance or default deployment
 model is supplied by this component entry.

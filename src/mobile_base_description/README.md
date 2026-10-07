@@ -23,8 +23,8 @@ is not a complete dynamic-model acceptance. All sensor/base_footprint paths are
 fixed and can be verified without motor operation. odom->base_footprint remains
 robot_localization's responsibility; this model-only launch does not fabricate it.
 Use the installed Description entry for model-only verification.
-Do not run it alongside the Control or sensor_model entries, which already start
-the sole RSP.
+Control now starts no RSP and can be launched independently after Description.
+Perception starts its sensors separately; the former sensor_model entry was removed.
 
 ```bash
 ros2 launch mobile_base_description description.launch.py
@@ -44,3 +44,29 @@ is not measured suspension travel, and no fake JointState or extra TF publisher
 is introduced. Wheel rotation remains continuous and comes from real M1 position
 feedback. Other passive caster/suspension joints are not implicitly fixed or
 declared hardware-verified by this choice.
+
+## Independent Control verification
+
+For model/Perception-only checks, the default geometry-only launch above is enough.
+For Control, start Description with the same explicit M1 profile that Control will
+use, then launch Control in a second terminal:
+
+```bash
+ros2 launch mobile_base_description description.launch.py hardware_config:=/absolute/hardware.yaml
+ros2 launch mobile_base_control m1.launch.py hardware_config:=/absolute/hardware.yaml
+```
+
+Description adds the existing M1 ros2_control declaration to the published URDF.
+It reads configuration only: no device open, controller manager, Servo ON or
+sensor startup occurs here. Native RSP remains the sole model publisher; Control
+consumes its transient-local robot_description. Optional model_file overrides
+geometry for a documented fixture/revision; the default is the installed model.
+The override must be geometry-only and contain canonical wheel joints when a
+hardware profile is supplied. Relative paths resolve from the caller directory,
+with ~ expansion. YAML/parser errors and missing, empty, nonmapping or null-valued hardware
+mappings fail model launch. Required hardware parameter completeness and physical
+parameter validation remain Control/plugin responsibility.
+
+Use one RSP and one profile per session. Loading a profile into Description is
+not hardware acceptance. End/restart the selected configuration to change it;
+there is no project-owned model/profile synchronization or hot reload.

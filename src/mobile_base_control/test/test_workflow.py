@@ -193,8 +193,13 @@ def workflow(tmp_path, request):
       <joint name="left_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="left_wheel"/><axis xyz="0 1 0"/></joint>
       <joint name="right_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="right_wheel"/><axis xyz="0 1 0"/></joint></robot>''')
     output = open(tmp_path / 'launch.log', 'w+')
+    model_output = open(tmp_path / 'description.log', 'w+')
+    model_process = subprocess.Popen(
+        ['ros2', 'launch', 'mobile_base_description', 'description.launch.py',
+         f'hardware_config:={target}', f'model_file:={model}'],
+        stdout=model_output, stderr=subprocess.STDOUT, start_new_session=True)
     process = subprocess.Popen(['ros2', 'launch', 'mobile_base_control', 'm1.launch.py',
-                                f'hardware_config:={target}', f'model_file:={model}'],
+                                f'hardware_config:={target}'],
                                stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
     peer.process = process
     peer.launch_log = tmp_path / "launch.log"
@@ -231,6 +236,13 @@ def workflow(tmp_path, request):
             process.wait()
         node.destroy_node()
         rclpy.shutdown()
+        if model_process.poll() is None:
+            os.killpg(model_process.pid, signal.SIGINT)
+        try:
+            model_process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            os.killpg(model_process.pid, signal.SIGKILL); model_process.wait()
+        model_output.close()
         peer.close()
         output.close()
 
@@ -277,7 +289,7 @@ def test_serial_response_timeout_is_not_healthy_stale_feedback(workflow):
 def test_unresolved_target_profile_fails_before_hardware_start():
     template = Path(get_package_share_directory('mobile_base_control')) / 'config' / 'target.template.yaml'
     result = subprocess.run(['ros2', 'launch', 'mobile_base_control', 'm1.launch.py',
-                             f'hardware_config:={template}', 'model_file:=/unused.urdf'],
+                             f'hardware_config:={template}'],
                             capture_output=True, text=True, timeout=8)
     assert result.returncode != 0
     assert 'M1 target fact required:' in result.stdout + result.stderr
@@ -415,7 +427,7 @@ def test_invalid_controller_update_rate_fails_before_serial_requests(tmp_path, r
                      '<joint name="left_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="left"/><axis xyz="0 1 0"/></joint>'
                      '<joint name="right_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="right"/><axis xyz="0 1 0"/></joint></robot>')
     process = subprocess.Popen(['ros2', 'launch', 'mobile_base_control', 'm1.launch.py',
-                                f'hardware_config:={target}', f'model_file:={model}'],
+                                f'hardware_config:={target}'],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
     try:
         output, _ = process.communicate(timeout=5)
@@ -551,3 +563,58 @@ def test_transient_position_fault_requires_reconfigure_before_new_reference(work
     node.create_subscription(JointState, '/joint_states', joints.append, 10)
     wait(lambda: joints and len(joints[-1].position) == 2 and
          all(p == pytest.approx(3.14159265359, abs=1e-9) for p in joints[-1].position))
+
+
+def test_independent_description_and_control_have_one_model_owner(workflow):
+    from std_msgs.msg import String
+    from rclpy.qos import QoSProfile, DurabilityPolicy
+    import xml.etree.ElementTree as ET
+    peer, node, _, _, _, wait = workflow
+    descriptions = []
+    node.create_subscription(String, '/robot_description', lambda m: descriptions.append(m.data),
+                             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+    wait(lambda: bool(descriptions))
+    assert len(node.get_publishers_info_by_topic('/robot_description')) == 1
+    assert len(node.get_publishers_info_by_topic('/tf_static')) == 1
+    assert ET.fromstring(descriptions[-1]).find("ros2_control/hardware/plugin").text == 'mobile_base_control/M1System'
+    os.killpg(peer.process.pid, signal.SIGINT)
+    peer.process.wait(timeout=8)
+    # Model ownership persists when only the independently launched Control exits.
+    assert len(node.get_publishers_info_by_topic('/robot_description')) == 1
+
+
+def test_description_with_hardware_profile_does_not_start_control(tmp_path):
+    from std_msgs.msg import String
+    from rclpy.qos import QoSProfile, DurabilityPolicy
+    import xml.etree.ElementTree as ET
+    peer = Peer()
+    profile = yaml.safe_load((Path(get_package_share_directory('mobile_base_control')) /
+                              'config/rwf.commissioning.yaml').read_text())
+    profile['hardware']['serial_port'] = peer.path
+    target = tmp_path / 'hardware.yaml'
+    target.write_text(yaml.safe_dump(profile))
+    process = subprocess.Popen(
+        ['ros2', 'launch', 'mobile_base_description', 'description.launch.py',
+         f'hardware_config:={target}'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        start_new_session=True)
+    rclpy.init(); node = rclpy.create_node('model_profile_observer')
+    descriptions = []
+    node.create_subscription(String, '/robot_description', lambda m: descriptions.append(m.data),
+                             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+    try:
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline and not descriptions:
+            rclpy.spin_once(node, timeout_sec=.05)
+        assert descriptions
+        assert ET.fromstring(descriptions[-1]).find('ros2_control/hardware/plugin').text == 'mobile_base_control/M1System'
+        assert not peer.requests
+        assert 'controller_manager' not in [name for name, _ in node.get_node_names_and_namespaces()]
+    finally:
+        node.destroy_node(); rclpy.shutdown()
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGINT)
+        try:
+            process.communicate(timeout=8)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL); process.communicate()
+        peer.close()

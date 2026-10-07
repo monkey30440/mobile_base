@@ -11,7 +11,6 @@ Component verification uses the installed owning-package entries:
 ```bash
 ros2 launch mobile_base_perception imu.launch.py imu_config:=/absolute/imu.yaml
 ros2 launch mobile_base_perception dual_picoscan.launch.py lidar_config:=/absolute/lidar.yaml
-ros2 launch mobile_base_perception sensor_model.launch.py --show-args
 ```
 
 Installed example profiles are in `share/mobile_base_perception/config`:
@@ -45,12 +44,13 @@ This profile is not an accepted deployment EKF uncertainty. LiDAR host IP/ports
 must match the actual current network; native shutdown/long-run timing acceptance
 remains incomplete. Edit a copied profile for different targets or validated tuning.
 
-sensor_model starts native dual LiDAR and one model RSP, without motor control
-or EKF. Do not run it with another model publisher. Native SICK TF and embedded
-IMU are disabled; mounting/scan transforms belong to the model. Both formal
-scans retain LAST echo and native _1 frames. Packet/adapter and public LiDAR
-workflow tests live here. Core acceptance precedes #38 integration and #39/#41
-product Bringup delivery.
+Perception starts only its own sensor nodes. For manual model/scan inspection,
+start `mobile_base_description description.launch.py` separately, then the IMU
+and/or dual-LiDAR entries in their own terminals. Start the native Foxglove bridge
+separately if needed. The former sensor_model composition is removed. Native
+SICK TF/embedded IMU remain disabled; Description owns mounting/scan transforms.
+Both formal scans retain LAST echo and native _1 frames. Core acceptance still
+precedes #38 integration and #39/#41 product Bringup delivery.
 
 The following IMU protocol and historical observations retain their original
 evidence scope. The latest deployment mount is model yaw+90 degrees; the dated

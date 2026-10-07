@@ -1,7 +1,6 @@
 """Configure native controller manager from an explicit M1 target profile."""
 import math
 from pathlib import Path
-import xml.etree.ElementTree as ET
 import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
@@ -12,9 +11,8 @@ from launch_ros.actions import Node
 
 def setup(context):
     path = LaunchConfiguration('hardware_config').perform(context)
-    model = LaunchConfiguration('model_file').perform(context)
-    if not path or not model:
-        raise RuntimeError('hardware_config and model_file are required; no guessed hardware defaults')
+    if not path:
+        raise RuntimeError('hardware_config is required; no guessed hardware defaults')
     with open(path, encoding='utf8') as stream:
         config = yaml.safe_load(stream)
     hardware = config['hardware']
@@ -35,25 +33,7 @@ def setup(context):
         value = controller.get(key)
         if value is None or not math.isfinite(value) or value <= 0:
             raise RuntimeError('positive calibrated/operational controller value required: ' + key)
-    robot = ET.fromstring(Path(model).read_text(encoding='utf8'))
-    if robot.find('ros2_control') is not None:
-        raise RuntimeError('model_file must contain geometry only; M1 owns ros2_control fragment')
     joint_names = ('left_wheel_joint', 'right_wheel_joint')
-    for name in joint_names:
-        if robot.find(f"joint[@name='{name}']") is None:
-            raise RuntimeError('model missing canonical wheel joint: ' + name)
-    control = ET.SubElement(robot, 'ros2_control', name='M1', type='system')
-    hw = ET.SubElement(control, 'hardware')
-    ET.SubElement(hw, 'plugin').text = 'mobile_base_control/M1System'
-    for key in required:
-        value = hardware[key]
-        ET.SubElement(hw, 'param', name=key).text = str(value).lower() if isinstance(value, bool) else str(value)
-    for name in joint_names:
-        joint = ET.SubElement(control, 'joint', name=name)
-        ET.SubElement(joint, 'command_interface', name='velocity')
-        ET.SubElement(joint, 'state_interface', name='velocity')
-        ET.SubElement(joint, 'state_interface', name='position')
-    description = ET.tostring(robot, encoding='unicode')
     parameters = {'update_rate': rate,
                   'base_controller.type': 'diff_drive_controller/DiffDriveController',
                   'joint_state_broadcaster.type': 'joint_state_broadcaster/JointStateBroadcaster'}
@@ -88,8 +68,6 @@ def setup(context):
         return []
 
     return [RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])),
-            Node(package='robot_state_publisher', executable='robot_state_publisher',
-                 parameters=[{'robot_description': description}]),
             Node(package='controller_manager', executable='ros2_control_node',
                  parameters=[parameters], output='screen'),
             Node(package='controller_manager', executable='spawner',
@@ -101,5 +79,4 @@ def setup(context):
 
 def generate_launch_description():
     return LaunchDescription([DeclareLaunchArgument('hardware_config', default_value=''),
-                              DeclareLaunchArgument('model_file', default_value=''),
                               OpaqueFunction(function=setup)])

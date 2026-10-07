@@ -92,8 +92,9 @@ parsing errors. There is no default deployment tuning or calibration profile.
 The native node name is `ekf_filter_node`; the YAML must configure that node.
 The caller supplies one existing robot_state_publisher and valid sensor/model
 TF. This launch does not start another model publisher, control hardware, IMU,
-LiDAR, Teleop, SLAM or Navigation. The current standalone M1 launch already
-starts robot_state_publisher; composition must preserve one model TF owner.
+LiDAR, Teleop, SLAM or Navigation. The independently launched Description owns robot_state_publisher;
+Control consumes that model and starts no RSP. Composition must preserve this
+single model TF owner.
 
 For V1, configure `world_frame: odom`, `odom_frame: odom`,
 `base_link_frame: base_footprint`, `publish_tf: true`, and planar estimation.
