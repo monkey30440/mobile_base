@@ -54,3 +54,31 @@ Both native drivers exited with signal11 during SIGINT teardown and logged ROS s
 Official releases checked2026-10-02 report [3.9.0](https://github.com/SICKAG/sick_scan_xd/releases/tag/3.9.0) as latest stable. Official crash reports reviewed include [#525](https://github.com/SICKAG/sick_scan_xd/issues/525) (Humble runtime crash) and [#539](https://github.com/SICKAG/sick_scan_xd/issues/539) (RMS2000 startup/protocol issue); neither verifies a fix for the observed Jazzy picoScan SIGINT cleanup crash. No matching verified stable fix was identified. Clean shutdown remains unresolved; no custom driver patch is introduced.
 
 Aligned-image follow-up: `mobile-base-v1-test:jazzy` image SHA256 `f6b55a322a52b908faff8fa284ce85f9d74df6854c6fca16b0fca283642bd262` produced119FL/118perBR echo messages in5s with mode1 and host-epoch first stamps, then both native processes again exited-11 on SIGINT with DDS datareader deletion errors. Updating the test image's ROS/DDS dependencies did not resolve the observed shutdown failure; its cause is not established.
+
+### Frame-direction baseline (2026-10-07)
+
+A stationary, bounded native run on the same production-check image and host
+192.168.0.51 received 125 FL scans and 125 scans per BR echo. The current native
+responses retained FL LAST=2 and BR ALL=1. No motor device was mapped, no motor
+command was sent and the echo filters were not changed. Driver startup used
+native transient UDP-output configuration as in the earlier workflow.
+
+Observed scan metadata: 1200 ranges, angle_min=-2.40862894 rad,
+angle_max=2.82301044 rad, angle_increment=0.004363336 rad. Use actual metadata,
+not the launch collection defaults, when inspecting angles. All floats were
+finite, but finite alone does not establish valid range data: the saved last
+FL scan had 1096 values within its reported bounds, BR echo0 had 1080, echo1
+had 57, and echo2 had zero (its range_max=0.001 was below range_min=0.05).
+This is a baseline observation, not proof that all echoes carry obstacles or
+that consumer invalid/no-return handling is accepted.
+
+Both native child drivers again exited -11 on SIGINT; the parent launch returned
+0. Parent status must not be used as clean-driver-shutdown evidence. The earlier
+shutdown limitation remains open. Raw last-scan snapshots, summary, bounded
+capture script and native logs are in
+`docs/validation/artifacts/lidar-frame-baseline-20261007.tar.gz`.
+
+Native layer/echo frame conventions and optical-axis evidence are in
+`docs/research/v1-lidar-frame-preflight.md`. Optical-to-CAD direction still needs
+an operator-positioned target before accepting actual scan transforms; no
+unvalidated optical yaw has been installed as production TF.
