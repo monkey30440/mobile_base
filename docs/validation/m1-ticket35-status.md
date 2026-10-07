@@ -23,3 +23,9 @@ remains UNRESOLVED. Operator reports it unknown and offers later raised validati
 Do not infer the counter scale from single-phase encoder parameter01-06=2500 or
 replace feedback with fabricated position. Ticket35 and complete model acceptance
 remain partial; no runtime fix or blocker removal occurred.
+
+[Raised position-format follow-up](m1-position-format-20261007.md): actual02-14=0
+and matching standard Index/Pos register reads establish mode0 representation;
+signed32 concatenation is rejected. Documented10000-step default is supported by
+bounded velocity consistency, with independent scale/wrap/calibration limits
+retained. No position runtime interface or complete wheel TF acceptance yet.
