@@ -193,7 +193,7 @@ def workflow(tmp_path, request):
       <joint name="left_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="left_wheel"/><axis xyz="0 1 0"/></joint>
       <joint name="right_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="right_wheel"/><axis xyz="0 1 0"/></joint></robot>''')
     output = open(tmp_path / 'launch.log', 'w+')
-    process = subprocess.Popen(['ros2', 'launch', 'mobile_base_bringup', 'control.launch.py',
+    process = subprocess.Popen(['ros2', 'launch', 'mobile_base_control', 'm1.launch.py',
                                 f'hardware_config:={target}', f'model_file:={model}'],
                                stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
     peer.process = process
@@ -276,7 +276,7 @@ def test_serial_response_timeout_is_not_healthy_stale_feedback(workflow):
 
 def test_unresolved_target_profile_fails_before_hardware_start():
     template = Path(get_package_share_directory('mobile_base_control')) / 'config' / 'target.template.yaml'
-    result = subprocess.run(['ros2', 'launch', 'mobile_base_bringup', 'control.launch.py',
+    result = subprocess.run(['ros2', 'launch', 'mobile_base_control', 'm1.launch.py',
                              f'hardware_config:={template}', 'model_file:=/unused.urdf'],
                             capture_output=True, text=True, timeout=8)
     assert result.returncode != 0
@@ -414,7 +414,7 @@ def test_invalid_controller_update_rate_fails_before_serial_requests(tmp_path, r
     model.write_text('<robot name="software_rate_fixture"><link name="base_footprint"/><link name="left"/><link name="right"/>'
                      '<joint name="left_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="left"/><axis xyz="0 1 0"/></joint>'
                      '<joint name="right_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="right"/><axis xyz="0 1 0"/></joint></robot>')
-    process = subprocess.Popen(['ros2', 'launch', 'mobile_base_bringup', 'control.launch.py',
+    process = subprocess.Popen(['ros2', 'launch', 'mobile_base_control', 'm1.launch.py',
                                 f'hardware_config:={target}', f'model_file:={model}'],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
     try:

@@ -1,3 +1,5 @@
+> Superseded entrypoint/development-order evidence: dc3f6ee component/base Bringup wrappers were withdrawn after Operator correction. Package consolidation remains; use owning-package component entries. The results below are historical software evidence only.
+
 # Package responsibilities and installed Bringup verification — 2026-10-07
 
 Authority: [spec32](https://github.com/monkey30440/mobile_base/issues/32), confirmed

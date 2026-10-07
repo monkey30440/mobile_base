@@ -3,7 +3,6 @@ import math
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import yaml
-import xacro
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
 from launch.event_handlers import OnShutdown
@@ -36,7 +35,7 @@ def setup(context):
         value = controller.get(key)
         if value is None or not math.isfinite(value) or value <= 0:
             raise RuntimeError('positive calibrated/operational controller value required: ' + key)
-    robot = ET.fromstring(xacro.process_file(model).toxml())
+    robot = ET.fromstring(Path(model).read_text(encoding='utf8'))
     if robot.find('ros2_control') is not None:
         raise RuntimeError('model_file must contain geometry only; M1 owns ros2_control fragment')
     joint_names = ('left_wheel_joint', 'right_wheel_joint')
@@ -79,9 +78,6 @@ def setup(context):
              'angular.z.has_velocity_limits': True,
              'angular.z.max_velocity': float(controller['angular_velocity_limit']),
              'angular.z.min_velocity': -float(controller['angular_velocity_limit'])}
-    for name in ('pose_covariance_diagonal', 'twist_covariance_diagonal'):
-        if name in controller:
-            drive[name] = controller[name]
     # Native spawner loads per-controller parameters from the required target YAML.
     import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as stream:

@@ -1,83 +1,3 @@
-# mobile_base_bringup
-
-## Operator and verification entries
-
-All real-device and integration verification starts from this installed ROS
-package. Reusable sensor/control launch implementations stay in their owning
-packages; do not assemble a second parallel runtime with temporary /tmp launch
-copies. Use only one of the model-containing entries at a time.
-
-| Entry | Starts | Explicit inputs |
-| --- | --- | --- |
-| model.launch.py | model-only RSP | no device inputs |
-| control.launch.py | M1, native controllers and sole RSP | hardware_config; optional model_file override |
-| imu.launch.py | USB IMU only | imu_config |
-| lidar.launch.py | native dual picoScan only | all sensor/receiver network facts |
-| sensor_model.launch.py | dual picoScan and model-only RSP | all sensor/receiver network facts |
-| local_base.launch.py | control, IMU, model and native EKF | hardware_config, imu_config, filter_config |
-| base.launch.py | local_base plus dual picoScan; optional Foxglove | above inputs plus all network facts |
-
-These are component/local-chain verification entries. Their existence or a
-running process does not establish complete Mapping/Navigation readiness.
-They start no SLAM, AMCL, Navigation, Teleop or velocity publisher.
-Control-containing entries activate the hardware/controllers and can Servo ON
-at zero command; normal native lifecycle stopping applies. Run only under the
-reviewed Operator conditions. No automatic physical-stop guarantee is added.
-
-Model defaults to the installed mobile_base_description deployment model.
-Both measured wheel angles are provided by mobile_base_control. The two nominal
-fixed drive seats remain geometry, not measured suspension travel. One native
-RSP owns model TF; native EKF alone owns odom→base_footprint. Do not start an
-extra description/sensor_model RSP alongside control-containing entries.
-
-Configuration YAML files must be explicit; no target serial parameters,
-covariance, operating limits or calibration are invented. local_base checks
-that all selected configuration/model files exist before starting nodes. Native
-ROS/device configuration owns parsing and invalid configuration errors. Errors
-and source logs are preserved; start success is not a health/readiness verdict.
-
-Example for the currently recorded platform network facts (reconfirm if changed):
-
-```bash
-ros2 launch mobile_base_bringup base.launch.py \
-  hardware_config:=/absolute/hardware.yaml \
-  imu_config:=/absolute/imu.yaml \
-  filter_config:=/absolute/ekf.yaml \
-  fl_hostname:=192.168.0.52 br_hostname:=192.168.0.53 \
-  udp_receiver_ip:=192.168.0.51 \
-  fl_udp_port:=2115 fl_check_udp_port:=2116 \
-  br_udp_port:=2117 br_check_udp_port:=2118 \
-  ros_qos:=4 foxglove:=True
-```
-
-Both sensors default to native LAST echo, active startup and elapsed-tick
-timestamps. listen_only_mode is exposed for passive software/network fixtures;
-those fixtures do not accept real sensor data or sensor shutdown. Native startup
-changes transient echo/output settings; concurrent sensor drivers must not run.
-Foxglove defaults off. When explicitly enabled, connect ws://localhost:8765
-(or the target host address); port is configurable via foxglove_port. In 3D use
-odom fixed frame, model Mesh up-axis Z-up, /robot_description and both formal
-scans. Ctrl+C requests native process shutdown; independently verify inhibited
-zero state where hardware acceptance requires it. Foxglove visualization does
-not replace native error/status or physical-stop checks.
-
-## Build and software tests
-
-Use a clean build/install prefix after package renaming. Do not source the old
-install overlay or treat historic package names as compatible aliases.
-
-```bash
-colcon build --packages-up-to mobile_base_bringup
-source install/setup.bash
-colcon test --packages-select mobile_base_control mobile_base_perception mobile_base_description mobile_base_bringup
-colcon test-result --verbose
-```
-
-Public control/LiDAR workflows and full local-chain integration tests are in
-Bringup. The latter uses OS serial peers and native control/RSP/EKF processes
-with the installed model; it does not map hardware. Necessary bounded protocol
-checks remain in Control/Perception; model checks remain in Description.
-
 # Dataset loading (#40)
 
 `dataset.launch.py` accepts one required `dataset` directory and selects exactly
@@ -195,3 +115,13 @@ RSP's static model remains available. RSP advertises `/tf` even without moving
 joints; publisher count alone is not proof of ownership of a particular edge.
 The test has no devices or physical wheel/IMU data and does not establish
 physical accuracy, LiDAR optical transforms or a production model package.
+
+## Development phase correction (2026-10-07)
+
+Core Control/IMU/LiDAR verification uses each owning package's installed entry.
+After core acceptance, ticket #38 integrates the model, real wheel/IMU data and
+native EKF; #39/#41 then deliver Mapping/Navigation product composition.
+The existing dataset and local-estimation entries below are partial software
+deliveries, not complete product Bringup or prerequisites for component tests.
+The additional component/base wrappers introduced in dc3f6ee were withdrawn.
+Their recorded software results remain historical evidence, not current entries.

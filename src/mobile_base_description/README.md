@@ -22,12 +22,12 @@ Movable branches require real appropriate joint feedback; absence of that feedba
 is not a complete dynamic-model acceptance. All sensor/base_footprint paths are
 fixed and can be verified without motor operation. odom->base_footprint remains
 robot_localization's responsibility; this model-only launch does not fabricate it.
-Use the installed Bringup model entry for model-only Operator verification.
-Do not run it alongside control/local_base/base entries: those already start
-the sole RSP with the native control fragment/profile.
+Use the installed Description entry for model-only verification.
+Do not run it alongside the Control or sensor_model entries, which already start
+the sole RSP.
 
 ```bash
-ros2 launch mobile_base_bringup model.launch.py
+ros2 launch mobile_base_description description.launch.py
 ```
 
 Foxglove 3D Scene → Mesh up-axis must be Z-up for the supplied STL geometry.

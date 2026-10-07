@@ -5,7 +5,7 @@ import os
 
 def test_missing_network_facts_prevent_device_start():
     result = subprocess.run(
-        ['ros2', 'launch', 'mobile_base_bringup', 'lidar.launch.py'],
+        ['ros2', 'launch', 'mobile_base_perception', 'dual_picoscan.launch.py'],
         capture_output=True, text=True, timeout=20,
     )
     assert result.returncode != 0
@@ -14,7 +14,7 @@ def test_missing_network_facts_prevent_device_start():
 
 def test_operator_can_inspect_required_device_arguments():
     result = subprocess.run(
-        ['ros2', 'launch', 'mobile_base_bringup', 'lidar.launch.py', '--show-args'],
+        ['ros2', 'launch', 'mobile_base_perception', 'dual_picoscan.launch.py', '--show-args'],
         capture_output=True, text=True, timeout=20,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -28,7 +28,7 @@ def test_native_sources_are_independently_visible_without_sensor_traffic():
     import rclpy
     from rclpy.qos import ReliabilityPolicy
 
-    command = ['ros2', 'launch', 'mobile_base_bringup', 'lidar.launch.py',
+    command = ['ros2', 'launch', 'mobile_base_perception', 'dual_picoscan.launch.py',
                'fl_hostname:=127.0.0.2', 'br_hostname:=127.0.0.3',
                'udp_receiver_ip:=127.0.0.1', 'fl_udp_port:=32115', 'br_udp_port:=32116',
                'fl_check_udp_port:=32117', 'br_check_udp_port:=32118',

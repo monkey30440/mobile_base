@@ -6,20 +6,20 @@ TF publisher or fusion engine is added. usb_imu remains the installed executable
 its Python module is now mobile_base_perception.node. Device/topic/frame and
 source diagnostics behavior are unchanged.
 
-Operator verification starts from mobile_base_bringup:
+Component verification uses the installed owning-package entries:
 
 ```bash
-ros2 launch mobile_base_bringup imu.launch.py imu_config:=/absolute/imu.yaml
-ros2 launch mobile_base_bringup lidar.launch.py --show-args
-ros2 launch mobile_base_bringup sensor_model.launch.py --show-args
+ros2 run mobile_base_perception usb_imu --ros-args --params-file /absolute/imu.yaml
+ros2 launch mobile_base_perception dual_picoscan.launch.py --show-args
+ros2 launch mobile_base_perception sensor_model.launch.py --show-args
 ```
 
-For the complete local model/control/IMU/EKF/dual-LiDAR chain, use Bringup
-base.launch.py. sensor_model.launch.py starts a single model RSP without motor
-control; do not run it concurrently with control/local_base/base. Native SICK
-TF and embedded IMU are disabled; mounting/scan transforms belong to the model.
-Both formal scans retain LAST echo and native _1 frames. Per-source graph tests
-live in Bringup; bounded packet/adapter tests remain in this package.
+sensor_model starts native dual LiDAR and one model RSP, without motor control
+or EKF. Do not run it with another model publisher. Native SICK TF and embedded
+IMU are disabled; mounting/scan transforms belong to the model. Both formal
+scans retain LAST echo and native _1 frames. Packet/adapter and public LiDAR
+workflow tests live here. Core acceptance precedes #38 integration and #39/#41
+product Bringup delivery.
 
 The following IMU protocol and historical observations retain their original
 evidence scope. The latest deployment mount is model yaw+90 degrees; the dated

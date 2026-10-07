@@ -9,13 +9,13 @@ from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
     lidar=Path(get_package_share_directory('mobile_base_perception'))/'launch'
-    model=Path(get_package_share_directory('mobile_base_bringup'))/'launch'
+    model=Path(get_package_share_directory('mobile_base_description'))/'launch'
     names=('fl_hostname','br_hostname','udp_receiver_ip','fl_udp_port','br_udp_port',
            'fl_check_udp_port','br_check_udp_port','ros_qos')
     arguments={name:LaunchConfiguration(name) for name in names}
     return LaunchDescription([
         *[DeclareLaunchArgument(name) for name in names],
-        IncludeLaunchDescription(PythonLaunchDescriptionSource(str(model/'model.launch.py'))),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource(str(model/'description.launch.py'))),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(str(lidar/'dual_picoscan.launch.py')),
             launch_arguments={**{name:arguments[name] for name in names},
                               'set_echo_filter':'True','echo_filter':'2','listen_only_mode':'False'}.items()),

@@ -25,7 +25,7 @@ See the raised reverse commissioning record for configure-failure/readback evide
 Then, inside the correctly provisioned hardware container:
 
 ```bash
-ros2 launch mobile_base_bringup control.launch.py hardware_config:=/absolute/target.yaml model_file:=/absolute/mobile_base.urdf
+ros2 launch mobile_base_control m1.launch.py hardware_config:=/absolute/target.yaml model_file:=/absolute/mobile_base.urdf
 ros2 control list_controllers
 ros2 topic echo /base_controller/odom
 ros2 topic echo /diagnostics
@@ -81,23 +81,11 @@ Do not change drive format/encoder parameters while running. A configure/reconne
 starts a new device-origin reference, without claiming cross-reset continuity.
 Physical signed-index overflow and power-reset behavior are not hardware-accepted.
 
-## Package and Operator entry (2026-10-07)
+## Package and verification phase (2026-10-07)
 
 This package replaces mobile_base_m1; its plugin is mobile_base_control/M1System.
-The adapter, protocol, lifecycle, measured-position, fault latch and native
-controller responsibilities are retained. Use the installed
-mobile_base_bringup control/local_base/base entrypoints for verification, not a
-temporary launch copy. The low-level M1 launch remains a reusable composition
-implementation and owns the single RSP in those control-containing entries.
-
-Bringup supplies the installed description model by default; an explicit
-model_file may override it for a documented fixture/revision. Source xacro is
-processed natively before the control fragment is appended. Optional explicit
-pose_covariance_diagonal and twist_covariance_diagonal in the controller profile
-are passed to native diff_drive_controller; no covariance is guessed or
-calibrated by this package. Commissioning values remain separate from formal
-target settings. Missing covariance must not be interpreted as accepted fusion
-uncertainty.
-
-Protocol C++ tests remain here; public ROS control workflow tests now live in
-mobile_base_bringup and invoke its installed control entry.
+Protocol and public native control workflow tests remain in this package and
+use its installed m1.launch.py entry with explicit hardware_config/model_file.
+Core device acceptance precedes ticket #38 local estimation integration and
+#39/#41 product Bringup delivery. No calibrated covariance or default deployment
+model is supplied by this component entry.

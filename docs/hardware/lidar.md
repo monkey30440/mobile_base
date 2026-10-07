@@ -1,10 +1,10 @@
 # Dual picoScan150 Operator workflow
 
-Ticket #37 / spec #32: `mobile_base_perception` composes native `sick_scan_xd` processes only. Install `ros-jazzy-sick-scan-xd`; software verification used 3.9.0. Build with colcon, source the workspace, and inspect `ros2 launch mobile_base_bringup lidar.launch.py --show-args`.
+Ticket #37 / spec #32: `mobile_base_perception` composes native `sick_scan_xd` processes only. Install `ros-jazzy-sick-scan-xd`; software verification used 3.9.0. Build with colcon, source the workspace, and inspect `ros2 launch mobile_base_perception dual_picoscan.launch.py --show-args`.
 
 All sensor/host IPs and UDP receive/check ports are required arguments. Both receive ports and both native receiver-IP check ports must be distinct on the host. Namespace is `/lidar/fl` or `/lidar/br`; full scans are `/lidar/fl/scan` and `/lidar/br/scan`, segments end in `/scan_segment`. Native node names `picoscan_fl` / `picoscan_br` identify process logs and ROS interfaces. Native `udp_sender` remains empty (bind all local interfaces). In 3.9.0 this parameter binds a local address rather than filtering a remote sender. Source association uses exclusive sensor destination configuration and distinct UDP ports; the driver does not enforce remote sender-IP filtering. Timestamps and native frames pass through untouched. No decoder, merger or monitoring runtime is added. Native IMU and TF publication are disabled; model TF belongs to robot_state_publisher.
 
-Current Operator entry is mobile_base_bringup; the dated observations below preserve historical echo/configuration evidence. Current formal selection is both native LAST with FL_1/BR_1 frames.
+Current component Operator entry is mobile_base_perception; the dated observations below preserve historical echo/configuration evidence. Current formal selection is both native LAST with FL_1/BR_1 frames.
 
 ## Target facts read 2026-10-02
 
