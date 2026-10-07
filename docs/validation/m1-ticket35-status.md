@@ -12,3 +12,14 @@ This checkpoint reconciles existing evidence against [ticket35](https://github.c
 The historical low-speed no-visible-motion symptom was not reproduced; its cause is unknown. No runtime fix is inferred. Native timeout receipt was observed at0.319s and fresh near-zero wheel feedback at0.471s, before cleanup at3.106s; these are observed commissioning latencies, not production guarantees. Operator saw stopping but could not identify its cause.
 
 References: [software/target provenance](m1-software.md), [reverse](m1-native-reverse-20261007.md), [low-speed/timeout](m1-low-speed-timeout-20261007.md), [inhibited USB link loss](m1-inhibited-linkloss-20261007.md), [initial ground rotation](m1-ground-rotation-20261007.md). Existing native dependency35→38 remains; neither ticket is complete. Effective calibration and production limits are not inferred from raised trials. No motor command was issued for this reconciliation.
+
+## Static estimation follow-up
+
+[Real static integration](real-static-estimation-20261007.md) confirmed the wheel/IMU
+data chain, but exposed missing wheel position state: native JointState position
+is NaN and both rotating-wheel TFs are invalid. M1 current-position Read Data5/6
+was read successfully while inhibited; conversion counts per motor revolution
+remains UNRESOLVED. Operator reports it unknown and offers later raised validation.
+Do not infer the counter scale from single-phase encoder parameter01-06=2500 or
+replace feedback with fabricated position. Ticket35 and complete model acceptance
+remain partial; no runtime fix or blocker removal occurred.

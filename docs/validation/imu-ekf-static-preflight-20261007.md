@@ -51,3 +51,8 @@ passive script, raw chunks/converted samples, full/subwindow statistics, propose
 but unapplied uncertainty note and the installed native parameter header. No
 runtime source changes or drive parameters are introduced. Later integration must
 retain native RSP model ownership and EKF-only odom→base_footprint ownership.
+
+Subsequent checkpoint: Operator adopted the bounded commissioning proposal. Actual
+static integration and its remaining wheel-position/TF gap are recorded in
+[real static estimation](real-static-estimation-20261007.md). The pending/unapplied
+statements above describe this historical preflight, not the current status.
