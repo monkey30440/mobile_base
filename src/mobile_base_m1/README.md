@@ -12,7 +12,17 @@ The communication manual revision1.1 (2025-02-03), pages37–42, specifies FC03 
 
 ## Start and Teleop
 
-Build with the repository container workflow, then:
+Build with the repository container workflow. For real hardware, additionally map
+the actual host serial device to the configured container path and add its host
+device group to the non-root container user. On the inspected AMR this is
+`/dev/ttyUSB0` (configured alias `/dev/fihRobotBaseMotor`), group `dialout`/GID20,
+mode660. Native Docker `--device` plus `--group-add` provides this access; mapping
+alone does not grant Unix group permission. Check the actual host device/group
+rather than assuming GID20 on another platform. The minimal development Compose
+has no serial mapping or group grant and must not be treated as hardware bringup.
+See the raised reverse commissioning record for configure-failure/readback evidence.
+
+Then, inside the correctly provisioned hardware container:
 
 ```bash
 ros2 launch mobile_base_m1 m1.launch.py hardware_config:=/absolute/target.yaml model_file:=/absolute/mobile_base.urdf
