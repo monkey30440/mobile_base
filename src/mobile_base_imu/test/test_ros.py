@@ -4,6 +4,7 @@ import pty
 import time
 import math
 import termios
+import pytest
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
@@ -83,3 +84,64 @@ def test_zero_baud_reports_configuration_error_without_touching_serial_settings(
         os.close(master)
         os.close(slave)
         rclpy.shutdown()
+
+
+def test_supplied_gyro_variances_are_in_published_si_axes():
+    rclpy.init()
+    master, slave = pty.openpty()
+    driver = UsbImu(['--ros-args', '-p', f'port:={os.ttyname(slave)}', '-p', 'baud:=115200',
+                     '-p', 'protocol_profile:=handboard_v1', '-p', 'acceleration_scale:=9.81',
+                     '-p', 'gyro_scale:=1.0', '-p', 'axes:=[2,-1,3]', '-p', 'sample_timeout:=1.0',
+                     '-p', 'angular_velocity_variances:=[0.01,0.04,0.09]'])
+    observer = Node('imu_covariance_observer')
+    samples, diagnostics = [], []
+    observer.create_subscription(Imu, 'imu/data_raw', samples.append, 10)
+    observer.create_subscription(DiagnosticArray, '/diagnostics', diagnostics.append, 10)
+    try:
+        end = time.monotonic() + .3
+        while time.monotonic() < end:
+            rclpy.spin_once(driver, timeout_sec=.005)
+            rclpy.spin_once(observer, timeout_sec=.005)
+        os.write(master, packet([0,0,1,0,0,1,2,3]+[0]*6))
+        end = time.monotonic() + .3
+        while time.monotonic() < end:
+            rclpy.spin_once(driver, timeout_sec=.005)
+            rclpy.spin_once(observer, timeout_sec=.005)
+        assert samples
+        assert list(samples[-1].angular_velocity_covariance) == [.01,0,0,0,.04,0,0,0,.09]
+        assert samples[-1].angular_velocity.x == 2.0
+        assert samples[-1].angular_velocity.y == -1.0
+        assert samples[-1].orientation_covariance[0] == -1
+        assert list(samples[-1].linear_acceleration_covariance) == [0.0]*9
+        assert any(v.key == 'angular_velocity_covariance' and 'supplied' in v.value
+                   for a in diagnostics for status in a.status for v in status.values)
+    finally:
+        driver.destroy_node(); observer.destroy_node()
+        os.close(master); os.close(slave); rclpy.shutdown()
+
+
+@pytest.mark.parametrize('variances', ['[0.0,0.04,0.09]', '[-0.01,0.04,0.09]', '[.nan,0.04,0.09]', '[.inf,0.04,0.09]', '[0.01,0.04]'])
+def test_invalid_gyro_variances_reject_before_serial_open(variances):
+    rclpy.init()
+    master, slave = pty.openpty()
+    before = termios.tcgetattr(slave)
+    driver = UsbImu(['--ros-args', '-p', f'port:={os.ttyname(slave)}', '-p', 'baud:=115200',
+                     '-p', 'protocol_profile:=handboard_v1', '-p', 'acceleration_scale:=9.81',
+                     '-p', 'gyro_scale:=1.0', '-p', 'axes:=[1,2,3]', '-p', 'sample_timeout:=1.0',
+                     '-p', f'angular_velocity_variances:={variances}'])
+    observer = Node('imu_invalid_variance_observer')
+    samples, diagnostics = [], []
+    observer.create_subscription(Imu, 'imu/data_raw', samples.append, 10)
+    observer.create_subscription(DiagnosticArray, '/diagnostics', diagnostics.append, 10)
+    try:
+        end = time.monotonic() + .3
+        while time.monotonic() < end:
+            rclpy.spin_once(driver, timeout_sec=.005)
+            rclpy.spin_once(observer, timeout_sec=.005)
+        assert termios.tcgetattr(slave) == before
+        assert not samples
+        assert any('configuration:' in status.message and 'angular_velocity_variances' in status.message
+                   for a in diagnostics for status in a.status)
+    finally:
+        driver.destroy_node(); observer.destroy_node()
+        os.close(master); os.close(slave); rclpy.shutdown()

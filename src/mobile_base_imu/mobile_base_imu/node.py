@@ -18,7 +18,8 @@ class UsbImu(Node):
         super().__init__('usb_imu', cli_args=cli_args)
         defaults = {'port': '', 'baud': 0, 'protocol_profile': '',
                     'acceleration_scale': 0.0, 'gyro_scale': 0.0,
-                    'axes': [0, 0, 0], 'sample_timeout': 0.0}
+                    'axes': [0, 0, 0], 'sample_timeout': 0.0,
+                    'angular_velocity_variances': [0.0, 0.0, 0.0]}
         config = {key: self.declare_parameter(key, value).value
                   for key, value in defaults.items()}
         self.fd = None
@@ -42,6 +43,10 @@ class UsbImu(Node):
 
     @staticmethod
     def validate(config):
+        variances = config['angular_velocity_variances']
+        if (len(variances) != 3 or not all(math.isfinite(value) for value in variances)
+                or not (all(value == 0 for value in variances) or all(value > 0 for value in variances))):
+            return 'configuration: angular_velocity_variances require three finite positive values or all zeros'
         if config['protocol_profile'] != 'handboard_v1':
             return 'configuration: confirm protocol_profile=handboard_v1'
         baud = config['baud']
@@ -124,6 +129,8 @@ class UsbImu(Node):
             message.header.stamp = self.get_clock().now().to_msg()
             message.header.frame_id = 'base_imu_link'
             message.orientation_covariance[0] = -1.0
+            for index, variance in zip((0, 4, 8), self.config['angular_velocity_variances']):
+                message.angular_velocity_covariance[index] = variance
             message.linear_acceleration.x, message.linear_acceleration.y, message.linear_acceleration.z = acceleration
             message.angular_velocity.x, message.angular_velocity.y, message.angular_velocity.z = gyro
             self.publisher.publish(message)
@@ -147,7 +154,11 @@ class UsbImu(Node):
         status.add('invalid_packets', str(self.invalid_packets))
         status.add('last_valid_sample_age_s', str(age))
         status.add('timestamp_source', 'host receipt; acquisition time unavailable')
-        status.add('covariance', 'unknown (ROS zeros); orientation unavailable')
+        status.add('angular_velocity_covariance',
+                   'invalid configuration' if 'angular_velocity_variances' in self.configuration_error else
+                   'supplied diagonal SI variances; calibration not verified'
+                   if any(self.config['angular_velocity_variances']) else 'unknown (ROS zeros)')
+        status.add('covariance', 'acceleration unknown (ROS zeros); orientation unavailable')
         return status
 
     def destroy_node(self):

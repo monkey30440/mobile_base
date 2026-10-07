@@ -29,8 +29,15 @@ on `/diagnostics`, opens no port and publishes no measurements.
 Output `imu/data_raw` is `sensor_msgs/Imu` with `base_imu_link`. Timestamp is the
 ROS host receipt time; no sensor acquisition timestamp exists in this packet,
 and latency/synchronization are unverified. Orientation covariance starts with
--1 (unavailable); acceleration/angular velocity covariances are all zero,
-the ROS convention for unknown covariance. They are not calibrated noise values.
+-1 (unavailable); acceleration covariance remains all zero (unknown). Angular velocity covariance
+also defaults to all zero, the ROS convention for unknown covariance. Optional
+`angular_velocity_variances` is a ROS double array of exactly three values in
+published `base_imu_link` x/y/z axes, in `(rad/s)^2`, already after unit/axis
+conversion. Use floating-point YAML entries. All zeros preserve unknown; supplied
+entries must all be finite and positive. Mixed zeros, negatives, nonfinite or
+wrong-length vectors fail configuration before serial open. Supplied values
+populate only diagonal entries0/4/8, with zero off-diagonals. The adapter does
+not rescale/permutate these already-published-axis variances or verify calibration.
 Do not configure estimation as if calibrated covariance or orientation exists.
 
 Native `diagnostic_updater` identifies port/profile, invalid packets, valid
@@ -95,3 +102,5 @@ payload commands were sent.
 The bounded capture script, raw bytes and timestamped summary are retained in
 `docs/validation/artifacts/imu-passive-20261007.tar.gz`. The script uses exclusive
 serial access; no production adapter or fusion runtime was changed.
+
+Diagnostics distinguish angular velocity covariance supplied, unknown or invalid configuration, while retaining the calibration-not-verified limitation. No deployment covariance values are provided; calibration and estimation acceptance remain separate requirements.
