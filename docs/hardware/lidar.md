@@ -100,3 +100,44 @@ origin, placement and measurement error were not quantified. It excludes the
 assumption that optical +X is robot-forward, but does not establish exact
 translation, yaw/pitch/roll or acceptance tolerances. No production optical
 TF is changed from this one point; rear-right direction remains unverified.
+
+### Foxglove ALL-echo observation correction (2026-10-07)
+
+The operator reported no BR points in Foxglove despite correct native frames.
+ROS-side observation found dense echo0 and compatible BEST_EFFORT subscriptions;
+all three echo transforms were available. A direct SDK WebSocket/CDR probe at
+8765 reproduced missing dense echo0: five seconds delivered mostly echo2,
+which then had zero valid ranges. Thus the missing dense data was observable
+before the 3D panel. This is not evidence that optical mounting TF is calibrated.
+
+An otherwise comparable observation bridge at 8766 with native
+`min_qos_depth:=10 max_qos_depth:=10` received 25 messages per echo, including
+1096 valid echo0 points. After the previous viewer container was removed, the
+agent recreated the independent viewer at ROS domain 176 with those bridge
+settings at 8765. The original probe then passed again: 25 messages per echo,
+1092 valid echo0 points, matching SDK/CDR schemas and both identity echo TFs.
+This supports a queue-depth correction for this bursty multi-echo stream;
+internal DDS drop counters were not measured. It does not establish production
+queue sizing, no-loss guarantees or successful user-side rendering yet.
+
+Reproduce the observation bridge configuration with:
+
+```bash
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml \
+  port:=8765 min_qos_depth:=10 max_qos_depth:=10
+```
+
+The temporary viewer uses native RSP only for identity connections among BR
+echo coordinates; no optical-to-base transform or motor control is added. Device
+FL LAST/BR ALL settings remain unchanged. The native driver shutdown fault also
+remains open. The UI needs to reconnect after Bridge restart and retain the BR
+display frame; a short scan decay can retain the interleaved echoes visually.
+Actual Foxglove rendering must still be confirmed by the operator.
+
+The bounded observation probe, RED/alternate-bridge/main-port GREEN results and
+errors are retained in
+`docs/validation/artifacts/foxglove-br-queue-diagnostic-20261007.tar.gz`.
+The installed Bridge 3.5.0 accepts `foxglove.sdk.v1` for the probe. The obsolete
+`foxglove.websocket.v1` subprotocol was rejected by this server; this was a
+probe compatibility adjustment, not the cause of the user's established UI
+connection symptom. No permanent custom Bridge, filter or republisher is added.
