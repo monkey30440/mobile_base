@@ -16,8 +16,7 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
     from rclpy.qos import QoSProfile, DurabilityPolicy
     share = Path(get_package_share_directory('mobile_base_description'))
     model = subprocess.run(['xacro', str(share/'urdf/mobile_base.urdf.xacro'),
-                            'fl_scan_roll:=3.141592653589793', 'fl_scan_pitch:=0', 'fl_scan_yaw:=-0.7853981633974483',
-                            'br_scan_roll:=3.141592653589793', 'br_scan_pitch:=0', 'br_scan_yaw:=-2.356194490192345'], check=True,
+                            ], check=True,
                            text=True, capture_output=True).stdout
     import xml.etree.ElementTree as ET
     robot = ET.fromstring(model)
@@ -25,7 +24,10 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
     assert not any('base_lidar_cad_link' in link.attrib['name'] for link in robot.findall('link'))
     for side in ('FL', 'BR'):
         mount = robot.find("joint[@name='base_lidar_joint_" + side + "']")
-        assert mount.find('origin').attrib['rpy'] == '0 0 0'
+        assert tuple(map(float, mount.find('origin').attrib['rpy'].split())) == pytest.approx(
+            (3.141592653589793, 0, 0.7853981633974483 if side == 'FL' else -2.356194490192345))
+        scan_joint = robot.find("joint[@name='lidar_scan_joint_" + side + "']")
+        assert scan_joint.find('origin').attrib['rpy'] == '0 0 0'
         assert mount.find('child').attrib['link'] == 'base_lidar_link_' + side
         link = robot.find("link[@name='base_lidar_link_" + side + "']")
         assert link.find('visual/origin').attrib == {'xyz': '0 0 0', 'rpy': '0 0 0'}
@@ -36,18 +38,17 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
         prefix='package://mobile_base_description/'
         assert mesh.attrib['filename'].startswith(prefix)
         assert (share/mesh.attrib['filename'][len(prefix):]).is_file()
-    process = subprocess.Popen(['ros2','launch','mobile_base_description','description.launch.py',
-        'fl_scan_roll:=3.141592653589793', 'fl_scan_pitch:=0', 'fl_scan_yaw:=-0.7853981633974483','br_scan_roll:=3.141592653589793', 'br_scan_pitch:=0', 'br_scan_yaw:=-2.356194490192345'],
+    process = subprocess.Popen(['ros2','launch','mobile_base_description','description.launch.py'],
         stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,start_new_session=True)
     rclpy.init(); node=rclpy.create_node('model_tf_acceptance');buffer=Buffer();listener=TransformListener(buffer,node)
     descriptions=[]
     sub=node.create_subscription(String,'/robot_description',lambda m:descriptions.append(m.data),
         QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
     expected={
-        'base_imu_link':(.04375,-.008,.24141,0.,0.,0.,1.),
-        'base_lidar_link_FL':(.28771,.26721,.19589,0.,0.,0.,1.),
-        'base_lidar_link_FL_1':(.28771,.26721,.19589,.923879532511,-.382683432365,0.,0.),
-        'base_lidar_link_BR':(-.24671,-.26721,.19589,0.,0.,0.,1.),
+        'base_imu_link':(.04375,-.008,.24141,0.,0.,.707106781187,.707106781187),
+        'base_lidar_link_FL':(.28771,.26721,.19589,.923879532511,.382683432365,0.,0.),
+        'base_lidar_link_FL_1':(.28771,.26721,.19589,.923879532511,.382683432365,0.,0.),
+        'base_lidar_link_BR':(-.24671,-.26721,.19589,.382683432365,-.923879532511,0.,0.),
         'base_lidar_link_BR_1':(-.24671,-.26721,.19589,.382683432365,-.923879532511,0.,0.),
     }
     try:

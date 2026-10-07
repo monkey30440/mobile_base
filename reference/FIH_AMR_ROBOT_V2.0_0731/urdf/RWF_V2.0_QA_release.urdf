@@ -624,7 +624,7 @@
     </visual>
   </link>
   <joint name="base_imu_joint" type="fixed">
-    <origin xyz="0.0437499999999998 -0.00799999999999978 -0.0145899999999999" rpy="0 0 0" />
+    <origin xyz="0.0437499999999998 -0.00799999999999978 -0.0145899999999999" rpy="0 0 1.5707963267948966" />
     <parent link="base_link" />
     <child link="base_imu_link" />
     <axis xyz="0 0 0" />
@@ -646,7 +646,7 @@
     </visual>
   </link>
   <joint name="base_lidar_joint_FL" type="fixed">
-    <origin xyz="0.28771 0.26721 -0.06011" rpy="0 0 0" />
+    <origin xyz="0.28771 0.26721 -0.06011" rpy="3.141592653589793 0 0.7853981633974483" />
     <parent link="base_link" />
     <child link="base_lidar_link_FL" />
     <axis xyz="0 0 0" />
@@ -668,7 +668,7 @@
     </visual>
   </link>
   <joint name="base_lidar_joint_BR" type="fixed">
-    <origin xyz="-0.24671 -0.26721 -0.06011" rpy="0 0 0" />
+    <origin xyz="-0.24671 -0.26721 -0.06011" rpy="3.141592653589793 0 -2.356194490192345" />
     <parent link="base_link" />
     <child link="base_lidar_link_BR" />
     <axis xyz="0 0 0" />

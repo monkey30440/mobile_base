@@ -230,3 +230,14 @@ Operator rejected additional base_lidar_cad_link_FL/BR frames. The current model
 preserves the source base_lidar_link_FL/BR CAD transforms and geometry and places
 explicit optical orientation on native _1 children only. Earlier extra-CAD-link
 model notes are superseded. See [validation](../validation/source-link-model-20261007.md).
+
+## Operator-specified URDF mounting (2026-10-07)
+
+The operator explicitly specified base_lidar_link_FL roll 180 degrees/yaw +45
+degrees and base_lidar_link_BR roll 180 degrees/yaw -135 degrees. These poses
+are now recorded directly in the reference URDF base_lidar_joint_FL/BR.
+Native `_1` children have identity transforms; launch-time optical rotation
+arguments were removed to prevent double rotation. Source translations and
+visual/inertial origins are unchanged. This supersedes the earlier nominal
+FL yaw -45 degrees and CAD/optical-child frame distinction. Physical alignment
+of the revised model remains an operator acceptance gate.

@@ -1,3 +1,5 @@
+> Superseded mounting placement: the operator subsequently specified source joint RPY directly (FL roll pi/yaw +pi/4; BR roll pi/yaw -3pi/4). Scan children are now identity. The measurements below describe the earlier child-rotation model.
+
 # Source-link model correction — 2026-10-07
 
 The operator confirmed the base mesh appearance is corrected and rejected added

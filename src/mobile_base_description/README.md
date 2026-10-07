@@ -7,16 +7,15 @@ is excluded. Source geometry, inertials and movable joints are retained.
 BASE_FOOTPRINT is normalized/rerooted as base_footprint; wheel joint names map to
 the canonical left_wheel_joint/right_wheel_joint used by M1.
 
-Native robot_state_publisher is the sole model TF owner. Original
-base_lidar_link_FL/BR links, meshes, inertials and source joint transforms are
-preserved. No additional CAD links are introduced. Their native scan children
-base_lidar_link_FL_1 and base_lidar_link_BR_1 express the optical orientation
-relative to these source CAD axes. CAD axes are not claimed to be device axes.
-Launch requires explicit optical roll/pitch/yaw (radians). The observation profile
-uses nominal roll=180 degrees, pitch=0 and yaw=-45/-135 degrees: the operator
-confirmed both sensors inverted, and coarse bearings constrain yaw. These are
-not calibrated production extrinsics. Optical translation follows the source
-mount origin pending measured calibration. Scan data is not rewritten.
+Native robot_state_publisher is the sole model TF owner. The supplied URDF
+now defines the operator-confirmed mounting poses directly on
+base_lidar_joint_FL/BR: roll=180 degrees, pitch=0, yaw=+45 degrees (FL)
+and -135 degrees (BR). base_imu_joint has yaw=+90 degrees, roll/pitch=0,
+with its source translation retained. The native base_lidar_link_FL_1/BR_1 scan children
+are identity transforms, so mounting rotation is applied exactly once.
+No extra CAD links or scan rewriting are used. Visual and inertial origins
+remain unchanged; meshes rotate with their source links. Translations retain
+the source mount positions pending precise extrinsic calibration.
 
 No joint_state_publisher or fabricated wheel/suspension/caster states are started.
 Movable branches require real appropriate joint feedback; absence of that feedback
@@ -27,9 +26,7 @@ Do not simultaneously start M1's standalone RSP: final bringup must compose a
 single RSP with the control fragment/profile, rather than two competing owners.
 
 ```bash
-ros2 launch mobile_base_description description.launch.py \
-  fl_scan_roll:=3.141592653589793 fl_scan_pitch:=0 fl_scan_yaw:=-0.7853981633974483 \
-  br_scan_roll:=3.141592653589793 br_scan_pitch:=0 br_scan_yaw:=-2.356194490192345
+ros2 launch mobile_base_description description.launch.py
 ```
 
 Foxglove 3D Scene → Mesh up-axis must be Z-up for the supplied STL geometry.

@@ -7,9 +7,6 @@ import xml.etree.ElementTree as ET
 source, output = map(Path, sys.argv[1:])
 original = ET.parse(source).getroot()
 robot = ET.Element('robot', name='mobile_base', attrib={'xmlns:xacro':'http://www.ros.org/wiki/xacro'})
-for side in ('fl','br'):
-    for axis in ('roll', 'pitch', 'yaw'):
-        ET.SubElement(robot,'xacro:arg',name=side+'_scan_'+axis,default='UNSET')
 links = {'base_link'}
 joints = []
 while True:
@@ -41,11 +38,7 @@ for side in ('FL','BR'):
     joint = ET.SubElement(robot, 'joint', name='lidar_scan_joint_' + side, type='fixed')
     ET.SubElement(joint, 'parent', link=mounting)
     ET.SubElement(joint, 'child', link=scan)
-    # Supplied CAD links retain their original axes and geometry. Only the
-    # native optical child expresses the measured device mounting orientation.
-    ET.SubElement(joint, 'origin', xyz='0 0 0',
-                  rpy=' '.join('$(arg ' + side.lower() + '_scan_' + axis + ')'
-                               for axis in ('roll', 'pitch', 'yaw')))
+    ET.SubElement(joint, 'origin', xyz='0 0 0', rpy='0 0 0')
 ET.indent(robot)
 output.parent.mkdir(parents=True,exist_ok=True)
 ET.ElementTree(robot).write(output,encoding='unicode',xml_declaration=True)
