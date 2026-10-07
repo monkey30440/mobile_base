@@ -73,3 +73,9 @@ physical target positions. Then use a known off-axis target (e.g. move it toward
 AMR left from a forward/rear reference) to distinguish angular handedness and
 nominal yaw. Exact targets/coordinates must be reported before acceptance.
 Mesh display correction and physical mounting acceptance are separate results.
+
+Independent follow-up review pinned7a03cb5 (user-approved f591f4e baseline;
+incremental9d13cb6...7a03cb5): Standards0 actionable bugs/new smells; Spec0
+actionable deviations/scope creep. Both reviewers explicitly retain the manual
+mesh/axis/off-axis-target and calibration gates. The earlier nonblocking source
+footprint duplication observation is unchanged.
