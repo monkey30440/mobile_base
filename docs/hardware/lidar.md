@@ -82,3 +82,21 @@ Native layer/echo frame conventions and optical-axis evidence are in
 `docs/research/v1-lidar-frame-preflight.md`. Optical-to-CAD direction still needs
 an operator-positioned target before accepting actual scan transforms; no
 unvalidated optical yaw has been installed as production TF.
+
+### Operator front-left direction check (2026-10-07)
+
+The operator observed `/lidar/fl/scan` in Foxglove with display frame
+`base_lidar_link_FL_1`, reporting the target at x=+0.92 m, y=-0.87 m.
+They explicitly confirmed that the target was placed from the front-left
+scanner along the AMR forward direction, without intended lateral offset.
+The reported point azimuth is -43.40 degrees; under that placement, the
+coarse optical-to-robot yaw is approximately 43.40 degrees, supporting
+a nominal front-left viewing direction near +45 degrees (robot front-left).
+The mounting link itself has zero rpy in the source URDF.
+
+This is operator-reported coarse direction evidence, not a recorded precise
+point/target survey or calibrated extrinsic transform. Target extent, optical
+origin, placement and measurement error were not quantified. It excludes the
+assumption that optical +X is robot-forward, but does not establish exact
+translation, yaw/pitch/roll or acceptance tolerances. No production optical
+TF is changed from this one point; rear-right direction remains unverified.
