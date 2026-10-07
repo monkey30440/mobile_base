@@ -16,8 +16,8 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
     from rclpy.qos import QoSProfile, DurabilityPolicy
     share = Path(get_package_share_directory('mobile_base_description'))
     model = subprocess.run(['xacro', str(share/'urdf/mobile_base.urdf.xacro'),
-                            'fl_scan_yaw:=0.7853981633974483',
-                            'br_scan_yaw:=2.356194490192345'], check=True,
+                            'fl_scan_roll:=3.141592653589793', 'fl_scan_pitch:=0', 'fl_scan_yaw:=-0.7853981633974483',
+                            'br_scan_roll:=3.141592653589793', 'br_scan_pitch:=0', 'br_scan_yaw:=-2.356194490192345'], check=True,
                            text=True, capture_output=True).stdout
     import xml.etree.ElementTree as ET
     robot = ET.fromstring(model)
@@ -29,16 +29,20 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
         assert mesh.attrib['filename'].startswith(prefix)
         assert (share/mesh.attrib['filename'][len(prefix):]).is_file()
     process = subprocess.Popen(['ros2','launch','mobile_base_description','description.launch.py',
-        'fl_scan_yaw:=0.7853981633974483','br_scan_yaw:=2.356194490192345'],
+        'fl_scan_roll:=3.141592653589793', 'fl_scan_pitch:=0', 'fl_scan_yaw:=-0.7853981633974483','br_scan_roll:=3.141592653589793', 'br_scan_pitch:=0', 'br_scan_yaw:=-2.356194490192345'],
         stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,start_new_session=True)
     rclpy.init(); node=rclpy.create_node('model_tf_acceptance');buffer=Buffer();listener=TransformListener(buffer,node)
     descriptions=[]
     sub=node.create_subscription(String,'/robot_description',lambda m:descriptions.append(m.data),
         QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
     expected={
-        'base_imu_link':(.04375,-.008,.24141,0.,1.),
-        'base_lidar_link_FL_1':(.28771,.26721,.19589,.382683432365,.923879532511),
-        'base_lidar_link_BR_1':(-.24671,-.26721,.19589,.923879532511,.382683432365),
+        'base_lidar_cad_link_FL':(.28771,.26721,.19589,0.,0.,0.,1.),
+        'base_lidar_cad_link_BR':(-.24671,-.26721,.19589,0.,0.,0.,1.),
+        'base_imu_link':(.04375,-.008,.24141,0.,0.,0.,1.),
+        'base_lidar_link_FL':(.28771,.26721,.19589,.923879532511,-.382683432365,0.,0.),
+        'base_lidar_link_FL_1':(.28771,.26721,.19589,.923879532511,-.382683432365,0.,0.),
+        'base_lidar_link_BR':(-.24671,-.26721,.19589,.382683432365,-.923879532511,0.,0.),
+        'base_lidar_link_BR_1':(-.24671,-.26721,.19589,.382683432365,-.923879532511,0.,0.),
     }
     try:
         end=time.monotonic()+10
@@ -46,10 +50,16 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
             rclpy.spin_once(node,timeout_sec=.1)
             if descriptions and all(buffer.can_transform('base_footprint',f,Time()) for f in expected):break
         assert descriptions
-        for frame,(x,y,z,qz,qw) in expected.items():
+        for frame,(x,y,z,qx,qy,qz,qw) in expected.items():
             t=buffer.lookup_transform('base_footprint',frame,Time(),timeout=Duration(seconds=1)).transform
             assert (t.translation.x,t.translation.y,t.translation.z)==pytest.approx((x,y,z),abs=1e-9)
-            assert (t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w)==pytest.approx((0,0,qz,qw),abs=1e-9)
+            actual=(t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w)
+            expected_rotation=(qx,qy,qz,qw)
+            # q and -q encode the same rotation; tf2 may return either.
+            assert (actual == pytest.approx(expected_rotation,abs=1e-9) or
+                    actual == pytest.approx(tuple(-v for v in expected_rotation),abs=1e-9))
+            if frame.startswith('base_lidar_link_'):
+                assert 1 - 2 * (t.rotation.x**2 + t.rotation.y**2) == pytest.approx(-1,abs=1e-9)
         assert len(node.get_publishers_info_by_topic('/tf_static'))==1
         assert not buffer.can_transform('odom','base_footprint',Time())
     finally:

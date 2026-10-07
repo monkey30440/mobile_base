@@ -1,4 +1,4 @@
-"""Start the sole native model TF owner with explicitly selected optical yaw."""
+"""Start the sole native model TF owner with explicitly selected optical mounting RPY."""
 import math
 from pathlib import Path
 import xacro
@@ -10,9 +10,11 @@ from launch_ros.actions import Node
 
 
 def start_model(context):
-    mapping={name:LaunchConfiguration(name).perform(context) for name in ('fl_scan_yaw','br_scan_yaw')}
+    names = (side + '_scan_' + axis for side in ('fl', 'br')
+             for axis in ('roll', 'pitch', 'yaw'))
+    mapping = {name: LaunchConfiguration(name).perform(context) for name in names}
     if any(not math.isfinite(float(v)) for v in mapping.values()):
-        raise RuntimeError('scan yaw must be finite radians from an explicit mounting profile')
+        raise RuntimeError('scan mounting RPY must be finite radians from an explicit mounting profile')
     model=Path(get_package_share_directory('mobile_base_description'))/'urdf/mobile_base.urdf.xacro'
     description=xacro.process_file(str(model),mappings=mapping).toxml()
     return [Node(package='robot_state_publisher',executable='robot_state_publisher',
@@ -21,7 +23,8 @@ def start_model(context):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('fl_scan_yaw',description='Explicit FL optical yaw relative to CAD mount, radians'),
-        DeclareLaunchArgument('br_scan_yaw',description='Explicit BR optical yaw relative to CAD mount, radians'),
+        *[DeclareLaunchArgument(side + '_scan_' + axis,
+              description='Explicit optical mounting ' + axis + ' relative to CAD axes, radians')
+          for side in ('fl', 'br') for axis in ('roll', 'pitch', 'yaw')],
         OpaqueFunction(function=start_model),
     ])

@@ -11,13 +11,16 @@ def generate_launch_description():
     lidar=Path(get_package_share_directory('mobile_base_lidar'))/'launch'
     model=Path(get_package_share_directory('mobile_base_description'))/'launch'
     names=('fl_hostname','br_hostname','udp_receiver_ip','fl_udp_port','br_udp_port',
-           'fl_check_udp_port','br_check_udp_port','ros_qos','fl_scan_yaw','br_scan_yaw')
+           'fl_check_udp_port','br_check_udp_port','ros_qos')
+    mounting_names = tuple(side + '_scan_' + axis for side in ('fl', 'br')
+                           for axis in ('roll', 'pitch', 'yaw'))
+    names += mounting_names
     arguments={name:LaunchConfiguration(name) for name in names}
     return LaunchDescription([
         *[DeclareLaunchArgument(name) for name in names],
         IncludeLaunchDescription(PythonLaunchDescriptionSource(str(model/'description.launch.py')),
-            launch_arguments={name:arguments[name] for name in ('fl_scan_yaw','br_scan_yaw')}.items()),
+            launch_arguments={name:arguments[name] for name in mounting_names}.items()),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(str(lidar/'dual_picoscan.launch.py')),
-            launch_arguments={**{name:arguments[name] for name in names if not name.endswith('_scan_yaw')},
+            launch_arguments={**{name:arguments[name] for name in names if name not in mounting_names},
                               'set_echo_filter':'True','echo_filter':'2','listen_only_mode':'False'}.items()),
     ])

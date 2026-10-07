@@ -213,3 +213,13 @@ and native RSP. Native bool CLI values use 1/0 (stoi conversion), not True/False
 See [staged integration evidence and manual gate](../validation/single-echo-model-20261007.md).
 Historical ALL/echo-view experiments above are evidence, not current deployment
 settings. Nominal +45/+135 yaw remains uncalibrated; final GUI alignment is pending.
+
+### Inverted mounting fact and corrected profile (2026-10-07)
+
+Operator accepted stable formal single-echo scans but rejected yaw-only model
+orientation, confirming both LiDAR tops face downward. Initial yaw-only profile
+is superseded: nominal roll=pi/pitch0, FL yaw=-pi/4, BR yaw=-3pi/4. Mounting and
+scan device axes now have +Z down; source CAD meshes stay in separately named
+CAD links. Body/IMU TF is preserved. Whole-model visual-only orientation is
+checked via Foxglove Scene Mesh up-axis Z-up, rather than an arbitrary +90-degree
+URDF rotation. See [correction and pending manual gate](../validation/inverted-model-20261007.md).

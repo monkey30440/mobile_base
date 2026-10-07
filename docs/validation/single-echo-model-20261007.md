@@ -1,5 +1,10 @@
 # Native dual single-echo scan + base model integration
 
+This is the initial yaw-only stage, superseded after the operator reported
+inverted sensors and incorrect mesh display. See
+[inverted mounting correction](inverted-model-20261007.md) for the current
+configuration and outstanding manual gate.
+
 2026-10-07. User requested production-oriented `/lidar/fl/scan` /
 `/lidar/br/scan`, native frames `base_lidar_link_FL_1` /
 `base_lidar_link_BR_1`, and integration with mobile_base_description.
