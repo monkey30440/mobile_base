@@ -1,18 +1,9 @@
 cmake_minimum_required(VERSION 3.19)
 project(mobile_base_description)
 find_package(ament_cmake REQUIRED)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-set(PLATFORM ${CMAKE_CURRENT_SOURCE_DIR}/../../reference/FIH_AMR_ROBOT_V2.0_0731)
-set(MODEL ${PLATFORM}/urdf/RWF_V2.0_QA_release.urdf)
-set(GENERATED ${CMAKE_CURRENT_BINARY_DIR}/mobile_base.urdf.xacro)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${MODEL} prepare_model.py)
-execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/prepare_model.py
-  ${MODEL} ${GENERATED} COMMAND_ERROR_IS_FATAL ANY)
-install(FILES ${GENERATED} DESTINATION share/${PROJECT_NAME}/urdf)
-install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
-# Only base meshes are packaged; upper-body assets remain another team's scope.
-file(GLOB BASE_MESHES ${PLATFORM}/meshes/base*.STL ${PLATFORM}/meshes/caster*.STL ${PLATFORM}/meshes/driving*.STL)
-install(FILES ${BASE_MESHES} DESTINATION share/${PROJECT_NAME}/meshes)
+# Package-owned base model and only its referenced meshes; no reference dependency.
+install(DIRECTORY launch urdf meshes DESTINATION share/${PROJECT_NAME})
+install(FILES README.md DESTINATION share/${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(model_tf test/test_model_tf.py TIMEOUT 40)

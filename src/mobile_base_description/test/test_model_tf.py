@@ -15,7 +15,7 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
     from std_msgs.msg import String
     from rclpy.qos import QoSProfile, DurabilityPolicy
     share = Path(get_package_share_directory('mobile_base_description'))
-    model = subprocess.run(['xacro', str(share/'urdf/mobile_base.urdf.xacro'),
+    model = subprocess.run(['xacro', str(share/'urdf/mobile_base.urdf'),
                             ], check=True,
                            text=True, capture_output=True).stdout
     import xml.etree.ElementTree as ET
