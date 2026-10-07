@@ -17,6 +17,7 @@ hardware:
   verified_speed_mode: true
   pdo_mapping: 0
   drive_enable_setting: 1
+  position_format: 0  # verified Index + residual pulse, not signed32 steps
   left_drive_id: 2
   right_drive_id: 1
   left_gear_ratio: 20.0
@@ -24,7 +25,11 @@ hardware:
   left_direction: 1.0
   right_direction: -1.0
   left_feedback_rpm_per_count: 1.0
+  left_position_steps_per_motor_revolution: 10000
+  left_encoder_pulses_per_motor_revolution: 2500
   right_feedback_rpm_per_count: 1.0
+  right_position_steps_per_motor_revolution: 10000
+  right_encoder_pulses_per_motor_revolution: 2500
   left_max_motor_rpm: 150.0
   right_max_motor_rpm: 150.0
 controller:

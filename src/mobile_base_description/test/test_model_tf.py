@@ -33,7 +33,11 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
         assert link.find('visual/origin').attrib == {'xyz': '0 0 0', 'rpy': '0 0 0'}
         assert link.find('inertial/origin').attrib == {'xyz': '0 0 0', 'rpy': '0 0 0'}
     assert robot.find("joint[@name='left_wheel_joint']").attrib['type'] == 'continuous'
-    assert robot.find("joint[@name='driving_slide_joint_L']").attrib['type'] == 'prismatic'
+    for side in ('L', 'R'):
+        mount = robot.find("joint[@name='driving_slide_joint_" + side + "']")
+        assert mount.attrib['type'] == 'fixed'
+        assert tuple(map(float, mount.find('origin').attrib['xyz'].split())) == pytest.approx(
+            (.0205, .1915 if side == 'L' else -.1915, -.176))
     for mesh in robot.findall('.//mesh'):
         prefix='package://mobile_base_description/'
         assert mesh.attrib['filename'].startswith(prefix)
@@ -45,6 +49,8 @@ def test_installed_model_preserves_geometry_and_publishes_scan_transforms():
     sub=node.create_subscription(String,'/robot_description',lambda m:descriptions.append(m.data),
         QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
     expected={
+        'driving_suspension_link_L':(.0205,.1915,.08,0.,0.,0.,1.),
+        'driving_suspension_link_R':(.0205,-.1915,.08,0.,0.,0.,1.),
         'base_imu_link':(.04375,-.008,.24141,0.,0.,.707106781187,.707106781187),
         'base_lidar_link_FL':(.28771,.26721,.19589,.923879532511,.382683432365,0.,0.),
         'base_lidar_link_FL_1':(.28771,.26721,.19589,.923879532511,.382683432365,0.,0.),

@@ -83,3 +83,12 @@ Primary sources: exact [native broadcaster4.42.1 source](https://github.com/ros-
 and [native controller4.42.1 source](https://github.com/ros-controls/ros2_controllers/blob/4.42.1/diff_drive_controller/src/diff_drive_controller.cpp).
 Local manufacturer references: reference/M1-COMM_UM-01-S0686.pdf, current-position
 Read Data5/6; reference/M1-UserManual_UM-01-S0701.pdf, encoder parameter01-06.
+
+## Native position / nominal seat follow-up
+
+[2026-10-07 follow-up](m1-position-native-tf-20261007.md) implements real position
+state and Operator-confirmed nominal fixed drive seats. Scoped software and
+actual stationary base/sensor/driven-wheel TF checks pass. This supersedes the
+historical missing-position and disconnected-drive-seat gaps above; independent
+calibration and complete ticket acceptance remain open. Raw historical evidence
+is preserved, and no dependency or issue is closed.

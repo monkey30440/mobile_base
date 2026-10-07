@@ -15,6 +15,8 @@ import yaml
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import JointState
+from tf2_msgs.msg import TFMessage
 
 
 def crc(data):
@@ -28,7 +30,7 @@ def crc(data):
 
 class Peer:
     """External Modbus RTU peer: fixed authoritative example RPM feedback."""
-    def __init__(self, require_enable=False, stale_target=0, ignore_istop=False, fail_enable=False, alarm_on_enable=False, enable_delay=0, ignore_svoff=False, response_delay=0):
+    def __init__(self, require_enable=False, stale_target=0, ignore_istop=False, fail_enable=False, alarm_on_enable=False, enable_delay=0, ignore_svoff=False, response_delay=0, positions=None, position_format=0, encoder_pulses=2500):
         self.response_delay = response_delay
         self.require_enable = require_enable
         self.enabled = not require_enable
@@ -48,6 +50,9 @@ class Peer:
         self.commands = []
         self.request_gaps = []
         self.last_response = None
+        self.positions = positions or [(1, 0), (65535, 0)]
+        self.position_format = position_format
+        self.encoder_pulses = encoder_pulses
         self.fault = False
         self.inhibited = False
         self.silent = False
@@ -78,6 +83,13 @@ class Peer:
                     self.enabled = True
                     self.enable_at = None
                 if request[1] == 3:
+                    address = struct.unpack('>H', request[2:4])[0]
+                    if request[0] != 0x65:
+                        value = {0x020d: self.position_format, 0x0105: self.encoder_pulses}[address]
+                        response = bytes((request[0], 3, 2)) + struct.pack('>H', value)
+                        if not self.silent:
+                            os.write(self.master, response + crc(response))
+                        continue
                     # status/alarm/rpm for IDs1 then2; right polarity reversed.
                     count = struct.unpack('>H', request[4:6])[0]
                     # Manual p38: each drive contributes n data words plus Error_Check.
@@ -98,6 +110,13 @@ class Peer:
                         response = bytes((0x65, 3, 8))
                         for target in self.targets:
                             response += struct.pack('>H', target & 0xffff)
+                            response += struct.pack('>H', struct.unpack('<H', crc(response))[0])
+                    if count == 16:
+                        original = response
+                        response = bytes((0x65, 3, 32))
+                        for slot, pair in enumerate(self.positions):
+                            words = struct.unpack('>3H', original[3 + slot * 8:9 + slot * 8])
+                            response += struct.pack('>7H', *words, 0, 0, *pair)
                             response += struct.pack('>H', struct.unpack('<H', crc(response))[0])
                     if count == 6:
                         # n=2: status/alarm/check, without the speed measurement.
@@ -148,7 +167,7 @@ def workflow(tmp_path, request):
                           'stop_bits': 1, 'response_timeout_seconds': 0.03, 'enable_timeout_seconds': 0.3,
                           'firmware': 'SOFTWARE_PEER_NOT_HARDWARE',
                           'verified_speed_mode': True, 'verified_multidrive2': True,
-                          'pdo_mapping': 0, 'drive_enable_setting': 1},
+                          'pdo_mapping': 0, 'drive_enable_setting': 1, 'position_format': 0},
               'controller': {'wheel_radius': 0.1, 'wheel_separation': 0.5,
                              'cmd_vel_timeout': 0.3, 'update_rate': 30,
                              'linear_velocity_limit': 0.5, 'angular_velocity_limit': 1.0,
@@ -160,7 +179,9 @@ def workflow(tmp_path, request):
         config['hardware'].update({side+'drive_id': drive_id, side+'gear_ratio': 10,
                                    side+'direction': direction,
                                    side+'feedback_rpm_per_count': 1,
-                                   side+'max_motor_rpm': 3000})
+                                   side+'max_motor_rpm': 3000,
+                                   side+'position_steps_per_motor_revolution': 10000,
+                                   side+'encoder_pulses_per_motor_revolution': 2500})
     target = tmp_path / 'target.yaml'
     target.write_text(yaml.safe_dump(config))
     model = tmp_path / 'robot.urdf'
@@ -412,3 +433,102 @@ def test_other_drive_alarm_is_latched_before_first_wheel_invalidity_and_shutdown
     os.killpg(peer.process.pid, signal.SIGINT)
     peer.process.wait(timeout=8)
     assert 7 not in peer.lifecycle_commands
+
+
+def test_real_position_feedback_reaches_native_joint_states(workflow):
+    peer, node, _, _, _, wait = workflow
+    joints = []
+    node.create_subscription(JointState, '/joint_states', joints.append, 10)
+    wait(lambda: joints and len(joints[-1].position) == 2 and
+         all(abs(p - 0.628318530718) < 1e-9 for p in joints[-1].position))
+    assert set(joints[-1].name) == {'left_wheel_joint', 'right_wheel_joint'}
+    assert len(joints[-1].position) == 2
+
+
+@pytest.mark.parametrize('workflow', [
+    {'positions': [(1, 9800), (65534, 200)]},
+    {'positions': [(32767, 9800), (32768, 200)]},
+], indirect=True)
+def test_native_joint_states_and_model_tf_follow_real_position_carry(workflow):
+    peer, node, _, _, _, wait = workflow
+    joints, transforms = [], []
+    node.create_subscription(JointState, '/joint_states', joints.append, 10)
+    node.create_subscription(TFMessage, '/tf', transforms.append, 20)
+    wait(lambda: joints and len(joints[-1].position) == 2)
+    before = dict(zip(joints[-1].name, joints[-1].position))
+    index = peer.positions[0][0]
+    peer.positions = [((index + 1) & 65535, 200), ((peer.positions[1][0] - 1) & 65535, 9800)]
+    # Independent fixture: each motor advances signed0.04 turns, gearing10:1.
+    wait(lambda: all(p == pytest.approx(before[n] + 0.0251327412287, abs=1e-8)
+                     for n, p in zip(joints[-1].name, joints[-1].position)))
+    import math
+    wait(lambda: {'left_wheel', 'right_wheel'} <=
+         {t.child_frame_id for m in transforms for t in m.transforms})
+    def model_follows_measured_position():
+        latest = {t.child_frame_id: t for m in transforms for t in m.transforms}
+        for child, joint in [('left_wheel', 'left_wheel_joint'), ('right_wheel', 'right_wheel_joint')]:
+            if child not in latest:
+                return False
+            q = latest[child].transform.rotation
+            half_angle = (before[joint] + 0.0251327412287) / 2
+            # q and -q describe the same rotation; compare orientation equivalence.
+            if abs(q.y * math.sin(half_angle) + q.w * math.cos(half_angle)) < 1 - 1e-8:
+                return False
+        return True
+    wait(model_follows_measured_position)
+    for m in transforms:
+        for t in m.transforms:
+            q = t.transform.rotation
+            assert all(math.isfinite(v) for v in (q.x, q.y, q.z, q.w))
+
+
+@pytest.mark.parametrize('workflow', [
+    {'position_format': 1, 'expect_failure': True},
+    {'encoder_pulses': 1024, 'expect_failure': True},
+], indirect=True)
+def test_wrong_actual_position_configuration_never_requests_servo_on(workflow):
+    peer, _, _, _, _, wait = workflow
+    wait(lambda: 'position format/encoder verification failed' in peer.launch_log.read_text())
+    assert 6 not in peer.lifecycle_commands
+
+
+@pytest.mark.parametrize('bad_position, reason', [
+    ((1, 10000), 'invalid residual position pulse'),
+    ((1000, 0), 'position jump/reset exceeds'),
+])
+def test_bad_position_invalidates_feedback_and_requests_stop(workflow, bad_position, reason):
+    peer, _, _, _, diagnostics, wait = workflow
+    diagnostics.clear()
+    peer.commands.clear()
+    peer.positions = [bad_position, peer.positions[1]]
+    wait(lambda: any(s.level in (2, b'\x02') and reason in s.message and
+                     any(v.key == 'feedback_valid' and v.value == 'False' for v in s.values)
+                     for m in diagnostics for s in m.status))
+    assert 0 in peer.lifecycle_commands
+    assert (0, 0) in peer.commands
+
+
+def test_transient_position_fault_requires_reconfigure_before_new_reference(workflow):
+    peer, node, _, _, diagnostics, wait = workflow
+    peer.positions = [(1, 10000), peer.positions[1]]
+    wait(lambda: any('invalid residual position pulse' in s.message and s.level in (2, b'\x02')
+                     for m in diagnostics for s in m.status))
+    enables = peer.lifecycle_commands.count(6)
+    peer.positions = [(5, 0), (65531, 0)]
+    diagnostics.clear()
+    wait(lambda: any('invalid residual position pulse' in s.message and
+                     any(v.key == 'feedback_valid' and v.value == 'False' for v in s.values)
+                     for m in diagnostics for s in m.status))
+    assert peer.lifecycle_commands.count(6) == enables
+    for state in ('inactive', 'active'):
+        result = subprocess.run(['ros2', 'control', 'set_hardware_component_state', 'M1', state],
+                                capture_output=True, text=True, timeout=8)
+        assert result.returncode == 0, result.stdout + result.stderr
+    for controller in ('joint_state_broadcaster', 'base_controller'):
+        result = subprocess.run(['ros2', 'control', 'set_controller_state', controller, 'active'],
+                                capture_output=True, text=True, timeout=8)
+        assert result.returncode == 0, result.stdout + result.stderr
+    joints = []
+    node.create_subscription(JointState, '/joint_states', joints.append, 10)
+    wait(lambda: joints and len(joints[-1].position) == 2 and
+         all(p == pytest.approx(3.14159265359, abs=1e-9) for p in joints[-1].position))

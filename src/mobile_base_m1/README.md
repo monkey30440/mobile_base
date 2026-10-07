@@ -1,6 +1,6 @@
 # M1 wheel hardware
 
-This package fills the confirmed M1-specific device gap from spec #32 / decision #22 / ticket #35. Native `ros2_control` and `diff_drive_controller` own differential kinematics, wheel odometry, velocity limits and command timeout. The adapter only exchanges Modbus Multi-drive2.0 wheel commands and valid velocity feedback. It publishes no TF and integrates no wheel position. `robot_localization` remains the single odom→base_footprint owner.
+This package fills the confirmed M1-specific device gap from spec #32 / decision #22 / ticket #35. Native `ros2_control` and `diff_drive_controller` own differential kinematics, wheel odometry, velocity limits and command timeout. The adapter only exchanges Modbus Multi-drive2.0 wheel commands and valid velocity and encoder-derived position feedback. It publishes no TF and computes no wheel odometry. `robot_localization` remains the single odom→base_footprint owner.
 
 ## Required target profile
 
@@ -38,7 +38,7 @@ Before Teleop, cancel Navigation and wait for its native terminal result. Before
 
 ## Diagnose
 
-Use `/diagnostics`, native controller logs and `ros2 control list_hardware_components`. Per-wheel status includes drive ID, configured firmware, motor status, alarm code, feedback validity and the basic cause. Communication/CRC/short-response/timeouts and alarms, STO or unknown statuses invalidate both feedback interfaces; inhibited6 is valid measurement with unavailable motion. Integrity errors invalidate both interfaces; previous data are never substituted as current valid measurements. The controller manager receives ERROR so it can deactivate affected controllers. Fault reset/brake/STO recovery is a deliberate operator hardware procedure, not automatic adapter behavior. Initial read-only observation found both drives in6 WAIT/INHIBIT with no alarm and0RPM. A later bounded zero-speed protocol gate verified SVON transitions both toSTOP0 and SVOFF returns both to6, always alarm0/currentRPM0/target0. Check actual main/CTRL power and the SERVO ON prerequisite before expecting motion; controller active alone does not mean Bringup/Teleop ready. Live communication watchdog05-17=0 is disabled, so a disconnected link/process loss cannot rely on a drive watchdog to stop.
+Use `/diagnostics`, native controller logs and `ros2 control list_hardware_components`. Per-wheel status includes drive ID, configured firmware, motor status, alarm code, feedback validity and the basic cause. Communication/CRC/short-response/timeouts and alarms, STO or unknown statuses invalidate both wheels’ velocity/position interfaces; inhibited6 is valid measurement with unavailable motion. Integrity errors invalidate all wheel feedback interfaces; previous data are never substituted as current valid measurements. The controller manager receives ERROR so it can deactivate affected controllers. Fault reset/brake/STO recovery is a deliberate operator hardware procedure, not automatic adapter behavior. Initial read-only observation found both drives in6 WAIT/INHIBIT with no alarm and0RPM. A later bounded zero-speed protocol gate verified SVON transitions both toSTOP0 and SVOFF returns both to6, always alarm0/currentRPM0/target0. Check actual main/CTRL power and the SERVO ON prerequisite before expecting motion; controller active alone does not mean Bringup/Teleop ready. Live communication watchdog05-17=0 is disabled, so a disconnected link/process loss cannot rely on a drive watchdog to stop.
 
 If launch rejects a target fact, complete it from authoritative evidence. If serial connection fails, check the actual container device mapping, path permissions and serial settings. If current-speed/status reads fail, verify Multi-drive2.0 mode, IDs/bitmask and applicable firmware/manual revision. If a command is rejected, check documented minimum RPM, configured gear/direction and speed limits. Do not resume until the cause and hardware conditions are understood.
 
@@ -51,3 +51,32 @@ The software suite uses a pseudo-terminal Modbus peer at the external serial bou
 Commissioning-only `controller.native_hardware_execution_budget_us` optionally forwards mean/stddev WARN/ERROR microsecond thresholds to native controller-manager hardware diagnostics. Omission/null retains upstream defaults. Statistical thresholds do not prove deadlines; periodicity/overrun diagnostics remain enabled, and genuine ERROR prevents commissioning motion. See the validation record for the measured RS485 timing rationale and interruption-related loss of historical temporary artifacts.
 
 A single raised0.1m/s, two-second native trial confirmed both wheels forward and both stopped by onsite observation; its temporary300RPM/.1m/s profile and raw evidence are archived in the validation record. The earlier0.03m/s trial had no observed wheel motion; on2026-10-07, separate raised0.03m/s two- and ten-second trials had operator-confirmed wheel motion and stopping. The historical symptom was not reproduced and its cause remains unknown. Separate command-silence evidence supports native timeout zeroing before cleanup, but independent physical timeout stop timing remains unresolved. See `docs/validation/m1-low-speed-timeout-20261007.md`. The repository commissioning profile stays150RPM/.03m/s; neither trial establishes minimum reliable velocity, production limits, calibrated odometry or link-loss/isolated-timeout physical stopping.
+
+## Real position state
+
+Confirmed mode0 Index/Pos feedback removes the missing-position/NaN defect recorded in
+`docs/validation/real-static-estimation-20261007.md`. The same Multi-drive read
+now obtains Data0–6 plus each drive’s prefix check; there is one serial owner and
+no added runtime TF or JointState publisher. Full base-to-wheel TF also requires an explicit
+model responsibility for the intervening drive seats. The V1 description uses
+Operator-confirmed nominal fixed seats; M1 does not measure their suspension travel. Native JointState broadcaster exposes
+position; native RSP consumes it. Native diff_drive_controller continues using
+velocity feedback (`position_feedback=false`); odometry ownership is unchanged.
+
+An explicit profile must supply `position_format: 0`, each wheel’s
+`position_steps_per_motor_revolution` and `encoder_pulses_per_motor_revolution`.
+Configure reads actual02-14 and01-06 for each ID before Servo ON, rejecting mismatch.
+Only the validated mode0 is supported; mode1 is not guessed. RWF commissioning
+uses10000 steps/motor turn and2500 single-phase encoder pulses, backed by actual
+register and fractional-carry checks, not independent mechanical calibration.
+
+First valid sample uses the device counter origin, not a calibrated mechanical
+wheel phase. Subsequent signed16 Index carry is unwrapped from real count deltas.
+Pulse out of range or a jump exceeding configured motor RPM with bounded response
+timing allowance invalidates all wheel feedback and latches a position fault until
+explicit reconfigure. Detected reset is not silently rebased during an active run.
+A reset whose delta resembles physically possible motion cannot be distinguished
+by this protocol; power/reset recovery requires a deliberate new configure epoch.
+Do not change drive format/encoder parameters while running. A configure/reconnect
+starts a new device-origin reference, without claiming cross-reset continuity.
+Physical signed-index overflow and power-reset behavior are not hardware-accepted.

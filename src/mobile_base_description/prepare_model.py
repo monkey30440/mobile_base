@@ -30,6 +30,14 @@ for joint in joints:
         joint.find('origin').attrib['xyz']='0 0 0.256'
     for side,short in [('L','left'),('R','right')]:
         if joint.attrib['name']=='driving_wheel_joint_'+side:joint.attrib['name']=short+'_wheel_joint'
+    # Confirmed V1 nominal drive-seat posture, not measured suspension state.
+    # Keep source geometry/origin; native RSP publishes these two fixed edges.
+    if joint.attrib['name'] in ('driving_slide_joint_L', 'driving_slide_joint_R'):
+        joint.attrib['type'] = 'fixed'
+        for tag in ('axis', 'limit'):
+            element = joint.find(tag)
+            if element is not None:
+                joint.remove(element)
     robot.append(joint)
 for side in ('FL','BR'):
     mounting = 'base_lidar_link_' + side

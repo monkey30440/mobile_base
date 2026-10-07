@@ -32,3 +32,14 @@ ros2 launch mobile_base_description description.launch.py
 Foxglove 3D Scene → Mesh up-axis must be Z-up for the supplied STL geometry.
 The default Y-up introduces a display-only mesh rotation; do not compensate
 by rotating base TF or changing authoritative visual origins.
+
+## Nominal drive-seat posture
+
+V1 spec32 reconciliation (2026-10-07) uses the original design origins at zero
+displacement for `driving_slide_joint_L/R`. The build-time deployment model
+expresses only these two as fixed joints; source URDF and origin geometry remain
+unchanged. Native RSP publishes the nominal base-to-drive-seat transforms. This
+is not measured suspension travel, and no fake JointState or extra TF publisher
+is introduced. Wheel rotation remains continuous and comes from real M1 position
+feedback. Other passive caster/suspension joints are not implicitly fixed or
+declared hardware-verified by this choice.

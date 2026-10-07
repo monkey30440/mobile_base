@@ -12,6 +12,7 @@ hardware:
   verified_speed_mode: null
   pdo_mapping: null
   drive_enable_setting: null
+  position_format: null  # verified Index + residual pulse, not signed32 steps
   left_drive_id: null
   right_drive_id: null
   left_gear_ratio: null
@@ -19,7 +20,11 @@ hardware:
   left_direction: null
   right_direction: null
   left_feedback_rpm_per_count: null
+  left_position_steps_per_motor_revolution: null
+  left_encoder_pulses_per_motor_revolution: null
   right_feedback_rpm_per_count: null
+  right_position_steps_per_motor_revolution: null
+  right_encoder_pulses_per_motor_revolution: null
   left_max_motor_rpm: null
   right_max_motor_rpm: null
 controller:

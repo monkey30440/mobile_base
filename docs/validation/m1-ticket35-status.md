@@ -34,3 +34,12 @@ retained. No position runtime interface or complete wheel TF acceptance yet.
 of mode0 Index/Pos carry on the actual drives. Documented10000-step conversion
 is supported for commissioning. Position-state runtime, rollover/reset semantics,
 complete wheel TF and independent mechanical calibration remain open.
+
+## Native position / nominal seat follow-up
+
+[2026-10-07 follow-up](m1-position-native-tf-20261007.md) implements real position
+state and Operator-confirmed nominal fixed drive seats. Scoped software and
+actual stationary base/sensor/driven-wheel TF checks pass. This supersedes the
+historical missing-position and disconnected-drive-seat gaps above; independent
+calibration and complete ticket acceptance remain open. Raw historical evidence
+is preserved, and no dependency or issue is closed.

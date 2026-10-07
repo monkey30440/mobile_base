@@ -19,9 +19,10 @@ def setup(context):
         config = yaml.safe_load(stream)
     hardware = config['hardware']
     required = ('serial_port', 'baud', 'parity', 'stop_bits', 'response_timeout_seconds', 'enable_timeout_seconds',
-                'firmware', 'verified_speed_mode', 'verified_multidrive2', 'pdo_mapping', 'drive_enable_setting')
+                'firmware', 'verified_speed_mode', 'verified_multidrive2', 'pdo_mapping', 'drive_enable_setting', 'position_format')
     required += tuple(side + suffix for side in ('left_', 'right_') for suffix in
-                      ('drive_id', 'gear_ratio', 'direction', 'feedback_rpm_per_count', 'max_motor_rpm'))
+                      ('drive_id', 'gear_ratio', 'direction', 'feedback_rpm_per_count', 'max_motor_rpm',
+                       'position_steps_per_motor_revolution', 'encoder_pulses_per_motor_revolution'))
     for key in required:
         if key not in hardware or hardware[key] is None:
             raise RuntimeError('M1 target fact required: ' + key)
@@ -51,6 +52,7 @@ def setup(context):
         joint = ET.SubElement(control, 'joint', name=name)
         ET.SubElement(joint, 'command_interface', name='velocity')
         ET.SubElement(joint, 'state_interface', name='velocity')
+        ET.SubElement(joint, 'state_interface', name='position')
     description = ET.tostring(robot, encoding='unicode')
     parameters = {'update_rate': rate,
                   'base_controller.type': 'diff_drive_controller/DiffDriveController',
