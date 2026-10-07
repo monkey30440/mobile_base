@@ -74,3 +74,24 @@ observed framing/layout compatibility, not firmware identity, units, mounted
 axis directions, timestamp accuracy, bias or calibration. No serial commands or
 firmware writes were sent. This observation is distinct from the adapter's
 software fixture tests; an actual calibrated ROS/estimation run remains pending.
+
+## Installation confirmation and passive sample (2026-10-07)
+
+The operator confirmed that the IMU installation coordinates match the authoritative
+URDF. Its `base_imu_link` joint has zero rpy relative to `base_link`; identity
+adapter axes `[1,2,3]` are therefore the operator-confirmed installation choice.
+This does not independently verify the firmware's wire-axis convention or gyro
+signs during rotation.
+
+A five-second passive capture at 115200 received 869 finite XOR-valid packets
+over 5.008 seconds (173.5 packets/s), with zero invalid candidates. Mean wire
+acceleration was approximately (-0.00822, 0.00231, 0.99595), consistent with the
+guide's approximately +1g Z reading. Mean wire gyro was approximately
+(0.03662, -0.00212, -0.04443). These are observations, not calibrated bias,
+covariance, scale, acquisition rate or timing accuracy. Controlled directional
+rotation and scale verification remain pending. No motor commands or serial
+payload commands were sent.
+
+The bounded capture script, raw bytes and timestamped summary are retained in
+`docs/validation/artifacts/imu-passive-20261007.tar.gz`. The script uses exclusive
+serial access; no production adapter or fusion runtime was changed.
