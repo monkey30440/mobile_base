@@ -22,11 +22,11 @@ def start_devices(context):
         allowed = {'fl_hostname', 'br_hostname', 'udp_receiver_ip', 'fl_udp_port',
                    'br_udp_port', 'fl_check_udp_port', 'br_check_udp_port', 'ros_qos',
                    'listen_only_mode', 'set_echo_filter', 'echo_filter', 'tick_to_timestamp_mode',
-                   'laserscan_range_min', 'laserscan_range_max'}
+                   'laserscan_range_min', 'laserscan_range_max', 'verbose_level'}
         if not isinstance(config, dict) or set(config) - allowed:
             raise RuntimeError('LiDAR configuration must be a mapping of supported launch arguments')
     defaults = {'listen_only_mode': 'False', 'set_echo_filter': 'True',
-                'echo_filter': '2', 'tick_to_timestamp_mode': '1',
+                'echo_filter': '2', 'tick_to_timestamp_mode': '1', 'verbose_level': '0',
                 'laserscan_range_min': '0', 'laserscan_range_max': '0'}
 
     def value(name):
@@ -72,6 +72,7 @@ def start_devices(context):
             'custom_pointclouds': '',
             'host_FREchoFilter': int(value('echo_filter')),
             'ros_qos': int(value('ros_qos')),
+            'verbose_level': int(value('verbose_level')),
             'tick_to_timestamp_mode': int(value('tick_to_timestamp_mode')),
             'laserscan_range_min': range_min,
             'laserscan_range_max': range_max,
@@ -113,6 +114,8 @@ def generate_launch_description():
                               description='Set native sensor echo filter on startup (transient SOPAS write)'),
         DeclareLaunchArgument('echo_filter', default_value='',
                               description='Native selector: default LAST (2) gives one stable scan frame per sensor; 0 FIRST, 1 ALL. Set on each startup'),
+        DeclareLaunchArgument('verbose_level', default_value='',
+                              description='Native verbosity: default 0 quiet, 1 statistics, 2 detailed data'),
         DeclareLaunchArgument('tick_to_timestamp_mode', default_value='',
                               description='Native timestamp mode: 0 PLL, 1 first host time plus sensor elapsed ticks'),
         DeclareLaunchArgument('laserscan_range_min', default_value='',

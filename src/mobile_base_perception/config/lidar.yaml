@@ -9,6 +9,8 @@ fl_check_udp_port: 2116
 br_udp_port: 2117
 br_check_udp_port: 2118
 ros_qos: 4
+# Native quiet mode: disable periodic statistics/data logs.
+verbose_level: 0
 listen_only_mode: false
 # Both native LAST=2, stable native FL_1/BR_1 scans. Transient SOPAS startup writes.
 set_echo_filter: true

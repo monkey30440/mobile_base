@@ -33,6 +33,15 @@ ros2 launch mobile_base_perception dual_picoscan.launch.py lidar_config:="$perce
 `src/mobile_base_perception/config/*.yaml`，再重新啟動對應 launch，不需重新建置。
 執行中的 driver 不會自動重新載入設定。
 
+LiDAR 預設使用原生 `verbose_level: 0`，不持續輸出統計／資料日誌；
+啟動訊息與異常訊息仍保留。需要排查時可在 `lidar.yaml` 修改，或單次覆寫：
+
+```bash
+ros2 launch mobile_base_perception dual_picoscan.launch.py verbose_level:=1
+```
+
+`1` 輸出統計，`2` 輸出詳細資料。
+
 相對路徑以執行指令時的工作目錄為準，並支援展開 `~`。缺檔時啟動失敗，不會選用
 備用設定。原生 ROS 載入、驗證 IMU YAML，adapter 再驗證其參數；LiDAR launch
 解析設定後，仍保留原生 driver 的驗證。LiDAR 命令列參數可覆寫個別 YAML 設定，
