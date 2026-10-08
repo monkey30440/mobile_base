@@ -1,6 +1,7 @@
 """Configure native controller manager from an explicit M1 target profile."""
 import math
 from pathlib import Path
+from ament_index_python.packages import get_package_share_directory
 import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
@@ -78,5 +79,6 @@ def setup(context):
 
 
 def generate_launch_description():
-    return LaunchDescription([DeclareLaunchArgument('hardware_config', default_value=''),
+    profile = Path(get_package_share_directory('mobile_base_control')) / 'config/rwf.commissioning.yaml'
+    return LaunchDescription([DeclareLaunchArgument('hardware_config', default_value=str(profile)),
                               OpaqueFunction(function=setup)])

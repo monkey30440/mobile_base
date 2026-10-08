@@ -1,107 +1,206 @@
-# M1 wheel hardware
+# mobile_base_control
 
-This package fills the confirmed M1-specific device gap from spec #32 / decision #22 / ticket #35. Native `ros2_control` and `diff_drive_controller` own differential kinematics, wheel odometry, velocity limits and command timeout. The adapter only exchanges Modbus Multi-drive2.0 wheel commands and valid velocity and encoder-derived position feedback. It publishes no TF and computes no wheel odometry. `robot_localization` remains the single odom→base_footprint owner.
+此套件補足 spec #32／decision #22／ticket #35 已確認的 M1 裝置介接缺口。
+原生 `ros2_control` 與 `diff_drive_controller` 負責差速運動學、輪端里程、速度限制與命令 timeout。
+Adapter 只透過 Modbus Multi-drive2.0 交換輪端命令，以及有效速度與編碼器位置回授，
+不發布 TF、不計算輪端里程。`robot_localization` 仍是唯一的 `odom → base_footprint` 發布者。
 
-## Required target profile
+## 設定檔用途
 
-Start from `config/rwf.target.yaml` for the inspected RWF target, or use the empty `config/target.template.yaml` for another target. Fill **every** remaining null from applicable evidence. The RWF profile records the user-confirmed path and nominal gear ratio20:1, wheel radius0.08m and wheel separation0.555m. Bounded read-only FC03 evidence confirms transport230400/8N1, left ID2/right ID1, speed mode0, command source4 and PDO mapping0. Velocity feedback is documented in motor RPM (1RPM/count); encoder resolution2500 pulses/rev is a different quantity. User confirms left positive motor RPM and right negative motor RPM move the corresponding wheel forward (`left_direction=+1`, `right_direction=-1`). Actual firmware identity and production permitted limits remain unresolved. `config/rwf.commissioning.yaml` records separate conservative engineering settings for bounded commissioning; its firmware metadata explicitly says UNIDENTIFIED. Nominal geometry is not effective calibration. The incomplete target and empty template fail closed until completed; software fixture values are never deployment defaults. Provenance is recorded in `docs/validation/m1-software.md`.
+| 檔案 | 用途 |
+|---|---|
+| `config/target.template.yaml` | 新平台的設定範本，須依證據填完所有必要 `null`；未填完不能啟動 |
+| `config/rwf.target.yaml` | 這台 RWF 已確認的硬體事實；未知韌體、限制與 timeout 保留 `null`，不能啟動 |
+| `config/rwf.commissioning.yaml` | 初期驗證使用的完整設定；目前兩個 launch 的預設設定，不代表已驗收的量產設定 |
 
-`gear_ratio` means motor revolutions per wheel revolution; `direction` is +1 or -1 mapping positive wheel radians to positive/CW motor RPM. `feedback_rpm_per_count` converts signed16 current-speed feedback to motor RPM. The minimal adapter supports verified speed mode, Multi-drive2.0, PDO mapping0 or1, two distinct IDs1–8, and status STOP0/RUN2 or WAIT/INHIBIT6 with no alarm. Status6 provides valid feedback but reports WARN/motion unavailable and rejects a nonzero command; it cannot establish Teleop usability. Activation validates no-alarm feedback, reads target speed (index12), requests ISTOP0, and requires target0 before requesting SVON6 once. It polls bounded readiness and target0. Deactivation/shutdown requests ISTOP0 then SVOFF7 only with fresh no-alarm proof, and verifies inhibited readback. Failure returns ERROR. SVOFF can implicitly reset alarms: a captured fault prevents it, but a fault appearing between read and write cannot be ruled out. No explicit alarm reset, parameter edits, STO release or brake manipulation occurs; recovery is deliberate and no automatic re-enable occurs. Operators must establish the verified drive mode and hardware conditions separately.
+RWF 設定記錄使用者確認的裝置路徑、名義減速比 20:1、輪半徑 0.08 m、輪距 0.555 m。
+有時間上限的唯讀 FC03 證據確認通訊為 230400／8N1、左 ID2／右 ID1、速度模式 0、
+命令來源 4、PDO mapping 0。速度回授單位為馬達 RPM（1 RPM/count）；
+編碼器解析度 2500 pulses/rev 是另一個量，不能混用。
+使用者確認左馬達正 RPM、右馬達負 RPM 對應 AMR 前進：
+`left_direction=+1`、`right_direction=-1`。
 
-The communication manual revision1.1 (2025-02-03), pages37–42, specifies FC03 reads at index0 (status/alarm/current speed) and FC10 writes at index8 (Multi-drive Lite command/data), addressed by the drive ID bitmask. The current combined read requests Data0–6 plus each drive's Error_Check: FC03 Num16, drive strides8. It consumes state, alarm, speed and position; the intermediate voltage/current words are not new published capabilities. The earlier Num8/stride4 read covered velocity-only feedback. On the inspected target, each Error_Check equals Modbus CRC16 over the cumulative response prefix to that drive's last requested data word, encoded big endian; the adapter validates both checks. This rule is supported by varied live read-only responses and literal tests, not a universal manufacturer firmware claim. Standard final frame CRC/error handling comes from libmodbus. The adapter enforces at least1.75ms RTU silence or3.5 character times, whichever is longer. Page33 specifies signed16 JG RPM and clamps a nonzero command below60RPM to60RPM. Such commands are rejected and request best-effort zero on both drives; otherwise the adapter could move faster than requested. A verified target with adequate gearing/command range is required; this limitation is not hidden by another kinematics engine.
+實際韌體身分與量產允許限制仍未解決。Commissioning 設定使用保守的工程參數，
+韌體 metadata 明記 `UNIDENTIFIED`。名義幾何不代表有效幾何已標定；
+軟體測試數值不能當作部署預設。證據來源見 `docs/validation/m1-software.md`。
 
-## Start and Teleop
+### 參數與啟停行為
 
-Build with the repository container workflow. For real hardware, additionally map
-the actual host serial device to the configured container path and add its host
-device group to the non-root container user. On the inspected AMR this is
-`/dev/ttyUSB0` (configured alias `/dev/fihRobotBaseMotor`), group `dialout`/GID20,
-mode660. Native Docker `--device` plus `--group-add` provides this access; mapping
-alone does not grant Unix group permission. Check the actual host device/group
-rather than assuming GID20 on another platform. The minimal development Compose
-has no serial mapping or group grant and must not be treated as hardware bringup.
-See the raised reverse commissioning record for configure-failure/readback evidence.
+`gear_ratio` 是每輪一圈所需的馬達圈數；`direction` 為 +1／-1，將正輪角映射至
+正／負馬達 RPM。`feedback_rpm_per_count` 將 signed16 目前速度回授換算為馬達 RPM。
+Adapter 支援已驗證的速度模式、Multi-drive2.0、PDO mapping 0／1、兩個不同的
+ID（1–8），以及無 alarm 的 STOP0／RUN2／WAIT或INHIBIT6。
 
-Then, inside the correctly provisioned hardware container:
+Status6 的量測有效，但診斷為 WARN／不可移動，並拒絕非零命令，不能視為 Teleop 可用。
+Activation 先驗證無 alarm 回授、讀取 index12 目標速度、要求 ISTOP0，確認目標為零後
+才要求一次 SVON6，再於時間上限內輪詢就緒與目標零。
+Deactivation／shutdown 只有取得新的無 alarm 證據後，才要求 ISTOP0、SVOFF7，
+並驗證 inhibited 讀回；失敗回傳 ERROR。
+
+SVOFF 可能隱含重設 alarm：已捕捉的 fault 會阻止此動作，但無法排除讀寫之間新出現的 fault。
+不執行明確 alarm reset、參數修改、STO 解除或煞車操作；復原由 Operator 處理，
+不自動重新啟用。Operator 須另行建立已驗證的驅動模式與硬體條件。
+
+### 通訊協定與限制
+
+通訊手冊 revision1.1（2025-02-03）第 37–42 頁定義：
+FC03 從 index0 讀取 status／alarm／目前速度，FC10 從 index8 寫入
+Multi-drive Lite command／data，使用 drive ID bitmask 定址。
+
+目前合併讀取 Data0–6 與每個 drive 的 Error_Check：FC03 Num16、drive stride8。
+使用 status、alarm、速度與位置，中間的電壓／電流 words 不新增對外發布能力。
+先前 Num8／stride4 只提供速度回授。
+
+在已檢查的平台，每個 Error_Check 是從回應起點累積至該 drive 最後資料 word 的
+Modbus CRC16，以 big endian 編碼；adapter 驗證兩個檢查值。
+這由不同實機唯讀回應與固定資料測試支持，不宣稱適用所有廠商韌體。
+最終 frame CRC 與錯誤處理由 libmodbus 提供。
+RTU 靜默間隔至少 1.75 ms 或 3.5 個字元時間，取較長者。
+
+手冊第 33 頁定義 signed16 JG RPM，並將低於 60 RPM 的非零命令提高至 60 RPM。
+Adapter 因此拒絕這類命令，並盡力對兩輪要求零速度，避免實際速度高於要求。
+平台須具備適用的減速比與命令範圍，不透過另一個運動學引擎掩蓋此限制。
+
+## 啟動與鍵盤控制
+
+依 repository 容器流程建置。實機 serial 裝置須映射至設定中的容器路徑，
+並將裝置的主機群組加入容器的一般使用者。
+此 AMR 為 `/dev/ttyUSB0`，穩定別名 `/dev/fihRobotBaseMotor`，
+群組 `dialout`／GID20、權限 660。Docker 裝置映射不會自動授予 Unix 群組權限。
+其他主機須確認實際群組，不直接假設 GID20。
+目前 `compose.yaml` 已映射 IMU／馬達別名並加入 serial 群組；裝置可存取不等於硬體就緒。
+Configure 失敗與讀回證據見架高反向驗證紀錄。
+
+三個終端分別執行：
 
 ```bash
-# Terminal 1: model only; loading the profile opens no motor device.
-ros2 launch mobile_base_description description.launch.py hardware_config:=/absolute/target.yaml
-# Terminal 2: starts/activates native hardware and controllers (may Servo ON).
-ros2 launch mobile_base_control m1.launch.py hardware_config:=/absolute/target.yaml
+# 終端 1：模型與 TF；讀取設定不會開啟馬達裝置。
+ros2 launch mobile_base_description description.launch.py
+```
+
+```bash
+# 終端 2：啟動並啟用原生硬體與 controllers，可能 Servo ON。
+ros2 launch mobile_base_control m1.launch.py
+```
+
+```bash
+# 終端 3：原生鍵盤 Teleop。
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+  --ros-args -p stamped:=true \
+  -r cmd_vel:=/base_controller/cmd_vel
+```
+
+鍵盤指令也可在 workspace 根目錄簡化為 `bash ./scripts/teleop.sh`。
+此腳本只啟動 Teleop，不啟動 Description 或 Control。
+
+檢查 controllers、輪端里程與診斷：
+
+```bash
 ros2 control list_controllers
 ros2 topic echo /base_controller/odom
 ros2 topic echo /diagnostics
-ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -r cmd_vel:=/base_controller/cmd_vel
 ```
 
-Description alone owns the complete model and native RSP. Supply the **same**
-explicit profile to both launches; Description adds the M1 ros2_control declaration
-without starting hardware. Control consumes the native `/robot_description` topic
-and starts no RSP or other package launch. Its `model_file` argument is removed;
-explicit geometry overrides belong to Description. Geometry-only Description
-(without hardware_config) cannot initialize M1; restart Description with the
-selected profile before starting Control. Do not change profiles/model during a
-run or rely on native topic loading to compare two different YAML files. Wrong,
-missing or mismatched configuration is an Operator setup error, not readiness.
-Native logs/spawner failures must be preserved and resolved. Control startup
-without the required description does not establish usable hardware/controllers.
+Description 獨自負責完整模型與原生 `robot_state_publisher`。
+兩個 launch 預設使用 Control 套件的 `config/rwf.commissioning.yaml`。
+另一平台須在兩邊使用相同的 `hardware_config:=/absolute/target.yaml` 覆寫。
+Description 加入 M1 `<ros2_control>` 宣告，不啟動硬體；Control 讀取原生
+`/robot_description`，不啟動 RSP 或其他套件 launch。
+Control 的 `model_file` 參數已移除，模型覆寫由 Description 負責。
 
-Controller feedback uses velocity, `open_loop=false`, and `enable_odom_tf=false`. Native `/base_controller/cmd_vel` is stamped Twist; `/base_controller/odom` remains the wheel-feedback odometry source. Limits and controller timeout come from the explicit profile.
+只有幾何、沒有控制宣告的模型無法初始化 M1。運行中不要更換模型／設定，
+也不要期待原生 topic 載入會比較兩份 YAML。
+錯誤、缺失或不一致的設定是 Operator 設定錯誤，不是就緒狀態。
+須保留並解決原生 logs／spawner 失敗；缺少必要模型時，Control 啟動不代表硬體／controllers 可用。
 
-Before Teleop, cancel Navigation and wait for its native terminal result. Before Navigation, end the Teleop process (Ctrl-C). Do not interpret zero speed, lack of messages, command timeout, controller inactive or zero acknowledgement as session completion or evidence that the physical robot stopped. Use the operator's actual hardware stop procedure and independent observation. Shutdown/deactivation attempts bounded stop/off with readback; error handling requests ISTOP and preserves its cause. A disconnected link cannot guarantee delivery.
+Controller 使用速度回授，`open_loop=false`、`enable_odom_tf=false`。
+`/base_controller/cmd_vel` 使用 `TwistStamped`；`/base_controller/odom` 是輪端回授里程來源。
+速度限制與 controller timeout 來自選定設定。
 
-## Diagnose
+Teleop 前須取消 Navigation，等待原生任務的終止結果；Navigation 前須以 Ctrl-C 結束 Teleop。
+零速度、沒有訊息、命令 timeout、controller inactive 或零值 acknowledgement，
+都不能直接視為控制情境已結束或實體機器人已停止。
+使用現場硬體停止方式與獨立觀察。Shutdown／deactivation 會嘗試有時間上限的停止、
+停用與讀回；錯誤處理要求 ISTOP 並保留原因。通訊斷線時無法保證命令送達。
 
-Use `/diagnostics`, native controller logs and `ros2 control list_hardware_components`. Per-wheel status includes drive ID, configured firmware, motor status, alarm code, feedback validity and the basic cause. Communication/CRC/short-response/timeouts and alarms, STO or unknown statuses invalidate both wheels’ velocity/position interfaces; inhibited6 is valid measurement with unavailable motion. Integrity errors invalidate all wheel feedback interfaces; previous data are never substituted as current valid measurements. The controller manager receives ERROR so it can deactivate affected controllers. Fault reset/brake/STO recovery is a deliberate operator hardware procedure, not automatic adapter behavior. Initial read-only observation found both drives in6 WAIT/INHIBIT with no alarm and0RPM. A later bounded zero-speed protocol gate verified SVON transitions both toSTOP0 and SVOFF returns both to6, always alarm0/currentRPM0/target0. Check actual main/CTRL power and the SERVO ON prerequisite before expecting motion; controller active alone does not mean Bringup/Teleop ready. Live communication watchdog05-17=0 is disabled, so a disconnected link/process loss cannot rely on a drive watchdog to stop.
+## 診斷與故障排查
 
-If launch rejects a target fact, complete it from authoritative evidence. If serial connection fails, check the actual container device mapping, path permissions and serial settings. If current-speed/status reads fail, verify Multi-drive2.0 mode, IDs/bitmask and applicable firmware/manual revision. If a command is rejected, check documented minimum RPM, configured gear/direction and speed limits. Do not resume until the cause and hardware conditions are understood.
+使用 `/diagnostics`、原生 controller logs 與 `ros2 control list_hardware_components`。
+每輪狀態包含 drive ID、設定的韌體資料、馬達 status、alarm code、回授有效性與基本原因。
+通訊／CRC／短回應／timeout，以及 alarm、STO 或未知 status，會使兩輪速度／位置介面無效。
+Inhibited6 的量測有效，但不可移動。
+完整性錯誤使全部輪端回授無效，不把過去資料當成目前有效量測。
+Controller manager 收到 ERROR 後可停用受影響 controllers。
+Fault reset／煞車／STO 復原由 Operator 進行，不是 adapter 自動行為。
 
-## Evidence boundary
+初始唯讀觀測中，兩輪為 WAIT／INHIBIT6、alarm0、RPM0。
+後續有時間上限的零速協定驗證確認 SVON 使兩輪進入 STOP0，SVOFF 回到6，
+全程 alarm0／目前RPM0／目標0。
+預期移動前須確認主電源／CTRL 電源及 SERVO ON 條件；controller active 不等於 Bringup／Teleop 就緒。
+實機通訊 watchdog `05-17=0` 為停用，斷線或程序消失時不能依賴 drive watchdog 停止。
 
-The software suite uses a pseudo-terminal Modbus peer at the external serial boundary and public ROS topics with the real native controller; fixture geometry, IDs, RPM and timeouts are controlled inputs. Bounded protocol tests verify signed scale/direction, the documented minimum-speed rejection, fault/STO invalidity and inhibited availability. Prefix-check corruption is rejected despite a valid final Modbus CRC. These do not validate real firmware compatibility, encoder feedback, wheel direction, displacement, stopping or calibrated odometry.
+Launch 拒絕平台參數時，從權威證據補齊。Serial 失敗時檢查映射、權限與通訊設定。
+速度／status 讀取失敗時檢查 Multi-drive2.0 模式、IDs／bitmask 與適用韌體／手冊版本。
+命令被拒絕時檢查最低 RPM、減速比／方向與速度限制；理解原因與硬體條件後才恢復。
 
-**REQUIRES HARDWARE VALIDATION:** verified target startup, valid wheel feedback, motion direction/displacement, alarms/disconnection, timeout/shutdown stop, and Teleop handover. **REQUIRES CALIBRATION:** effective wheel radius/separation, effective gearing/scales/polarity, limits/timeouts and downstream odometry performance. Actual test versions/results are recorded in the implementation evidence; software completion is not hardware acceptance.
+## 驗證證據界線
 
-Commissioning-only `controller.native_hardware_execution_budget_us` optionally forwards mean/stddev WARN/ERROR microsecond thresholds to native controller-manager hardware diagnostics. Omission/null retains upstream defaults. Statistical thresholds do not prove deadlines; periodicity/overrun diagnostics remain enabled, and genuine ERROR prevents commissioning motion. See the validation record for the measured RS485 timing rationale and interruption-related loss of historical temporary artifacts.
+軟體測試在外部 serial 邊界使用 pseudo-terminal Modbus peer，搭配真實原生 controller
+與公開 ROS topics；幾何、IDs、RPM、timeout 為受控測試輸入。
+有時間上限的協定測試驗證正負尺度／方向、最低速度拒絕、fault／STO 無效性與 inhibited 狀態。
+即使最終 Modbus CRC 正確，prefix check 損壞仍會被拒絕。
+這些不驗證實際韌體相容、編碼器回授、輪向、位移、實體停止或經標定里程。
 
-A single raised0.1m/s, two-second native trial confirmed both wheels forward and both stopped by onsite observation; its temporary300RPM/.1m/s profile and raw evidence are archived in the validation record. The earlier0.03m/s trial had no observed wheel motion; on2026-10-07, separate raised0.03m/s two- and ten-second trials had operator-confirmed wheel motion and stopping. The historical symptom was not reproduced and its cause remains unknown. Separate command-silence evidence supports native timeout zeroing before cleanup, but independent physical timeout stop timing remains unresolved. See `docs/validation/m1-low-speed-timeout-20261007.md`. The repository commissioning profile stays150RPM/.03m/s; neither trial establishes minimum reliable velocity, production limits, calibrated odometry or link-loss/isolated-timeout physical stopping.
+**REQUIRES HARDWARE VALIDATION（需要硬體驗證）：** 平台啟動、有效輪端回授、
+移動方向／位移、alarms／斷線、timeout／shutdown 停止及 Teleop 交接。
+**REQUIRES CALIBRATION（需要標定）：** 有效輪半徑／輪距、有效減速比／尺度／極性、
+限制／timeout 與後續里程性能。實際版本與結果記錄於驗證文件；軟體完成不等於硬體驗收。
 
-## Real position state
+Commissioning 可選參數 `controller.native_hardware_execution_budget_us` 將平均值／標準差的
+WARN／ERROR 微秒門檻交給原生 controller-manager 硬體診斷。
+省略或 `null` 保留 upstream 預設。統計門檻不證明 deadline；週期／overrun 診斷仍啟用，
+真正的 ERROR 阻止 commissioning 動作。RS485 時序依據與中斷造成的歷史暫存資料遺失見驗證紀錄。
 
-Confirmed mode0 Index/Pos feedback removes the missing-position/NaN defect recorded in
-`docs/validation/real-static-estimation-20261007.md`. The same Multi-drive read
-now obtains Data0–6 plus each drive’s prefix check; there is one serial owner and
-no added runtime TF or JointState publisher. Full base-to-wheel TF also requires an explicit
-model responsibility for the intervening drive seats. The V1 description uses
-Operator-confirmed nominal fixed seats; M1 does not measure their suspension travel. Native JointState broadcaster exposes
-position; native RSP consumes it. Native diff_drive_controller continues using
-velocity feedback (`position_feedback=false`); odometry ownership is unchanged.
+一次架高 0.1 m/s、兩秒測試由現場確認兩輪前進並停止；暫時 300 RPM／0.1 m/s 設定與
+原始證據已封存。較早 0.03 m/s 測試沒有觀察到輪子移動；2026-10-07 另行進行
+0.03 m/s、兩秒與十秒測試，Operator 確認輪子移動並停止。
+歷史症狀未重現，原因仍未知。命令停止發布的獨立證據支持原生 timeout 在清理前歸零，
+但實體 timeout 停止的獨立時間確認仍未解決。
+詳見 `docs/validation/m1-low-speed-timeout-20261007.md`。
+Repository commissioning 設定維持 150 RPM／0.03 m/s；上述測試不建立最低可靠速度、
+量產限制、經標定里程，或斷線／單獨 timeout 的實體停止驗收。
 
-An explicit profile must supply `position_format: 0`, each wheel’s
-`position_steps_per_motor_revolution` and `encoder_pulses_per_motor_revolution`.
-Configure reads actual02-14 and01-06 for each ID before Servo ON, rejecting mismatch.
-Only the validated mode0 is supported; mode1 is not guessed. RWF commissioning
-uses10000 steps/motor turn and2500 single-phase encoder pulses, backed by actual
-register and fractional-carry checks, not independent mechanical calibration.
+## 真實輪角回授
 
-First valid sample uses the device counter origin, not a calibrated mechanical
-wheel phase. Subsequent signed16 Index carry is unwrapped from real count deltas.
-Pulse out of range or a jump exceeding configured motor RPM with bounded response
-timing allowance invalidates all wheel feedback and latches a position fault until
-explicit reconfigure. Detected reset is not silently rebased during an active run.
-A reset whose delta resembles physically possible motion cannot be distinguished
-by this protocol; power/reset recovery requires a deliberate new configure epoch.
-Do not change drive format/encoder parameters while running. A configure/reconnect
-starts a new device-origin reference, without claiming cross-reset continuity.
-Physical signed-index overflow and power-reset behavior are not hardware-accepted.
+已確認的 mode0 Index／Pos 回授修正
+`docs/validation/real-static-estimation-20261007.md` 記錄的位置缺失／NaN 問題。
+同一個 Multi-drive read 取得 Data0–6 與各 drive prefix check；只有一個 serial owner，
+不新增 runtime TF 或 JointState publisher。
+完整底座至輪子 TF 還需要模型處理中間輪座。
+V1 Description 使用 Operator 確認的名義固定輪座；M1 不量測懸吊位移。
+原生 JointState broadcaster 發布位置，原生 RSP 消費該資料。
+原生 diff_drive_controller 仍使用速度回授（`position_feedback=false`），里程責任不變。
 
-## Package and verification phase (2026-10-07)
+設定須提供 `position_format: 0`、每輪的 `position_steps_per_motor_revolution`
+與 `encoder_pulses_per_motor_revolution`。
+Configure 在 Servo ON 前讀取各 ID 的實際 `02-14` 與 `01-06`，不一致就拒絕。
+僅支援已驗證的 mode0，不猜測 mode1。
+RWF commissioning 使用每馬達圈 10000 steps、單相編碼器 2500 pulses，
+依據實際 registers 與分數進位檢查，不代表獨立機械標定。
 
-This package replaces mobile_base_m1; its plugin is mobile_base_control/M1System.
-Protocol and public native control workflow tests remain in this package and
-use its installed m1.launch.py entry with explicit hardware_config, after
-independently starting Description with the same profile.
-Core device acceptance precedes ticket #38 local estimation integration and
-#39/#41 product Bringup delivery. No calibrated covariance or default deployment
-model is supplied by this component entry.
+第一個有效樣本使用裝置 counter 原點，不是標定後的機械輪角零位。
+後續 signed16 Index 進位由真實 count 差值展開。
+Pulse 超出範圍，或跳變超出設定 RPM 與有限回應時序容差，會使所有輪端回授無效，
+並鎖存 position fault，直到明確重新 configure。
+運行中偵測到 reset 不會默默重設參考；若 reset 差值看似合理移動，協定無法區分。
+電源／reset 復原須明確進入新的 configure 階段。
+運行中不要修改 drive 格式或 encoder 參數；configure／reconnect 建立新的裝置原點參考，
+不宣稱跨 reset 連續性。實體 signed-index overflow 與斷電 reset 行為尚未硬體驗收。
+
+## 套件與驗證階段（2026-10-07）
+
+此套件取代 `mobile_base_m1`，plugin 為 `mobile_base_control/M1System`。
+協定與公開原生 Control 流程測試保留在本套件，先獨立啟動同設定的 Description，
+再使用已安裝的 `m1.launch.py`；測試可透過明確 `hardware_config` 提供受控設定。
+核心裝置驗收先於 #38 局部估測整合，以及 #39／#41 產品 Bringup。
+此元件入口不提供經標定 covariance 或已接受的正式部署模型。

@@ -61,23 +61,24 @@ Foxglove 3D 設定：
 
 ## 後續：獨立啟動 Control
 
-需要測 Control 時，先結束模型驗證情境，再以同一份明確硬體設定分別啟動兩個套件。
+兩個入口預設讀取已安裝的 mobile_base_control/config/rwf.commissioning.yaml。
+Description 需要已安裝的 Control 套件以取得設定，但不啟動 Control。
 
 Terminal 1：
 
 ```bash
-ros2 launch mobile_base_description description.launch.py hardware_config:=/absolute/hardware.yaml
+ros2 launch mobile_base_description description.launch.py
 ```
 
 Terminal 2：
 
 ```bash
-ros2 launch mobile_base_control m1.launch.py hardware_config:=/absolute/hardware.yaml
+ros2 launch mobile_base_control m1.launch.py
 ```
 
 Description 只讀設定，將既有 M1 `ros2_control` 宣告加入發布的 URDF；不開裝置、不啟動控制器、不執行 Servo ON。Control 透過原生 `robot_description` topic 取得模型，啟動硬體／控制器，可能執行 Servo ON；實機操作條件仍須另外確認。
 
-兩個入口必須選同一份 profile。幾何-only 的 Description 無法供 M1 初始化使用。沒有自動比對兩份設定或 hot reload；變更模型／設定時，結束該情境再重新啟動。
+兩個入口必須選同一份 profile；需要其他設定時，兩邊都以 hardware_config:=/absolute/hardware.yaml 覆寫。幾何-only 的 Description 無法供 M1 初始化使用。沒有自動比對兩份設定或 hot reload；變更模型／設定時，結束該情境再重新啟動。
 
 `model_file` 可明確指定另一份幾何 URDF／xacro，預設是套件內模型。相對路徑由呼叫者工作目錄解析，支援 `~` 展開。提供硬體設定時，模型必須有 `left_wheel_joint`／`right_wheel_joint`，且不能已有 `ros2_control` 宣告。
 
