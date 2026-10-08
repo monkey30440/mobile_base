@@ -59,3 +59,9 @@ Teleop／Control／Description全部exit0；Control log保留hardware lifecycle�
 參考PELB的02-01=3000RPM只在來源0/2/3生效，而目前来源4；
 01-04=4188RPM為無載參考轉速。1600是Operator選定software ceiling，硬體額定上限未知。
 #35仍有現行滿速範圍、3600秒邊界、獨立物理停止／尺度及適用故障證據待核對。
+
+## Operator補充確認
+
+Operator後續明確回覆「兩段都有轉動，最後都停止」，因此本次低速k停止鍵與
+鍵盤退出都有獨立現場停止觀察。此確認補足上方等待回覆的項目，不擴張為
+1600RPM滿速、timeout-only或失聯物理停止驗收。
