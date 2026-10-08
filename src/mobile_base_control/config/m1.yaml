@@ -30,8 +30,9 @@ hardware:
   right_feedback_rpm_per_count: 1.0
   right_position_steps_per_motor_revolution: 10000
   right_encoder_pulses_per_motor_revolution: 2500
-  left_max_motor_rpm: 150.0
-  right_max_motor_rpm: 150.0
+  # Operator-selected software ceiling; not a hardware-rated/validated maximum.
+  left_max_motor_rpm: 1600.0
+  right_max_motor_rpm: 1600.0
 controller:
   wheel_radius: 0.08
   wheel_separation: 0.555

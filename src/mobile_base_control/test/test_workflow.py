@@ -165,14 +165,14 @@ class Peer:
 def workflow(tmp_path, request):
     os.environ['ROS_DOMAIN_ID'] = str(100 + os.getpid() % 100)
     options = getattr(request, 'param', {})
-    peer = Peer(**{k: v for k, v in options.items() if k not in ('expect_failure', 'native_budget')})
+    peer = Peer(**{k: v for k, v in options.items() if k not in ('expect_failure', 'native_budget', 'cmd_vel_timeout')})
     config = {'hardware': {'serial_port': peer.path, 'baud': 115200, 'parity': 'N',
                           'stop_bits': 1, 'response_timeout_seconds': 0.03, 'enable_timeout_seconds': 0.3,
                           'firmware': 'SOFTWARE_PEER_NOT_HARDWARE',
                           'verified_speed_mode': True, 'verified_multidrive2': True,
                           'pdo_mapping': 0, 'drive_enable_setting': 1, 'position_format': 0},
               'controller': {'wheel_radius': 0.1, 'wheel_separation': 0.5,
-                             'cmd_vel_timeout': 0.3, 'update_rate': 30,
+                             'cmd_vel_timeout': options.get('cmd_vel_timeout', 0.3), 'update_rate': 30,
                              'linear_velocity_limit': 0.5, 'angular_velocity_limit': 1.0,
                              'native_hardware_execution_budget_us': {'mean_warn':15000.0, 'mean_error':20000.0,
                                                                      'stddev_warn':3000.0, 'stddev_error':5000.0}}}
@@ -222,6 +222,14 @@ def workflow(tmp_path, request):
 
     try:
         if not options.get('expect_failure'):
+            if options.get('cmd_vel_timeout', 0.3) > 1:
+                wait(lambda: publisher.get_subscription_count() > 0)
+                def initialize_zero():
+                    zero = TwistStamped()
+                    zero.header.stamp = node.get_clock().now().to_msg()
+                    publisher.publish(zero)
+                    return bool(odom)
+                wait(initialize_zero)
             wait(lambda: bool(odom) and publisher.get_subscription_count() > 0 and joint_feedback
                  and len(joint_feedback[-1].position) == 2
                  and all(math.isfinite(value) for value in joint_feedback[-1].position))
@@ -621,3 +629,30 @@ def test_description_with_hardware_profile_does_not_start_control(tmp_path):
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL); process.communicate()
         peer.close()
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'cmd_vel_timeout': 3600}], indirect=True)
+def test_long_timeout_explicit_zero_and_shutdown(workflow):
+    peer, node, publisher, _, _, wait = workflow
+    command = TwistStamped()
+    command.header.stamp = node.get_clock().now().to_msg()
+    command.twist.linear.x = 0.1
+    publisher.publish(command)
+    wait(lambda: peer.commands and peer.commands[-1] == (95, -95))
+    deadline = time.monotonic() + 0.7
+    while time.monotonic() < deadline:
+        rclpy.spin_once(node, timeout_sec=0.03)
+        assert peer.commands[-1] == (95, -95)
+    command.header.stamp = node.get_clock().now().to_msg()
+    command.twist.linear.x = 0.0
+    publisher.publish(command)
+    wait(lambda: peer.commands[-1] == (0, 0), seconds=3)
+    command.header.stamp = node.get_clock().now().to_msg()
+    command.twist.linear.x = 0.1
+    publisher.publish(command)
+    wait(lambda: peer.commands[-1] == (95, -95))
+    os.killpg(peer.process.pid, signal.SIGINT)
+    wait(lambda: not peer.enabled, seconds=5)
+    assert peer.targets == [0, 0]
+    assert 7 in peer.lifecycle_commands
+    assert not peer.alarm_reset_observed
