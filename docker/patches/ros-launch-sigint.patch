@@ -1,0 +1,38 @@
+--- a/launch/launch_service.py
++++ b/launch/launch_service.py
+@@ -374,15 +374,26 @@
+         :param: shutdown_when_idle if True (default), the service will shutdown when idle
+         :return: the return code (non-zero if there are any errors)
+         """
+-        loop = osrf_pycommon.process_utils.get_loop()
+-        run_async_task = loop.create_task(self.run_async(
+-            shutdown_when_idle=shutdown_when_idle
+-        ))
+-        while True:
+-            try:
+-                return loop.run_until_complete(run_async_task)
+-            except KeyboardInterrupt:
+-                continue
++        # AsyncSafeSignalManager handles SIGINT through the event loop. The
++        # default synchronous KeyboardInterrupt can interrupt asyncio callback
++        # scheduling and lose the task that consumes the Shutdown event.
++        previous_handler = signal.getsignal(signal.SIGINT)
++        suppress_keyboard_interrupt = previous_handler is signal.default_int_handler
++        if suppress_keyboard_interrupt:
++            signal.signal(signal.SIGINT, lambda signum, frame: None)
++        try:
++            loop = osrf_pycommon.process_utils.get_loop()
++            run_async_task = loop.create_task(self.run_async(
++                shutdown_when_idle=shutdown_when_idle
++            ))
++            while True:
++                try:
++                    return loop.run_until_complete(run_async_task)
++                except KeyboardInterrupt:
++                    continue
++        finally:
++            if suppress_keyboard_interrupt:
++                signal.signal(signal.SIGINT, previous_handler)
+ 
+     def __on_shutdown(self, event: Event, context: LaunchContext) -> Optional[SomeEntitiesType]:
+         self.__shutting_down = True

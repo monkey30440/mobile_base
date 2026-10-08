@@ -1,10 +1,12 @@
-# 原生 LiDAR 修正的建置
+# 原生元件修正的建置
 
-目前 `sick_scan_xd` 使用固定上游原始碼加 downstream patch，其他 ROS 套件維持 apt 安裝。
+目前 `sick_scan_xd` 與 `slam_toolbox` 使用固定上游原始碼加 downstream patch；
+launch 使用 base image 的原生套件加下述最小 source patch。其他 ROS 套件維持 apt 安裝。
 
 - Upstream：SICKAG/sick_scan_xd，3.9.0。
 - Commit：`a562c5d098de21f6284359f4dfea97e93bd2b4d5`。
 - Patch：`patches/sick-scan-xd-shutdown.patch`。
+- 初始化中止：`patches/sick-scan-xd-stop-during-init.patch`。
 - 安裝 prefix：`/opt/mobile_base/sick_scan_xd`。
 - 執行環境：Fast DDS，沒有切換 RMW。
 
@@ -35,3 +37,54 @@ Docker build 檢查 tag 實際 commit，patch 無法套用時會失敗，不會�
 若上游發布相同問題的正式修正，應比較 source、重跑公開 shutdown regression 與
 雙光達資料／TF／reconnect 回歸，再決定更新或恢復 binary install。
 不得僅移除 patch、吞掉 crash、加入自動 restart 或以 SIGKILL 冒充正常退出。
+
+## launch 的 SIGINT 事件排程修正（#51）
+
+Python 的預設 SIGINT handler 會同步拋出 `KeyboardInterrupt`。原生
+`LaunchService.run()` 捕捉例外後重跑 event loop，但例外若打斷 asyncio
+callback 排程，可能遺失消費 Shutdown event 的 task wakeup。此時 launch
+已收到 SIGINT，卻不會通知 child；增加 timeout 不能修正遺失的排程。
+
+`patches/ros-launch-sigint.patch` 只在 `LaunchService.run()` 期間，且 caller
+使用 Python 預設 handler 時，避免同步例外；SIGINT 仍透過原生
+`AsyncSafeSignalManager` 的 wakeup fd 在事件迴圈內處理並轉送 child。
+`finally` 還原原 handler，caller 自訂的 handler 保持其責任。
+這不是忽略停止訊號，也不新增 launcher wrapper 或監控 node。
+
+Docker build 先核對 `launch_service.py` 的 SHA256（與官方 3.4.8 相同），
+再套用 patch；原生 source 改變時 build 會失敗，需重新研究與驗證。
+`/opt/mobile_base/launch/source-version.txt` 保存 patch 與修正版檔案 SHA256。
+package inventory 仍表示 binary 基線，不能代替該檔案的來源紀錄。
+
+回歸測試在實際 `LaunchService` 與 asyncio 的 task wakeup 排程邊界注入
+SIGINT，驗證停止事件不遺失、child 正常退出及 handler 還原：
+
+```bash
+python3 -m pytest docker/test/test_launch_shutdown.py -q
+```
+
+自然重現、binary 升級的反證與驗證界線見
+[研究紀錄](../docs/research/lidar-middleware-shutdown-20261008.md)。
+
+## LiDAR 初始化途中停止（#51）
+
+原生 `MsgPackThreads::runThreadCb()` 可能已進入重新初始化的外層迴圈，
+隨後收到停止要求，使內層 UDP receiver 建立迴圈被跳過；此時 receiver
+仍為 null，原版卻繼續建立 converter 並存取 `udp_receiver->Fifo()`。
+自然 SIGINT 的 GDB stack 與固定時序注入都重現相同的 null dereference。
+
+`sick-scan-xd-stop-during-init.patch` 只在 UDP receiver 建立迴圈後、IMU
+receiver／converter 建立前，檢查是否有 receiver。沒有時結束工作迴圈，
+走既有 join／cleanup；不改變正常初始化、資料、重連或 TF 的責任。
+
+回歸測試使用 AArch64 GDB 與該原生 logging seam 固定停止時序，並讓
+真正的 SIGINT／context shutdown 執行。GDB 是除錯／測試依賴，不加入
+正式 image 的 runtime 依賴；缺少 GDB 或平台不符時此項明確 skip：
+
+```bash
+python3 -m pytest docker/test/test_native_receiver_shutdown.py -q
+```
+
+Docker build 同樣核對 pinned SICK commit、檢查 patch 能否套用，並記錄
+patch SHA256。兩項 #51 修正是不同故障的補足，不能以 launch 測試通過
+替代 native driver 的初始化／停止驗證。

@@ -1,0 +1,16 @@
+--- a/driver/src/sick_scansegment_xd/scansegment_threads.cpp
++++ b/driver/src/sick_scansegment_xd/scansegment_threads.cpp
+@@ -225,6 +225,13 @@
+                 udp_receiver = 0;
+                 std::this_thread::sleep_for(std::chrono::seconds(1));
+             }
++        }
++
++        // Shutdown may skip the receiver initialization loop. Do not
++        // construct the converter or access a FIFO without a receiver.
++        if (!udp_receiver)
++        {
++            break;
+         }
+ 
+         // Initialize udp receiver for imu data

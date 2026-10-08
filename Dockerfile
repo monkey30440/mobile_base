@@ -50,10 +50,13 @@ RUN git clone --depth 1 --branch 3.9.0 https://github.com/SICKAG/sick_scan_xd.gi
 # 原生 ROS 2 deferred signal handling，加上明確釋放診斷 node。
 COPY docker/patches/sick-scan-xd-shutdown.patch /tmp/sick-scan-xd.patch
 COPY docker/patches/sick-scan-xd-range-bounds.patch /tmp/sick-scan-xd-range-bounds.patch
+COPY docker/patches/sick-scan-xd-stop-during-init.patch /tmp/sick-scan-xd-stop-during-init.patch
 RUN git -C /tmp/sick-source apply --check /tmp/sick-scan-xd.patch \
     && git -C /tmp/sick-source apply /tmp/sick-scan-xd.patch \
     && git -C /tmp/sick-source apply --check /tmp/sick-scan-xd-range-bounds.patch \
     && git -C /tmp/sick-source apply /tmp/sick-scan-xd-range-bounds.patch \
+    && git -C /tmp/sick-source apply --check /tmp/sick-scan-xd-stop-during-init.patch \
+    && git -C /tmp/sick-source apply /tmp/sick-scan-xd-stop-during-init.patch \
     && source /opt/ros/jazzy/setup.bash \
     && colcon --log-base /tmp/sick-log build --base-paths /tmp/sick-source \
         --build-base /tmp/sick-build --install-base /opt/mobile_base/sick_scan_xd \
@@ -63,7 +66,8 @@ RUN git -C /tmp/sick-source apply --check /tmp/sick-scan-xd.patch \
         > /opt/mobile_base/sick_scan_xd/source-version.txt \
     && sha256sum /tmp/sick-scan-xd.patch >> /opt/mobile_base/sick_scan_xd/source-version.txt \
     && sha256sum /tmp/sick-scan-xd-range-bounds.patch >> /opt/mobile_base/sick_scan_xd/source-version.txt \
-    && rm -rf /tmp/sick-source /tmp/sick-build /tmp/sick-log /tmp/sick-scan-xd.patch /tmp/sick-scan-xd-range-bounds.patch
+    && sha256sum /tmp/sick-scan-xd-stop-during-init.patch >> /opt/mobile_base/sick_scan_xd/source-version.txt \
+    && rm -rf /tmp/sick-source /tmp/sick-build /tmp/sick-log /tmp/sick-scan-xd.patch /tmp/sick-scan-xd-range-bounds.patch /tmp/sick-scan-xd-stop-during-init.patch
 
 # 倒裝非對稱 scan：固定原生版本，只修正 metadata angle bounds。
 FROM ros_base AS slam_builder
@@ -90,6 +94,17 @@ RUN git -C /tmp/slam-source apply --check /tmp/slam-toolbox.patch \
 FROM ros_base
 COPY --from=sick_builder /opt/mobile_base/sick_scan_xd /opt/mobile_base/sick_scan_xd
 COPY --from=slam_builder /opt/mobile_base/slam_toolbox /opt/mobile_base/slam_toolbox
+
+# SIGINT 交由原生 async signal manager 處理，避免 KeyboardInterrupt 打斷 event queue。
+COPY docker/patches/ros-launch-sigint.patch /tmp/ros-launch-sigint.patch
+RUN cd /opt/ros/jazzy/lib/python3.12/site-packages \
+    && echo '7d587a8269131ae9b2e950460a52c87e95fd4bce083faa1fcc1f76bf8468a756  launch/launch_service.py' | sha256sum -c - \
+    && git apply --check /tmp/ros-launch-sigint.patch \
+    && git apply /tmp/ros-launch-sigint.patch \
+    && mkdir -p /opt/mobile_base/launch \
+    && sha256sum /tmp/ros-launch-sigint.patch launch/launch_service.py \
+        > /opt/mobile_base/launch/source-version.txt \
+    && rm /tmp/ros-launch-sigint.patch
 
 # 配合 host UID/GID，準備非 root 使用者的可寫家目錄。
 ARG LOCAL_UID=1000
