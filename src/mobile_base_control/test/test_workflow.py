@@ -656,3 +656,22 @@ def test_long_timeout_explicit_zero_and_shutdown(workflow):
     assert peer.targets == [0, 0]
     assert 7 in peer.lifecycle_commands
     assert not peer.alarm_reset_observed
+
+
+@pytest.mark.parametrize('workflow', [{'require_enable': True, 'cmd_vel_timeout': 3600}], indirect=True)
+def test_3600_second_command_age_boundary(workflow):
+    from rclpy.duration import Duration
+    peer, node, publisher, _, _, wait = workflow
+    command = TwistStamped()
+    # Exercise the native age calculation without advancing the hardware clock.
+    command.header.stamp = (node.get_clock().now() - Duration(seconds=3598.0)).to_msg()
+    command.twist.linear.x = 0.1
+    published_at = time.monotonic()
+    publisher.publish(command)
+    wait(lambda: peer.commands and peer.commands[-1] == (95, -95), seconds=1)
+    while time.monotonic() - published_at < 1.0:
+        rclpy.spin_once(node, timeout_sec=0.03)
+        assert peer.commands[-1] == (95, -95)
+    wait(lambda: peer.commands[-1] == (0, 0), seconds=3)
+    elapsed = time.monotonic() - published_at
+    assert 1.8 < elapsed < 3.0

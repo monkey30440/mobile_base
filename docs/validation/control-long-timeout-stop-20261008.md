@@ -65,3 +65,25 @@ Teleop／Control／Description全部exit0；Control log保留hardware lifecycle�
 Operator後續明確回覆「兩段都有轉動，最後都停止」，因此本次低速k停止鍵與
 鍵盤退出都有獨立現場停止觀察。此確認補足上方等待回覆的項目，不擴張為
 1600RPM滿速、timeout-only或失聯物理停止驗收。
+
+## 3600秒命令年齡邊界與權威模型補充
+
+新增test_3600_second_command_age_boundary，使用真实native controller與模擬Modbus：
+cmd_vel_timeout3600秒，publish stamp為當下減3598秒。
+到期前至少一秒維持非零，約兩秒後歸零；斷言1.8–3.0秒內收到零命令。
+單項通過，4.57秒。沒有修改runtime clock，沒有實機動作；驗證的是命令stamp年齡
+達3600秒的native timeout行為，不是連續運行一小時的可靠性。
+本結果補足先前未驗證的timeout年齡邊界。
+
+原始權威URDF中driving_wheel_joint_L/R均有limit velocity15.7rad/s。
+以Operator確認gear20:1換算約2998.5motorRPM；1600RPM對應8.378rad/s輪速，
+低於模型宣告。這支持名義軟體範圍，不等於實際馬達額定／負載或量產最高速度驗收。
+先前僅檢查PELB/driver手冊而稱完全沒有範圍依據的說法不完整，以上補正。
+
+## 實際平台不一致 — 待Operator決定
+
+/proc/device-tree/model實際回報NVIDIA Jetson AGX Thor Developer Kit，uname aarch64。
+容器Ubuntu24.04.3；controller_manager4.48.0、diff_drive_controller4.42.1、libmodbus3.1.10。
+目前不能將此主機上的測試宣稱為AGX Orin平台驗收。
+#35原acceptance指定AGX Orin；需Operator確認是正式平台修訂，或開發／測試主機。
+未關閉#35或解除#38 dependency，也未更改V1 hardware facts。
