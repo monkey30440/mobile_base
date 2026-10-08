@@ -65,6 +65,9 @@ Docker build 檢查 commit、patch 可套用性，並在 `source-version.txt` �
 既有 catch、C API、其他執行路徑、精確 calibration、實體 power-cycle、長時間運行尚未完整驗證。
 本次通過不代表量產可靠性或全部 V1 驗收；#37 的剩餘硬體驗收仍應明確保留，不移除 #38 dependencies。
 
+後續 [真實電源循環與 15 分鐘觀察](lidar-power-soak-20261008.md) 已補足本輪剩餘的元件恢復／觀察證據，
+並逐項核對 #37 acceptance。上句保留當時尚未完成的狀態；後續元件交付完成不宣稱精密標定或量產可靠性。
+
 最終原始 logs、腳本、provenance、失敗與修正證據存於 `artifacts/lidar-shutdown-fix-20261008.tar.gz`；
 SOPAS access token 已遮蔽。初始探針與最終 image 證據分開，不以初版綠燈代替最終修正版。
 Artifact SHA256：`540a21ff3ed6d5e9a96c21e632dba5c6342288b3ac26d1a2c9415310d8319af0`。

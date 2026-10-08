@@ -1,6 +1,6 @@
 # Dual picoScan150 Operator workflow
 
-Ticket #37 / spec #32: `mobile_base_perception` composes native `sick_scan_xd` processes only. Install `ros-jazzy-sick-scan-xd`; software verification used 3.9.0. Build with colcon, source the workspace, and inspect `ros2 launch mobile_base_perception dual_picoscan.launch.py --show-args`.
+Ticket #37 / spec #32: `mobile_base_perception` composes native `sick_scan_xd` processes only. The current Docker image keeps the apt package as a dependency/baseline and runs a pinned 3.9.0 source overlay with the bounded shutdown patch documented in [the fix report](../validation/lidar-shutdown-fix-20261008.md). Build with colcon, source the workspace, and inspect `ros2 launch mobile_base_perception dual_picoscan.launch.py --show-args`. Verify the selected executable with `ros2 pkg prefix sick_scan_xd`; apt inventory alone does not identify it.
 
 Sensor/host IPs and UDP ports default to package `config/lidar.yaml`; `lidar_config` or CLI arguments can override them. Native `--symlink-install` makes that config refer directly to the workspace source file, so source YAML changes apply on the next launch. The installed Perception `config/lidar.yaml` records the current RWF network settings; confirm its applicability before use. CLI arguments override YAML entries. Both receive ports and both native receiver-IP check ports must be distinct on the host. Namespace is `/lidar/fl` or `/lidar/br`; full scans are `/lidar/fl/scan` and `/lidar/br/scan`, segments end in `/scan_segment`. Native node names `picoscan_fl` / `picoscan_br` identify process logs and ROS interfaces. Native `udp_sender` remains empty (bind all local interfaces). In 3.9.0 this parameter binds a local address rather than filtering a remote sender. Source association uses exclusive sensor destination configuration and distinct UDP ports; the driver does not enforce remote sender-IP filtering. Timestamps and native frames pass through untouched. No decoder, merger or monitoring runtime is added. Native IMU and TF publication are disabled; model TF belongs to robot_state_publisher.
 
@@ -35,7 +35,7 @@ Use native `ros2 service list -t` to discover each driver's SOPAS service and `r
 
 ## Evidence
 
-Software tests run at the public Operator/ROS seam with real native processes in passive loopback mode, no mock driver. They verify argument failure, discoverability and separate publishers with SensorDataQoS. They do not supply sensor data and therefore do not validate ranges, timestamps, CRC, geometry or hardware reconnection. Actual dual scans, sensor identity/frame association, fault injection/recovery and extrinsic calibration remain hardware work.
+Software tests run at the public Operator/ROS seam with real native processes in passive loopback mode, no mock driver. They verify argument failure, discoverability and separate publishers with SensorDataQoS. Current parameter/service fixtures replay an official upstream compact packet to keep passive receivers stable; a separate no-input regression checks native child shutdown. This synthetic traffic does not establish physical ranges, device timestamps, geometry or hardware reconnection. Actual dual scans, identity/frame association and recovery have separate hardware evidence; precise extrinsic calibration remains downstream work.
 
 Primary API evidence: [native launch](https://github.com/SICKAG/sick_scan_xd/blob/3.9.0/launch/sick_picoscan.launch), [native ROS2 wrapper](https://github.com/SICKAG/sick_scan_xd/blob/3.9.0/launch/sick_picoscan.launch.py), [frame suffix implementation](https://github.com/SICKAG/sick_scan_xd/blob/3.9.0/driver/src/sick_scansegment_xd/ros_msgpack_publisher.cpp#L901), [QoS selectors](https://github.com/SICKAG/sick_scan_xd/blob/3.9.0/include/sick_scan/sick_ros_wrapper.h#L393), and repository-authoritative `reference/operating_instructions_picoscan150_2d_lidar_sensors_en_im0106691.pdf`. These source facts do not replace hardware evidence.
 
@@ -252,3 +252,16 @@ correct source/QoS and available TF at every observed stamp. Both devices read
 LAST2. Native shutdown remains failed: both children exited−6 after output-stop
 acknowledgements; launch parent0 does not establish success. Read-only follow-up
 confirmed both outputs disabled. See [bounded evidence and limits](../validation/dual-lidar-independent-live-20261007.md).
+
+## Shutdown fix and component acceptance (2026-10-08)
+
+The failures above are preserved historical evidence. The pinned source overlay
+now passes dual-source SIGINT and streaming SIGTERM shutdown, native FL-only
+timeout/reconnect, and a real shared two-LiDAR power-cycle without relaunch.
+The subsequent 15-minute bounded soak retained approximately 25 Hz per source,
+stable formal frames, monotonic timestamps and complete model TF availability;
+both children finished cleanly. See [fix evidence](../validation/lidar-shutdown-fix-20261008.md)
+and [power-cycle/component acceptance](../validation/lidar-power-soak-20261008.md).
+Operator-confirmed static model/scan alignment is reused, while precise optical
+extrinsics, acquisition-time calibration, long-term drift and production
+durability remain unvalidated downstream responsibilities.
