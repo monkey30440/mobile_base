@@ -113,3 +113,5 @@ shutdown 的所有時序／DDS 問題都已解決。
 `artifacts/imu-bias-calibration-20261008.tar.gz` 包含實測樣本、標定檔、native logs、
 RED／GREEN／完整回歸與臨時唯讀驗證程序；SHA-256 `44519a4189d62fdca17cb5a67bc0c3650d8c63f0db28c35f9f9d0bead7d1e319`。
 原始診斷 evidence 另保留，不以本次結果改寫歷史。
+
+後續 [#51 LiDAR／launch 停止驗證](lidar-launch-shutdown-20261008.md) 已獨立定位並修正兩個停止根因；上述 #50 當時的 unresolved 記錄保留為歷史。原生 service response timeout 仍另列限制，不以停止修正宣稱一併解決。

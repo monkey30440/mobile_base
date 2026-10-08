@@ -121,3 +121,7 @@ Python 官方文件提供機制依據，原生 LaunchService `run()` 在外層�
 **CONFIRMED（formal regression red）**：repository `docker/test/test_native_receiver_shutdown.py` 保留真 SIGINT 與 context shutdown，原始 native source RED（exit 255、1.46 秒）。最小候選為 UDP scan receiver init loop 之後、IMU init 之前的七行 null guard：尚無 receiver 或後續資源配置時直接結束 run loop；正常已配置路徑不變。**驗證中**：候選 Docker image 正建置；green、完整 software pressure、雙光達實機結果需由 #51 validation 報告完成。不要將候選 build 開始誤報為修正已驗收。
 
 此根因修正不覆蓋所有 SICK upstream 路徑：GenericLaser globals、其他 scan families、FIFO／Lifecycle、任意重連與任意 signal 重入均無全域正確性證明；本輪保持 minimal responsibility，只修已定位的 null receiver 邊界。
+
+## 後續驗收完成
+
+上述候選已於同日完成三項 deterministic green、600次原始雙 driver停止、完整99項 Python回歸、4項 C++協定與3 輪實體雙光達啟停，並套用正式Compose。詳見 [#51 validation](../validation/lidar-launch-shutdown-20261008.md)；研究中當時的失敗／驗證中狀態保留為歷史，不取代最終報告的限制。
