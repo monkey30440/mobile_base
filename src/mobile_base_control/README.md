@@ -214,3 +214,13 @@ Pulse 超出範圍，或跳變超出設定 RPM 與有限回應時序容差，會
 再使用已安裝的 `m1.launch.py`；測試可透過明確 `hardware_config` 提供受控設定。
 核心裝置驗收先於 #38 局部估測整合，以及 #39／#41 產品 Bringup。
 此元件入口不提供經標定 covariance 或已接受的正式部署模型。
+
+### #38 本地估測起始 uncertainty
+
+`m1.yaml` 的 pose／twist covariance diagonal 直接傳給原生
+`diff_drive_controller`，順序為 x、y、z、roll、pitch、yaw。
+目前使用 upstream 文件的 commissioning 起始建議值，未做實車 covariance
+標定，不代表里程計精度已通過。省略欄位則沿用原生預設。
+
+既有 3600 秒 command timeout 保留。冷啟動後，原生 controller 在首筆有效
+命令前可能不發布里程計；先由既有 Teleop 送出零速度，再檢查資料鏈。

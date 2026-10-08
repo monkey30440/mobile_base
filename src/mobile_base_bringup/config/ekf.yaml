@@ -1,0 +1,22 @@
+# COMMISSIONING starting profile; not calibrated uncertainty or accuracy acceptance.
+# Fuse wheel forward velocity + nonholonomic lateral zero and IMU yaw rate only.
+# Model owns mounting rotation; IMU orientation/acceleration are not fused.
+# Wheel geometry, covariance, IMU bias and filter tuning need later calibration.
+ekf_filter_node:
+  ros__parameters:
+    frequency: 20.0
+    sensor_timeout: 0.3
+    two_d_mode: true
+    publish_tf: true
+    print_diagnostics: true
+    world_frame: odom
+    odom_frame: odom
+    base_link_frame: base_footprint
+    odom0: /base_controller/odom
+    odom0_config: [false, false, false, false, false, false,
+                   true, true, false, false, false, false,
+                   false, false, false]
+    imu0: /imu/data_raw
+    imu0_config: [false, false, false, false, false, false,
+                  false, false, false, false, false, true,
+                  false, false, false]

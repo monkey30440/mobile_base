@@ -88,7 +88,7 @@ ros2 launch mobile_base_bringup local_estimation.launch.py filter_config:=/path/
 
 The selected path is resolved from the caller's working directory (`~` is
 expanded); a missing file fails launch. Native ROS parameter loading owns YAML
-parsing errors. There is no default deployment tuning or calibration profile.
+parsing errors. The installed `config/ekf.yaml` is an Operator-approved commissioning starting profile, not a calibrated deployment profile.
 The native node name is `ekf_filter_node`; the YAML must configure that node.
 The caller supplies one existing robot_state_publisher and valid sensor/model
 TF. This launch does not start another model publisher, control hardware, IMU,
@@ -102,7 +102,7 @@ Use `/base_controller/odom` and `/imu/data_raw` as the actual native input topic
 (subject to the chosen namespace/remapping). The controller's odom TF remains
 disabled. Only the EKF owns `odom → base_footprint`; model TF belongs to RSP.
 Unusable IMU orientation must not be selected. Select gyro yaw rate only once
-its axis/scale/timing are validated and its message has calibrated variance;
+its axis/scale/timing are validated and its uncertainty is explicitly configured;
 unknown zeros are not an acceptable input uncertainty for deployment fusion.
 Wheel feedback covariance, measurement selections, timeouts and filter tuning
 also require deployment evidence. This narrow launch and a running EKF do not
@@ -126,3 +126,23 @@ The existing dataset and local-estimation entries below are partial software
 deliveries, not complete product Bringup or prerequisites for component tests.
 The additional component/base wrappers introduced in dc3f6ee were withdrawn.
 Their recorded software results remain historical evidence, not current entries.
+
+## #38 commissioning 起始設定（2026-10-08）
+
+Operator 已採用這份起始設定，標定留後續。Description、Control、IMU
+仍分別啟動；這個入口只啟動原生 EKF，不是完整產品 Bringup。
+
+```bash
+ros2 launch mobile_base_bringup local_estimation.launch.py \
+  filter_config:=$(ros2 pkg prefix --share mobile_base_bringup)/config/ekf.yaml
+```
+
+輪端 covariance 使用原生 diff_drive_controller 文件的起始建議值；
+IMU 使用既有靜止實測的角速度 second moments about zero，包含當時 bias，
+不代表已標定的 variance、bias 補償或漂移上限。只融合輪端 vx、非完整約束 vy=0
+與 IMU yaw rate；不融合不可用的 orientation 或 acceleration。
+
+保留既有 command timeout 3600 秒及速度限制 0.50／0.50。原生 controller
+冷啟動的命令 buffer 是 NaN；首次有效命令之前可能不發布 odometry。
+驗證時先透過既有 Teleop 送出有效零速度，再確認輪端與 IMU 資料有效後啟動 EKF。
+這不是 covariance 標定或定位精度驗收；後續產品 Bringup 應明確承接初始化與 readiness。

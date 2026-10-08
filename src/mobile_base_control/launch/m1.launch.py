@@ -59,6 +59,14 @@ def setup(context):
              'angular.z.has_velocity_limits': True,
              'angular.z.max_velocity': float(controller['angular_velocity_limit']),
              'angular.z.min_velocity': -float(controller['angular_velocity_limit'])}
+    for key in ('pose_covariance_diagonal', 'twist_covariance_diagonal'):
+        if key in controller:
+            values = controller[key]
+            if (not isinstance(values, list) or len(values) != 6
+                    or any(type(value) not in (int, float) or not math.isfinite(value)
+                           or value < 0 for value in values)):
+                raise RuntimeError('six finite nonnegative covariance values required: ' + key)
+            drive[key] = [float(value) for value in values]
     # Native spawner loads per-controller parameters from the required target YAML.
     import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as stream:

@@ -14,7 +14,8 @@ from tf2_msgs.msg import TFMessage
 import yaml
 
 
-def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path):
+@pytest.mark.parametrize('installed_profile', [False, True])
+def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_profile):
     # Declared synthetic uncertainties are fixtures, never deployment calibration.
     config = {'ekf_filter_node': {'ros__parameters': {
         'frequency': 30.0, 'sensor_timeout': 0.2, 'two_d_mode': True,
@@ -25,6 +26,14 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path):
         'imu0': '/fixture/imu',
         'imu0_config': [False]*11 + [True] + [False]*3,
     }}}
+    if installed_profile:
+        from pathlib import Path
+        from ament_index_python.packages import get_package_share_directory
+        packaged = Path(get_package_share_directory('mobile_base_bringup')) / 'config/ekf.yaml'
+        config = yaml.safe_load(packaged.read_text())
+        wheel_topic, imu_topic = '/base_controller/odom', '/imu/data_raw'
+    else:
+        wheel_topic, imu_topic = '/fixture/wheel_odom', '/fixture/imu'
     profile = tmp_path / 'synthetic-ekf.yaml'
     profile.write_text(yaml.safe_dump(config))
     # The physical IMU origin follows the authoritative CAD URDF; no scan aliases.
@@ -35,8 +44,8 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path):
     observer = Node('estimation_fixture_observer')
     buffer = Buffer()
     listener = TransformListener(buffer, observer)
-    wheel = observer.create_publisher(Odometry, '/fixture/wheel_odom', 10)
-    gyro = observer.create_publisher(Imu, '/fixture/imu', 10)
+    wheel = observer.create_publisher(Odometry, wheel_topic, 10)
+    gyro = observer.create_publisher(Imu, imu_topic, 10)
     samples = []
     odom_transforms = []
     def observe_tf(message):
@@ -49,7 +58,7 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path):
     try:
         for args, name in [
             (['ros2', 'run', 'robot_state_publisher', 'robot_state_publisher', '--ros-args', '--params-file', str(rsp_config)], 'model'),
-            (['ros2', 'launch', 'mobile_base_bringup', 'local_estimation.launch.py', f'filter_config:={profile}'], 'ekf'),
+            (['ros2', 'launch', 'mobile_base_bringup', 'local_estimation.launch.py', f'filter_config:={packaged if installed_profile else profile}'], 'ekf'),
         ]:
             log = open(tmp_path / (name + '.log'), 'w')
             logs.append(log)

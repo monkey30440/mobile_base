@@ -165,7 +165,7 @@ class Peer:
 def workflow(tmp_path, request):
     os.environ['ROS_DOMAIN_ID'] = str(100 + os.getpid() % 100)
     options = getattr(request, 'param', {})
-    peer = Peer(**{k: v for k, v in options.items() if k not in ('expect_failure', 'native_budget', 'cmd_vel_timeout')})
+    peer = Peer(**{k: v for k, v in options.items() if k not in ('expect_failure', 'native_budget', 'cmd_vel_timeout', 'covariance')})
     config = {'hardware': {'serial_port': peer.path, 'baud': 115200, 'parity': 'N',
                           'stop_bits': 1, 'response_timeout_seconds': 0.03, 'enable_timeout_seconds': 0.3,
                           'firmware': 'SOFTWARE_PEER_NOT_HARDWARE',
@@ -176,6 +176,9 @@ def workflow(tmp_path, request):
                              'linear_velocity_limit': 0.5, 'angular_velocity_limit': 1.0,
                              'native_hardware_execution_budget_us': {'mean_warn':15000.0, 'mean_error':20000.0,
                                                                      'stddev_warn':3000.0, 'stddev_error':5000.0}}}
+    if 'covariance' in options:
+        config['controller']['pose_covariance_diagonal'] = options['covariance']
+        config['controller']['twist_covariance_diagonal'] = options['covariance']
     if not options.get('native_budget', False):
         config['controller'].pop('native_hardware_execution_budget_us')
     for side, drive_id, direction in [('left_', 2, -1), ('right_', 1, 1)]:
@@ -675,3 +678,13 @@ def test_3600_second_command_age_boundary(workflow):
     wait(lambda: peer.commands[-1] == (0, 0), seconds=3)
     elapsed = time.monotonic() - published_at
     assert 1.8 < elapsed < 3.0
+
+
+@pytest.mark.parametrize('workflow', [{'covariance': [0.012, 0.023, 0.034, 0.045, 0.056, 0.067]}], indirect=True)
+def test_native_odometry_carries_configured_measurement_uncertainty(workflow):
+    peer, node, publisher, odom, diagnostics, wait = workflow
+    expected = [0.0] * 36
+    for index, value in zip((0, 7, 14, 21, 28, 35), (0.012, 0.023, 0.034, 0.045, 0.056, 0.067)):
+        expected[index] = value
+    assert list(odom[-1].pose.covariance) == expected
+    assert list(odom[-1].twist.covariance) == expected

@@ -12,5 +12,7 @@ usb_imu:
     gyro_scale: 0.017453292519943295
     axes: [1, 2, 3]
     sample_timeout: 0.3
-    # ROS unknown covariance; stationary noise is not deployment calibration.
-    angular_velocity_variances: [0.0, 0.0, 0.0]
+    # Commissioning observed second moments about zero, (rad/s)^2.
+    # Includes measured stationary bias; NOT calibrated variance or drift bound.
+    # Source: real-static-estimation-20261007, reused in #38 stationary verification.
+    angular_velocity_variances: [4.576113064280129e-7, 9.063136025567312e-8, 2.7384782088781707e-7]

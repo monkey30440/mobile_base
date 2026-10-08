@@ -221,3 +221,11 @@ ros2 launch mobile_base_perception imu.launch.py
 裝置缺失會在 `/diagnostics` 回報通訊錯誤，不會發布虛構 IMU 資料。
 新增映射需重建容器；USB 拔插後先確認主機裝置，再重建容器並重新啟動 driver。
 同一裝置只啟動一個 driver。
+
+### #38 IMU commissioning uncertainty
+
+`config/imu.yaml` 的角速度 variance 起始值取自既有靜止實測 second moments
+about zero，單位為 `(rad/s)^2`；Operator 已同意用於 commissioning 資料鏈驗證。
+這些值包含當時 bias，並非已標定 variance、bias 補償或漂移上限；標定留後續。
+模型負責安裝旋轉，driver 不重複套用 yaw +90°。本地 EKF 只選用 yaw rate，
+不融合不可用 orientation 或 acceleration。
