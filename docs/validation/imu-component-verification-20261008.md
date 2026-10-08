@@ -27,3 +27,9 @@ IMU/packet/ROS/launch相關18tests通過，3個native LiDAR source tests排除�
 若需要量化精度/bias/covariance，仍屬後續calibration，unknown不能當calibrated。
 
 本輪不改runtime，不關閉#36，不解除#38 dependency；所有驗證程序已停止。
+
+## Operator三軸確認與結案
+
+Operator明確確認IMU角速度x/y/z方向與尺度均正確。
+這補足上方實機旋轉確認缺口，證據來源為Operator，不是本observer的靜止資料推論。
+#36元件驗收已結案；bias/covariance/acquisition-time與估測性能限制仍保留。
