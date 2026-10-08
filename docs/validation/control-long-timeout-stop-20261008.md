@@ -87,3 +87,20 @@ cmd_vel_timeout3600秒，publish stamp為當下減3598秒。
 目前不能將此主機上的測試宣稱為AGX Orin平台驗收。
 #35原acceptance指定AGX Orin；需Operator確認是正式平台修訂，或開發／測試主機。
 未關閉#35或解除#38 dependency，也未更改V1 hardware facts。
+
+## 正式平台修訂與#35結論
+
+Operator明確確認正式平台改為AGX Thor，取代先前AGX Orin。
+平台不一致因此由需求修訂解決；spec32／decision22／ticket35已同步。
+
+#35元件責任核對：可重現啟動與版本／targetfacts已記錄；native與adapter責任明確；
+nominal單位／極性／encoder轉換有協定、register／carry及公開回授證據；
+Operator確認前後／左右操作與本次兩段停止；invalidity／alarm／linkloss有軟體測試，
+真實inhibited拔插有source error／reconnect readback；3600命令年齡到期及明確退出停用已驗證。
+韌體依Operator既有同意保留未知，不猜測。
+
+此結論為Control元件交付／bounded commissioning驗收，不宣稱量產功能凍結。
+有效幾何、bias/covariance與估測性能留適用的#38／完整workflow驗收／標定階段；
+1600RPM滿速、enabled-drive失聯停止與一小時long-run沒有驗收。
+停止依賴可用鏈路；watchdog停用限制與Operator硬體停止責任保留。
+不把上述延後性能或失聯停止保證添加成#35未指定的新功能要求。
