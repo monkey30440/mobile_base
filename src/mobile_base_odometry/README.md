@@ -27,14 +27,20 @@ ros2 launch mobile_base_perception imu.launch.py
 odometry；透過既有 Teleop 送出零速度初始化，再檢查來源。後續產品 Bringup
 必須承接初始化／readiness，這裡沒有永久 command publisher。
 
-另開 terminal，明確指定已安裝的起始 profile：
+另開 terminal，預設讀取套件內的 `config/ekf.yaml`：
+
+```bash
+ros2 launch mobile_base_odometry odometry.launch.py
+```
+
+需要其他設定時可明確覆寫，不會在指定檔案失敗時 fallback：
 
 ```bash
 ros2 launch mobile_base_odometry odometry.launch.py \
-  filter_config:=$(ros2 pkg prefix --share mobile_base_odometry)/config/ekf.yaml
+  filter_config:=/完整路徑/其他設定.yaml
 ```
 
-`filter_config` 仍為必填，可改用其他原生 YAML 的完整路徑。相對路徑以目前
+相對路徑以目前
 工作目錄解析，支援 `~`；缺檔報錯，YAML 解析由原生 ROS 參數載入負責。
 node 名稱為 `ekf_filter_node`。修改 source config 使用 `--symlink-install`，
 下一次 launch 才套用，不支援 runtime hot reload。

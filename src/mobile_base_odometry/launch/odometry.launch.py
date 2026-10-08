@@ -1,5 +1,6 @@
 """Native local EKF only; model TF belongs to the caller's single RSP."""
 from pathlib import Path
+from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
@@ -16,7 +17,9 @@ def setup(context):
 
 
 def generate_launch_description():
+    profile = Path(get_package_share_directory('mobile_base_odometry')) / 'config/ekf.yaml'
     return LaunchDescription([
-        DeclareLaunchArgument('filter_config', description='Explicit native EKF YAML; no deployment defaults'),
+        DeclareLaunchArgument('filter_config', default_value=str(profile),
+                              description='Native EKF YAML; defaults to package commissioning config'),
         OpaqueFunction(function=setup),
     ])
