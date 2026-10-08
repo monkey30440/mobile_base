@@ -29,7 +29,7 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_pr
     if installed_profile:
         from pathlib import Path
         from ament_index_python.packages import get_package_share_directory
-        packaged = Path(get_package_share_directory('mobile_base_bringup')) / 'config/ekf.yaml'
+        packaged = Path(get_package_share_directory('mobile_base_odometry')) / 'config/ekf.yaml'
         config = yaml.safe_load(packaged.read_text())
         wheel_topic, imu_topic = '/base_controller/odom', '/imu/data_raw'
     else:
@@ -58,7 +58,7 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_pr
     try:
         for args, name in [
             (['ros2', 'run', 'robot_state_publisher', 'robot_state_publisher', '--ros-args', '--params-file', str(rsp_config)], 'model'),
-            (['ros2', 'launch', 'mobile_base_bringup', 'local_estimation.launch.py', f'filter_config:={packaged if installed_profile else profile}'], 'ekf'),
+            (['ros2', 'launch', 'mobile_base_odometry', 'local_estimation.launch.py', f'filter_config:={packaged if installed_profile else profile}'], 'ekf'),
         ]:
             log = open(tmp_path / (name + '.log'), 'w')
             logs.append(log)
