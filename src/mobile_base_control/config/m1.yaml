@@ -35,10 +35,10 @@ hardware:
 controller:
   wheel_radius: 0.08
   wheel_separation: 0.555
-  cmd_vel_timeout: 0.3
+  cmd_vel_timeout: 3600 #0.3
   update_rate: 20
-  linear_velocity_limit: 0.03
-  angular_velocity_limit: 0.10
+  linear_velocity_limit: 0.50
+  angular_velocity_limit: 0.50
   # Native synchronous RS485 execution budget; microseconds, engineering only.
   # Mean/stddev alarms are statistical thresholds, not hard deadlines/WCET.
   native_hardware_execution_budget_us:

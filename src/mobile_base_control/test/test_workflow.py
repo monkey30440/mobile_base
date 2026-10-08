@@ -286,8 +286,11 @@ def test_serial_response_timeout_is_not_healthy_stale_feedback(workflow):
     assert (0, 0) in peer.commands  # request observed; no stop acknowledgement inferred
 
 
-def test_unresolved_target_profile_fails_before_hardware_start():
-    template = Path(get_package_share_directory('mobile_base_control')) / 'config' / 'target.template.yaml'
+def test_unresolved_target_profile_fails_before_hardware_start(tmp_path):
+    profile = yaml.safe_load((Path(get_package_share_directory('mobile_base_control')) / 'config/m1.yaml').read_text())
+    profile['hardware']['firmware'] = None
+    template = tmp_path / 'incomplete.yaml'
+    template.write_text(yaml.safe_dump(profile))
     result = subprocess.run(['ros2', 'launch', 'mobile_base_control', 'm1.launch.py',
                              f'hardware_config:={template}'],
                             capture_output=True, text=True, timeout=8)
@@ -417,7 +420,7 @@ def test_native_hardware_execution_budget_preserves_timing_errors(workflow, expe
 @pytest.mark.parametrize('rate', [.5, True, 0, -1])
 def test_invalid_controller_update_rate_fails_before_serial_requests(tmp_path, rate):
     peer = Peer()
-    profile = yaml.safe_load((Path(get_package_share_directory('mobile_base_control')) / 'config' / 'rwf.commissioning.yaml').read_text())
+    profile = yaml.safe_load((Path(get_package_share_directory('mobile_base_control')) / 'config' / 'm1.yaml').read_text())
     profile['hardware']['serial_port'] = peer.path
     profile['controller']['update_rate'] = rate
     target = tmp_path / 'invalid-rate.yaml'
@@ -589,7 +592,7 @@ def test_description_with_hardware_profile_does_not_start_control(tmp_path):
     import xml.etree.ElementTree as ET
     peer = Peer()
     profile = yaml.safe_load((Path(get_package_share_directory('mobile_base_control')) /
-                              'config/rwf.commissioning.yaml').read_text())
+                              'config/m1.yaml').read_text())
     profile['hardware']['serial_port'] = peer.path
     target = tmp_path / 'hardware.yaml'
     target.write_text(yaml.safe_dump(profile))

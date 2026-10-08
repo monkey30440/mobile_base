@@ -7,11 +7,9 @@ Adapter 只透過 Modbus Multi-drive2.0 交換輪端命令，以及有效速度�
 
 ## 設定檔用途
 
-| 檔案 | 用途 |
-|---|---|
-| `config/target.template.yaml` | 新平台的設定範本，須依證據填完所有必要 `null`；未填完不能啟動 |
-| `config/rwf.target.yaml` | 這台 RWF 已確認的硬體事實；未知韌體、限制與 timeout 保留 `null`，不能啟動 |
-| `config/rwf.commissioning.yaml` | 初期驗證使用的完整設定；目前兩個 launch 的預設設定，不代表已驗收的量產設定 |
+`config/m1.yaml` 是目前唯一的啟動設定，兩個 launch 預設共同使用此檔。
+它保留初期驗證的工程限制與未知韌體註記，不代表已驗收的量產設定。
+已確認硬體事實與未解決項目的來源仍記錄於驗證文件。
 
 RWF 設定記錄使用者確認的裝置路徑、名義減速比 20:1、輪半徑 0.08 m、輪距 0.555 m。
 有時間上限的唯讀 FC03 證據確認通訊為 230400／8N1、左 ID2／右 ID1、速度模式 0、
@@ -102,7 +100,7 @@ ros2 topic echo /diagnostics
 ```
 
 Description 獨自負責完整模型與原生 `robot_state_publisher`。
-兩個 launch 預設使用 Control 套件的 `config/rwf.commissioning.yaml`。
+兩個 launch 預設使用 Control 套件的 `config/m1.yaml`。
 另一平台須在兩邊使用相同的 `hardware_config:=/absolute/target.yaml` 覆寫。
 Description 加入 M1 `<ros2_control>` 宣告，不啟動硬體；Control 讀取原生
 `/robot_description`，不啟動 RSP 或其他套件 launch。

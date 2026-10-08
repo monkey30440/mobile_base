@@ -45,7 +45,7 @@ def start_model(context):
 
 def generate_launch_description():
     model = Path(get_package_share_directory('mobile_base_description')) / 'urdf/mobile_base.urdf'
-    hardware = Path(get_package_share_directory('mobile_base_control')) / 'config/rwf.commissioning.yaml'
+    hardware = Path(get_package_share_directory('mobile_base_control')) / 'config/m1.yaml'
     return LaunchDescription([
         DeclareLaunchArgument('model_file', default_value=str(model), description='Geometry-only URDF/xacro'),
         DeclareLaunchArgument('hardware_config', default_value=str(hardware),

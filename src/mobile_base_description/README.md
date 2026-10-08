@@ -61,7 +61,7 @@ Foxglove 3D 設定：
 
 ## 後續：獨立啟動 Control
 
-兩個入口預設讀取已安裝的 mobile_base_control/config/rwf.commissioning.yaml。
+兩個入口預設讀取已安裝的 mobile_base_control/config/m1.yaml。
 Description 需要已安裝的 Control 套件以取得設定，但不啟動 Control。
 
 Terminal 1：

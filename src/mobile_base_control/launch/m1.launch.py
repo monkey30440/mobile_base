@@ -79,6 +79,6 @@ def setup(context):
 
 
 def generate_launch_description():
-    profile = Path(get_package_share_directory('mobile_base_control')) / 'config/rwf.commissioning.yaml'
+    profile = Path(get_package_share_directory('mobile_base_control')) / 'config/m1.yaml'
     return LaunchDescription([DeclareLaunchArgument('hardware_config', default_value=str(profile)),
                               OpaqueFunction(function=setup)])
