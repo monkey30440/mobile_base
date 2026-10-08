@@ -81,7 +81,7 @@ real robot map, legal route-network review or hardware acceptance.
 
 原生 EKF 的 launch／config／公開 ROS 測試已搬至
 [`mobile_base_odometry`](../mobile_base_odometry/README.md)。
-Bringup 不再提供 `local_estimation.launch.py` 或重複的 EKF 配置。
+Bringup 不提供 EKF 入口或重複配置；使用 Odometry 的 `odometry.launch.py`。
 後續 Mapping／Navigation 產品組合使用 Odometry 的原生入口。
 
 ## Development phase correction (2026-10-07)

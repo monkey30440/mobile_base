@@ -30,7 +30,7 @@ odometry；透過既有 Teleop 送出零速度初始化，再檢查來源。後�
 另開 terminal，明確指定已安裝的起始 profile：
 
 ```bash
-ros2 launch mobile_base_odometry local_estimation.launch.py \
+ros2 launch mobile_base_odometry odometry.launch.py \
   filter_config:=$(ros2 pkg prefix --share mobile_base_odometry)/config/ekf.yaml
 ```
 
