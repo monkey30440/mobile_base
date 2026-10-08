@@ -1,5 +1,6 @@
 """Start the USB IMU adapter with the package profile or an explicit override."""
 from pathlib import Path
+import yaml
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
@@ -12,8 +13,13 @@ def start_imu(context):
     path = Path(LaunchConfiguration('imu_config').perform(context)).expanduser().resolve()
     if not path.is_file():
         raise RuntimeError('IMU configuration file missing: ' + str(path))
+    with path.open(encoding='utf8') as stream:
+        parameters = yaml.safe_load(stream)['usb_imu']['ros__parameters']
+    calibration = parameters.get('calibration_file', '')
+    if calibration:
+        calibration = str((path.parent / Path(calibration).expanduser()).resolve())
     return [Node(package='mobile_base_perception', executable='usb_imu',
-                 name='usb_imu', parameters=[str(path)], output='screen')]
+                 name='usb_imu', parameters=[str(path), {'calibration_file': calibration}], output='screen')]
 
 
 def generate_launch_description():

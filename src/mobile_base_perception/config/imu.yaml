@@ -5,6 +5,8 @@
 # 0.3 s is a commissioning timeout, not an accepted production operating limit.
 usb_imu:
   ros__parameters:
+    # Relative to this selected YAML; absent/invalid file keeps raw only.
+    calibration_file: imu_calibration.yaml
     port: /dev/fihRobotBaseIMU
     baud: 115200
     protocol_profile: handboard_v1

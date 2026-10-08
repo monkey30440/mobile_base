@@ -1,5 +1,6 @@
 """USB bridge transport and device diagnostics, with receipt-time ROS output."""
 import math
+from copy import deepcopy
 import os
 import termios
 import time
@@ -11,6 +12,8 @@ from sensor_msgs.msg import Imu
 from diagnostic_msgs.msg import DiagnosticStatus
 
 from .packet import decode
+from .calibration import load_calibration
+import yaml
 
 
 class UsbImu(Node):
@@ -19,7 +22,8 @@ class UsbImu(Node):
         defaults = {'port': '', 'baud': 0, 'protocol_profile': '',
                     'acceleration_scale': 0.0, 'gyro_scale': 0.0,
                     'axes': [0, 0, 0], 'sample_timeout': 0.0,
-                    'angular_velocity_variances': [0.0, 0.0, 0.0]}
+                    'angular_velocity_variances': [0.0, 0.0, 0.0],
+                    'calibration_file': ''}
         config = {key: self.declare_parameter(key, value).value
                   for key, value in defaults.items()}
         self.fd = None
@@ -31,6 +35,13 @@ class UsbImu(Node):
         self.received_samples = 0
         self.config = config
         self.publisher = self.create_publisher(Imu, 'imu/data_raw', 10)
+        self.corrected_publisher = self.create_publisher(Imu, 'imu/data', 10)
+        self.calibration = None
+        self.calibration_error = ''
+        try:
+            self.calibration = load_calibration(config['calibration_file'])
+        except (ValueError, OSError, yaml.YAMLError) as error:
+            self.calibration_error = str(error)
         self.updater = diagnostic_updater.Updater(self)
         self.updater.setHardwareID(config['port'] or 'unconfigured USB IMU')
         self.updater.add('USB IMU', self.diagnostic)
@@ -134,6 +145,15 @@ class UsbImu(Node):
             message.linear_acceleration.x, message.linear_acceleration.y, message.linear_acceleration.z = acceleration
             message.angular_velocity.x, message.angular_velocity.y, message.angular_velocity.z = gyro
             self.publisher.publish(message)
+            if self.calibration is not None:
+                corrected = deepcopy(message)
+                bias = self.calibration['angular_velocity_bias']
+                corrected.angular_velocity.x -= bias[0]
+                corrected.angular_velocity.y -= bias[1]
+                corrected.angular_velocity.z -= bias[2]
+                for index, variance in zip((0, 4, 8), self.calibration['angular_velocity_variances']):
+                    corrected.angular_velocity_covariance[index] = variance
+                self.corrected_publisher.publish(corrected)
             self.last_sample = time.monotonic()
             self.last_event_valid = True
             self.received_samples += 1
@@ -146,10 +166,16 @@ class UsbImu(Node):
             status.summary(DiagnosticStatus.ERROR, 'valid sample timeout')
         elif not self.last_event_valid:
             status.summary(DiagnosticStatus.ERROR, self.last_error)
+        elif self.calibration_error:
+            status.summary(DiagnosticStatus.WARN, 'raw valid; corrected unavailable: ' + self.calibration_error)
         else:
-            status.summary(DiagnosticStatus.OK, 'valid bridge samples; calibration not verified')
+            status.summary(DiagnosticStatus.OK, 'fixed gyro bias applied; long-term calibration not verified')
         status.add('port', self.config['port'])
         status.add('protocol_profile', self.config['protocol_profile'])
+        status.add('calibration_file', self.config['calibration_file'])
+        status.add('corrected_source', 'unavailable' if self.calibration_error else '/imu/data')
+        status.add('calibrated_at_utc', self.calibration['calibrated_at_utc'] if self.calibration else 'unavailable')
+        status.add('corrected_covariance', 'session sample dispersion; thermal/bias uncertainty not calibrated')
         status.add('valid_samples', str(self.received_samples))
         status.add('invalid_packets', str(self.invalid_packets))
         status.add('last_valid_sample_age_s', str(age))

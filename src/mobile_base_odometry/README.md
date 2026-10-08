@@ -6,7 +6,7 @@
 
 ## 責任與介面
 
-- 輸入：`/base_controller/odom`、`/imu/data_raw`。
+- 輸入：`/base_controller/odom`、`/imu/data`。
 - 輸出：`/odometry/filtered`，唯一發布 `odom → base_footprint`。
 - Control 的 odom TF 維持 disabled；Description 的單一 RSP 負責模型 TF。
 - Description、Control、IMU 各自啟動；這個入口不啟動其他套件、
@@ -52,8 +52,10 @@ Operator 已採用起始設定，標定留後續。設定從原 Bringup 搬移�
 不融合不可用 orientation／acceleration；安裝旋轉由模型負責，不重複套用。
 
 輪端 covariance 使用原生 diff_drive_controller 文件的起始建議值；IMU 使用
-既有靜止實測 second moments about zero，包含當時 bias。這不是 covariance
-標定、bias 補償或漂移上限，也不宣稱定位精度已通過。
+人工標定檔的固定零偏補償與同條件 sample dispersion；raw 仍保留供標定／排查。
+這不是全溫度 covariance／bias 保證或漂移上限，也不宣稱定位精度已通過。
+啟動前先依 Perception README 完成標定，確認 `/imu/data` 持續更新；
+缺少 corrected 資料時不能以 EKF process／輪端單來源輸出冒充可使用。
 保留 `3600 秒／0.50／0.50` 與既有硬體設定。
 
 架高轉輪只驗證輪端資料鏈與模型；不能當成底座實際移動或落地動態融合驗收。

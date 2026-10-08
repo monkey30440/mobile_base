@@ -11,5 +11,6 @@ setup(
     maintainer='mobile_base maintainers', maintainer_email='maintainers@example.com',
     description='V1 USB IMU adapter and native dual picoScan composition.',
     license='Apache-2.0', tests_require=['pytest'],
-    entry_points={'console_scripts': ['usb_imu = mobile_base_perception.node:main']},
+    entry_points={'console_scripts': ['usb_imu = mobile_base_perception.node:main',
+                                      'calibrate_imu = mobile_base_perception.calibrate:main']},
 )

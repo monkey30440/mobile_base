@@ -1,0 +1,16 @@
+frame_id: base_imu_link
+units: rad/s
+source_topic: /imu/data_raw
+calibrated_at_utc: '2026-10-08T08:45:42.247776+00:00'
+sample_count: 10347
+duration_seconds: 60.00929774000542
+first_sample_stamp: 1791449082.1771963
+last_sample_stamp: 1791449142.1867921
+angular_velocity_bias:
+- 0.0008798150904725764
+- -0.0003213049720597958
+- -0.00043625572148102616
+angular_velocity_variances:
+- 2.1225325132686974e-08
+- 2.813127552066658e-08
+- 1.9503947636140577e-08

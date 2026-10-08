@@ -3,7 +3,8 @@
 負責最小必要的 USB IMU adapter，以及可重用的原生雙 picoScan 設定，取代
 `mobile_base_imu` 與 `mobile_base_lidar`。整併不新增 LiDAR 解碼器、scan 合併器、
 TF publisher 或融合引擎。IMU 執行檔仍為 `usb_imu`，Python 模組改為
-`mobile_base_perception.node`；裝置、topic、frame 與來源診斷行為不變。
+`mobile_base_perception.node`；既有 raw topic／frame 保留。V1 零偏補償另提供
+`/imu/data`，責任與操作見下方標定章節。
 
 ## 獨立啟動與設定
 
@@ -39,8 +40,9 @@ ros2 launch mobile_base_perception dual_picoscan.launch.py lidar_config:="$perce
 套件設定是可安裝的設定範例，不具備即時重新載入功能。
 
 IMU 封包格式與 baud 已有實機被動觀測證據；韌體身分、獨立單位／軸向驗證與標定
-仍有既有證據限制。0.3 秒 timeout 是初期驗證設定。陀螺儀 covariance 明確保留未知
-（全零），未採用暫時靜止噪聲實驗的數值；此設定不代表已接受的部署 EKF 不確定度。
+仍有既有證據限制。0.3 秒 timeout 是初期驗證設定。raw covariance 使用既有
+commissioning second moments，包含當時 bias；corrected 使用人工標定檔的
+session dispersion，不能當成全溫度／長期 uncertainty。
 LiDAR IP／port 必須符合實際網路，原生關閉與長時間時序驗收仍未完成。
 不同平台或經驗證的調整可使用另一份設定檔。
 
@@ -54,6 +56,71 @@ Perception 只啟動自身的感測器節點。手動檢查模型與 scan 時，
 以下協定與歷史觀測保留原本的證據範圍。目前模型中的 IMU 安裝為 yaw +90°；
 下方有日期的零 rpy 觀測發生於 Operator 修訂之前。Adapter 軸向設定與實體
 軸向、尺度、標定仍須有適用的證據。
+
+## IMU 零偏標定與固定補償（#50）
+
+**IMU 零偏**是實體靜止時，角速度量測仍有非零平均值；它不是雜訊大小。
+**固定補償**是在相同 IMU frame／rad/s 中減去人工標定並審查保存的三軸零偏。
+運行時不自學習、不加 deadband、不把小角速度歸零；安裝旋轉仍由模型負責。
+
+保留 `/imu/data_raw`；原生 EKF 使用 `/imu/data`。未提供有效標定檔時 raw 可供
+標定／排查，但 corrected 不發布，diagnostics 顯示 WARN 與原因。Mapping／
+Navigation 必須確認 corrected 持續更新，不能只因 EKF 有輸出就宣稱可使用。
+Transport／packet 異常仍是來源 ERROR，不被 calibration warning 蓋掉。
+
+預設 `imu.yaml` 的 `calibration_file: imu_calibration.yaml` 相對於**選定的
+imu.yaml 所在目錄**解析；支援絕對路徑與 `~`。這與 `imu_config` 本身相對
+目前工作目錄解析不同。缺檔／解析失敗／frame、units、來源或數值不符時不猜測
+bias，不改 raw，不用零 bias fallback；修正後需重新 launch，不支援 hot reload。
+
+### 人工流程
+
+Operator 必須確保整段採集期間實體靜止；gyro 小值不能證明車沒動。
+先保持馬達停用、底座靜止，啟動 IMU，不需 Description／Control／EKF：
+
+```bash
+ros2 launch mobile_base_perception imu.launch.py
+```
+
+另一容器 terminal，工作目錄 `/workspace`：
+
+```bash
+ros2 run mobile_base_perception calibrate_imu --stationary \
+  --output src/mobile_base_perception/config/imu_calibration_new.yaml
+```
+
+工具只訂閱 `/imu/data_raw`，預設採集 60 秒、至少 200 筆；這是可調整的
+commissioning 起始 window，不是暖機完成或量產精度保證。`--duration`、
+`--min-samples`、`--wait-timeout`、`--max-gap` 可明確調整；詳細見 `--help`。
+拒絕缺資料、非有限值、錯誤 frame、時間不連續／資料 gap、不足樣本及無法量得
+三軸 dispersion；不發送任何裝置／馬達命令。
+
+輸出 YAML 記錄 frame、rad/s、來源、UTC 日期、樣本數／時間與三軸 bias／variance。
+Operator 審查採集期間確實靜止與來源／數值後，在 `config/imu.yaml` 將
+`calibration_file` 改為 `imu_calibration_new.yaml`，停止 IMU，再重新 launch 套用。
+既有檔案**不覆寫**。重新標定時輸出另一個檔名，審查後修改 `imu.yaml` 的
+`calibration_file` 指向新檔；不以刪掉既有證據作為預設流程。
+本平台已附 `imu_calibration.yaml` 的實測 commissioning 結果，只適用記錄的
+裝置／條件；新裝置不能直接當成自己的標定。上述命令使用新檔名，若該檔
+也已存在，必須另選名稱並同步更新 `calibration_file`。
+開發 symlink-install 的 `imu.yaml` 解析到 source 目錄；上述 output 是其相鄰檔。
+其他部署使用選定 config 目錄的可寫檔案或絕對路徑，不必寫入唯讀安裝目錄。
+
+```bash
+ros2 topic echo /imu/data_raw --once
+ros2 topic echo /imu/data --once
+ros2 topic echo /diagnostics
+```
+
+標定檔只在啟動時載入。原始角速度／stamp／frame／acceleration 保留；corrected
+僅固定減去 bias 並提供同條件 dispersion，orientation 仍 unavailable。
+這不是完整 bias uncertainty／covariance 標定：樣本可能相關，跨溫度、長期 bias
+與 firmware 開機校正皆需另外量測。不可任意調大 covariance 掩蓋 drift。
+裝置、firmware、輸出尺度／axes、安裝或靜止殘差改變時，Operator 重新判定與標定；
+同一 frame 名稱不能證明同一硬體，檔案數值檢查不能自動檢出所有語意配錯。
+
+驗收使用未參與標定的較長靜止資料、正／負慢速旋轉及重新啟動的重用結果。
+報告 drift 與實際條件，不承諾 odom 絕對無漂移。不要把車動作當成標定輸入。
 
 ## USB IMU adapter（#36）
 

@@ -16,6 +16,11 @@ mobile_base_description/
 
 STL 使用 `package://mobile_base_description/meshes/...` 引用。安裝後，模型與 meshes 位於 `share/mobile_base_description/`。檔案內容與來源 hash 見 [本輪驗證紀錄](../../docs/validation/description-self-contained-20261007.md)。
 
+## 模型術語
+
+- **名義輪座姿態**：使用 V1 輪座的設計位置作為模型幾何參考，不是懸吊即時量測。
+- **量測輪角**：由馬達位置回授換算的驅動輪轉角；角度參考與位移標定是不同概念。
+
 ## 模型責任
 
 - `base_footprint` 是統一的 footprint 名稱，連接 `base_link` 與底座模型。

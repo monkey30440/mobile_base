@@ -15,7 +15,8 @@ import yaml
 
 
 @pytest.mark.parametrize('installed_profile', [False, True])
-def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_profile):
+@pytest.mark.parametrize('stationary', [False, True])
+def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_profile, stationary):
     # Declared synthetic uncertainties are fixtures, never deployment calibration.
     config = {'ekf_filter_node': {'ros__parameters': {
         'frequency': 30.0, 'sensor_timeout': 0.2, 'two_d_mode': True,
@@ -31,7 +32,7 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_pr
         from ament_index_python.packages import get_package_share_directory
         packaged = Path(get_package_share_directory('mobile_base_odometry')) / 'config/ekf.yaml'
         config = yaml.safe_load(packaged.read_text())
-        wheel_topic, imu_topic = '/base_controller/odom', '/imu/data_raw'
+        wheel_topic, imu_topic = '/base_controller/odom', '/imu/data'
     else:
         wheel_topic, imu_topic = '/fixture/wheel_odom', '/fixture/imu'
     profile = tmp_path / 'synthetic-ekf.yaml'
@@ -46,6 +47,7 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_pr
     listener = TransformListener(buffer, observer)
     wheel = observer.create_publisher(Odometry, wheel_topic, 10)
     gyro = observer.create_publisher(Imu, imu_topic, 10)
+    raw_gyro = observer.create_publisher(Imu, '/imu/data_raw', 10) if installed_profile else None
     samples = []
     odom_transforms = []
     def observe_tf(message):
@@ -63,7 +65,8 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_pr
             log = open(tmp_path / (name + '.log'), 'w')
             logs.append(log)
             processes.append(subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, start_new_session=True))
-        deadline = time.monotonic() + 8
+        started = time.monotonic()
+        deadline = started + 8
         while time.monotonic() < deadline:
             assert all(p.poll() is None for p in processes), (tmp_path / 'ekf.log').read_text()
             stamp = observer.get_clock().now().to_msg()
@@ -71,18 +74,23 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_pr
             odom.header.stamp = stamp
             odom.header.frame_id = 'odom'
             odom.child_frame_id = 'base_footprint'
-            odom.twist.twist.linear.x = 0.2
+            odom.twist.twist.linear.x = 0.0 if stationary else 0.2
             odom.twist.covariance[0] = odom.twist.covariance[7] = 0.01
             wheel.publish(odom)
             imu = Imu()
             imu.header.stamp = stamp
             imu.header.frame_id = 'base_imu_link'
             imu.orientation_covariance[0] = -1.0
-            imu.angular_velocity.z = 0.5
+            imu.angular_velocity.z = 0.0 if stationary else 0.5
             imu.angular_velocity_covariance = [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01]
             gyro.publish(imu)
+            if raw_gyro is not None:
+                imu.angular_velocity.z = -0.5
+                raw_gyro.publish(imu)
             rclpy.spin_once(observer, timeout_sec=0.03)
-            if (samples and samples[-1].pose.pose.position.x > 0.03
+            if stationary and samples and len(samples) > 40 and time.monotonic()-started > 3:
+                break
+            if (not stationary and samples and samples[-1].pose.pose.position.x > 0.03
                     and samples[-1].pose.pose.orientation.z > 0.03
                     and abs(samples[-1].twist.twist.linear.x - 0.2) < 0.03
                     and abs(samples[-1].twist.twist.angular.z - 0.5) < 0.03
@@ -90,12 +98,18 @@ def test_native_wheel_imu_fusion_and_single_odom_tf_owner(tmp_path, installed_pr
                 break
         assert samples, (tmp_path / 'ekf.log').read_text()
         result = samples[-1]
+        if installed_profile:
+            assert not observer.get_subscriptions_info_by_topic('/imu/data_raw'), 'native EKF must not fall back to raw'
         assert result.header.frame_id == 'odom'
         assert result.child_frame_id == 'base_footprint'
-        assert result.twist.twist.linear.x == pytest.approx(0.2, abs=0.03)
-        assert result.twist.twist.angular.z == pytest.approx(0.5, abs=0.03)
-        assert result.pose.pose.position.x > 0.03
-        assert result.pose.pose.orientation.z > 0.03
+        assert result.twist.twist.linear.x == pytest.approx(0.0 if stationary else 0.2, abs=0.03)
+        assert result.twist.twist.angular.z == pytest.approx(0.0 if stationary else 0.5, abs=0.03)
+        if stationary:
+            assert abs(result.pose.pose.position.x) < 1e-4
+            assert abs(result.pose.pose.orientation.z) < 1e-4, 'raw gyro must not drive stationary fused yaw'
+        else:
+            assert result.pose.pose.position.x > 0.03
+            assert result.pose.pose.orientation.z > 0.03
         buffer.lookup_transform('odom', 'base_imu_link', rclpy.time.Time())
         # RSP advertises /tf even with no moving joints. Topic publisher count
         # alone cannot establish ownership of a particular transform.

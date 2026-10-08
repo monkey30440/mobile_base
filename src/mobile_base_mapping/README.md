@@ -38,7 +38,7 @@ bash ./scripts/teleop.sh
 
 先按 `k` 傳送零速度。既有 diff_drive_controller 冷啟動要收到首筆
 有效命令才開始發布 odom；保留既有 3600 秒 timeout，不新增初始化 publisher。
-先確認 `/base_controller/odom`、`/imu/data_raw`、`/odometry/filtered`、
+先確認 `/base_controller/odom`、`/imu/data`、`/odometry/filtered`、
 前左 scan 及 `odom → base_footprint → base_link → base_lidar_link_FL_1`
 有效，再於另一终端啟動：
 
@@ -86,14 +86,21 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 
 ## 保存並結束
 
-Operator 自行選定並建立可寫目錄；下列路徑只是例子，目錄名稱不屬於產品 contract：
+目前 Operator 操作約定：每次保存建立 `./maps/YYYYMMDD_HHMMSS/`。
+`./` 是執行指令的工作目錄；Compose 預設 `/workspace`，因此對應 host
+repository 的 `maps/`。時間使用主機本地時區。這是目錄命名慣例，
+不要求 Navigation loader 解析時間或限制其他合法 dataset 目錄。
 
 ```bash
-mkdir -p /workspace/maps/mapping_acceptance
+map_dir="./maps/$(date +%Y%m%d_%H%M%S)"
+mkdir -p ./maps &&
+mkdir "$map_dir" &&
 ros2 run nav2_map_server map_saver_cli -t /map \
-  -f /workspace/maps/mapping_acceptance/map --fmt pgm
+  -f "$map_dir/map" --fmt pgm
 ```
 
+`mkdir` 拒絕已存在的時間目錄；同一秒重複操作時先等待下一秒重新執行，
+不覆寫既有地圖。任一目錄建立失敗時，`&&` 不會繼續存圖。
 直接使用原生 CLI，不加保存 wrapper。成功輸出固定 `map.pgm`、`map.yaml`，
 YAML 使用同目錄的 `image: map.pgm`。保留原生結果／error／log：exit 0 代表
 原生保存成功，非零代表失敗，應修正原因後重試；沒有可接收 map 或圖片路徑
@@ -106,11 +113,12 @@ YAML 使用同目錄的 `image: map.pgm`。保留原生結果／error／log：ex
 ## 開發驗收的原生重載
 
 保存／重載是開發驗收，並非日常 Operator 的額外步驟。
-停止 Mapping 後可用原生 loader 確認保存地圖：
+停止 Mapping 後可用原生 loader 確認保存地圖。以下延用存圖 terminal 的
+`map_dir`；若另開 terminal，先將它設為要驗收的實際 dataset 目錄：
 
 ```bash
 ros2 run nav2_map_server map_server --ros-args \
-  -p yaml_filename:=/workspace/maps/mapping_acceptance/map.yaml
+  -p yaml_filename:="$map_dir/map.yaml"
 ```
 
 另一終端：

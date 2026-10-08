@@ -34,7 +34,7 @@ ros2 control list_hardware_components
 ros2 control list_controllers
 ros2 lifecycle get /slam_toolbox
 ros2 topic hz /base_controller/odom
-ros2 topic hz /imu/data_raw
+ros2 topic hz /imu/data
 ros2 topic hz /lidar/fl/scan
 ros2 topic hz /odometry/filtered
 ros2 run tf2_ros tf2_echo odom base_lidar_link_FL_1
