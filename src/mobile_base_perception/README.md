@@ -177,7 +177,34 @@ Launch 沒有寫死主機路徑。無參數 launch 會設定、啟動已記錄�
 
 完全由命令列提供設定時，可明確指定內容為 `{}` 的 YAML；ROS launch CLI 不接受
 空的 `lidar_config` argument。指定檔案缺失仍會失敗，不會改用備用設定。
-這不代表已修正另行記錄的原生關閉問題。
+LiDAR driver 使用 Docker 內的修正版 `sick_scan_xd` overlay；詳見下段。
+
+## 原生 LiDAR driver 的關閉修正
+
+Docker 建置固定 SICK 3.9.0／commit `a562c5d098de21f6284359f4dfea97e93bd2b4d5`，
+套用 `docker/patches/sick-scan-xd-shutdown.patch`，安裝至
+`/opt/mobile_base/sick_scan_xd`。修正只在掃描執行緒結束後明確釋放全域診斷 updater，
+避免 ROS node 留到 middleware 靜態解構階段才銷毀。同時保留 rclcpp 原生 deferred
+SIGINT／SIGTERM handler，透過 Context pre-shutdown hook 在有效 context 中停止 scanner，
+避免自訂 signal handler 中的 join／middleware mutex 死鎖。不改 scan、TF 或 QoS。
+apt 版仍保留作為依賴／基線，但一般容器 Bash 會先載入修正版 overlay。
+
+```bash
+docker compose build mobile_base
+docker compose up -d mobile_base
+docker compose exec mobile_base bash
+ros2 pkg prefix sick_scan_xd
+cat /opt/mobile_base/sick_scan_xd/source-version.txt
+```
+
+prefix 應為 `/opt/mobile_base/sick_scan_xd/sick_scan_xd`。
+版本紀錄包含上游 commit 與 patch SHA256。啟動指令仍是
+`ros2 launch mobile_base_perception dual_picoscan.launch.py`。
+裸用 `/opt/ros/jazzy/setup.bash` 並未選用這個 overlay；其他執行環境也必須明確載入
+`/opt/mobile_base/sick_scan_xd/local_setup.bash`。
+
+正式修正針對 Jazzy standalone caller 的 SIGINT／SIGTERM／scanner join 路徑；不宣稱解決所有上游異常路徑、
+所有 middleware 版本或長期可靠性。更新上游版本時須重新核對 patch 並跑啟停回歸。
 
 ## 實機 IMU 容器存取
 

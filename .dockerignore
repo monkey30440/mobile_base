@@ -1,2 +1,5 @@
 **
 !Dockerfile
+!docker/
+!docker/patches/
+!docker/patches/sick-scan-xd-shutdown.patch

@@ -26,6 +26,76 @@ def test_operator_can_inspect_required_device_arguments():
         assert name in result.stdout
 
 
+@pytest.mark.parametrize('attempt', range(3))
+def test_native_children_exit_cleanly_on_sigint(tmp_path, monkeypatch, attempt):
+    """Exercise shutdown independently of passive-mode service discovery."""
+    import signal
+    import time
+    import re
+    monkeypatch.setenv('ROS_DOMAIN_ID', str(100 + os.getpid() % 80 + attempt))
+    config = tmp_path / 'empty.yaml'
+    config.write_text('{}\n')
+    log_path = tmp_path / 'shutdown.log'
+    with log_path.open('w') as log:
+        process = subprocess.Popen([
+            'ros2', 'launch', 'mobile_base_perception', 'dual_picoscan.launch.py',
+            f'lidar_config:={config}', 'fl_hostname:=127.0.0.2',
+            'br_hostname:=127.0.0.3', 'udp_receiver_ip:=127.0.0.1',
+            'fl_udp_port:=32115', 'br_udp_port:=32116',
+            'fl_check_udp_port:=32117', 'br_check_udp_port:=32118',
+            'ros_qos:=4', 'listen_only_mode:=True'],
+            stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                output = log_path.read_text()
+                if all(f'"/lidar/{s}/scan"' in output for s in ('fl', 'br')):
+                    break
+                assert process.poll() is None, output
+                time.sleep(0.05)
+            assert all(f'"/lidar/{s}/scan"' in output for s in ('fl', 'br')), output
+        finally:
+            if process.poll() is None:
+                process.send_signal(signal.SIGINT)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+    output = log_path.read_text()
+    assert process.returncode == 0, output
+    assert 'process has died' not in output, output
+    clean = re.findall(r'\[(picoscan_(?:fl|br))-\d+\]: process has finished cleanly', output)
+    assert sorted(clean) == ['picoscan_br', 'picoscan_fl'], output
+
+
+@pytest.fixture
+def native_loopback_traffic():
+    import socket
+    import threading
+    from pathlib import Path
+    packet = bytes.fromhex((Path(__file__).parent / 'fixtures/compact-v4.hex').read_text())
+    stop = threading.Event()
+
+    def replay():
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+            while not stop.is_set():
+                for port in (32115, 32116):
+                    # Native passive startup checks for >1 received packets
+                    # immediately; send a burst rather than a lone datagram.
+                    for _ in range(4):
+                        sender.sendto(packet, ('127.0.0.1', port))
+                stop.wait(0.02)
+
+    thread = threading.Thread(target=replay)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
+
+
 @pytest.fixture
 def editable_default_overlay(tmp_path, use_config):
     if use_config != 'default':
@@ -52,11 +122,15 @@ def editable_default_overlay(tmp_path, use_config):
 
 
 @pytest.mark.parametrize("use_config", [False, True, "default"])
-def test_native_sources_are_independently_visible_without_sensor_traffic(tmp_path, use_config, editable_default_overlay):
+def test_native_sources_are_independently_visible_with_loopback_traffic(tmp_path, use_config, editable_default_overlay, monkeypatch, native_loopback_traffic):
     import signal
     import time
     import rclpy
     from rclpy.qos import ReliabilityPolicy
+
+    # Isolate sequential native-driver instances and their DDS discovery state.
+    domain_offset = {False: 0, True: 1, 'default': 2}[use_config]
+    monkeypatch.setenv('ROS_DOMAIN_ID', str(100 + os.getpid() % 80 + domain_offset))
 
     command = ['ros2', 'launch', 'mobile_base_perception', 'dual_picoscan.launch.py',
                'fl_hostname:=127.0.0.2', 'br_hostname:=127.0.0.3',
@@ -81,7 +155,10 @@ def test_native_sources_are_independently_visible_without_sensor_traffic(tmp_pat
     if editable_default_overlay:
         command = ['bash', '-c', 'source "$1"; shift; exec "$@"', 'bash',
                    str(editable_default_overlay)] + command
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    # Native passive-driver logs can fill an unread pipe and stall ROS services.
+    log_path = tmp_path / 'native-launch.log'
+    log = log_path.open('w')
+    process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                text=True, start_new_session=True)
     rclpy.init()
     observer = rclpy.create_node('lidar_workflow_test')
@@ -118,15 +195,22 @@ def test_native_sources_are_independently_visible_without_sensor_traffic(tmp_pat
     finally:
         observer.destroy_node()
         rclpy.shutdown()
-        os.killpg(process.pid, signal.SIGINT)
+        process.send_signal(signal.SIGINT)
         try:
-            output, _ = process.communicate(timeout=10)
+            process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
-            output, _ = process.communicate()
+            process.wait()
+        log.close()
 
-    (tmp_path / 'native-launch.log').write_text(output)
+    output = log_path.read_text()
     assert '[picoscan_fl-' in output and '[picoscan_br-' in output
+    # launch can return 0 even when a native child aborts during teardown.
+    assert process.returncode == 0, output
+    assert 'process has died' not in output, output
+    import re
+    clean = re.findall(r'\[(picoscan_(?:fl|br))-\d+\]: process has finished cleanly', output)
+    assert sorted(clean) == ['picoscan_br', 'picoscan_fl'], output
 
 
 def test_imu_config_launch_publishes_converted_serial_samples(tmp_path):

@@ -1,5 +1,5 @@
 # 基礎環境：指定 Isaac ROS image 與確切內容。
-FROM nvcr.io/nvidia/isaac/ros:isaac_ros_740c8500df2685ab1f4a4e53852601df-arm64-jetpack@sha256:e5a7ecfaea177c602a43937c932672dd354ed8bf3acc11e29ca7c5ebc6a891d6
+FROM nvcr.io/nvidia/isaac/ros:isaac_ros_740c8500df2685ab1f4a4e53852601df-arm64-jetpack@sha256:e5a7ecfaea177c602a43937c932672dd354ed8bf3acc11e29ca7c5ebc6a891d6 AS ros_base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -42,6 +42,29 @@ RUN sed -i 's|http://repo.download.nvidia.com/|https://repo.download.nvidia.com/
     && dpkg-query -W > /opt/mobile-base-packages.tsv \
     && rm -rf /var/lib/apt/lists/*
 
+# 下載與修正建置分開快取；final image 只保留安裝產物。
+FROM ros_base AS sick_builder
+RUN git clone --depth 1 --branch 3.9.0 https://github.com/SICKAG/sick_scan_xd.git /tmp/sick-source \
+    && test "$(git -C /tmp/sick-source rev-parse HEAD)" = a562c5d098de21f6284359f4dfea97e93bd2b4d5
+
+# 原生 ROS 2 deferred signal handling，加上明確釋放診斷 node。
+COPY docker/patches/sick-scan-xd-shutdown.patch /tmp/sick-scan-xd.patch
+RUN git -C /tmp/sick-source apply --check /tmp/sick-scan-xd.patch \
+    && git -C /tmp/sick-source apply /tmp/sick-scan-xd.patch \
+    && source /opt/ros/jazzy/setup.bash \
+    && colcon --log-base /tmp/sick-log build --base-paths /tmp/sick-source \
+        --build-base /tmp/sick-build --install-base /opt/mobile_base/sick_scan_xd \
+        --executor sequential --cmake-args -DROS_VERSION=2 -DBUILD_DEBUG_TARGET=OFF \
+    && printf '%s\n' 'upstream=3.9.0' \
+        'commit=a562c5d098de21f6284359f4dfea97e93bd2b4d5' \
+        > /opt/mobile_base/sick_scan_xd/source-version.txt \
+    && sha256sum /tmp/sick-scan-xd.patch >> /opt/mobile_base/sick_scan_xd/source-version.txt \
+    && rm -rf /tmp/sick-source /tmp/sick-build /tmp/sick-log /tmp/sick-scan-xd.patch
+
+# apt 版保留作為依賴／基線；overlay 提供正式 executable。
+FROM ros_base
+COPY --from=sick_builder /opt/mobile_base/sick_scan_xd /opt/mobile_base/sick_scan_xd
+
 # 配合 host UID/GID，準備非 root 使用者的可寫家目錄。
 ARG LOCAL_UID=1000
 ARG LOCAL_GID=1000
@@ -53,6 +76,7 @@ ENV HOME=/home/mobile_base
 # 共用 ROS 環境：互動 Bash 與 bash -c 都載入 Jazzy／workspace overlay。
 RUN cat <<'EOF' > /etc/mobile-base-ros.bash
 source /opt/ros/jazzy/setup.bash
+source /opt/mobile_base/sick_scan_xd/local_setup.bash
 if [[ -f /workspace/install/setup.bash ]]; then
     source /workspace/install/setup.bash
 fi

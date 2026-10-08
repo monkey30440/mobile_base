@@ -1,0 +1,121 @@
+--- a/include/sick_scan/sick_scan_common.h
++++ b/include/sick_scan/sick_scan_common.h
+@@ -98,6 +98,8 @@
+ 
+ namespace sick_scan_xd
+ {
++  // Call only after scanner workers have joined, before process teardown.
++  void releaseDiagnosticUpdater();
+ 
+   class SickScanCommon
+   {
+--- a/driver/src/sick_scan_common.cpp
++++ b/driver/src/sick_scan_common.cpp
+@@ -215,6 +215,14 @@
+ 
+ namespace sick_scan_xd
+ {
++  void releaseDiagnosticUpdater()
++  {
++#ifdef USE_DIAGNOSTIC_UPDATER
++    // Retain the updater across reconnects, but not process static teardown.
++    s_diagnostics_.reset();
++#endif
++  }
++
+   /*!
+   \brief calculate crc-code for last byte of binary message
+        XOR-calucation is done ONLY over message content (i.e. skipping the first 8 Bytes holding 0x02020202 <Length Information as 4-byte long>)
+--- a/include/sick_scan/sick_generic_laser.h
++++ b/include/sick_scan/sick_generic_laser.h
+@@ -18,6 +18,9 @@
+ 
+ void rosSignalHandler(int signalRecv);
+ 
++// Run on an ordinary thread while the ROS context is still valid.
++void requestScannerShutdown();
++
+ void setVersionInfo(std::string _versionInfo);
+ 
+ std::string getVersionInfo();
+--- a/driver/src/sick_generic_laser.cpp
++++ b/driver/src/sick_generic_laser.cpp
+@@ -65,6 +65,7 @@
+ #pragma warning(disable: 4267)
+ #endif
+ 
++#include <atomic>
+ #include <sick_scan/sick_ros_wrapper.h>
+ #include <sick_scan/sick_scan_xd_version.h>
+ #include "softwarePLL.h"
+@@ -112,7 +113,7 @@
+ static sick_scan_xd::SickScanCommonTcp *s_scanner = NULL;
+ 
+ static std::string versionInfo = std::string(SICK_SCAN_XD_VERSION) + GITHASH_STR + GITINFO_STR;
+-static bool s_shutdownSignalReceived = false;
++static std::atomic<bool> s_shutdownSignalReceived{false};
+ 
+ static std::mutex g_diag_mutex;  // Mutex to protect notifier call
+ 
+@@ -209,6 +210,12 @@
+ bool shutdownSignalReceived()
+ {
+  return s_shutdownSignalReceived;
++}
++
++void requestScannerShutdown()
++{
++  s_shutdownSignalReceived = true;
++  stopScannerAndExit(true);
+ }
+ 
+ void rosSignalHandler(int signalRecv)
+--- a/driver/src/sick_generic_caller.cpp
++++ b/driver/src/sick_generic_caller.cpp
+@@ -72,6 +72,7 @@
+ #include <signal.h>
+ 
+ #include "sick_scan/sick_generic_laser.h"
++#include "sick_scan/sick_scan_common.h"
+ #include "sick_scan/dataDumper.h"
+ #include "sick_scan/helper/angle_compensator.h"
+ 
+@@ -140,22 +141,26 @@
+     rclcpp::init(argc, argv);
+     bool ros_signal_handler = rclcpp::signal_handlers_installed();
+     ROS_INFO_STREAM("ROS2 signal handler are " << (ros_signal_handler? "" : " NOT") << "installed");
+-    if (rclcpp::uninstall_signal_handlers())
+-      ROS_INFO_STREAM("ROS2 signal handler uninstalled");
+-    else
+-      ROS_ERROR_STREAM("## ERROR: Failed to uninstall ROS2 signal handler");
++    // Keep rclcpp's deferred SIGINT/SIGTERM handling. Never join scanner
++    // threads from an asynchronous signal handler holding middleware locks.
+     rclcpp::NodeOptions node_options;
+     node_options.allow_undeclared_parameters(true);
+     //node_options.automatically_declare_initial_parameters(true);
+     rosNodePtr node = rclcpp::Node::make_shared("sick_scan", "", node_options);
++    node->get_node_base_interface()->get_context()->add_pre_shutdown_callback([]() {
++      // Join scanner workers before rcl invalidates their context.
++      requestScannerShutdown();
++    });
+ #else
+   ros::init(argc, argv, scannerName, ros::init_options::NoSigintHandler);  // scannerName holds the node-name
+   // signal(SIGINT, rosSignalHandler);
+   ros::NodeHandle nh("~");
+   rosNodePtr node = &nh;
+ #endif
++  #if !defined __ROS_VERSION || __ROS_VERSION != 2
+   signal(SIGINT, rosSignalHandler);  // SIGINT = 2, Ctrl-C or kill -2
+   signal(SIGTERM, rosSignalHandler); // SIGTERM = 15, default kill level
++  #endif
+ 
+   ROS_INFO_STREAM(versionInfo);
+   for (int i = 0; i < argc_tmp; i++)
+@@ -183,6 +188,7 @@
+     }
+     stopScannerAndExit();
+     joinGenericLaser();
++    sick_scan_xd::releaseDiagnosticUpdater();
+   }
+   catch(const std::exception& e)
+   {
