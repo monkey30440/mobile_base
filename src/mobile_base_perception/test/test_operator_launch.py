@@ -26,6 +26,19 @@ def test_operator_can_inspect_required_device_arguments():
         assert name in result.stdout
 
 
+@pytest.mark.parametrize('minimum,maximum', [('0.05', '0.04'), ('-1', '25'), ('0.05', 'nan'), ('0.05', '1e39')])
+def test_invalid_measurement_bounds_prevent_device_start(minimum, maximum):
+    result = subprocess.run([
+        'ros2', 'launch', 'mobile_base_perception', 'dual_picoscan.launch.py',
+        'fl_hostname:=127.0.0.2', 'br_hostname:=127.0.0.3',
+        'udp_receiver_ip:=127.0.0.1',
+        'laserscan_range_min:=' + minimum, 'laserscan_range_max:=' + maximum,
+    ], capture_output=True, text=True, timeout=10)
+    assert result.returncode != 0
+    assert 'Invalid LaserScan bounds' in result.stdout + result.stderr
+    assert 'process started' not in result.stdout + result.stderr
+
+
 @pytest.mark.parametrize('attempt', range(3))
 def test_native_children_exit_cleanly_on_sigint(tmp_path, monkeypatch, attempt):
     """Exercise shutdown independently of passive-mode service discovery."""
@@ -183,7 +196,8 @@ def test_native_sources_are_independently_visible_with_loopback_traffic(tmp_path
             from rclpy.parameter_client import AsyncParameterClient
             client = AsyncParameterClient(observer, namespace + '/' + name)
             assert client.wait_for_services(timeout_sec=3)
-            future = client.get_parameters(['listen_only_mode', 'host_set_FREchoFilter', 'imu_enable', 'host_FREchoFilter'])
+            future = client.get_parameters(['listen_only_mode', 'host_set_FREchoFilter', 'imu_enable', 'host_FREchoFilter',
+                                            'laserscan_range_min', 'laserscan_range_max'])
             rclpy.spin_until_future_complete(observer, future, timeout_sec=3)
             assert future.done()
             values = future.result().values
@@ -192,6 +206,9 @@ def test_native_sources_are_independently_visible_with_loopback_traffic(tmp_path
             assert [v.string_value for v in values[:3]] == ['1', '1', '0']
             if use_config == 'default':
                 assert values[3].string_value == '0'
+                assert [v.string_value for v in values[4:]] == ['0.05', '25.0']
+            else:
+                assert [v.string_value for v in values[4:]] == ['0.0', '0.0']
     finally:
         observer.destroy_node()
         rclpy.shutdown()

@@ -1,5 +1,6 @@
 """Compose two native drivers; network facts must be supplied by the Operator."""
 from pathlib import Path
+import math
 import yaml
 
 from ament_index_python.packages import get_package_share_directory
@@ -20,11 +21,13 @@ def start_devices(context):
             config = yaml.safe_load(stream)
         allowed = {'fl_hostname', 'br_hostname', 'udp_receiver_ip', 'fl_udp_port',
                    'br_udp_port', 'fl_check_udp_port', 'br_check_udp_port', 'ros_qos',
-                   'listen_only_mode', 'set_echo_filter', 'echo_filter', 'tick_to_timestamp_mode'}
+                   'listen_only_mode', 'set_echo_filter', 'echo_filter', 'tick_to_timestamp_mode',
+                   'laserscan_range_min', 'laserscan_range_max'}
         if not isinstance(config, dict) or set(config) - allowed:
             raise RuntimeError('LiDAR configuration must be a mapping of supported launch arguments')
     defaults = {'listen_only_mode': 'False', 'set_echo_filter': 'True',
-                'echo_filter': '2', 'tick_to_timestamp_mode': '1'}
+                'echo_filter': '2', 'tick_to_timestamp_mode': '1',
+                'laserscan_range_min': '0', 'laserscan_range_max': '0'}
 
     def value(name):
         selected = LaunchConfiguration(name).perform(context)
@@ -42,6 +45,11 @@ def start_devices(context):
         raise RuntimeError('LiDAR receive/check UDP ports must be distinct and in 1..65535')
     if value('fl_hostname') == value('br_hostname'):
         raise RuntimeError('FL and BR require distinct sensor IP addresses')
+    range_min, range_max = (float(value(name)) for name in ('laserscan_range_min', 'laserscan_range_max'))
+    if not ((range_min == 0 and range_max == 0) or
+            (math.isfinite(range_min) and math.isfinite(range_max) and
+             0 <= range_min < range_max <= 3.4028234663852886e38)):
+        raise RuntimeError('Invalid LaserScan bounds: use 0/0 to disable or finite 0 <= min < max')
     def boolean(name):
         text = value(name).lower()
         if text not in ('true', 'false', '1', '0'):
@@ -65,6 +73,8 @@ def start_devices(context):
             'host_FREchoFilter': int(value('echo_filter')),
             'ros_qos': int(value('ros_qos')),
             'tick_to_timestamp_mode': int(value('tick_to_timestamp_mode')),
+            'laserscan_range_min': range_min,
+            'laserscan_range_max': range_max,
         }
         nodes.append(Node(
             package='sick_scan_xd', executable='sick_generic_caller',
@@ -105,5 +115,9 @@ def generate_launch_description():
                               description='Native selector: default LAST (2) gives one stable scan frame per sensor; 0 FIRST, 1 ALL. Set on each startup'),
         DeclareLaunchArgument('tick_to_timestamp_mode', default_value='',
                               description='Native timestamp mode: 0 PLL, 1 first host time plus sensor elapsed ticks'),
+        DeclareLaunchArgument('laserscan_range_min', default_value='',
+                              description='Confirmed sensor measurement minimum [m]; requires fixed SICK overlay'),
+        DeclareLaunchArgument('laserscan_range_max', default_value='',
+                              description='Confirmed sensor measurement maximum [m]; 0/0 retains upstream metadata'),
         OpaqueFunction(function=start_devices),
     ])

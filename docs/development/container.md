@@ -84,3 +84,34 @@ services:
 ## 驗證紀錄
 
 見 [ticket #47](https://github.com/monkey30440/mobile_base/issues/47) 的 resolution 與 [環境驗證紀錄](container-validation.md)。未完成的 Orin BSP／GPU／GUI／USB／LiDAR 驗證留在後續 target/裝置 tickets，不代表 robot Bringup ready。
+
+## Mapping 原生倒裝修正（#39）
+
+原生 `slam_toolbox 2.8.5` 對倒裝且非對稱 scan 只反轉 ranges，未反轉
+angle bounds。本平台實測會造成約 23.742° 的 scan/map 旋轉偏差；
+Operator 採用固定官方 source 的最小 metadata 修正。
+Docker 的 slam_builder 使用官方 commit
+`ec8f7635dea317b531c419f798f87d90a336f32e` 與
+`docker/patches/slam-toolbox-inverted-bounds.patch`，安裝至
+`/opt/mobile_base/slam_toolbox`；正式 executable 由此 overlay 提供，
+apt 套件保留作依賴／基線。版本及 patch hash 在該目录的 source-version.txt。
+source sparse checkout 略過不參與編譯的 images，保留實際建置／安裝輸入。
+
+這不修改 scan topics／frames、真實 URDF、FOV、SLAM／TF ownership，
+也不新增 scan relay、融合或存圖 wrapper。軟體及真實地圖品質分開驗收；
+將來 upstream 修正後，需重做適用驗證再移除此 overlay。
+研究與驗證見 [Mapping research](../research/mapping-native-20261008.md) 及
+[Mapping validation](../validation/mapping-package-20261008.md)。
+
+## LaserScan 距離範圍 metadata 修正（#39）
+
+同一固定 SICK 3.9.0 source overlay 加入
+`docker/patches/sick-scan-xd-range-bounds.patch`。上游的 segment publisher
+使用當幀最近／最遠量測填入 range_min/max；SLAM 快取首幀 bounds 後，
+可能排除後續仍在感測器能力內的有效點。
+修正版提供 `laserscan_range_min/max`，0/0 預設保留上游行為；平台
+lidar.yaml 根據兩台已讀回 OrdNum=1134608 的 Core-1，明定 0.05／25 m。
+只修正 metadata，不修改 ranges、角度、frame、時間戳或點雲。
+這兩個參數屬於本專案的最小 source 補足，**不是 apt 原生版既有參數**。
+版本與兩份 SICK patch hash 都寫入 source-version.txt；因此必須重新
+build image 並 recreate container，僅重建 workspace 不會更新 driver。

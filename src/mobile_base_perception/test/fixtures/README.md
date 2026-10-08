@@ -15,3 +15,12 @@ no connected SOPAS socket, then repeatedly rebuilds services when its FIFO has
 fewer than two messages. A no-input fixture is therefore unsuitable for testing
 stable parameter-service discovery. The dedicated shutdown regression retains
 the original no-input scenario.
+
+`test_native_ranges.py` derives two loopback scenarios from this same compact-v4
+packet. It changes the little-endian telegram counter at offset 8 and the
+distance values in the 60 seven-byte measurement records beginning at offset
+132, then recomputes the documented zlib CRC32. Each scan contains uniform
+2 m or 10 m measurements. Geometry and RSSI bytes remain unchanged; the test
+observes the native UDP parser/publisher's actual ROS LaserScan output.
+This verifies stable capability metadata and preserved measurements, not
+physical picoScan range accuracy or calibration.

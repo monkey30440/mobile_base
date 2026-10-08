@@ -49,8 +49,11 @@ RUN git clone --depth 1 --branch 3.9.0 https://github.com/SICKAG/sick_scan_xd.gi
 
 # 原生 ROS 2 deferred signal handling，加上明確釋放診斷 node。
 COPY docker/patches/sick-scan-xd-shutdown.patch /tmp/sick-scan-xd.patch
+COPY docker/patches/sick-scan-xd-range-bounds.patch /tmp/sick-scan-xd-range-bounds.patch
 RUN git -C /tmp/sick-source apply --check /tmp/sick-scan-xd.patch \
     && git -C /tmp/sick-source apply /tmp/sick-scan-xd.patch \
+    && git -C /tmp/sick-source apply --check /tmp/sick-scan-xd-range-bounds.patch \
+    && git -C /tmp/sick-source apply /tmp/sick-scan-xd-range-bounds.patch \
     && source /opt/ros/jazzy/setup.bash \
     && colcon --log-base /tmp/sick-log build --base-paths /tmp/sick-source \
         --build-base /tmp/sick-build --install-base /opt/mobile_base/sick_scan_xd \
@@ -59,11 +62,34 @@ RUN git -C /tmp/sick-source apply --check /tmp/sick-scan-xd.patch \
         'commit=a562c5d098de21f6284359f4dfea97e93bd2b4d5' \
         > /opt/mobile_base/sick_scan_xd/source-version.txt \
     && sha256sum /tmp/sick-scan-xd.patch >> /opt/mobile_base/sick_scan_xd/source-version.txt \
-    && rm -rf /tmp/sick-source /tmp/sick-build /tmp/sick-log /tmp/sick-scan-xd.patch
+    && sha256sum /tmp/sick-scan-xd-range-bounds.patch >> /opt/mobile_base/sick_scan_xd/source-version.txt \
+    && rm -rf /tmp/sick-source /tmp/sick-build /tmp/sick-log /tmp/sick-scan-xd.patch /tmp/sick-scan-xd-range-bounds.patch
 
-# apt 版保留作為依賴／基線；overlay 提供正式 executable。
+# 倒裝非對稱 scan：固定原生版本，只修正 metadata angle bounds。
+FROM ros_base AS slam_builder
+RUN git clone --filter=blob:none --depth 1 --branch 2.8.5 --sparse \
+        https://github.com/SteveMacenski/slam_toolbox.git /tmp/slam-source \
+    && test "$(git -C /tmp/slam-source rev-parse HEAD)" = ec8f7635dea317b531c419f798f87d90a336f32e \
+    && git -C /tmp/slam-source sparse-checkout set \
+        CMake config include launch lib rviz_plugin solvers src srv test
+
+COPY docker/patches/slam-toolbox-inverted-bounds.patch /tmp/slam-toolbox.patch
+RUN git -C /tmp/slam-source apply --check /tmp/slam-toolbox.patch \
+    && git -C /tmp/slam-source apply /tmp/slam-toolbox.patch \
+    && source /opt/ros/jazzy/setup.bash \
+    && MAKEFLAGS=-j4 colcon --log-base /tmp/slam-log build --base-paths /tmp/slam-source \
+        --build-base /tmp/slam-build --install-base /opt/mobile_base/slam_toolbox \
+        --executor sequential --cmake-args -DBUILD_TESTING=OFF \
+    && printf '%s\n' 'upstream=2.8.5' \
+        'commit=ec8f7635dea317b531c419f798f87d90a336f32e' \
+        > /opt/mobile_base/slam_toolbox/source-version.txt \
+    && sha256sum /tmp/slam-toolbox.patch >> /opt/mobile_base/slam_toolbox/source-version.txt \
+    && rm -rf /tmp/slam-source /tmp/slam-build /tmp/slam-log /tmp/slam-toolbox.patch
+
+# apt 版保留作為依賴／基線；overlays 提供正式 executable。
 FROM ros_base
 COPY --from=sick_builder /opt/mobile_base/sick_scan_xd /opt/mobile_base/sick_scan_xd
+COPY --from=slam_builder /opt/mobile_base/slam_toolbox /opt/mobile_base/slam_toolbox
 
 # 配合 host UID/GID，準備非 root 使用者的可寫家目錄。
 ARG LOCAL_UID=1000
@@ -77,6 +103,7 @@ ENV HOME=/home/mobile_base
 RUN cat <<'EOF' > /etc/mobile-base-ros.bash
 source /opt/ros/jazzy/setup.bash
 source /opt/mobile_base/sick_scan_xd/local_setup.bash
+source /opt/mobile_base/slam_toolbox/local_setup.bash
 if [[ -f /workspace/install/setup.bash ]]; then
     source /workspace/install/setup.bash
 fi

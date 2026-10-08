@@ -1,0 +1,18 @@
+slam_toolbox:
+  ros__parameters:
+    # Native 2.8.5 defaults supply the solver and scan-matcher settings.
+    # This is a commissioning starting profile, not map-quality calibration.
+    mode: mapping
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint
+    scan_topic: /lidar/fl/scan
+    resolution: 0.05
+    transform_publish_period: 0.02
+    map_update_interval: 5.0
+    # Native gate: translation OR rotation may provide a new Mapping view.
+    # Default false skips pure rotations before the mapper's heading check.
+    check_min_dist_and_heading_precisely: true
+    use_map_saver: true
+    # V1 saves occupancy maps only; interactive pose-graph editing is excluded.
+    enable_interactive_mode: false

@@ -1,4 +1,71 @@
-# Dataset loading (#40)
+# mobile_base_bringup
+
+## Mapping 情境（#39）
+
+獨立套件驗證完成後，產品入口組合 Description、雙 LiDAR、IMU、Control、
+Odometry 與 Mapping 的既有原生入口。以本 repository Docker image 執行：
+
+```bash
+ros2 launch mobile_base_bringup mapping.launch.py
+```
+
+另一終端啟動鍵盤控制，先按 `k` 發出零速度：
+
+```bash
+bash ./scripts/teleop.sh
+```
+
+這是人工啟動程序的一部分：既有 diff_drive_controller 必須收到第一筆有效
+命令才開始發布輪端 odom。沒有自動初始化 publisher 或統一 readiness boolean。
+保留既定 3600 秒命令 timeout；使用者按 `k` 停止並確認實體停止後才退出鍵盤。
+
+Bringup 不能只以 process 存在或 SLAM active 判定完成。移動前應確認：
+
+- 原生 Control 的 hardware 與 controllers active，輪端回授有效。
+- 前左 scan、IMU、`/base_controller/odom`、`/odometry/filtered` 持續更新，
+  原生來源 diagnostics／logs 沒有影響功能的異常。
+- 完整 `odom → base_footprint → base_link → base_lidar_link_FL_1` 可用，
+  原生 SLAM active 且能接收建圖輸入；不要求先有保存地圖。
+
+使用原生工具判讀，例如：
+
+```bash
+ros2 control list_hardware_components
+ros2 control list_controllers
+ros2 lifecycle get /slam_toolbox
+ros2 topic hz /base_controller/odom
+ros2 topic hz /imu/data_raw
+ros2 topic hz /lidar/fl/scan
+ros2 topic hz /odometry/filtered
+ros2 run tf2_ros tf2_echo odom base_lidar_link_FL_1
+ros2 topic echo /diagnostics
+```
+
+每個觀察命令可用 Ctrl+C 結束。缺資料、必要 TF、裝置異常或 configure／activate
+失敗時不可開始建圖；保留原生原因、停止情境、修正輸入後重新啟動，不宣稱 ready。
+Mapping 的 map→odom 由 SLAM 單獨負責；EKF 與 RSP 各自保留原本 TF ownership。
+這個入口不啟動 AMCL／Navigation，情境切換前先結束 Mapping。
+
+各 config 預設由其 owning package 提供。需要覆寫時：
+
+```bash
+ros2 launch mobile_base_bringup mapping.launch.py \
+  hardware_config:=/absolute/m1.yaml \
+  lidar_config:=/absolute/lidar.yaml \
+  imu_config:=/absolute/imu.yaml \
+  filter_config:=/absolute/ekf.yaml \
+  mapping_config:=/absolute/slam.yaml
+```
+
+同一 `hardware_config` 同時傳給 Description 與 Control，避免模型與裝置設定
+分歧。指定檔案缺失不 fallback；各原生／owning package 保留解析與啟動責任。
+不複製各套件 config、不把 Foxglove 或 Teleop 包成新的 runtime manager。
+
+建圖觀察、原生保存固定 map.pgm／map.yaml、保存成功即結束及開發驗收重載，
+見 [Mapping 操作說明](../mobile_base_mapping/README.md)。完成後先按 k、確認停止，
+Ctrl+C 結束 Teleop，再 Ctrl+C 結束 Mapping Bringup，讓原生 Control 停用馬達。
+
+## Dataset loading (#40)
 
 `dataset.launch.py` accepts one required `dataset` directory and selects exactly
 `map.pgm`, `map.yaml`, and `route_graph.geojson`. It checks that each required path

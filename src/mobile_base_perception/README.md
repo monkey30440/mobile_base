@@ -206,6 +206,25 @@ prefix 應為 `/opt/mobile_base/sick_scan_xd/sick_scan_xd`。
 正式修正針對 Jazzy standalone caller 的 SIGINT／SIGTERM／scanner join 路徑；不宣稱解決所有上游異常路徑、
 所有 middleware 版本或長期可靠性。更新上游版本時須重新核對 patch 並跑啟停回歸。
 
+## LaserScan 距離範圍 metadata
+
+兩台 LiDAR 的唯讀 OrdNum 均為 `1134608`，對應
+[官方 Core-1 datasheet](https://www.sick.com/media/pdf/1/81/581/dataSheet_PICS150-01000-Core-1_1134608_en.pdf)
+的有效工作範圍 0.05–25 m。`config/lidar.yaml` 因此明確設定
+`laserscan_range_min: 0.05`、`laserscan_range_max: 25.0`。
+這表示感測器有效量測上下限，不是每一幀最近／最遠的物體距離，
+也不代表已驗證 25 m 實體量測精度。
+
+SICK 3.9.0 原生 publisher 以當幀 extrema 填上下限；SLAM 快取首幀 bounds 後，
+可能漏掉後续較遠或較近的有效點。Docker 既有 source overlay 另套用
+`docker/patches/sick-scan-xd-range-bounds.patch`，讓 segment／fullframe 使用
+明確配置的 bounds；原始 ranges、角度、frame、時間戳與點雲保持不變。
+這兩個參數是本次 confirmed gap 的最小來源修正，apt 原生版本沒有這項能力。
+0/0 保留原生行為，供未配置的 upstream 型號／軟體 fixture 使用；本平台正式設定
+使用上述已確認的 Core-1 值。若換型號，需先確認其有效範圍再更改設定。
+設定非法時啟動報錯；新增或移除這份來源修正須重建 image、重建 container，
+並驗證原生輸出及 Mapping，而非只重建 workspace。
+
 ## 實機 IMU 容器存取
 
 主機須存在 `/dev/fihRobotBaseIMU`。`compose.yaml` 映射該裝置，並授予 serial

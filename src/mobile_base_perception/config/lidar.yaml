@@ -15,3 +15,8 @@ set_echo_filter: true
 echo_filter: 2
 # Native first-host-time + elapsed ticks; long-run timing is not calibrated.
 tick_to_timestamp_mode: 1
+# Both devices read back OrdNum=1134608 (PICS150-01000 Core-1).
+# Official measurement capability, not the extrema observed in each scene.
+# Requires the reproducible sick_scan_xd range-bounds source overlay.
+laserscan_range_min: 0.05
+laserscan_range_max: 25.0

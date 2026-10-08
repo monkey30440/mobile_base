@@ -1,0 +1,16 @@
+diff --git a/src/laser_utils.cpp b/src/laser_utils.cpp
+index fb54ef0..85246ea 100644
+--- a/src/laser_utils.cpp
++++ b/src/laser_utils.cpp
+@@ -88,6 +88,11 @@ LaserMetadata LaserAssistant::toLaserMetadata(sensor_msgs::msg::LaserScan scan)
+ 
+   double mountingYaw;
+   bool inverted = isInverted(mountingYaw);
++  if (inverted) {
++    const auto original_minimum_angle = scan_.angle_min;
++    scan_.angle_min = -scan_.angle_max;
++    scan_.angle_max = -original_minimum_angle;
++  }
+   karto::LaserRangeFinder * laser = makeLaser(mountingYaw);
+   LaserMetadata laserMeta(laser, inverted);
+   return laserMeta;

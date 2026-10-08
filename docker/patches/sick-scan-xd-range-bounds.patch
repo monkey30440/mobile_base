@@ -1,0 +1,114 @@
+diff --git a/driver/src/sick_scansegment_xd/config.cpp b/driver/src/sick_scansegment_xd/config.cpp
+index 06b2918..97240dc 100644
+--- a/driver/src/sick_scansegment_xd/config.cpp
++++ b/driver/src/sick_scansegment_xd/config.cpp
+@@ -51,6 +51,8 @@
+  *
+  */
+ #include <cstring>
++#include <cmath>
++#include <limits>
+ #include <sick_scan/sick_ros_wrapper.h>
+ #include "sick_scansegment_xd/config.h"
+ #include <sick_scan/sick_scan_common_tcp.h>
+@@ -58,6 +60,17 @@
+ 
+ #define ROS_DECL_GET_PARAMETER(node,name,value) do{rosDeclareParam((node),(name),(value));rosGetParam((node),(name),(value));}while(false)
+ 
++// LaserScan uses float32 measurement bounds. An unset pair preserves upstream behavior.
++static bool validLaserScanRanges(double minimum, double maximum)
++{
++    const bool valid = (minimum == 0 && maximum == 0) ||
++        (std::isfinite(minimum) && std::isfinite(maximum) && minimum >= 0 &&
++         maximum > minimum && maximum <= std::numeric_limits<float>::max());
++    if (!valid)
++        ROS_ERROR_STREAM("Invalid laserscan_range_min/max: use 0/0 to disable or finite 0 <= min < max");
++    return valid;
++}
++
+ /** Lookup a table of optional key value pairs and overwrite argument if key found in table */
+ static bool setOptionalArgument(const std::map<std::string, std::string>& key_value_pairs, const std::string& key, std::string& argument)
+ {
+@@ -355,6 +368,10 @@ bool sick_scansegment_xd::Config::Init(rosNodePtr _node)
+     std::string str_laserscan_layer_filter = "0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0";
+     ROS_DECL_GET_PARAMETER(node, "laserscan_layer_filter", str_laserscan_layer_filter);
+     sick_scansegment_xd::util::parseVector(str_laserscan_layer_filter, laserscan_layer_filter);
++    ROS_DECL_GET_PARAMETER(node, "laserscan_range_min", laserscan_range_min);
++    ROS_DECL_GET_PARAMETER(node, "laserscan_range_max", laserscan_range_max);
++    if (!validLaserScanRanges(laserscan_range_min, laserscan_range_max))
++        return false;
+ 
+     if (imu_enable && scandataformat != 2)
+     {
+@@ -480,6 +497,11 @@ bool sick_scansegment_xd::Config::Init(int argc, char** argv)
+     if (setOptionalArgument(cli_parameter_map, "laserscan_layer_filter", cli_laserscan_layer_filter))
+         sick_scansegment_xd::util::parseVector(cli_laserscan_layer_filter, laserscan_layer_filter);
+ 
++    setOptionalArgument(cli_parameter_map, "laserscan_range_min", laserscan_range_min);
++    setOptionalArgument(cli_parameter_map, "laserscan_range_max", laserscan_range_max);
++    if (!validLaserScanRanges(laserscan_range_min, laserscan_range_max))
++        return false;
++
+     PrintConfig();
+ 
+     if (imu_enable && scandataformat != 2)
+@@ -544,6 +566,7 @@ void sick_scansegment_xd::Config::PrintConfig(void)
+     ROS_INFO_STREAM("host_set_LFPlayerFilter:          " << host_set_LFPlayerFilter);
+     ROS_INFO_STREAM("host_LFPintervalFilter:           " << host_LFPintervalFilter);
+     ROS_INFO_STREAM("host_set_LFPintervalFilter:       " << host_set_LFPintervalFilter);
++    ROS_INFO_STREAM("laserscan_range_min/max:          " << laserscan_range_min << " / " << laserscan_range_max << " [m], 0/0 disables override");
+     ROS_INFO_STREAM("laserscan_layer_filter:           " << sick_scansegment_xd::util::printVector(laserscan_layer_filter));
+     ROS_INFO_STREAM("msgpack_validator_enabled:                         " << msgpack_validator_enabled);
+     ROS_INFO_STREAM("msgpack_validator_verbose:                         " << msgpack_validator_verbose);
+diff --git a/driver/src/sick_scansegment_xd/ros_msgpack_publisher.cpp b/driver/src/sick_scansegment_xd/ros_msgpack_publisher.cpp
+index 37e518c..2861dc8 100644
+--- a/driver/src/sick_scansegment_xd/ros_msgpack_publisher.cpp
++++ b/driver/src/sick_scansegment_xd/ros_msgpack_publisher.cpp
+@@ -271,6 +271,8 @@ sick_scansegment_xd::RosMsgpackPublisher::RosMsgpackPublisher(const std::string&
+ 	m_imu_frame_id = config.publish_imu_frame_id;
+ 	m_node = config.node;
+ 	m_laserscan_layer_filter = config.laserscan_layer_filter;
++	m_laserscan_range_min = config.laserscan_range_min;
++	m_laserscan_range_max = config.laserscan_range_max;
+ 	// m_segment_count = config.segment_count;
+ 	m_all_segments_azimuth_min_deg = (float)config.all_segments_min_deg;
+   m_all_segments_azimuth_max_deg = (float)config.all_segments_max_deg;
+@@ -890,6 +892,12 @@ void sick_scansegment_xd::RosMsgpackPublisher::convertPointsToLaserscanMsg(uint3
+ 				laser_scan_msg.range_min -= 1.0e-03f;
+ 				laser_scan_msg.range_max += 1.0e-03f;
+ 				laser_scan_msg.range_min = std::max(0.05f, laser_scan_msg.range_min); // min range of multiScan and picoScan: 0.05 [m]
++                // Capability metadata only: never alter measured ranges or scan geometry.
++                if (m_laserscan_range_max > 0)
++                {
++                    laser_scan_msg.range_min = static_cast<float>(m_laserscan_range_min);
++                    laser_scan_msg.range_max = static_cast<float>(m_laserscan_range_max);
++                }
+ 				
+ 
+ 				laser_scan_msg.header.stamp.sec = timestamp_sec;
+diff --git a/include/sick_scansegment_xd/config.h b/include/sick_scansegment_xd/config.h
+index 1362479..92c5b13 100644
+--- a/include/sick_scansegment_xd/config.h
++++ b/include/sick_scansegment_xd/config.h
+@@ -192,6 +192,8 @@ namespace sick_scansegment_xd
+         int layer_lookup_table_id; // Index for Layer lookup table: 0: multiScan136/166, 1: multiScan165
+ 
+         // Configuration of laserscan messages (ROS only), activate/deactivate laserscan messages for each layer
++        double laserscan_range_min = 0; // Optional stable LaserScan measurement bounds [m]; 0/0 retains upstream behavior
++        double laserscan_range_max = 0;
+         std::vector<int> laserscan_layer_filter; // Default: { 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, i.e. laserscan messages for layer 5 activated (elevation -0.07 degree, max number of scan points)
+ 
+         rosNodePtr node; // NodePtr node; // ROS node handle (always 0 on non-ros-targets)
+diff --git a/include/sick_scansegment_xd/ros_msgpack_publisher.h b/include/sick_scansegment_xd/ros_msgpack_publisher.h
+index 50c15a2..8ec3e9f 100644
+--- a/include/sick_scansegment_xd/ros_msgpack_publisher.h
++++ b/include/sick_scansegment_xd/ros_msgpack_publisher.h
+@@ -411,6 +411,8 @@ namespace sick_scansegment_xd
+         ImuMsgPublisher m_publisher_imu;                     // ros publisher to publish Imu messages
+         bool m_publisher_imu_initialized = false;            // imu messages enabled, ros publisher for Imu messages initialized
+         double m_scan_time = 0;                              // scan_time = 1 / scan_frequency = time for a full 360-degree rotation of the sensor
++        double m_laserscan_range_min = 0;
++        double m_laserscan_range_max = 0;
+         std::vector<int> m_laserscan_layer_filter;           // Configuration of laserscan messages (ROS only), activate/deactivate laserscan messages for each layer
+ 	    std::vector<CustomPointCloudConfiguration> m_custom_pointclouds_cfg; // Configuration of customized pointclouds
+ 
