@@ -1,10 +1,11 @@
-"""Start the USB IMU adapter with an explicitly selected ROS parameter file."""
+"""Start the USB IMU adapter with the package profile or an explicit override."""
 from pathlib import Path
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
 
 
 def start_imu(context):
@@ -17,6 +18,10 @@ def start_imu(context):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('imu_config', description='Explicit USB IMU ROS parameter YAML'),
+        DeclareLaunchArgument(
+            'imu_config',
+            default_value=str(Path(get_package_share_directory('mobile_base_perception'))
+                              / 'config' / 'imu.yaml'),
+            description='USB IMU ROS parameter YAML (defaults to package config/imu.yaml)'),
         OpaqueFunction(function=start_imu),
     ])

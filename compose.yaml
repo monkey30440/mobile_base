@@ -14,6 +14,13 @@ services:
     runtime: runc
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
 
+    # 實機 IMU USB 存取；SERIAL_GID 預設為 Ubuntu dialout 的 20。
+    devices:
+      - /dev/fihRobotBaseIMU:/dev/fihRobotBaseIMU
+      - /dev/fihRobotBaseMotor:/dev/fihRobotBaseMotor
+    group_add:
+      - "${SERIAL_GID:-20}"
+
     # 共用 host 網路，掛載 repository 作為開發 workspace。
     network_mode: host
     working_dir: /workspace
